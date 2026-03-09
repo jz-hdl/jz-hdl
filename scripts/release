@@ -80,7 +80,7 @@ if ! ctest --test-dir "$BUILD_DIR" --output-on-failure; then
 fi
 
 echo "==> Running validation tests..."
-if ! bash "$REPO_ROOT/compiler/tests/run_validation.sh"; then
+if ! JZ_HDL_BIN="$BUILD_DIR/jz-hdl" bash "$REPO_ROOT/compiler/tests/run_validation.sh"; then
   echo "Error: Validation tests failed. Aborting release."
   rm -rf "$BUILD_DIR"
   git -C "$REPO_ROOT" reset --hard HEAD~1

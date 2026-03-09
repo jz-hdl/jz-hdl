@@ -21,7 +21,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR%/tests}"
 GOLDEN_DIR="${ROOT_DIR}/tests/golden"
-JZ_HDL_BIN="${ROOT_DIR}/build/jz-hdl"
+JZ_HDL_BIN="${JZ_HDL_BIN:-${ROOT_DIR}/build/jz-hdl}"
 
 if [[ ! -x "${JZ_HDL_BIN}" ]]; then
   echo "error: jz-hdl binary not found or not executable at: ${JZ_HDL_BIN}" >&2
