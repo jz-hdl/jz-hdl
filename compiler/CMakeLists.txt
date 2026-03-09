@@ -47,7 +47,8 @@ if(BUILD_TESTING)
     add_test(NAME literal_semantics COMMAND jz-literal-test)
     add_test(
         NAME lint_validation
-        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.sh
+        COMMAND ${CMAKE_COMMAND} -E env JZ_HDL_BIN=$<TARGET_FILE:jz-hdl>
+                bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.sh
     )
 endif()
 
