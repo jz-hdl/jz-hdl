@@ -247,7 +247,7 @@ static void print_line(const JZDiagnostic *d,
             }
         }
     } else {
-        code_text = "MISSING_RULE_FIXME";
+        code_text = d->code ? d->code : "UNKNOWN";
         desc_text = d->message ? d->message : "";
     }
 

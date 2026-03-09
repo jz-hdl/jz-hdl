@@ -53,7 +53,7 @@ void rtlil_backend_io_error(JZDiagnosticList *diagnostics,
     loc.line = 1;
     loc.column = 1;
     jz_diagnostic_report(diagnostics, loc, JZ_SEVERITY_ERROR,
-                         "BACKEND_IO", message);
+                         "IO_BACKEND", message);
 }
 
 void rtlil_indent(FILE *out, int level)

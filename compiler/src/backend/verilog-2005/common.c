@@ -41,7 +41,7 @@ void backend_io_error(JZDiagnosticList *diagnostics,
     jz_diagnostic_report(diagnostics,
                          loc,
                          JZ_SEVERITY_ERROR,
-                         "BACKEND_IO",
+                         "IO_BACKEND",
                          message);
 }
 

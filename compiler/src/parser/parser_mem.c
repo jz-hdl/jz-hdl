@@ -316,7 +316,7 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                  * Error-recovery for a very common mistake: using the read-port
                  * timing qualifiers on a write (IN) port, e.g. `IN wr ASYNC;`
                  * or `IN wr SYNC;`. Instead of treating this as a syntax error
-                 * (which would fall back to PARSE000/MISSING_RULE_FIXME), emit
+                 * (which would fall back to PARSE000), emit
                  * the MEM_INVALID_PORT_TYPE rule at the qualifier token and
                  * then continue parsing so the rest of the MEM block can still
                  * be analyzed.
