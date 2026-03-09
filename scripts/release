@@ -51,7 +51,7 @@ sed -i '' \
 
 # Specification markdown files
 for spec in "$REPO_ROOT"/specification/*.md; do
-  sed -i '' "s/Version: [0-9]*\.[0-9]*\.[0-9]*/Version: ${VERSION}/" "$spec"
+  sed -i '' "s/Version: [0-9][0-9.]*/Version: ${VERSION}/" "$spec"
 done
 
 # Commit version bump
