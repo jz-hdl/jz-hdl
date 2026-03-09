@@ -1,0 +1,59 @@
+# JZ-HDL
+
+> JZ-HDL is a hardware description language designed for clear, analyzable, and synthesis‑friendly RTL.
+
+Hardware Correctness by Construction
+
+## Table of Contents
+
+### Quick Start
+
+- [Overview](/jz-hdl/getting-started/overview.md)
+- [Contract](/jz-hdl/getting-started/contract.md)
+- [Installation](/jz-hdl/getting-started/installation.md)
+- [CLI Usage](/jz-hdl/getting-started/cli-usage.md)
+
+### Reference Manual
+
+- [Core Concepts](/jz-hdl/reference-manual/formal-reference/core-concepts.md)
+- [Net Drivers](/jz-hdl/reference-manual/net-drivers.md)
+- [Types and Widths](/jz-hdl/reference-manual/type-width-system.md)
+- [Projects](/jz-hdl/reference-manual/projects.md)
+- [Modules](/jz-hdl/reference-manual/modules.md)
+- [Memory](/jz-hdl/reference-manual/memory.md)
+- [Clock Domains](/jz-hdl/reference-manual/clock-domains.md)
+- [--tristate-default Compiler Flag](/jz-hdl/reference-manual/tristate-default.md)
+- [Errors and Diagnostics](/jz-hdl/reference-manual/errors-diagnostics-warnings.md)
+- [Migration Guide](/jz-hdl/reference-manual/migration.md)
+- [Language Examples](/jz-hdl/reference-manual/language-examples.md)
+
+#### Language Reference
+
+- [Core Concepts](/jz-hdl/reference-manual/formal-reference/core-concepts.md)
+- [Type System](/jz-hdl/reference-manual/formal-reference/type-system.md)
+- [Expressions and Operators](/jz-hdl/reference-manual/formal-reference/expressions-and-operators.md)
+- [Module Structure](/jz-hdl/reference-manual/formal-reference/module-structure.md)
+- [Statements](/jz-hdl/reference-manual/formal-reference/statements.md)
+- [Projects](/jz-hdl/reference-manual/formal-reference/projects.md)
+- [Memory (MEM) Reference](/jz-hdl/reference-manual/formal-reference/memory.md)
+- [Global Constant Blocks (@global)](/jz-hdl/reference-manual/formal-reference/global-block.md)
+- [Templates](/jz-hdl/reference-manual/formal-reference/templates.md)
+- [Compile-time Assertions (@check)](/jz-hdl/reference-manual/formal-reference/compile-time-check.md)
+
+### Verification
+
+- [Testbenches](/jz-hdl/reference-manual/testbench.md)
+- [Simulation](/jz-hdl/reference-manual/simulation.md)
+
+
+### Examples
+
+- [Counter](/jz-hdl/examples/counter.md)
+- [Latch](/jz-hdl/examples/latch.md)
+- [PLL Blink](/jz-hdl/examples/pll.md)
+- [DVI Color Bars](/jz-hdl/examples/dvi.md)
+- [DVI with Audio](/jz-hdl/examples/dvi-audio.md)
+- [Ascon-128 Encryption](/jz-hdl/examples/ascon.md)
+- [CPU Examples](/jz-hdl/examples/cpu.md)
+- [SOC](/jz-hdl/examples/soc.md)
+

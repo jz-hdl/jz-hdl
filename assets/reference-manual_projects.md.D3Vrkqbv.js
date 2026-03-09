@@ -1,0 +1,291 @@
+import{_ as s,o as e,c as n,ai as i}from"./chunks/framework.C4ntERNc.js";const u=JSON.parse('{"title":"Projects","description":"","frontmatter":{"title":"Projects","lang":"en-US","layout":"doc","outline":"deep"},"headers":[],"relativePath":"reference-manual/projects.md","filePath":"reference-manual/projects.md"}'),l={name:"reference-manual/projects.md"};function p(t,a,o,c,d,r){return e(),n("div",null,[...a[0]||(a[0]=[i(`<div style="display:none;" hidden="true" aria-hidden="true">Are you an LLM? You can read better optimized documentation at /jz-hdl/reference-manual/projects.md for this page in Markdown format</div><h1 id="projects" tabindex="-1">Projects <a class="header-anchor" href="#projects" aria-label="Permalink to “Projects”">​</a></h1><h2 id="project-overview" tabindex="-1">Project overview <a class="header-anchor" href="#project-overview" aria-label="Permalink to “Project overview”">​</a></h2><p>A JZ-HDL project (@project ... @endproj) is the chip-level integration unit. It collects:</p><ul><li>project-wide compile-time configuration (CONFIG),</li><li>clock &amp; pin declarations (CLOCKS, IN_PINS, OUT_PINS, INOUT_PINS),</li><li>physical pin mapping (MAP),</li><li>optional blackbox declarations usable anywhere in the project,</li><li>a single root/top instantiation via <code>@top</code>.</li></ul><p>A project:</p><ul><li>defines how modules are bound to board pins and clocks,</li><li>imports module/blackbox definitions from source files,</li><li>provides global configuration values (CONFIG) accessible to all module instantiations as <code>CONFIG.NAME</code>,</li><li>may include <code>@global</code> blocks (sized literal constants) that are usable as runtime values across all modules.</li></ul><p>Every design must contain exactly one <code>@project</code> block (per compilation unit) and exactly one <code>@top</code> declaration inside it.</p><hr><h2 id="project-canonical-form" tabindex="-1">Project canonical form <a class="header-anchor" href="#project-canonical-form" aria-label="Permalink to “Project canonical form”">​</a></h2><p>Canonical skeleton:</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@project(CHIP=&lt;chipid&gt;) &lt;project_name&gt;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @import &quot;&lt;path/to/library.jzhdl&gt;&quot;;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  CONFIG {</span></span>
+<span class="line"><span>    &lt;config_id&gt; = &lt;nonnegative_integer_expression&gt;;</span></span>
+<span class="line"><span>    ...</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  CLOCKS {</span></span>
+<span class="line"><span>    &lt;clock_name&gt; = { period=&lt;ns&gt;, edge=[Rising|Falling] };</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  IN_PINS { ... }</span></span>
+<span class="line"><span>  OUT_PINS { ... }</span></span>
+<span class="line"><span>  INOUT_PINS { ... }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  MAP { ... }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @blackbox &lt;name&gt; { PORT { ... } }</span></span>
+<span class="line"><span>  @blackbox ...</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @global &lt;global_name&gt;</span></span>
+<span class="line"><span>    &lt;const_id&gt; = &lt;width&gt;&#39;&lt;base&gt;&lt;value&gt;;</span></span>
+<span class="line"><span>    ...</span></span>
+<span class="line"><span>  @endglob</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @top &lt;top_module_name&gt; {</span></span>
+<span class="line"><span>    IN    [&lt;width&gt;] &lt;port_name&gt; = &lt;pin_expr | _&gt;;</span></span>
+<span class="line"><span>    OUT   [&lt;width&gt;] &lt;port_name&gt; = &lt;pin_expr | _&gt;;</span></span>
+<span class="line"><span>    INOUT [&lt;width&gt;] &lt;port_name&gt; = &lt;pin_expr | _&gt;;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>@endproj</span></span></code></pre></div><ul><li><code>CHIP=&lt;chipid&gt;</code> is optional; defaults to <code>GENERIC</code>. The chip ID is case-insensitive and may be an identifier or string literal.</li><li>If <code>CHIP</code> is not <code>GENERIC</code>, the compiler loads <code>&lt;chipid&gt;.json</code> from the project directory (falling back to its built-in database). The JSON file describes supported memory configurations, clock generators, and constraints.</li></ul><p>Key rules:</p><ul><li><code>@import</code> directives (optional) must appear immediately after <code>@project</code> header.</li><li>One <code>CONFIG</code> block maximum; <code>CONFIG</code> names are visible across modules via <code>CONFIG.NAME</code>.</li><li>All pins declared in IN/OUT/INOUT blocks must be mapped in <code>MAP</code>.</li><li>Exactly one <code>@top</code> instantiation must be present; the referenced module or blackbox must be defined in the project or imported.</li></ul><hr><h2 id="import" tabindex="-1">@import <a class="header-anchor" href="#import" aria-label="Permalink to “@import”">​</a></h2><p>Purpose</p><ul><li>Import module and blackbox definitions from other .jzhdl source files into the current project namespace.</li></ul><p>Placement and rules</p><ul><li>Only valid inside <code>@project</code>, and must appear immediately after the <code>@project</code> header and before CONFIG/CLOCKS/PIN blocks.</li><li>Imported files must not contain their own <code>@project</code>/<code>@endproj</code> pair.</li><li>Import paths are resolved and normalized. Re-importing the same resolved file (directly or transitively) is a compile error (IMPORT_FILE_MULTIPLE_TIMES).</li><li>After imports, all module and blackbox definitions form a single project-wide namespace and must be unique.</li></ul><p>Semantics</p><ul><li>Modules and blackboxes from imports are available to <code>@top</code> and <code>@new</code> instantiations.</li><li>Imported definitions are not automatically parameterized; overrides happen at instantiation via <code>OVERRIDE</code>.</li></ul><p>Path normalization</p><ul><li>Import paths use the OS canonical path resolution (POSIX <code>realpath</code>, Windows <code>_fullpath</code>) to normalize symbolic links, <code>.</code>/<code>..</code>, and redundant separators.</li><li>On case-insensitive filesystems, canonical resolution normalizes case for correct dedup.</li><li>Diagnostic messages report the original user-supplied path, not the resolved canonical path.</li></ul><p>Path security (sandbox)</p><ul><li>All user-specified file paths (<code>@import</code>, <code>@file()</code>) are subject to sandbox restrictions.</li><li>By default: absolute paths and <code>..</code> traversal are forbidden. Resolved paths must be within the sandbox root (directory of the input file).</li><li>CLI flags: <code>--sandbox-root=&lt;dir&gt;</code>, <code>--allow-absolute-paths</code>, <code>--allow-traversal</code>.</li><li>See the <a href="/jz-hdl/reference-manual/formal-reference/projects.html#path-security-sandbox">formal reference</a> for full details.</li></ul><p>Error conditions</p><ul><li>File not found (tool-specific handling)</li><li>Imported file contains <code>@project</code> block → compile error</li><li>Duplicate module/blackbox name across imports or local definitions → compile error</li><li>Absolute path without <code>--allow-absolute-paths</code> → <code>PATH_ABSOLUTE_FORBIDDEN</code></li><li>Path traversal (<code>..</code>) without <code>--allow-traversal</code> → <code>PATH_TRAVERSAL_FORBIDDEN</code></li><li>Path outside sandbox → <code>PATH_OUTSIDE_SANDBOX</code></li></ul><hr><h2 id="config-project-wide-constants" tabindex="-1">CONFIG (project-wide constants) <a class="header-anchor" href="#config-project-wide-constants" aria-label="Permalink to “CONFIG (project-wide constants)”">​</a></h2><p>Purpose</p><ul><li>Provide compile-time constants visible in all modules via <code>CONFIG.NAME</code>.</li></ul><p>Syntax</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>CONFIG {</span></span>
+<span class="line"><span>  NAME = &lt;nonnegative_integer_expression&gt;;   // numeric</span></span>
+<span class="line"><span>  NAME = &quot;&lt;string&gt;&quot;;                          // string</span></span>
+<span class="line"><span>  ...</span></span>
+<span class="line"><span>}</span></span></code></pre></div><p>Key properties</p><ul><li>Evaluated at compile time</li><li>Numeric entries: used in compile-time integer contexts (widths, MEM depths, OVERRIDE expressions)</li><li>String entries: used in string contexts such as <code>@file()</code> path arguments (e.g., <code>@file(CONFIG.FIRMWARE)</code>)</li><li>Not usable as runtime values in ASYNCHRONOUS or SYNCHRONOUS expressions</li><li>No shadowing between CONFIG and module-local CONST (use <code>CONFIG.NAME</code> to refer to project-wide values)</li></ul><p>Rules &amp; validation</p><ul><li>Only one CONFIG block per project</li><li>Numeric values must be nonnegative integers; expressions may reference earlier CONFIG names (forward references forbidden)</li><li>String values are double-quoted string literals</li><li>Circular dependencies among CONFIG entries → compile error</li><li>Using a string CONFIG where a number is expected → <code>CONST_STRING_IN_NUMERIC_CONTEXT</code></li><li>Using a numeric CONFIG where a string is expected → <code>CONST_NUMERIC_IN_STRING_CONTEXT</code></li></ul><p>Common uses</p><ul><li>XLEN, ADDR_WIDTH, feature enables, sizes shared across modules</li><li>File paths for MEM initialization (firmware images, lookup tables)</li></ul><p>Error examples</p><ul><li>Using CONFIG in runtime context → CONST_USED_WHERE_FORBIDDEN / CONFIG_USED_WHERE_FORBIDDEN</li><li>Missing CONFIG name referenced in a module instantiation width → CONFIG_USE_UNDECLARED</li><li>String CONFIG used as width → CONST_STRING_IN_NUMERIC_CONTEXT</li></ul><hr><h2 id="clocks" tabindex="-1">CLOCKS <a class="header-anchor" href="#clocks" aria-label="Permalink to “CLOCKS”">​</a></h2><p>Purpose</p><ul><li>Declare named clocks (period and edge) for timing analysis and to validate top‑level clock pin bindings.</li></ul><p>Syntax</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>CLOCKS {</span></span>
+<span class="line"><span>  clk_name = { period=&lt;positive_number&gt;, edge=[Rising|Falling] };</span></span>
+<span class="line"><span>}</span></span></code></pre></div><p>Rules</p><ul><li><code>clk_name</code> must be declared as an input pin (IN_PINS or CLOCKS-matched)</li><li>Period is in nanoseconds; must be &gt; 0</li><li>Edge defaults to Rising if omitted</li><li>Names must be unique within CLOCKS</li></ul><p>Validation</p><ul><li>Top-level pins referencing clock names must exist and be width <code>[1]</code></li><li>Duplicate clock name → error</li><li>Period ≤ 0 or invalid edge specifier → error</li></ul><hr><h2 id="clock-gen-clock-generators" tabindex="-1">CLOCK_GEN (clock generators) <a class="header-anchor" href="#clock-gen-clock-generators" aria-label="Permalink to “CLOCK_GEN (clock generators)”">​</a></h2><p>Purpose</p><ul><li>Define on-chip clock generation from PLLs, DLLs, or CLKDIVs, deriving new clocks from declared input clocks.</li></ul><p>Syntax</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>CLOCK_GEN {</span></span>
+<span class="line"><span>  &lt;gen_type&gt; {</span></span>
+<span class="line"><span>    IN &lt;in_clock&gt;;</span></span>
+<span class="line"><span>    OUT &lt;output_name&gt; &lt;out_clock&gt;;</span></span>
+<span class="line"><span>    ...</span></span>
+<span class="line"><span>    CONFIG {</span></span>
+<span class="line"><span>      &lt;param_name&gt; = &lt;param_value&gt;;</span></span>
+<span class="line"><span>      ...</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span>  };</span></span>
+<span class="line"><span>  ...</span></span>
+<span class="line"><span>}</span></span></code></pre></div><p><code>&lt;gen_type&gt;</code> is one of: <code>PLL</code>, <code>DLL</code>, <code>CLKDIV</code>, or <code>OSC</code>.</p><p>Semantics</p><ul><li>The input clock must refer to a clock declared in CLOCKS with a period (or a clock generated by another generator in the same CLOCK_GEN block for chaining).</li><li>The output name is a chip-specific output selector (e.g., <code>BASE</code>, <code>PHASE</code>, <code>DIV</code>, <code>DIV3</code>).</li><li>The output clock must refer to a clock declared in CLOCKS <strong>without</strong> a period (the compiler computes it from the generator configuration).</li><li>The generated clock must not be declared as an IN_PIN and must not already be driven by another CLOCK_GEN.</li><li>CONFIG parameters are chip-specific and validated against the chip&#39;s generator definition.</li><li>Not all outputs or parameters need to be used; omitting them is acceptable.</li><li>A single CLOCK_GEN block may contain multiple generators (e.g., a PLL followed by a CLKDIV that divides the PLL output).</li></ul><h3 id="generator-types" tabindex="-1">Generator types <a class="header-anchor" href="#generator-types" aria-label="Permalink to “Generator types”">​</a></h3><ul><li><strong>PLL</strong> (Phase-Locked Loop): Frequency synthesis with VCO, feedback divider, and multiple outputs (BASE, PHASE, DIV, DIV3). Used for generating arbitrary frequencies from a reference clock.</li><li><strong>DLL</strong> (Delay-Locked Loop): Phase alignment without frequency multiplication. Used for clock de-skew.</li><li><strong>CLKDIV</strong> (Clock Divider): Simple fixed-ratio frequency division. Divides an input clock by a fixed ratio (e.g., 2, 3.5, 4, 5). No VCO or feedback — simpler and lower-power than PLL. Produces a single BASE output. The <code>MODE</code> CONFIG parameter selects the chip-specific variant (e.g., <code>local</code> for IO-logic dividers, <code>global</code> for fabric-wide dividers) when multiple variants are available.</li><li><strong>OSC</strong> (Internal Oscillator): On-chip RC oscillator that generates a clock without any external reference. Does not require an IN clock. The output frequency is determined by chip-specific CONFIG parameters (e.g., <code>FREQ_DIV</code>, <code>DEVICE</code>). Produces a single BASE output.</li></ul><p>Validation</p><ul><li>Input clock must have a declared period in CLOCKS (or be driven by a prior generator in the same block).</li><li>Output clocks must not have a period in CLOCKS (it is derived).</li><li>VCO frequency (for PLL; derived from reference clock and divider parameters) must be within the chip&#39;s valid range.</li><li>CLOCK_GEN chaining is only permitted if the chip explicitly supports it.</li></ul><h3 id="pll-example" tabindex="-1">PLL example <a class="header-anchor" href="#pll-example" aria-label="Permalink to “PLL example”">​</a></h3><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>CLOCKS {</span></span>
+<span class="line"><span>  sys_clk = { period=37.04 };   // 27 MHz external clock</span></span>
+<span class="line"><span>  fast_clk;                      // derived by PLL (no period)</span></span>
+<span class="line"><span>}</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>CLOCK_GEN {</span></span>
+<span class="line"><span>  PLL {</span></span>
+<span class="line"><span>    IN sys_clk;</span></span>
+<span class="line"><span>    OUT BASE fast_clk;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>    CONFIG {</span></span>
+<span class="line"><span>      IDIV = 3;</span></span>
+<span class="line"><span>      FBDIV = 50;</span></span>
+<span class="line"><span>      ODIV = 2;</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span>  };</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h3 id="clkdiv-example" tabindex="-1">CLKDIV example <a class="header-anchor" href="#clkdiv-example" aria-label="Permalink to “CLKDIV example”">​</a></h3><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>CLOCKS {</span></span>
+<span class="line"><span>  serial_clk = { period=4.0 };  // 250 MHz serial clock</span></span>
+<span class="line"><span>  pixel_clk;                     // 50 MHz pixel clock (serial / 5)</span></span>
+<span class="line"><span>}</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>CLOCK_GEN {</span></span>
+<span class="line"><span>  CLKDIV {</span></span>
+<span class="line"><span>    IN serial_clk;</span></span>
+<span class="line"><span>    OUT BASE pixel_clk;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>    CONFIG {</span></span>
+<span class="line"><span>      DIV_MODE = 5;</span></span>
+<span class="line"><span>      MODE = local;</span></span>
+<span class="line"><span>    };</span></span>
+<span class="line"><span>  };</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h3 id="osc-example" tabindex="-1">OSC example <a class="header-anchor" href="#osc-example" aria-label="Permalink to “OSC example”">​</a></h3><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>CLOCKS {</span></span>
+<span class="line"><span>  osc_clk;  // generated by internal oscillator</span></span>
+<span class="line"><span>}</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>CLOCK_GEN {</span></span>
+<span class="line"><span>  OSC {</span></span>
+<span class="line"><span>    OUT BASE osc_clk;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>    CONFIG {</span></span>
+<span class="line"><span>      FREQ_DIV = 10;</span></span>
+<span class="line"><span>    };</span></span>
+<span class="line"><span>  };</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h3 id="chaining-pll-clkdiv" tabindex="-1">Chaining PLL + CLKDIV <a class="header-anchor" href="#chaining-pll-clkdiv" aria-label="Permalink to “Chaining PLL + CLKDIV”">​</a></h3><p>A common pattern is to use a PLL to synthesize a high-frequency clock, then a CLKDIV to derive a lower-frequency clock from it. Both generators appear in the same CLOCK_GEN block:</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>CLOCKS {</span></span>
+<span class="line"><span>  SCLK       = { period=37.037 };  // 27 MHz crystal</span></span>
+<span class="line"><span>  serial_clk;                       // 126 MHz (from PLL)</span></span>
+<span class="line"><span>  pixel_clk;                        // 25.2 MHz (serial / 5)</span></span>
+<span class="line"><span>}</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>CLOCK_GEN {</span></span>
+<span class="line"><span>  PLL {</span></span>
+<span class="line"><span>    IN SCLK;</span></span>
+<span class="line"><span>    OUT BASE serial_clk;</span></span>
+<span class="line"><span>    CONFIG {</span></span>
+<span class="line"><span>      IDIV = 2;</span></span>
+<span class="line"><span>      FBDIV = 13;</span></span>
+<span class="line"><span>      ODIV = 8;</span></span>
+<span class="line"><span>    };</span></span>
+<span class="line"><span>  };</span></span>
+<span class="line"><span>  CLKDIV {</span></span>
+<span class="line"><span>    IN serial_clk;</span></span>
+<span class="line"><span>    OUT BASE pixel_clk;</span></span>
+<span class="line"><span>    CONFIG {</span></span>
+<span class="line"><span>      DIV_MODE = 5;</span></span>
+<span class="line"><span>    };</span></span>
+<span class="line"><span>  };</span></span>
+<span class="line"><span>}</span></span></code></pre></div><hr><h2 id="pin-blocks" tabindex="-1">PIN BLOCKS <a class="header-anchor" href="#pin-blocks" aria-label="Permalink to “PIN BLOCKS”">​</a></h2><p>Three blocks declare the chip&#39;s electrical I/O: IN_PINS, OUT_PINS and INOUT_PINS. Each entry names a logical pin and its electrical properties.</p><h3 id="pin-attributes" tabindex="-1">Pin attributes <a class="header-anchor" href="#pin-attributes" aria-label="Permalink to “Pin attributes”">​</a></h3><table tabindex="0"><thead><tr><th>Attribute</th><th>Required</th><th>Values</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>standard</code></td><td>Yes (all pins)</td><td>See I/O standards below</td><td>—</td><td>Electrical I/O standard</td></tr><tr><td><code>drive</code></td><td>Yes (OUT, INOUT)</td><td>Integer or fractional (e.g., <code>8</code>, <code>3.5</code>)</td><td>—</td><td>Drive strength in milliamps</td></tr><tr><td><code>mode</code></td><td>No</td><td><code>SINGLE</code>, <code>DIFFERENTIAL</code></td><td><code>SINGLE</code></td><td>Single-ended or differential signaling</td></tr><tr><td><code>term</code></td><td>No</td><td><code>ON</code>, <code>OFF</code></td><td><code>OFF</code></td><td>On-die termination resistor</td></tr><tr><td><code>pull</code></td><td>No</td><td><code>UP</code>, <code>DOWN</code>, <code>NONE</code></td><td><code>NONE</code></td><td>Pull-up/pull-down resistor</td></tr><tr><td><code>fclk</code></td><td>No</td><td>clock name</td><td>—</td><td>Serialization clock for differential output (fast clock)</td></tr><tr><td><code>pclk</code></td><td>No</td><td>clock name</td><td>—</td><td>Parallel clock for differential output (pixel/data clock)</td></tr></tbody></table><h3 id="i-o-standards" tabindex="-1">I/O standards <a class="header-anchor" href="#i-o-standards" aria-label="Permalink to “I/O standards”">​</a></h3><p><strong>Single-ended standards</strong> (<code>mode=SINGLE</code> or default): <code>LVTTL</code>, <code>LVCMOS33</code>, <code>LVCMOS25</code>, <code>LVCMOS18</code>, <code>LVCMOS15</code>, <code>LVCMOS12</code>, <code>PCI33</code>, <code>SSTL25_I</code>, <code>SSTL25_II</code>, <code>SSTL18_I</code>, <code>SSTL18_II</code>, <code>SSTL15</code>, <code>SSTL135</code>, <code>HSTL18_I</code>, <code>HSTL18_II</code>, <code>HSTL15_I</code>, <code>HSTL15_II</code></p><p><strong>Differential standards</strong> (<code>mode=DIFFERENTIAL</code>): <code>LVDS25</code>, <code>LVDS33</code>, <code>BLVDS25</code>, <code>EXT_LVDS25</code>, <code>TMDS33</code>, <code>RSDS</code>, <code>MINI_LVDS</code>, <code>PPDS</code>, <code>SUB_LVDS</code>, <code>SLVS</code>, <code>LVPECL33</code>, <code>DIFF_SSTL25_I</code>, <code>DIFF_SSTL25_II</code>, <code>DIFF_SSTL18_I</code>, <code>DIFF_SSTL18_II</code>, <code>DIFF_SSTL15</code>, <code>DIFF_SSTL135</code>, <code>DIFF_HSTL18_I</code>, <code>DIFF_HSTL18_II</code>, <code>DIFF_HSTL15_I</code>, <code>DIFF_HSTL15_II</code></p><h3 id="syntax-examples" tabindex="-1">Syntax examples <a class="header-anchor" href="#syntax-examples" aria-label="Permalink to “Syntax examples”">​</a></h3><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>IN_PINS {</span></span>
+<span class="line"><span>  clk = { standard=LVCMOS33 };</span></span>
+<span class="line"><span>  button[2] = { standard=LVCMOS18 };</span></span>
+<span class="line"><span>}</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>OUT_PINS {</span></span>
+<span class="line"><span>  led[6] = { standard=LVCMOS18, drive=8 };</span></span>
+<span class="line"><span>  TMDS_CLK = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5 };</span></span>
+<span class="line"><span>  TMDS_DATA[3] = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5 };</span></span>
+<span class="line"><span>}</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>INOUT_PINS {</span></span>
+<span class="line"><span>  data_bus[8] = { standard=LVCMOS33, drive=8 };</span></span>
+<span class="line"><span>  EDID_DAT = { standard=LVCMOS33, drive=4, pull=UP };</span></span>
+<span class="line"><span>  EDID_CLK = { standard=LVCMOS33, drive=4, pull=UP };</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h3 id="rules" tabindex="-1">Rules <a class="header-anchor" href="#rules" aria-label="Permalink to “Rules”">​</a></h3><ul><li>Pin names must be unique across all PIN blocks</li><li>Bus syntax <code>[N]</code> declares a multi-bit pin; width must be positive integer</li><li><code>standard</code> required for all pins; <code>drive</code> required for OUT and INOUT pins</li><li>For buses, MAP must map each bit individually</li><li><code>mode</code> must be consistent with <code>standard</code>: differential standards require <code>mode=DIFFERENTIAL</code>, single-ended standards require <code>mode=SINGLE</code> (or omit <code>mode</code>)</li><li><code>term</code> is valid only for <code>mode=DIFFERENTIAL</code> or for single-ended SSTL/HSTL standards (which support on-die termination)</li><li><code>pull</code> is not valid on <code>OUT_PINS</code> (outputs drive the pin, they cannot be pulled)</li></ul><h3 id="validation-errors" tabindex="-1">Validation errors <a class="header-anchor" href="#validation-errors" aria-label="Permalink to “Validation errors”">​</a></h3><ul><li>Declaring a pin in multiple pin blocks</li><li>Missing or invalid <code>drive</code> on OUT/INOUT pins</li><li>Bus width ≤ 0 → error</li><li><code>mode=DIFFERENTIAL</code> with a single-ended standard (or vice versa) → <code>PIN_MODE_STANDARD_MISMATCH</code></li><li><code>pull=UP</code> or <code>pull=DOWN</code> on an OUT_PINS entry → <code>PIN_PULL_ON_OUTPUT</code></li><li><code>term=ON</code> on a standard that doesn&#39;t support termination → <code>PIN_TERM_INVALID_FOR_STANDARD</code></li></ul><h3 id="notes" tabindex="-1">Notes <a class="header-anchor" href="#notes" aria-label="Permalink to “Notes”">​</a></h3><ul><li>CLOCKS entries should reference an IN_PINS clock pin name</li><li>Pin physical mapping is performed in MAP block; missing mapping is an error</li><li>Fractional drive values (e.g., <code>3.5</code>) are supported for standards that use them</li></ul><hr><h2 id="map-physical-pin-mapping" tabindex="-1">MAP (physical pin mapping) <a class="header-anchor" href="#map-physical-pin-mapping" aria-label="Permalink to “MAP (physical pin mapping)”">​</a></h2><p>Purpose</p><ul><li>Bind logical top-level pin names to physical board/package pins.</li></ul><h3 id="single-ended-syntax" tabindex="-1">Single-ended syntax <a class="header-anchor" href="#single-ended-syntax" aria-label="Permalink to “Single-ended syntax”">​</a></h3><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>MAP {</span></span>
+<span class="line"><span>  clk = 52;</span></span>
+<span class="line"><span>  led[0] = 10;</span></span>
+<span class="line"><span>  data_bus[7] = GPIO_27;</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h3 id="differential-syntax" tabindex="-1">Differential syntax <a class="header-anchor" href="#differential-syntax" aria-label="Permalink to “Differential syntax”">​</a></h3><p>Differential pins (<code>mode=DIFFERENTIAL</code>) use the <code>{ P=&lt;id&gt;, N=&lt;id&gt; }</code> syntax to specify both the positive and negative physical pin:</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>MAP {</span></span>
+<span class="line"><span>  TMDS_CLK = { P=33, N=34 };</span></span>
+<span class="line"><span>  TMDS_DATA[0] = { P=35, N=36 };</span></span>
+<span class="line"><span>  TMDS_DATA[1] = { P=37, N=38 };</span></span>
+<span class="line"><span>  TMDS_DATA[2] = { P=39, N=40 };</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h3 id="rules-1" tabindex="-1">Rules <a class="header-anchor" href="#rules-1" aria-label="Permalink to “Rules”">​</a></h3><ul><li>Every declared pin (from IN/OUT/INOUT) must have corresponding MAP entries</li><li>Bus bits must be mapped individually</li><li>Map entries must reference declared pins; mapping undeclared pins → error</li><li>Duplicate assignment of the same physical pin must be validated (allowed only if tri-state by design)</li><li>Differential pins must use <code>{ P=&lt;id&gt;, N=&lt;id&gt; }</code> syntax; single-ended pins must use scalar syntax</li><li>Both P and N physical pins are checked for duplicate physical location conflicts</li><li>P and N must be different physical pins</li></ul><h3 id="validation-errors-1" tabindex="-1">Validation errors <a class="header-anchor" href="#validation-errors-1" aria-label="Permalink to “Validation errors”">​</a></h3><ul><li>Pin declared but not mapped → compile error</li><li>Mapped pin not declared → compile error</li><li>Duplicate mappings → warning or error (tool-dependent)</li><li>Differential pin with scalar MAP → <code>MAP_DIFF_EXPECTED_PAIR</code></li><li>Single-ended pin with <code>{ P, N }</code> MAP → <code>MAP_SINGLE_UNEXPECTED_PAIR</code></li><li>Differential MAP missing P or N → <code>MAP_DIFF_MISSING_PN</code></li><li>P and N are the same physical pin → <code>MAP_DIFF_SAME_PIN</code></li></ul><hr><h2 id="bus-physical-pin-mapping" tabindex="-1">BUS (physical pin mapping) <a class="header-anchor" href="#bus-physical-pin-mapping" aria-label="Permalink to “BUS (physical pin mapping)”">​</a></h2><p>Purpose</p><ul><li>Provide a reusable, project‑level description of a grouped set of signals (a &quot;bus&quot;) and a compact way for modules to instantiate and connect those buses.</li><li>Let module authors declare a bus-shaped port and have the tool automatically resolve each member signal&#39;s direction based on the module&#39;s role (initiator vs responder).</li></ul><p>Project-level BUS definition</p><p>Syntax (inside @project):</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>BUS &lt;bus_id&gt; {</span></span>
+<span class="line"><span>  IN    [&lt;width&gt;]  &lt;signal&gt;;</span></span>
+<span class="line"><span>  OUT   [&lt;width&gt;]  &lt;signal&gt;;</span></span>
+<span class="line"><span>  INOUT [&lt;width&gt;]  &lt;signal&gt;;</span></span>
+<span class="line"><span>  ...</span></span>
+<span class="line"><span>}</span></span></code></pre></div><p>Notes</p><ul><li>The bus_id is a project-wide identifier and must be unique.</li><li>Directions (IN/OUT/INOUT) in a BUS block are written from the SOURCE (initiator) perspective.</li><li>Widths may be literals or CONFIG expressions (e.g., CONFIG.XLEN).</li></ul><hr><h2 id="chip-id-json" tabindex="-1">Chip ID JSON <a class="header-anchor" href="#chip-id-json" aria-label="Permalink to “Chip ID JSON”">​</a></h2><p>When <code>CHIP</code> is not <code>GENERIC</code>, the compiler loads a chip data JSON file that describes:</p><ul><li><strong>memory</strong>: Array of objects describing supported memory configurations (DISTRIBUTED, BLOCK types with width/depth combinations).</li><li><strong>clock_gen</strong>: Array of objects describing clock generators (PLL, DLL, CLKDIV) with parameters, derived expressions, outputs, and constraints.</li></ul><p>The JSON schema includes:</p><ul><li><code>memory[].type</code>: <code>DISTRIBUTED</code> or <code>BLOCK</code></li><li><code>memory[].configurations[]</code>: <code>{ width, depth }</code> pairs</li><li><code>clock_gen[].type</code>: <code>pll</code>, <code>dll</code>, or <code>clkdiv</code></li><li><code>clock_gen[].parameters</code>: Named parameters with type, min, max constraints</li><li><code>clock_gen[].derived</code>: Computed values (e.g., VCO frequency) with expressions and valid ranges</li><li><code>clock_gen[].outputs</code>: Named outputs (e.g., <code>BASE</code>, <code>PHASE</code>, <code>DIV</code>, <code>DIV3</code>) with frequency expressions</li></ul><p>All periods are in nanoseconds; all derived frequency expressions output MHz. Expressions are evaluated in a restricted expression language (identifiers + math, no side effects).</p><p>The compiler validates MEM declarations and CLOCK_GEN configurations against the chip data. If validation fails, a compile error is emitted with the specific constraint that was violated.</p><hr><h2 id="blackbox" tabindex="-1">@blackbox <a class="header-anchor" href="#blackbox" aria-label="Permalink to “@blackbox”">​</a></h2><p>Purpose</p><ul><li>Declare opaque/externally-supplied modules (hard macros, vendor IP, encrypted cores) inside the project.</li></ul><p>Syntax</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@blackbox &lt;name&gt; {</span></span>
+<span class="line"><span>  PORT {</span></span>
+<span class="line"><span>    IN    [&lt;width&gt;] a;</span></span>
+<span class="line"><span>    OUT   [&lt;width&gt;] b;</span></span>
+<span class="line"><span>    INOUT [&lt;width&gt;] bus;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span>}</span></span></code></pre></div><p>Rules</p><ul><li>Blackbox declarations must appear inside <code>@project</code> (before <code>@top</code>)</li><li>Name shares same namespace as modules; must be unique project-wide</li><li>No body: cannot contain WIRE, REGISTER, ASYNCHRONOUS, MEM, etc.</li><li>Blackboxes may include CONST blocks; interpreted as local configuration for that IP</li></ul><p>Instantiation</p><ul><li>Use <code>@new</code> inside modules to instantiate a blackbox, same as module instantiation. OVERRIDE is allowed and passed through.</li></ul><p>Example with OVERRIDE:</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@module parent</span></span>
+<span class="line"><span>  CONST { DATA_WIDTH = 16; }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @new mem0 memory_wrapper {</span></span>
+<span class="line"><span>    OVERRIDE {</span></span>
+<span class="line"><span>      WORD_WIDTH = 32;</span></span>
+<span class="line"><span>      DEPTH = 512;</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span>    IN  [1]  clk = clk;</span></span>
+<span class="line"><span>    IN  [9]  addr = mem_addr;</span></span>
+<span class="line"><span>    IN  [32] wr_data = mem_wdata;</span></span>
+<span class="line"><span>    IN  [1]  wr_en = mem_wen;</span></span>
+<span class="line"><span>    OUT [32] rd_data = mem_rdata;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span>@endmod</span></span></code></pre></div><p>The <code>OVERRIDE</code> block replaces the child module&#39;s <code>CONST</code> values before elaboration. This allows a single module definition to be instantiated with different configurations.</p><p>Validation</p><ul><li>Port widths and directions must match at instantiation</li><li>Missing blackbox declaration for <code>@new</code> → error</li></ul><p>Example use cases</p><ul><li>BRAM/DSP primitives, PLLs, vendor SERDES, encrypted IP</li></ul><hr><h2 id="top-top-level-module-instantiation" tabindex="-1">@top (top-level module instantiation) <a class="header-anchor" href="#top-top-level-module-instantiation" aria-label="Permalink to “@top (top-level module instantiation)”">​</a></h2><p>Purpose</p><ul><li>Define the design root and bind module ports to physical pins or <code>_</code> (no-connect).</li></ul><p>Syntax</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@top &lt;top_module_name&gt; {</span></span>
+<span class="line"><span>  IN  [1] clk = hw_clk;</span></span>
+<span class="line"><span>  OUT [6] led = leds;</span></span>
+<span class="line"><span>  INOUT [8] data = data_bus;</span></span>
+<span class="line"><span>  OUT [1] debug = _;</span></span>
+<span class="line"><span>}</span></span></code></pre></div><p>Rules</p><ul><li>Exactly one @top block required inside a project</li><li>The top module name must refer to a module or blackbox defined in project or imported files</li><li>All module ports must be listed in @top (omitting a port is a compile error)</li><li>For each port: <ul><li>If name is <code>_</code>, the port is intentionally not connected to board pins</li><li>Otherwise the name must resolve to a declared pin in a compatible PIN block (IN → IN_PINS/INOUT_PINS/CLOCKS, OUT → OUT_PINS/INOUT_PINS, INOUT → INOUT_PINS)</li></ul></li><li>Port widths must exactly match module port widths</li></ul><p>Validation errors</p><ul><li>Top module not found</li><li>Port not listed</li><li>Port width mismatch</li><li>Port direction vs pin category mismatch</li><li>Pin not mapped in MAP</li></ul><h3 id="logical-to-physical-expansion" tabindex="-1">Logical-to-Physical Expansion <a class="header-anchor" href="#logical-to-physical-expansion" aria-label="Permalink to “Logical-to-Physical Expansion”">​</a></h3><p>For <code>@top</code> port bindings, the compiler handles width matching between module ports and physical pins:</p><ul><li><code>width(port_name)</code> must equal <code>width(pin_name)</code> regardless of pin mode (<code>SINGLE</code> or <code>DIFFERENTIAL</code>).</li><li>For <code>mode=DIFFERENTIAL</code> pins, the compiler internally handles the 2-pin (P/N) expansion per bit. From the module&#39;s perspective, the port is a single-ended signal of the declared width.</li></ul><hr><h2 id="global-project-wide-sized-literals" tabindex="-1">@global (project-wide sized literals) <a class="header-anchor" href="#global-project-wide-sized-literals" aria-label="Permalink to “@global (project-wide sized literals)”">​</a></h2><p>Purpose</p><ul><li>Provide named, sized literal constants accessible as runtime values in any module: instruction encodings, bit-pattern constants, opcodes, etc.</li></ul><p>Syntax</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@global &lt;namespace_name&gt;</span></span>
+<span class="line"><span>  NAME = &lt;width&gt;&#39;&lt;base&gt;&lt;value&gt;;</span></span>
+<span class="line"><span>  OTHER = 8&#39;b1010_1100;</span></span>
+<span class="line"><span>@endglob</span></span></code></pre></div><p>Key properties</p><ul><li>Each constant is a sized literal with explicit width (follows literal rules from Section 2.1)</li><li>Referenced in modules as <code>namespace_name.NAME</code></li><li>Global constants are values (unlike CONFIG which are compile-time integers)</li><li>Usable anywhere a value may appear: RHS of assignments, conditions, intrinsic operator arguments, etc.</li></ul><p>Rules &amp; validation</p><ul><li>The namespace name must be unique across project compilation</li><li>Each const_id must be unique inside its <code>@global</code> block</li><li>Values must obey literal rules: size, base, intrinsic-width ≤ declared width (overflow → error)</li><li><code>x</code> bits are allowed in binary literals but must follow Observability Rule (may not propagate into observable sinks)</li></ul><p>Use cases</p><ul><li>Instruction encodings, opcode masks, default packet fields, fixed bit patterns used at runtime</li></ul><p>Errors</p><ul><li>Duplicate global namespace</li><li>Duplicate constant identifier in the same block</li><li>Invalid literal syntax or overflow</li><li>Attempting to assign to a global constant (read-only)</li></ul><p>Example</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@global ISA</span></span>
+<span class="line"><span>  INST_ADD   = 17&#39;b0110011_0000000_000;</span></span>
+<span class="line"><span>  INST_SUB   = 17&#39;b0110011_0100000_000;</span></span>
+<span class="line"><span>@endglob</span></span></code></pre></div><p>Usage inside a module:</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>IF (opcode == ISA.INST_ADD) { ... }</span></span></code></pre></div><hr><h2 id="check-compile-time-assertions" tabindex="-1">@check (compile-time assertions) <a class="header-anchor" href="#check-compile-time-assertions" aria-label="Permalink to “@check (compile-time assertions)”">​</a></h2><p>Purpose</p><ul><li>Validate compile-time constraints (widths, config sanity, address ranges) during elaboration. A <code>@check</code> failure aborts compilation. <code>@check</code> never generates hardware or runtime behavior.</li></ul><p>Syntax</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@check (&lt;constant_expression&gt;, &lt;string_message&gt;);</span></span></code></pre></div><p>Rules</p><ul><li>The expression must evaluate to a constant, nonnegative integer at compile time.</li><li>If the expression is zero (false), compilation fails with the message.</li><li>Allowed operands: integer literals, <code>CONST</code>, <code>CONFIG.NAME</code>, <code>clog2()</code>, comparisons, logical operators.</li><li>Forbidden: any runtime signal (ports, wires, registers, memory ports, slices).</li><li><code>@check</code> may appear inside <code>@project</code> or <code>@module</code>, but not inside blocks (ASYNCHRONOUS, SYNCHRONOUS, etc.).</li></ul><p>Examples</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>// Valid: width constraint</span></span>
+<span class="line"><span>CONST { WIDTH = 32; }</span></span>
+<span class="line"><span>@check (WIDTH % 8 == 0, &quot;Width must be a multiple of 8.&quot;);</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Valid: project config constraint</span></span>
+<span class="line"><span>@check (CONFIG.DATA_WIDTH &gt;= 8, &quot;Data width must be at least 8.&quot;);</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Valid: address width sanity</span></span>
+<span class="line"><span>CONST { DEPTH = 256; ADDR_W = 8; }</span></span>
+<span class="line"><span>@check (ADDR_W == clog2(DEPTH), &quot;Address width does not match depth.&quot;);</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Invalid: runtime signal</span></span>
+<span class="line"><span>@check (select == 3, &quot;...&quot;);  // ERROR: non-constant expression</span></span></code></pre></div><hr><h2 id="validation-rules-and-common-errors-project-level" tabindex="-1">Validation rules and common errors (project-level) <a class="header-anchor" href="#validation-rules-and-common-errors-project-level" aria-label="Permalink to “Validation rules and common errors (project-level)”">​</a></h2><ul><li>Only one <code>@project</code> per file; missing <code>@endproj</code> → error.</li><li><code>@import</code> files must be unique after path normalization; duplicate import → error.</li><li><code>CONFIG</code> forward reference or circular dependency → compile error.</li><li><code>CLOCKS</code> entries must reference declared IN pins and have width <code>[1]</code>.</li><li>Pin conflicts: same pin declared in multiple PIN blocks → error.</li><li>MAP must include entries for every declared pin; unmapped pins → error.</li><li><code>@top</code> must reference an existing module/blackbox and list all its ports.</li><li>Port/pin direction mismatch (e.g., module IN bound to OUT_PINS, module INOUT bound to IN_PINS) → error.</li><li>Duplicate module or blackbox names across imports and local definitions → compile error.</li><li>Invalid <code>@global</code> literal (unsized, overflow, invalid digits) → compile error.</li></ul><hr><h2 id="best-practices-and-checklists" tabindex="-1">Best practices and checklists <a class="header-anchor" href="#best-practices-and-checklists" aria-label="Permalink to “Best practices and checklists”">​</a></h2><p>Project checklist before compilation</p><ul><li>[ ] All module/blackbox names required by <code>@top</code> and <code>@new</code> are defined or imported</li><li>[ ] Each declared pin has a MAP entry (bus bits mapped individually)</li><li>[ ] <code>CONFIG</code> contains shared sizes (XLEN, ADDR_WIDTH) used by multiple modules</li><li>[ ] Clocks declared in CLOCKS match top-level clock pins (names and widths)</li><li>[ ] <code>@global</code> values for opcode masks and encodings are defined and used consistently</li><li>[ ] <code>@import</code> paths are normalized and not duplicated across project imports</li><li>[ ] Blackboxes declared for vendor IP; OVERRIDE used at instantiation where needed</li><li>[ ] No port width mismatch between top and module definitions</li><li>[ ] Pin electrical standards and drive strengths set correctly for board hardware</li></ul><p>Recommended style</p><ul><li>Use <code>CONFIG</code> for integer sizes shared across modules (compile-time); use <code>@global</code> for sized bit-patterns used at runtime.</li><li>Keep <code>@import</code> lines centralized at top of <code>@project</code> for clarity.</li><li>Name clocks clearly (e.g., sys_clk, ref_clk) and document periods in CLOCKS.</li><li>Map pins with clear comments in MAP for board reference.</li><li>Use <code>_</code> in <code>@top</code> to explicitly ignore unused top ports and avoid accidental omissions.</li></ul><hr><h2 id="examples" tabindex="-1">Examples <a class="header-anchor" href="#examples" aria-label="Permalink to “Examples”">​</a></h2><p>Minimal project with @global and imports:</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@project example_proj</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @import &quot;cores.jzhdl&quot;;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  CONFIG {</span></span>
+<span class="line"><span>    XLEN = 32;</span></span>
+<span class="line"><span>    REG_DEPTH = 32;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  CLOCKS {</span></span>
+<span class="line"><span>    sys_clk = { period=10 };  // 100 MHz</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  IN_PINS {</span></span>
+<span class="line"><span>    sys_clk = { standard=LVCMOS33 };</span></span>
+<span class="line"><span>    btn = { standard=LVCMOS18 };</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  OUT_PINS {</span></span>
+<span class="line"><span>    leds[4] = { standard=LVCMOS18, drive=8 };</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  MAP {</span></span>
+<span class="line"><span>    sys_clk = 1;</span></span>
+<span class="line"><span>    btn = 2;</span></span>
+<span class="line"><span>    leds[0] = 10;</span></span>
+<span class="line"><span>    leds[1] = 11;</span></span>
+<span class="line"><span>    leds[2] = 12;</span></span>
+<span class="line"><span>    leds[3] = 13;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @blackbox pll_ip {</span></span>
+<span class="line"><span>    PORT { IN [1] clk_in; OUT [1] clk_out; OUT [1] locked; }</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @global ISA</span></span>
+<span class="line"><span>    INST_ADD = 17&#39;b0110011_0000000_000;</span></span>
+<span class="line"><span>    INST_SUB = 17&#39;b0110011_0100000_000;</span></span>
+<span class="line"><span>  @endglob</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @top top_core {</span></span>
+<span class="line"><span>    IN  [1] clk = sys_clk;</span></span>
+<span class="line"><span>    IN  [1] button = btn;</span></span>
+<span class="line"><span>    OUT [4] led = leds;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>@endproj</span></span></code></pre></div><p>Example with differential signaling and pull-up resistors (DVI output):</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@project dvi_proj</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  CLOCKS {</span></span>
+<span class="line"><span>    SCLK = { period=37.04 };</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  IN_PINS {</span></span>
+<span class="line"><span>    SCLK = { standard=LVCMOS33 };</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  OUT_PINS {</span></span>
+<span class="line"><span>    LED[6]       = { standard=LVCMOS33, drive=8 };</span></span>
+<span class="line"><span>    TMDS_CLK     = { mode=DIFFERENTIAL, standard=LVDS25, drive=4 };</span></span>
+<span class="line"><span>    TMDS_DATA[3] = { mode=DIFFERENTIAL, standard=LVDS25, drive=4 };</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  INOUT_PINS {</span></span>
+<span class="line"><span>    EDID_DAT = { standard=LVCMOS33, drive=4, pull=UP };</span></span>
+<span class="line"><span>    EDID_CLK = { standard=LVCMOS33, drive=4, pull=UP };</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  MAP {</span></span>
+<span class="line"><span>    SCLK = 4;</span></span>
+<span class="line"><span>    LED[0] = 15;</span></span>
+<span class="line"><span>    LED[1] = 16;</span></span>
+<span class="line"><span>    LED[2] = 17;</span></span>
+<span class="line"><span>    LED[3] = 18;</span></span>
+<span class="line"><span>    LED[4] = 19;</span></span>
+<span class="line"><span>    LED[5] = 20;</span></span>
+<span class="line"><span>    TMDS_CLK     = { P=33, N=34 };</span></span>
+<span class="line"><span>    TMDS_DATA[0] = { P=35, N=36 };</span></span>
+<span class="line"><span>    TMDS_DATA[1] = { P=37, N=38 };</span></span>
+<span class="line"><span>    TMDS_DATA[2] = { P=39, N=40 };</span></span>
+<span class="line"><span>    EDID_DAT = 52;</span></span>
+<span class="line"><span>    EDID_CLK = 53;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  @top dvi_top {</span></span>
+<span class="line"><span>    IN  [1] clk       = SCLK;</span></span>
+<span class="line"><span>    OUT [6] leds      = LED;</span></span>
+<span class="line"><span>    OUT [1] tmds_clk  = TMDS_CLK;</span></span>
+<span class="line"><span>    OUT [3] tmds_data = TMDS_DATA;</span></span>
+<span class="line"><span>    INOUT [1] edid_dat = EDID_DAT;</span></span>
+<span class="line"><span>    INOUT [1] edid_clk = EDID_CLK;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>@endproj</span></span></code></pre></div><p>Example showing CONFIG + top instantiation using CONFIG:</p><div class="language-text"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span>@project param_proj</span></span>
+<span class="line"><span>  CONFIG { XLEN = 64; }</span></span>
+<span class="line"><span>  CLOCKS { clk = { period=5 }; }</span></span>
+<span class="line"><span>  IN_PINS { clk = { standard=LVCMOS33 }; }</span></span>
+<span class="line"><span>  OUT_PINS { out_bus[XLEN] = { standard=LVCMOS33, drive=8 }; }</span></span>
+<span class="line"><span>  MAP { clk = 1; out_bus[0] = 10; /* ... map remaining bits ... */ }</span></span>
+<span class="line"><span>  @top wide_top {</span></span>
+<span class="line"><span>    IN [1] clk = clk;</span></span>
+<span class="line"><span>    OUT [XLEN] out_bus = out_bus;</span></span>
+<span class="line"><span>  }</span></span>
+<span class="line"><span>@endproj</span></span></code></pre></div>`,196)])])}const m=s(l,[["render",p]]);export{u as __pageData,m as default};
