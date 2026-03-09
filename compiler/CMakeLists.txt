@@ -19,7 +19,7 @@ add_compile_definitions(_DEFAULT_SOURCE _POSIX_C_SOURCE=200809L)
 
 # Strict warnings for supported compilers
 if(CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "GNU")
-    add_compile_options(-Wall -Wextra -Wpedantic)
+    add_compile_options(-Wall -Wextra -Wpedantic -Wunused-function -Wunused-variable)
 elseif(MSVC)
     add_compile_options(/W4)
 endif()
