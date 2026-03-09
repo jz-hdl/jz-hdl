@@ -2,14 +2,12 @@
 set -euo pipefail
 
 # Build the VitePress docs site and deploy to the gh-pages branch.
+# Uses a temporary clone so the working repo is never modified.
 # Usage: scripts/gitpages-update
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOCS_DIR="$REPO_ROOT/docs"
 DIST_DIR="$DOCS_DIR/.vitepress/dist"
-
-# Save current branch to return to it later
-CURRENT_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)"
 
 echo "==> Installing dependencies..."
 (cd "$DOCS_DIR" && npm install)
@@ -24,42 +22,40 @@ fi
 
 echo "==> Deploying to gh-pages..."
 
-# Create a temporary directory for the deploy
-TMPDIR="$(mktemp -d)"
-cp -r "$DIST_DIR"/. "$TMPDIR"
+# Get the remote URL
+REMOTE_URL="$(git -C "$REPO_ROOT" remote get-url origin)"
 
-# Switch to gh-pages branch (create orphan if it doesn't exist)
-if git -C "$REPO_ROOT" show-ref --verify --quiet refs/heads/gh-pages; then
-  git -C "$REPO_ROOT" checkout gh-pages
+# Work in a temporary clone to avoid touching the working repo
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+# Clone just the gh-pages branch (shallow), or init a new repo if it doesn't exist
+if git ls-remote --heads "$REMOTE_URL" gh-pages | grep -q gh-pages; then
+  git clone --depth 1 --branch gh-pages "$REMOTE_URL" "$TMPDIR/deploy"
 else
-  git -C "$REPO_ROOT" checkout --orphan gh-pages
-  git -C "$REPO_ROOT" rm -rf .
+  mkdir "$TMPDIR/deploy"
+  git -C "$TMPDIR/deploy" init
+  git -C "$TMPDIR/deploy" checkout --orphan gh-pages
+  git -C "$TMPDIR/deploy" remote add origin "$REMOTE_URL"
 fi
 
-# Replace contents with built site
-# Remove everything except .git
-find "$REPO_ROOT" -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
+# Remove old site contents (but keep .git)
+find "$TMPDIR/deploy" -maxdepth 1 ! -name '.git' ! -path "$TMPDIR/deploy" -exec rm -rf {} +
 
-# Copy built site into repo root
-cp -r "$TMPDIR"/. "$REPO_ROOT"
+# Copy built site
+cp -r "$DIST_DIR"/. "$TMPDIR/deploy"
 
 # Add .nojekyll to bypass Jekyll processing on GitHub Pages
-touch "$REPO_ROOT/.nojekyll"
+touch "$TMPDIR/deploy/.nojekyll"
 
 # Commit and push
-git -C "$REPO_ROOT" add -A
-if git -C "$REPO_ROOT" diff --cached --quiet; then
+git -C "$TMPDIR/deploy" add -A
+if git -C "$TMPDIR/deploy" diff --cached --quiet; then
   echo "No changes to deploy."
 else
-  git -C "$REPO_ROOT" commit -m "Deploy docs to GitHub Pages"
-  git -C "$REPO_ROOT" push origin gh-pages
+  git -C "$TMPDIR/deploy" commit -m "Deploy docs to GitHub Pages"
+  git -C "$TMPDIR/deploy" push origin gh-pages
   echo "==> Deployed successfully."
 fi
-
-# Return to original branch
-git -C "$REPO_ROOT" checkout "$CURRENT_BRANCH"
-
-# Clean up
-rm -rf "$TMPDIR"
 
 echo "==> Done."
