@@ -72,17 +72,6 @@ These are the things every author should absorb first.
 
 ---
 
-## What's new / version 1.0 highlights
-
-- Strict Observability Rule for `x` propagation
-- Flow‑sensitive Exclusive Assignment enforcement (PED)
-- Explicit CDC primitives (BIT, BUS, FIFO) with home‑domain binding
-- A small but expressive set of intrinsics (uadd/sadd/umul/smul/gbit/sbit/gslice/sslice)
-- Simplified, deterministic MEM model with ASYNC/SYNC read ports and explicit write modes
-- Compile-time templates (`@template`/`@apply`) for reusable logic patterns with scratch wires and unrolling
-
----
-
 ## How to read the documentation
 
 - **Newcomers:** Start with the [Examples](/examples/counter) to see working JZ-HDL code, then read the guide pages under Reference Manual.
