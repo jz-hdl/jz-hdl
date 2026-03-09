@@ -449,6 +449,10 @@ const JZRuleInfo jz_rule_table[] = {
     { "GENERAL_WARNINGS", "WARN_UNUSED_PORT",                      0, JZ_RULE_MODE_WRN, "S12.3 PORT declared but never used in any expression or assignment" },
     { "GENERAL_WARNINGS", "WARN_INTERNAL_TRISTATE",                0, JZ_RULE_MODE_WRN, "Internal tri-state logic is not FPGA-compatible; use --tristate-default to enable automatic tri-state elimination" },
 
+    /* [IO] */
+    { "IO", "IO_BACKEND",                                          0, JZ_RULE_MODE_ERR, "Failed to open or write backend output file" },
+    { "IO", "IO_IR",                                               0, JZ_RULE_MODE_ERR, "Failed to write or finalize IR output file" },
+
     /* [PATH_SECURITY] */
     { "PATH_SECURITY", "PATH_ABSOLUTE_FORBIDDEN",                0, JZ_RULE_MODE_ERR, "S12.2 Absolute path used without --allow-absolute-paths" },
     { "PATH_SECURITY", "PATH_TRAVERSAL_FORBIDDEN",               0, JZ_RULE_MODE_ERR, "S12.2 Path contains '..' traversal without --allow-traversal" },

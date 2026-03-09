@@ -1055,7 +1055,7 @@ int jz_ir_write_json(const IR_Design *design,
                 jz_diagnostic_report(diagnostics,
                                      loc,
                                      JZ_SEVERITY_ERROR,
-                                     "IR_IO",
+                                     "IO_IR",
                                      "failed to construct temporary IR output filename");
             }
             return -1;
@@ -1068,7 +1068,7 @@ int jz_ir_write_json(const IR_Design *design,
                 jz_diagnostic_report(diagnostics,
                                      loc,
                                      JZ_SEVERITY_ERROR,
-                                     "IR_IO",
+                                     "IO_IR",
                                      "failed to open temporary IR output file for writing");
             }
             return -1;
@@ -1177,7 +1177,7 @@ int jz_ir_write_json(const IR_Design *design,
                 jz_diagnostic_report(diagnostics,
                                      loc,
                                      JZ_SEVERITY_ERROR,
-                                     "IR_IO",
+                                     "IO_IR",
                                      "failed to write complete IR output");
             }
             return -1;
@@ -1191,7 +1191,7 @@ int jz_ir_write_json(const IR_Design *design,
                 jz_diagnostic_report(diagnostics,
                                      loc,
                                      JZ_SEVERITY_ERROR,
-                                     "IR_IO",
+                                     "IO_IR",
                                      "failed to close IR output stream");
             }
             return -1;
@@ -1204,7 +1204,7 @@ int jz_ir_write_json(const IR_Design *design,
                     jz_diagnostic_report(diagnostics,
                                          loc,
                                          JZ_SEVERITY_ERROR,
-                                         "IR_IO",
+                                         "IO_IR",
                                          "failed to move temporary IR file into place");
                 }
                 return -1;
