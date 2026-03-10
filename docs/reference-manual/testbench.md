@@ -369,6 +369,48 @@ The `@repeat` directive is a **pre-parser text expansion**. Before lexing or par
 // Expands to 4 cycles with expected values 0, 1, 2, 3
 ```
 
+### @print
+
+```text
+@print("<format_string>", <arg1>, <arg2>, ...)
+```
+
+Outputs a formatted message to the simulator's standard output at the current point in the test sequence. The message is printed after all combinational logic has settled.
+
+**Format specifiers:**
+
+| Specifier | Description |
+| --- | --- |
+| `%h` | Hexadecimal |
+| `%d` | Decimal |
+| `%b` | Binary |
+| `%tick` | Current cycle count (no argument consumed) |
+| `%ms` | Current simulation time in ms (no argument consumed) |
+
+`%tick` and `%ms` are autonomous — they do not consume an argument from the argument list.
+
+```jz
+@print("count = %h at cycle %tick", count)
+@print("addr=%h data=%d", addr, data_out)
+@print("cycle %tick: done")
+```
+
+### @print_if
+
+```text
+@print_if(<condition>, "<format_string>", <arg1>, <arg2>, ...)
+```
+
+Conditionally outputs a formatted message. The message is printed only if `<condition>` is non-zero (truthy — any bit is `1`).
+
+- `<condition>` is a testbench wire or hierarchical signal reference.
+- The format string and arguments follow the same rules as `@print`.
+
+```jz
+@print_if(valid, "data captured: %h at cycle %tick", data_out)
+@print_if(error, "ERROR at cycle %tick: expected %h got %h", expected, actual)
+```
+
 ## Simulation Phases
 
 Each simulation step proceeds through these phases in strict order:
@@ -571,6 +613,8 @@ Seed: 0xDEADBEEF
 | TB-019 | Observing a signal containing `z` in an assertion is a runtime error |
 | TB-020 | A file may not contain both RTL definitions and verification constructs |
 | TB-021 | `@expect_tristate` asserts all bits of the signal are `z` |
+| PRT-001 | Number of non-autonomous format specifiers in `@print` / `@print_if` must match the number of arguments |
+| PRT-002 | `@print` / `@print_if` may not appear inside `@setup` or `@update` blocks |
 | RPT-001 | `@repeat` requires a positive integer count |
 | RPT-002 | `@repeat` without matching `@end` |
 | SE-001 | Combinational logic must converge within 100 delta cycles |

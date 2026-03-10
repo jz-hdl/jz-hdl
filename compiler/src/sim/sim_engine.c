@@ -238,10 +238,79 @@ static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
     }
 
     if (node->type == JZ_AST_EXPR_IDENTIFIER) {
-        /* Look up in tb_wires */
         int idx = find_tb_wire(ts, node->name);
         if (idx >= 0) return ts->tb_wires[idx].value;
         return sim_val_all_x(1);
+    }
+
+    if (node->type == JZ_AST_EXPR_BINARY) {
+        if (node->child_count < 2) return sim_val_all_x(1);
+        SimValue lhs = eval_tb_ast_expr(ts, node->children[0]);
+        SimValue rhs = eval_tb_ast_expr(ts, node->children[1]);
+        const char *op = node->block_kind;
+        if (!op) return sim_val_all_x(1);
+
+        if (strcmp(op, "EQ") == 0)        return sim_val_eq(lhs, rhs);
+        if (strcmp(op, "NEQ") == 0)       return sim_val_neq(lhs, rhs);
+        if (strcmp(op, "LT") == 0)        return sim_val_lt(lhs, rhs);
+        if (strcmp(op, "GT") == 0)        return sim_val_gt(lhs, rhs);
+        if (strcmp(op, "LTE") == 0)       return sim_val_lte(lhs, rhs);
+        if (strcmp(op, "GTE") == 0)       return sim_val_gte(lhs, rhs);
+        if (strcmp(op, "AND") == 0)       return sim_val_and(lhs, rhs);
+        if (strcmp(op, "OR") == 0)        return sim_val_or(lhs, rhs);
+        if (strcmp(op, "XOR") == 0)       return sim_val_xor(lhs, rhs);
+        if (strcmp(op, "ADD") == 0)       return sim_val_add(lhs, rhs);
+        if (strcmp(op, "SUB") == 0)       return sim_val_sub(lhs, rhs);
+        if (strcmp(op, "MUL") == 0)       return sim_val_mul(lhs, rhs);
+        if (strcmp(op, "DIV") == 0)       return sim_val_div(lhs, rhs);
+        if (strcmp(op, "MOD") == 0)       return sim_val_mod(lhs, rhs);
+        if (strcmp(op, "SHL") == 0)       return sim_val_shl(lhs, rhs);
+        if (strcmp(op, "SHR") == 0)       return sim_val_shr(lhs, rhs);
+        if (strcmp(op, "LOG_AND") == 0)   return sim_val_logical_and(lhs, rhs);
+        if (strcmp(op, "LOG_OR") == 0)    return sim_val_logical_or(lhs, rhs);
+        return sim_val_all_x(1);
+    }
+
+    if (node->type == JZ_AST_EXPR_UNARY) {
+        if (node->child_count < 1) return sim_val_all_x(1);
+        SimValue operand = eval_tb_ast_expr(ts, node->children[0]);
+        const char *op = node->block_kind;
+        if (!op) return sim_val_all_x(1);
+
+        if (strcmp(op, "NOT") == 0)       return sim_val_not(operand);
+        if (strcmp(op, "LOG_NOT") == 0)   return sim_val_logical_not(operand);
+        if (strcmp(op, "NEG") == 0)       return sim_val_neg(operand);
+        return sim_val_all_x(1);
+    }
+
+    if (node->type == JZ_AST_EXPR_SLICE) {
+        if (node->child_count < 1) return sim_val_all_x(1);
+        SimValue base = eval_tb_ast_expr(ts, node->children[0]);
+        /* name="msb:lsb" or children[1]=msb, children[2]=lsb */
+        if (node->name) {
+            int msb = 0, lsb = 0;
+            sscanf(node->name, "%d:%d", &msb, &lsb);
+            return sim_val_slice(base, msb, lsb);
+        }
+        return sim_val_all_x(1);
+    }
+
+    if (node->type == JZ_AST_EXPR_CONCAT) {
+        if (node->child_count == 0) return sim_val_all_x(1);
+        SimValue parts[64];
+        int count = (int)node->child_count;
+        if (count > 64) count = 64;
+        for (int i = 0; i < count; i++)
+            parts[i] = eval_tb_ast_expr(ts, node->children[i]);
+        return sim_val_concat(parts, count);
+    }
+
+    if (node->type == JZ_AST_EXPR_TERNARY) {
+        if (node->child_count < 3) return sim_val_all_x(1);
+        SimValue cond = eval_tb_ast_expr(ts, node->children[0]);
+        SimValue t = eval_tb_ast_expr(ts, node->children[1]);
+        SimValue f = eval_tb_ast_expr(ts, node->children[2]);
+        return sim_val_ternary(cond, t, f);
     }
 
     /* Fallback: try text as a literal */
@@ -261,6 +330,95 @@ static void record_failure(SimTestState *ts, const char *msg) {
         ts->cap_failure_msgs = new_cap;
     }
     ts->failure_msgs[ts->num_failure_msgs++] = strdup(msg);
+}
+
+/* ---- @print / @print_if execution ---- */
+
+/**
+ * Process a @print or @print_if AST node.
+ *
+ * Format specifiers:
+ *   %h  - hex value of next arg
+ *   %d  - decimal value of next arg
+ *   %b  - binary value of next arg
+ *   %tick - current tick/cycle count
+ *   %ms   - current simulation time in milliseconds
+ */
+static void process_print(SimTestState *ts, const JZASTNode *node) {
+    if (!node) return;
+
+    int is_print_if = (node->type == JZ_AST_PRINT_IF);
+
+    /* For @print_if, children[0] is the condition */
+    int arg_start = 0;
+    if (is_print_if) {
+        if (node->child_count < 1) return;
+        SimValue cond = eval_tb_ast_expr(ts, node->children[0]);
+        int truth = sim_val_is_true(cond);
+        if (truth != 1) return; /* skip if false or x/z */
+        arg_start = 1;
+    }
+
+    const char *fmt = node->text;
+    if (!fmt) return;
+
+    int arg_idx = arg_start;
+    char valbuf[512];
+
+    for (const char *p = fmt; *p; p++) {
+        if (*p == '%') {
+            /* Check for %tick */
+            if (strncmp(p, "%tick", 5) == 0) {
+                /* In testbench mode, tick = cycle_count; in simulation, use time */
+                if (ts->tick_ps > 0) {
+                    uint64_t ticks = ts->current_time_ps / ts->tick_ps;
+                    fprintf(stdout, "%llu", (unsigned long long)ticks);
+                } else {
+                    fprintf(stdout, "%llu", (unsigned long long)ts->cycle_count);
+                }
+                p += 4; /* skip "tick" (loop will advance past %) */
+                continue;
+            }
+            /* Check for %ms */
+            if (strncmp(p, "%ms", 3) == 0) {
+                double ms = (double)ts->current_time_ps / 1e9;
+                fprintf(stdout, "%.6f", ms);
+                p += 2; /* skip "ms" */
+                continue;
+            }
+            /* %h, %d, %b — consume next argument */
+            if (p[1] == 'h' || p[1] == 'd' || p[1] == 'b') {
+                char spec = p[1];
+                p++; /* skip the specifier char */
+
+                if (arg_idx < (int)node->child_count) {
+                    SimValue val = eval_tb_ast_expr(ts, node->children[arg_idx++]);
+                    switch (spec) {
+                    case 'h':
+                        sim_val_to_hex(val, valbuf, sizeof(valbuf));
+                        break;
+                    case 'd':
+                        sim_val_to_dec(val, valbuf, sizeof(valbuf));
+                        break;
+                    case 'b':
+                        sim_val_to_bin(val, valbuf, sizeof(valbuf));
+                        break;
+                    }
+                    fputs(valbuf, stdout);
+                } else {
+                    /* Not enough arguments */
+                    fputc('%', stdout);
+                    fputc(spec, stdout);
+                }
+                continue;
+            }
+            /* Unknown % sequence, print literally */
+            fputc('%', stdout);
+            continue;
+        }
+        fputc(*p, stdout);
+    }
+    fputc('\n', stdout);
 }
 
 /* ---- Collect clocks and wires (shared by testbench and simulation) ---- */
@@ -1012,6 +1170,11 @@ static int sim_run_test(const JZASTNode *root,
             process_expect_tristate(&ts, child);
             break;
 
+        case JZ_AST_PRINT:
+        case JZ_AST_PRINT_IF:
+            process_print(&ts, child);
+            break;
+
         default:
             break;
         }
@@ -1330,6 +1493,7 @@ static int sim_run_simulation(const JZASTNode *root,
             tick_ps = gcd64(tick_ps, sim_clocks[i].toggle_ps);
     }
     if (tick_ps == 0) tick_ps = 1000; /* default 1ns */
+    ts.tick_ps = tick_ps;
 
     if (verbose) {
         fprintf(stdout, "Simulation tick resolution: %llu ps\n",
@@ -1691,6 +1855,10 @@ static int sim_run_simulation(const JZASTNode *root,
                 ts.num_failed++;
                 ts.runtime_error = 1;
             }
+        } else if (child->type == JZ_AST_PRINT ||
+                   child->type == JZ_AST_PRINT_IF) {
+            ts.current_time_ps = current_time_ps;
+            process_print(&ts, child);
         }
         /* Skip other node types (CLOCK_BLOCK, WIRE_BLOCK, TAP_BLOCK, etc.) */
     }

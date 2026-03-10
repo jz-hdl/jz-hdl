@@ -90,6 +90,10 @@ typedef struct SimTestState {
     int              num_failure_msgs;
     int              cap_failure_msgs;
 
+    /* Shared: time tracking (for @print %tick / %ms) */
+    uint64_t         current_time_ps;  /* simulation time in picoseconds */
+    uint64_t         tick_ps;          /* tick resolution in picoseconds */
+
     /* Testbench only: assertion tracking */
     int              test_passed;
     int              num_expects;

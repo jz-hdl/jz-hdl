@@ -277,6 +277,48 @@ The `@repeat` directive is a **pre-parser text expansion**. Before lexing or par
 @end
 ```
 
+### @print
+
+```text
+@print("<format_string>", <arg1>, <arg2>, ...)
+```
+
+Outputs a formatted message to the simulator's standard output at the current simulation time. The message is printed after all combinational logic has settled.
+
+**Format specifiers:**
+
+| Specifier | Description |
+| --- | --- |
+| `%h` | Hexadecimal |
+| `%d` | Decimal |
+| `%b` | Binary |
+| `%tick` | Current tick count (no argument consumed) |
+| `%ms` | Current simulation time in ms (no argument consumed) |
+
+`%tick` and `%ms` are autonomous — they do not consume an argument from the argument list.
+
+```jz
+@print("wr_ptr = %h at tick %tick", dut.wr_ptr)
+@print("time %ms: data_out = %d", data_out)
+@print("tick %tick: reset released")
+```
+
+### @print_if
+
+```text
+@print_if(<condition>, "<format_string>", <arg1>, <arg2>, ...)
+```
+
+Conditionally outputs a formatted message. The message is printed only if `<condition>` is non-zero (truthy — any bit is `1`).
+
+- `<condition>` is a testbench wire or hierarchical signal reference.
+- The format string and arguments follow the same rules as `@print`.
+
+```jz
+@print_if(full, "FIFO full at time %ms, wr_ptr=%h", dut.wr_ptr)
+@print_if(empty, "FIFO empty at tick %tick")
+```
+
 ## Waveform Output
 
 ### VCD Format

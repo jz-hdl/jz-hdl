@@ -288,6 +288,66 @@ The `@repeat` directive is a **pre-parser text expansion** shared with `@testben
 | RPT-001 | `@repeat` requires a positive integer count |
 | RPT-002 | `@repeat` without matching `@end` |
 
+### 4.7 @print
+
+**Syntax:**
+```text
+@print("<format_string>", <arg1>, <arg2>, ...)
+```
+
+The `@print` directive outputs a formatted message to the simulator's standard output at the current simulation time.
+
+- `<format_string>` is a string literal containing text and optional format specifiers.
+- Arguments following the format string are testbench wire identifiers or hierarchical signal references, matched positionally to format specifiers.
+- The message is printed after all combinational logic has settled following the most recent `@run`, `@run_until`, `@run_while`, or `@update` directive.
+- `@print` may appear anywhere in the simulation body where `@update` is valid.
+
+**Format specifiers:**
+
+| Specifier | Description |
+| :--- | :--- |
+| `%h` | Display the argument value in hexadecimal |
+| `%d` | Display the argument value in decimal |
+| `%b` | Display the argument value in binary |
+| `%tick` | Display the current tick count (no argument consumed) |
+| `%ms` | Display the current simulation time in milliseconds (no argument consumed) |
+
+- `%tick` and `%ms` are **autonomous specifiers** — they do not consume an argument from the argument list.
+- The number of non-autonomous format specifiers must match the number of arguments. A mismatch is a compile error.
+
+**Example:**
+```text
+@print("wr_ptr = %h at tick %tick", dut.wr_ptr)
+@print("time %ms: data_out = %d", data_out)
+@print("tick %tick: reset released")
+```
+
+### 4.8 @print_if
+
+**Syntax:**
+```text
+@print_if(<condition>, "<format_string>", <arg1>, <arg2>, ...)
+```
+
+The `@print_if` directive conditionally outputs a formatted message. The message is printed only if `<condition>` evaluates to a non-zero (truthy) value.
+
+- `<condition>` is a testbench wire identifier or hierarchical signal reference. The condition is truthy if any bit is `1`.
+- The format string and arguments follow the same rules as `@print`.
+- `@print_if` may appear anywhere `@print` is valid.
+
+**Example:**
+```text
+@print_if(full, "FIFO full at time %ms, wr_ptr=%h", dut.wr_ptr)
+@print_if(empty, "FIFO empty at tick %tick")
+```
+
+**Rules:**
+
+| Rule | Description |
+| :--- | :--- |
+| PRT-001 | Number of non-autonomous format specifiers must match the number of arguments |
+| PRT-002 | `@print` / `@print_if` may not appear inside `@setup` or `@update` blocks |
+
 ---
 
 ## 5. CLI USAGE

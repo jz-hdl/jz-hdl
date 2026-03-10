@@ -294,6 +294,73 @@ static JZASTNode *parse_sim_run(Parser *p)
 }
 
 /**
+ * @brief Parse @print or @print_if directive.
+ *
+ * @print("format", arg1, arg2, ...)
+ * @print_if(condition, "format", arg1, arg2, ...)
+ */
+JZASTNode *parse_print_directive(Parser *p, int is_print_if)
+{
+    const JZToken *kw = &p->tokens[p->pos - 1]; /* keyword already consumed */
+    JZASTNodeType node_type = is_print_if ? JZ_AST_PRINT_IF : JZ_AST_PRINT;
+
+    if (!match(p, JZ_TOK_LPAREN)) {
+        parser_error(p, is_print_if
+            ? "expected '(' after @print_if"
+            : "expected '(' after @print");
+        return NULL;
+    }
+
+    JZASTNode *node = jz_ast_new(node_type, kw->loc);
+    if (!node) return NULL;
+
+    /* For @print_if, the first argument is the condition expression */
+    if (is_print_if) {
+        JZASTNode *cond = parse_expression(p);
+        if (!cond) {
+            jz_ast_free(node);
+            return NULL;
+        }
+        jz_ast_add_child(node, cond);
+
+        if (!match(p, JZ_TOK_COMMA)) {
+            parser_error(p, "expected ',' after condition in @print_if");
+            jz_ast_free(node);
+            return NULL;
+        }
+    }
+
+    /* Format string */
+    const JZToken *fmt_tok = peek(p);
+    if (fmt_tok->type != JZ_TOK_STRING || !fmt_tok->lexeme) {
+        parser_error(p, "expected format string in @print/@print_if");
+        jz_ast_free(node);
+        return NULL;
+    }
+    jz_ast_set_text(node, fmt_tok->lexeme);
+    advance(p);
+
+    /* Optional arguments: , arg1, arg2, ... */
+    while (peek(p)->type == JZ_TOK_COMMA) {
+        advance(p); /* consume comma */
+        JZASTNode *arg = parse_expression(p);
+        if (!arg) {
+            jz_ast_free(node);
+            return NULL;
+        }
+        jz_ast_add_child(node, arg);
+    }
+
+    if (!match(p, JZ_TOK_RPAREN)) {
+        parser_error(p, "expected ')' after @print/@print_if");
+        jz_ast_free(node);
+        return NULL;
+    }
+
+    return node;
+}
+
+/**
  * @brief Parse @run_until / @run_while directive.
  *
  * Syntax:
@@ -960,6 +1027,16 @@ JZASTNode *parse_simulation(Parser *p)
             JZASTNode *rw = parse_sim_run_cond(p, JZ_AST_SIM_RUN_WHILE);
             if (!rw) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, rw);
+        } else if (t->type == JZ_TOK_KW_PRINT) {
+            advance(p);
+            JZASTNode *pr = parse_print_directive(p, 0);
+            if (!pr) { jz_ast_free(sim); return NULL; }
+            jz_ast_add_child(sim, pr);
+        } else if (t->type == JZ_TOK_KW_PRINT_IF) {
+            advance(p);
+            JZASTNode *pr = parse_print_directive(p, 1);
+            if (!pr) { jz_ast_free(sim); return NULL; }
+            jz_ast_add_child(sim, pr);
         } else {
             parser_error(p, "unexpected token in @simulation block");
             jz_ast_free(sim);

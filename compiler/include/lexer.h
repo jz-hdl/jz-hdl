@@ -165,6 +165,8 @@ typedef enum JZTokenType {
     JZ_TOK_KW_RUN,        /**< \@run */
     JZ_TOK_KW_RUN_UNTIL, /**< \@run_until */
     JZ_TOK_KW_RUN_WHILE, /**< \@run_while */
+    JZ_TOK_KW_PRINT,     /**< \@print */
+    JZ_TOK_KW_PRINT_IF,  /**< \@print_if */
     JZ_TOK_KW_TAP,        /**< TAP keyword. */
 
     JZ_TOK_OTHER           /**< Fallback single-character token. */

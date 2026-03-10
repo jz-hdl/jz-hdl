@@ -643,6 +643,66 @@ The `@repeat` directive is a **pre-parser text expansion**. Before lexing or par
 | RPT-001 | `@repeat` requires a positive integer count |
 | RPT-002 | `@repeat` without matching `@end` |
 
+### 7.5 @print
+
+**Syntax:**
+```text
+@print("<format_string>", <arg1>, <arg2>, ...)
+```
+
+The `@print` directive outputs a formatted message to the simulator's standard output at the point in the test sequence where it appears.
+
+- `<format_string>` is a string literal containing text and optional format specifiers.
+- Arguments following the format string are testbench wire identifiers or hierarchical signal references, matched positionally to format specifiers.
+- The message is printed after all combinational logic has settled following the most recent `@clock` or `@update` directive.
+- `@print` may appear anywhere in the test sequence where `@expect_equal` is valid.
+
+**Format specifiers:**
+
+| Specifier | Description |
+| :--- | :--- |
+| `%h` | Display the argument value in hexadecimal |
+| `%d` | Display the argument value in decimal |
+| `%b` | Display the argument value in binary |
+| `%tick` | Display the current cycle count (no argument consumed) |
+| `%ms` | Display the current simulation time in milliseconds (no argument consumed) |
+
+- `%tick` and `%ms` are **autonomous specifiers** — they do not consume an argument from the argument list.
+- The number of non-autonomous format specifiers must match the number of arguments. A mismatch is a compile error.
+
+**Example:**
+```text
+@print("count = %h at cycle %tick", count)
+@print("addr=%h data=%d", addr, data_out)
+@print("cycle %tick: done")
+```
+
+### 7.6 @print_if
+
+**Syntax:**
+```text
+@print_if(<condition>, "<format_string>", <arg1>, <arg2>, ...)
+```
+
+The `@print_if` directive conditionally outputs a formatted message. The message is printed only if `<condition>` evaluates to a non-zero (truthy) value.
+
+- `<condition>` is a testbench wire identifier or hierarchical signal reference. The condition is truthy if any bit is `1`.
+- The format string and arguments follow the same rules as `@print`.
+- `@print_if` may appear anywhere `@print` is valid.
+
+**Example:**
+```text
+@print_if(valid, "data captured: %h at cycle %tick", data_out)
+@print_if(error, "ERROR at cycle %tick: expected %h got %h", expected, actual)
+```
+
+**Rules:**
+
+| Rule | Description |
+| :--- | :--- |
+| PRT-001 | Number of non-autonomous format specifiers must match the number of arguments |
+| PRT-002 | `@print` / `@print_if` may not appear inside `@setup` or `@update` blocks |
+
 ---
 
 ## 8. EXECUTION MODEL
@@ -993,6 +1053,8 @@ Seed: 0xDEADBEEF
 | TB-019 | Observing a signal containing `z` in an assertion is a runtime error (aborts test case) |
 | TB-020 | A file may not contain both RTL definitions (`@module`/`@project`) and verification constructs (`@testbench`) |
 | TB-021 | `@expect_tristate` asserts all bits of the signal are `z`; it is the only assertion that accepts `z` values |
+| PRT-001 | Number of non-autonomous format specifiers in `@print` / `@print_if` must match the number of arguments |
+| PRT-002 | `@print` / `@print_if` may not appear inside `@setup` or `@update` blocks |
 
 ### 11.2 Simulation Execution Rules
 
