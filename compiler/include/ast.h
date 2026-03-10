@@ -135,6 +135,8 @@ typedef enum JZASTNodeType {
     JZ_AST_SIM_TAP_BLOCK,           /**< TAP block for internal signal monitoring. */
     JZ_AST_SIM_TAP_DECL,            /**< Individual TAP signal (name=hierarchical path). */
     JZ_AST_SIM_RUN,                 /**< \@run directive (text=unit, name=value). */
+    JZ_AST_SIM_RUN_UNTIL,           /**< \@run_until directive. Children: [0]=signal, [1]=value, text=timeout_unit, name=timeout_value, block_kind=op. */
+    JZ_AST_SIM_RUN_WHILE,           /**< \@run_while directive. Children: [0]=signal, [1]=value, text=timeout_unit, name=timeout_value, block_kind=op. */
 } JZASTNodeType;
 
 typedef struct JZASTNode JZASTNode;

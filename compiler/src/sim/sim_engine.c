@@ -1564,6 +1564,133 @@ static int sim_run_simulation(const JZASTNode *root,
                 vcd_set_time(vcd, current_time_ps);
                 vcd_dump_all(vcd, &ts, vcd_ids, sim_taps, num_sim_taps);
             }
+        } else if (child->type == JZ_AST_SIM_RUN_UNTIL ||
+                   child->type == JZ_AST_SIM_RUN_WHILE) {
+            /* @run_until / @run_while: advance time with condition check */
+            int is_until = (child->type == JZ_AST_SIM_RUN_UNTIL);
+
+            /* Parse timeout duration */
+            uint64_t timeout_ps;
+            if (child->text && strcmp(child->text, "ticks") == 0) {
+                uint64_t raw = run_to_ps(child);
+                timeout_ps = raw * tick_ps;
+            } else {
+                timeout_ps = run_to_ps(child);
+            }
+
+            /* Get condition: children[0]=signal, children[1]=value, block_kind=op */
+            const JZASTNode *sig_node = (child->child_count > 0) ? child->children[0] : NULL;
+            const JZASTNode *val_node = (child->child_count > 1) ? child->children[1] : NULL;
+            int cond_is_eq = (!child->block_kind || strcmp(child->block_kind, "==") == 0);
+
+            SimValue expected_val = eval_tb_ast_expr(&ts, val_node);
+
+            if (verbose) {
+                fprintf(stdout, "@%s(%s %s ..., timeout=%s=%s) -> %llu ps\n",
+                        is_until ? "run_until" : "run_while",
+                        sig_node && sig_node->name ? sig_node->name : "?",
+                        cond_is_eq ? "==" : "!=",
+                        child->text ? child->text : "?",
+                        child->name ? child->name : "?",
+                        (unsigned long long)timeout_ps);
+            }
+
+            uint64_t end_time_ps = current_time_ps + timeout_ps;
+            int condition_met = 0;
+
+            while (current_time_ps < end_time_ps && !ts.runtime_error) {
+                current_time_ps += tick_ps;
+
+                /* Toggle clocks scheduled at this tick */
+                int any_edge = 0;
+                for (int ci2 = 0; ci2 < num_sim_clocks; ci2++) {
+                    if (sim_clocks[ci2].toggle_ps > 0 &&
+                        (current_time_ps % sim_clocks[ci2].toggle_ps) == 0) {
+                        int wi = sim_clocks[ci2].tb_wire_idx;
+                        if (wi >= 0) {
+                            uint64_t cur = ts.tb_wires[wi].value.val[0] & 1;
+                            ts.tb_wires[wi].value = sim_val_from_uint(cur ^ 1, 1);
+                            any_edge = 1;
+                        }
+                    }
+                }
+
+                /* Propagate inputs and settle combinational */
+                sim_propagate_inputs(&ts);
+                sim_settle_checked(&ts);
+                sim_resolve_inout_z(&ts);
+
+                /* Fire sync domains for active clock edges */
+                if (any_edge) {
+                    for (int ci2 = 0; ci2 < num_sim_clocks; ci2++) {
+                        if (sim_clocks[ci2].toggle_ps == 0) continue;
+                        if ((current_time_ps % sim_clocks[ci2].toggle_ps) != 0) continue;
+
+                        int wi = sim_clocks[ci2].tb_wire_idx;
+                        if (wi < 0) continue;
+                        uint64_t new_clk = ts.tb_wires[wi].value.val[0] & 1;
+
+                        int clock_port_id = -1;
+                        for (int b = 0; b < ts.num_bindings; b++) {
+                            if (ts.bindings[b].tb_wire_index == wi) {
+                                clock_port_id = ts.bindings[b].port_signal_id;
+                                break;
+                            }
+                        }
+
+                        sim_fire_domains_for_clock(&ts, clock_port_id, new_clk,
+                                                    /*apply_nba_per_domain=*/0);
+                    }
+
+                    sim_ctx_apply_nba(ts.dut);
+                    sim_settle_checked(&ts);
+                    sim_resolve_inout_z(&ts);
+                }
+
+                sim_propagate_outputs(&ts);
+
+                /* Dump to VCD */
+                vcd_set_time(vcd, current_time_ps);
+                vcd_dump_all(vcd, &ts, vcd_ids, sim_taps, num_sim_taps);
+
+                /* Evaluate condition */
+                SimValue actual = eval_tb_ast_expr(&ts, sig_node);
+                int match;
+                if (cond_is_eq)
+                    match = sim_val_is_true(sim_val_eq(actual, expected_val)) == 1;
+                else
+                    match = sim_val_is_true(sim_val_neq(actual, expected_val)) == 1;
+
+                if (is_until) {
+                    /* @run_until: stop when condition becomes true */
+                    if (match) {
+                        condition_met = 1;
+                        break;
+                    }
+                } else {
+                    /* @run_while: stop when condition becomes false */
+                    if (!match) {
+                        condition_met = 1;
+                        break;
+                    }
+                }
+            }
+
+            if (!condition_met && !ts.runtime_error) {
+                /* Timeout reached without condition being met */
+                char msg[256];
+                snprintf(msg, sizeof(msg),
+                         "    TIMEOUT: @%s(%s %s ...) at %s:%d\n"
+                         "      Condition not met within timeout",
+                         is_until ? "run_until" : "run_while",
+                         sig_node && sig_node->name ? sig_node->name : "?",
+                         cond_is_eq ? "==" : "!=",
+                         filename ? filename : "?",
+                         child->loc.line);
+                record_failure(&ts, msg);
+                ts.num_failed++;
+                ts.runtime_error = 1;
+            }
         }
         /* Skip other node types (CLOCK_BLOCK, WIRE_BLOCK, TAP_BLOCK, etc.) */
     }

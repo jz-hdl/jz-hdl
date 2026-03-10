@@ -126,6 +126,8 @@ static const char *node_type_name(JZASTNodeType t) {
     case JZ_AST_SIM_TAP_BLOCK:         return "SimTapBlock";
     case JZ_AST_SIM_TAP_DECL:          return "SimTapDecl";
     case JZ_AST_SIM_RUN:               return "SimRun";
+    case JZ_AST_SIM_RUN_UNTIL:         return "SimRunUntil";
+    case JZ_AST_SIM_RUN_WHILE:         return "SimRunWhile";
 
     default:
         return "Unknown";

@@ -204,7 +204,55 @@ TAP {
 - All assignments within a single `@update` block use **simultaneous assignment semantics**: all RHS expressions are evaluated using the pre-update wire values before any LHS targets are written. This means `b <= a; a <= a + 1;` assigns the old value of `a` to `b`, not the incremented value (see Testbench Specification Section 6.5 for details).
 - After all assignments complete, combinational logic settles, and the result is logged to the waveform before the next `@run` advances time.
 
-### 4.5 @repeat
+### 4.4 @run_until (Conditional Time Advancement)
+
+**Syntax:**
+```text
+@run_until(<signal> == <value>, timeout=<unit>=<amount>)
+@run_until(<signal> != <value>, timeout=<unit>=<amount>)
+```
+
+The `@run_until` directive advances simulation time tick-by-tick until the specified condition becomes true, or until the timeout is reached. Clocks toggle automatically during advancement, exactly as with `@run`.
+
+- `<signal>` must be a testbench `WIRE` identifier (typically connected to a module output).
+- `<value>` must be a sized literal.
+- The condition is evaluated after each tick (after combinational settling and synchronous domain firing).
+- The `timeout` parameter specifies the maximum simulation time to advance. If the condition is not met within the timeout, the simulator reports a **TIMEOUT** runtime error and aborts the simulation.
+- The timeout uses the same time units as `@run`: `ns`, `ms`, or `ticks`.
+
+**Example:**
+```text
+@run_until(count == 8'h05, timeout=ns=1000)
+// Simulation advances until count reaches 5, or 1000ns elapses (error)
+```
+
+### 4.5 @run_while (Conditional Time Advancement)
+
+**Syntax:**
+```text
+@run_while(<signal> == <value>, timeout=<unit>=<amount>)
+@run_while(<signal> != <value>, timeout=<unit>=<amount>)
+```
+
+The `@run_while` directive advances simulation time tick-by-tick while the specified condition remains true, or until the timeout is reached. It is the logical complement of `@run_until`.
+
+- Same rules as `@run_until` for signal references, value types, and timeout behavior.
+- The condition is evaluated after each tick. Simulation stops when the condition becomes false.
+- If the timeout is reached while the condition is still true, the simulator reports a **TIMEOUT** runtime error.
+
+**Example:**
+```text
+@run_while(busy == 1'b1, timeout=ns=5000)
+// Simulation advances while busy is high, or 5000ns elapses (error)
+```
+
+**Rules:**
+
+| Rule | Description |
+| :--- | :--- |
+| SIM-030 | `@run_until`/`@run_while` condition not met within timeout (TIMEOUT runtime error) |
+
+### 4.6 @repeat
 
 **Syntax:**
 ```text
