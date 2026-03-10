@@ -29,6 +29,12 @@ elseif(MSVC)
     add_compile_options(/W4)
 endif()
 
+# Simulation performance tracking
+option(TRACK_PERF "Enable simulation performance tracking" OFF)
+if(TRACK_PERF)
+    add_compile_definitions(TRACK_PERF)
+endif()
+
 # CI-only Werror toggle
 option(JZ_HDL_WERROR "Treat warnings as errors" OFF)
 if(JZ_HDL_WERROR)
@@ -144,6 +150,7 @@ add_library(jz_hdl_lib
     src/sim/sim_vcd.c
     src/sim/sim_fst.c
     src/sim/sim_waveform.c
+    src/sim/sim_perf.c
 )
 
 # Embed JSON data files as headers
