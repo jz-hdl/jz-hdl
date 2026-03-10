@@ -57,7 +57,7 @@ A register's declared reset value is **never** applied automatically at instanti
 
 ### Execution Flow
 
-1. **Time Advancement (`@run`)**: The simulator advances time tick-by-tick up to the requested duration.
+1. **Time Advancement (`@run`, `@run_until`, `@run_while`)**: The simulator advances time tick-by-tick up to the requested duration or until a condition is met.
 2. **Tick Evaluation**: At each tick:
    - If a clock is scheduled to toggle, its value updates.
    - Combinational logic evaluates to a fixed point.
@@ -107,7 +107,7 @@ Simulation follows the same x and z semantics as the main JZ-HDL specification a
 
     @setup { ... }
 
-    // Sequence of @run and @update directives
+    // Sequence of @run, @run_until, @run_while, and @update directives
 @endsim
 ```
 
@@ -207,6 +207,75 @@ Applies new stimulus to testbench wires at the exact simulation time it is calle
 
 - All assignments within a single `@update` block use **simultaneous assignment semantics**: all RHS expressions are evaluated using the pre-update wire values before any LHS targets are written. This means `b <= a; a <= a + 1;` assigns the old value of `a` to `b`, not the incremented value (see [Testbench @update](/reference-manual/testbench#update) for details).
 - After all assignments complete, combinational logic settles, and the result is logged to the waveform before the next `@run` advances time.
+
+### @run_until
+
+```text
+@run_until(<signal> == <value>, timeout=<unit>=<amount>)
+@run_until(<signal> != <value>, timeout=<unit>=<amount>)
+```
+
+Advances simulation time tick-by-tick until the specified condition becomes true, or until the timeout is reached. Clocks toggle automatically during advancement, exactly as with `@run`.
+
+- `<signal>` must be a testbench `WIRE` identifier (typically connected to a module output).
+- `<value>` must be a sized literal.
+- The condition is evaluated after each tick (after combinational settling and synchronous domain firing).
+- The `timeout` parameter specifies the maximum simulation time. If the condition is not met within the timeout, the simulator reports a **TIMEOUT** runtime error and aborts.
+- Timeout uses the same time units as `@run`: `ns`, `ms`, or `ticks`.
+
+```jz
+// Run until counter reaches 5, with a 1000ns safety timeout
+@run_until(count == 8'h05, timeout=ns=1000)
+```
+
+### @run_while
+
+```text
+@run_while(<signal> == <value>, timeout=<unit>=<amount>)
+@run_while(<signal> != <value>, timeout=<unit>=<amount>)
+```
+
+Advances simulation time tick-by-tick while the specified condition remains true, or until the timeout is reached. This is the logical complement of `@run_until`.
+
+- Same rules as `@run_until` for signal references, value types, and timeout behavior.
+- Simulation stops when the condition becomes false.
+- If the timeout is reached while the condition is still true, the simulator reports a **TIMEOUT** runtime error.
+
+```jz
+// Run while busy is high, with a 5000ns safety timeout
+@run_while(busy == 1'b1, timeout=ns=5000)
+```
+
+::: tip @run_until vs @run_while
+`@run_until(x == val)` and `@run_while(x != val)` are logically equivalent — both stop when `x` equals `val`. Choose whichever reads more naturally for your use case.
+:::
+
+### @repeat
+
+```text
+@repeat <count>
+<body>
+@end
+```
+
+The `@repeat` directive is a **pre-parser text expansion**. Before lexing or parsing, the compiler duplicates the body `<count>` times, replacing each standalone occurrence of `IDX` with the iteration index (0 through N-1).
+
+- `<count>` must be a positive integer literal.
+- `<body>` may contain any valid simulation content: `@run`, `@update`, `@run_until`, `@run_while`, comments, or any other text.
+- `IDX` is replaced on word boundaries only — it will not match inside identifiers like `INDEX` or `MY_IDX_VAR`.
+- Nesting is supported: an inner `@repeat` expands fully within each iteration of the outer `@repeat`.
+- `@end` closes only `@repeat` blocks — it does not conflict with `@endsim` or other closing directives.
+- `@repeat` inside comments or string literals is ignored.
+
+```jz
+// Issue 4 sequential update/run pairs with incrementing data
+@repeat 4
+@update {
+    data_in <= 8'hIDX;
+}
+@run(ns=10)
+@end
+```
 
 ## Waveform Output
 
@@ -325,7 +394,8 @@ Files containing `@simulation` blocks must be run with `--simulate`. Using `--li
         rd_en <= 1'b1;
     }
 
-    // Run long enough to see read clocks process the data
+    // Wait until FIFO is no longer empty, then run a bit more
+    @run_until(empty == 1'b0, timeout=ns=200)
     @run(ns=100)
 @endsim
 ```

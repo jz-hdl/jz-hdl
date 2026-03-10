@@ -332,6 +332,43 @@ Asserts that all bits of the signal are currently in the high-impedance (`z`) st
 - Takes only one argument — the expected state is always all-z.
 - This is the only assertion that accepts `z` values; `@expect_equal` and `@expect_not_equal` treat `z` as a runtime error.
 
+### @repeat
+
+```text
+@repeat <count>
+<body>
+@end
+```
+
+The `@repeat` directive is a **pre-parser text expansion**. Before lexing or parsing, the compiler duplicates the body `<count>` times, replacing each standalone occurrence of `IDX` with the iteration index (0 through N-1).
+
+- `<count>` must be a positive integer literal.
+- `<body>` may contain any valid testbench content: `@clock`, `@update`, `@expect_equal`, `@expect_not_equal`, `@expect_tristate`, comments, or any other text.
+- `IDX` is replaced on word boundaries only — it will not match inside identifiers like `INDEX` or `MY_IDX_VAR`.
+- Nesting is supported: an inner `@repeat` expands fully within each iteration of the outer `@repeat`.
+- `@end` closes only `@repeat` blocks — it does not conflict with `@endtb` or other closing directives.
+- `@repeat` inside comments or string literals is ignored.
+
+**Example — Multi-cycle clock advancement:**
+
+```jz
+// Equivalent to writing @clock(clk, cycle=1) five times
+@repeat 5
+@clock(clk, cycle=1)
+@end
+```
+
+**Example — IDX substitution:**
+
+```jz
+// Advance clock and check incrementing values
+@repeat 4
+@clock(clk, cycle=1)
+@expect_equal(count, 8'hIDX)
+@end
+// Expands to 4 cycles with expected values 0, 1, 2, 3
+```
+
 ## Simulation Phases
 
 Each simulation step proceeds through these phases in strict order:
@@ -534,6 +571,8 @@ Seed: 0xDEADBEEF
 | TB-019 | Observing a signal containing `z` in an assertion is a runtime error |
 | TB-020 | A file may not contain both RTL definitions and verification constructs |
 | TB-021 | `@expect_tristate` asserts all bits of the signal are `z` |
+| RPT-001 | `@repeat` requires a positive integer count |
+| RPT-002 | `@repeat` without matching `@end` |
 | SE-001 | Combinational logic must converge within 100 delta cycles |
 | SE-008 | `z` reaching a non-tristate expression (IF condition, SELECT selector, ternary condition) is a runtime error |
 | SE-009 | Given identical source and seed, all output must be bit-identical across runs |
