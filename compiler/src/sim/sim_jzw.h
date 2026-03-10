@@ -70,6 +70,21 @@ void jzw_set_time(JZWWriter *w, uint64_t time_ps);
 void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width);
 
 /**
+ * @brief Add an annotation to the JZW database.
+ *
+ * @param w         JZW writer.
+ * @param time_ps   Simulation time in picoseconds.
+ * @param type      Annotation type string (e.g., "trace", "alert", "mark").
+ * @param signal_id Signal ID, or -1 for global annotations.
+ * @param message   Optional message text (may be NULL).
+ * @param color     Optional color name (may be NULL).
+ * @param end_time  Optional end time for range annotations, or 0 for point.
+ */
+void jzw_add_annotation(JZWWriter *w, uint64_t time_ps, const char *type,
+                         int signal_id, const char *message,
+                         const char *color, uint64_t end_time);
+
+/**
  * @brief Set the simulation end time and close the database.
  *
  * @param w JZW writer.

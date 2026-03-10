@@ -566,8 +566,13 @@
     }
 
     // POR needs 1,048,576 cycles × 26.94 ns ≈ 28,249 µs
-    // Run past POR release plus ~3 scanlines (~134 µs)
-    @run(ns=28400000)
+    // Skip waveform recording during the long POR wait
+    @trace(state=off)
+    @run(ns=28200000)
+    @trace(state=on)
+
+    // Run ~3 scanlines of active video
+    @run(ns=200000)
 
     // Press pattern-switch button (active-low)
     @update {

@@ -275,6 +275,49 @@ void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width)
     jzw_maybe_commit(w);
 }
 
+void jzw_add_annotation(JZWWriter *w, uint64_t time_ps, const char *type,
+                         int signal_id, const char *message,
+                         const char *color, uint64_t end_time)
+{
+    if (!w || !w->defs_ended || !type) return;
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(w->db,
+        "INSERT INTO annotations (time, type, signal_id, message, color, end_time) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        -1, &stmt, NULL);
+    if (rc != SQLITE_OK) return;
+
+    if (!w->in_transaction) {
+        jzw_begin(w);
+    }
+
+    sqlite3_bind_int64(stmt, 1, (sqlite3_int64)time_ps);
+    sqlite3_bind_text(stmt, 2, type, -1, SQLITE_TRANSIENT);
+    if (signal_id >= 0)
+        sqlite3_bind_int(stmt, 3, signal_id + 1); /* 1-based */
+    else
+        sqlite3_bind_null(stmt, 3);
+    if (message)
+        sqlite3_bind_text(stmt, 4, message, -1, SQLITE_TRANSIENT);
+    else
+        sqlite3_bind_null(stmt, 4);
+    if (color)
+        sqlite3_bind_text(stmt, 5, color, -1, SQLITE_TRANSIENT);
+    else
+        sqlite3_bind_null(stmt, 5);
+    if (end_time > 0)
+        sqlite3_bind_int64(stmt, 6, (sqlite3_int64)end_time);
+    else
+        sqlite3_bind_null(stmt, 6);
+
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    w->batch_count++;
+    jzw_maybe_commit(w);
+}
+
 void jzw_close(JZWWriter *w)
 {
     if (!w) return;

@@ -170,7 +170,7 @@ Annotations are timestamped metadata entries associated with the simulation time
 | :--- | :--- |
 | `id` | Auto-incrementing unique identifier. |
 | `time` | Simulation time in picoseconds when the annotation was created. |
-| `type` | Annotation type string. One of: `alert`, `mark`, `select`. |
+| `type` | Annotation type string. One of: `alert`, `mark`, `select`, `trace`. |
 | `signal_id` | Optional. References `signals.id`. If non-NULL, the annotation is associated with a specific signal. If NULL, it is a global annotation (applies to the entire time column). |
 | `message` | Optional. Human-readable text describing the annotation. |
 | `color` | Optional. Display color hint. One of the predefined color names (Section 5.4). |
@@ -282,7 +282,22 @@ Creates a range annotation of type `select` that highlights a signal for the dur
 // Highlights data_out for the 100ns window
 ```
 
-### 5.4 Color Names
+### 5.4 Trace Annotations
+
+The `@trace` directive (Simulation Specification Section 4.9) generates annotations of type `trace` in the JZW database. These are automatically created by the simulator when `@trace(state=on)` or `@trace(state=off)` is encountered.
+
+| Column | Value |
+| :--- | :--- |
+| `type` | `"trace"` |
+| `time` | Simulation time when trace state changed (picoseconds). |
+| `signal_id` | NULL (trace is global, not signal-specific). |
+| `message` | `"on"` or `"off"`. |
+| `color` | NULL. |
+| `end_time` | NULL. |
+
+Viewers should use trace annotations to visually indicate periods where waveform recording was disabled (e.g., grayed-out regions, gap markers, or collapsed time ranges).
+
+### 5.5 Color Names
 
 The following color names are valid for annotation directives:
 
@@ -299,7 +314,7 @@ The following color names are valid for annotation directives:
 
 Color names are case-insensitive in source but stored as uppercase in the database. Viewers map these names to specific RGB values at their discretion.
 
-### 5.5 Annotation Placement Rules
+### 5.6 Annotation Placement Rules
 
 | Rule | Description |
 | :--- | :--- |

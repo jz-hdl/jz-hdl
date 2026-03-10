@@ -1666,6 +1666,9 @@ static int sim_run_simulation(const JZASTNode *root,
     sim_wave_set_time(wave,0);
     wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
 
+    /* Trace state: on by default */
+    int trace_enabled = 1;
+
     /* Walk simulation body sequentially (skip the @setup we already ran) */
     int setup_done = 0;
     for (size_t ci = 0; ci < sim_node->child_count; ci++) {
@@ -1683,15 +1686,19 @@ static int sim_run_simulation(const JZASTNode *root,
             /* Subsequent @setup blocks (unusual) — treat like @update */
             process_setup_update(&ts, child, 1);
             sim_full_settle(&ts);
-            sim_wave_set_time(wave,current_time_ps);
-            wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+            if (trace_enabled) {
+                sim_wave_set_time(wave,current_time_ps);
+                wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+            }
 
         } else if (child->type == JZ_AST_TB_UPDATE) {
             /* @update: apply wire changes at current time, then settle */
             process_setup_update(&ts, child, 0);
             sim_full_settle(&ts);
-            sim_wave_set_time(wave,current_time_ps);
-            wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+            if (trace_enabled) {
+                sim_wave_set_time(wave,current_time_ps);
+                wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+            }
 
         } else if (child->type == JZ_AST_SIM_RUN) {
             /* @run: advance time */
@@ -1771,9 +1778,11 @@ static int sim_run_simulation(const JZASTNode *root,
                 /* Propagate outputs */
                 sim_propagate_outputs(&ts);
 
-                /* Dump to VCD */
-                sim_wave_set_time(wave,current_time_ps);
-                wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+                /* Dump to waveform (skip if trace is off) */
+                if (trace_enabled) {
+                    sim_wave_set_time(wave,current_time_ps);
+                    wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+                }
             }
         } else if (child->type == JZ_AST_SIM_RUN_UNTIL ||
                    child->type == JZ_AST_SIM_RUN_WHILE) {
@@ -1862,9 +1871,11 @@ static int sim_run_simulation(const JZASTNode *root,
 
                 sim_propagate_outputs(&ts);
 
-                /* Dump to VCD */
-                sim_wave_set_time(wave,current_time_ps);
-                wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+                /* Dump to waveform (skip if trace is off) */
+                if (trace_enabled) {
+                    sim_wave_set_time(wave,current_time_ps);
+                    wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+                }
 
                 /* Evaluate condition */
                 SimValue actual = eval_tb_ast_expr(&ts, sig_node);
@@ -1908,6 +1919,29 @@ static int sim_run_simulation(const JZASTNode *root,
                    child->type == JZ_AST_PRINT_IF) {
             ts.current_time_ps = current_time_ps;
             process_print(&ts, child);
+
+        } else if (child->type == JZ_AST_SIM_TRACE) {
+            /* @trace(state=on/off): toggle waveform recording */
+            int new_state = (child->name && strcmp(child->name, "on") == 0) ? 1 : 0;
+
+            if (verbose) {
+                fprintf(stdout, "@trace(state=%s) at %llu ps\n",
+                        new_state ? "on" : "off",
+                        (unsigned long long)current_time_ps);
+            }
+
+            /* Write annotation to JZW */
+            sim_wave_add_annotation(wave, current_time_ps, "trace",
+                                     -1, new_state ? "on" : "off",
+                                     NULL, 0);
+
+            if (new_state && !trace_enabled) {
+                /* Turning trace on: dump full state snapshot */
+                sim_wave_set_time(wave, current_time_ps);
+                wave_dump_all(wave, &ts, wave_ids, sim_taps, num_sim_taps);
+            }
+
+            trace_enabled = new_state;
         }
         /* Skip other node types (CLOCK_BLOCK, WIRE_BLOCK, TAP_BLOCK, etc.) */
     }

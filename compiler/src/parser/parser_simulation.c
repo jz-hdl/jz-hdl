@@ -375,6 +375,56 @@ JZASTNode *parse_print_directive(Parser *p, int is_print_if)
 }
 
 /**
+ * @brief Parse @trace(state=on/off) directive.
+ *
+ * Syntax: @trace(state=on) or @trace(state=off)
+ * The @trace keyword has already been consumed.
+ */
+static JZASTNode *parse_sim_trace(Parser *p)
+{
+    const JZToken *kw = &p->tokens[p->pos - 1];
+
+    if (!match(p, JZ_TOK_LPAREN)) {
+        parser_error(p, "expected '(' after @trace");
+        return NULL;
+    }
+
+    /* Expect 'state' identifier */
+    const JZToken *state_tok = peek(p);
+    if (!state_tok->lexeme || strcmp(state_tok->lexeme, "state") != 0) {
+        parser_error(p, "expected 'state' in @trace directive");
+        return NULL;
+    }
+    advance(p);
+
+    /* Expect '=' */
+    if (!match(p, JZ_TOK_OP_ASSIGN)) {
+        parser_error(p, "expected '=' after 'state' in @trace");
+        return NULL;
+    }
+
+    /* Expect 'on' or 'off' */
+    const JZToken *val_tok = peek(p);
+    if (!val_tok->lexeme ||
+        (strcmp(val_tok->lexeme, "on") != 0 &&
+         strcmp(val_tok->lexeme, "off") != 0)) {
+        parser_error(p, "expected 'on' or 'off' in @trace(state=...)");
+        return NULL;
+    }
+    const char *state_val = val_tok->lexeme;
+    advance(p);
+
+    if (!match(p, JZ_TOK_RPAREN)) {
+        parser_error(p, "expected ')' after @trace(state=...)");
+        return NULL;
+    }
+
+    JZASTNode *node = jz_ast_new(JZ_AST_SIM_TRACE, kw->loc);
+    jz_ast_set_name(node, state_val);
+    return node;
+}
+
+/**
  * @brief Parse @run_until / @run_while directive.
  *
  * Syntax:
@@ -1051,6 +1101,11 @@ JZASTNode *parse_simulation(Parser *p)
             JZASTNode *pr = parse_print_directive(p, 1);
             if (!pr) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, pr);
+        } else if (t->type == JZ_TOK_KW_TRACE) {
+            advance(p);
+            JZASTNode *tr = parse_sim_trace(p);
+            if (!tr) { jz_ast_free(sim); return NULL; }
+            jz_ast_add_child(sim, tr);
         } else {
             parser_error(p, "unexpected token in @simulation block");
             jz_ast_free(sim);

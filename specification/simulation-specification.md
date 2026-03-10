@@ -120,8 +120,8 @@ Simulation follows the same x and z semantics as the JZ-HDL specification (Secti
     @new <instance_name> <module_name> { ... }
 
     @setup { ... }
-    
-    // Sequence of @run and @update directives
+
+    // Sequence of @run, @update, and @trace directives
 @endsim
 ```
 
@@ -347,6 +347,46 @@ The `@print_if` directive conditionally outputs a formatted message. The message
 | :--- | :--- |
 | PRT-001 | Number of non-autonomous format specifiers must match the number of arguments |
 | PRT-002 | `@print` / `@print_if` may not appear inside `@setup` or `@update` blocks |
+
+### 4.9 @trace (Waveform Recording Control)
+
+**Syntax:**
+```text
+@trace(state=on)
+@trace(state=off)
+```
+
+The `@trace` directive controls whether signal value changes are recorded to the output waveform file during subsequent `@run`, `@run_until`, and `@run_while` directives.
+
+- **Default state is `on`.** If no `@trace` directive appears, all signal changes are recorded (backward compatible).
+- When `state=off`, the simulation continues to execute — clocks toggle, logic evaluates, time advances — but no signal values are written to the waveform output. This dramatically reduces output file size and simulation time for uninteresting periods (e.g., waiting for a power-on reset counter).
+- When `state=on` after a `state=off` period, the simulator writes a **full state snapshot** at the current simulation time before resuming per-tick recording. This ensures the waveform viewer sees correct signal values at the start of the recorded window, not stale time-0 values.
+- `@trace` may be toggled any number of times to capture specific windows of interest.
+- `@trace` directives apply to all waveform output formats (VCD, FST, JZW).
+- For JZW output, each `@trace` toggle writes an annotation of type `trace` to the annotations table, with `message` set to `"on"` or `"off"`. Viewers can use these annotations to indicate trace-off periods visually.
+
+**Example:**
+```text
+@setup {
+    por   <= 1'b1;
+    rst_n <= 1'b1;
+}
+
+// Skip recording during 28ms POR wait
+@trace(state=off)
+@run(ns=28200000)
+@trace(state=on)
+
+// Now record the interesting video output
+@run(ns=200000)
+```
+
+**Rules:**
+
+| Rule | Description |
+| :--- | :--- |
+| TRC-001 | `@trace` state must be `on` or `off` |
+| TRC-002 | `@trace` may not appear inside `@setup` or `@update` blocks |
 
 ---
 

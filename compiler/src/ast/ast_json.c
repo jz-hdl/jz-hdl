@@ -130,6 +130,7 @@ static const char *node_type_name(JZASTNodeType t) {
     case JZ_AST_SIM_RUN_WHILE:         return "SimRunWhile";
     case JZ_AST_PRINT:                 return "Print";
     case JZ_AST_PRINT_IF:              return "PrintIf";
+    case JZ_AST_SIM_TRACE:             return "SimTrace";
 
     default:
         return "Unknown";

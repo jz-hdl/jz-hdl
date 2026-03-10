@@ -139,6 +139,7 @@ typedef enum JZASTNodeType {
     JZ_AST_SIM_RUN_WHILE,           /**< \@run_while directive. Children: [0]=signal, [1]=value, text=timeout_unit, name=timeout_value, block_kind=op. */
     JZ_AST_PRINT,                   /**< \@print directive. text=format_string, children=args. */
     JZ_AST_PRINT_IF,                /**< \@print_if directive. text=format_string, children[0]=condition, children[1..]=args. */
+    JZ_AST_SIM_TRACE,               /**< \@trace(state=on/off) directive. name="on" or "off". */
 } JZASTNodeType;
 
 typedef struct JZASTNode JZASTNode;

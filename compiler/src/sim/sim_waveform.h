@@ -53,6 +53,14 @@ void sim_wave_dump_value(SimWaveWriter *w, int sig_id, uint64_t value,
                           int width);
 
 /**
+ * @brief Add an annotation (JZW only; no-op for VCD/FST).
+ */
+void sim_wave_add_annotation(SimWaveWriter *w, uint64_t time_ps,
+                              const char *type, int signal_id,
+                              const char *message, const char *color,
+                              uint64_t end_time);
+
+/**
  * @brief Close the writer and free resources.
  */
 void sim_wave_close(SimWaveWriter *w);

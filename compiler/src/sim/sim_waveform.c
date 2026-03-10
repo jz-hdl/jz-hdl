@@ -91,6 +91,18 @@ void sim_wave_dump_value(SimWaveWriter *w, int sig_id, uint64_t value,
         vcd_dump_value(w->backend.vcd, sig_id, value, width);
 }
 
+void sim_wave_add_annotation(SimWaveWriter *w, uint64_t time_ps,
+                              const char *type, int signal_id,
+                              const char *message, const char *color,
+                              uint64_t end_time)
+{
+    if (!w) return;
+    if (w->format == SIM_WAVE_JZW)
+        jzw_add_annotation(w->backend.jzw, time_ps, type, signal_id,
+                            message, color, end_time);
+    /* No-op for VCD/FST */
+}
+
 void sim_wave_close(SimWaveWriter *w)
 {
     if (!w) return;
