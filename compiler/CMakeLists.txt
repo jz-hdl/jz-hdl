@@ -274,6 +274,7 @@ if(PANDOC_EXECUTABLE)
         "simulation-specification"
         "testbench-specification"
         "chip-info-specification"
+        "jzw-specification"
     )
 
     set(PDF_OUTPUTS "")
