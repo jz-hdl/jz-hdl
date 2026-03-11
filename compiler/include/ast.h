@@ -142,8 +142,9 @@ typedef enum JZASTNodeType {
     JZ_AST_SIM_TRACE,               /**< \@trace(state=on/off) directive. name="on" or "off". */
     JZ_AST_SIM_MARK,                /**< \@mark(color, "message") directive. text=color, name=message. */
     JZ_AST_SIM_MARK_IF,             /**< \@mark_if(condition, color, "message") directive. children[0]=condition, text=color, name=message. */
-    JZ_AST_SIM_ALERT,               /**< \@alert(condition, color, "message") directive. children[0]=condition, text=color, name=message. */
+    JZ_AST_SIM_ALERT,               /**< \@alert(color, "message") directive. text=color, name=message. */
     JZ_AST_SIM_ALERT_IF,            /**< \@alert_if(condition, color, "message") directive. children[0]=condition, text=color, name=message. */
+    JZ_AST_SIM_MONITOR_BLOCK,       /**< MONITOR block. Children are per-tick directives (\@print_if, \@mark_if, \@alert_if). */
 } JZASTNodeType;
 
 typedef struct JZASTNode JZASTNode;

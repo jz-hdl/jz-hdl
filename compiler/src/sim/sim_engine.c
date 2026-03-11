@@ -1694,10 +1694,10 @@ static int sim_run_simulation(const JZASTNode *root,
     /* Trace state: on by default */
     int trace_enabled = 1;
 
-    /* Collect @alert nodes for per-tick evaluation during @run */
-    const JZASTNode **alert_nodes = NULL;
-    int num_alerts = 0;
-    int cap_alerts = 0;
+    /* Collect MONITOR block children for per-tick evaluation */
+    const JZASTNode **monitor_nodes = NULL;
+    int num_monitors = 0;
+    int cap_monitors = 0;
 
     /* Walk simulation body sequentially (skip the @setup we already ran) */
     int setup_done = 0;
@@ -1819,25 +1819,31 @@ static int sim_run_simulation(const JZASTNode *root,
                     PERF_TIMER_STOP(PERF_WAVEFORM_DUMP);
                 }
 
-                /* Evaluate @alert conditions */
-                for (int ai = 0; ai < num_alerts; ai++) {
-                    const JZASTNode *an = alert_nodes[ai];
-                    if (an->child_count < 1) continue;
-                    const JZASTNode *cond_node = an->children[0];
-                    SimValue cond = eval_tb_ast_expr(&ts, cond_node);
-                    /* If not found in tb_wires, try TAP signals */
-                    if (cond.xmask[0] != 0 && cond_node->name) {
-                        for (int ti = 0; ti < num_sim_taps; ti++) {
-                            if (strcmp(sim_taps[ti].full_path, cond_node->name) == 0) {
-                                SimSignalEntry *se = sim_ctx_lookup(ts.dut, sim_taps[ti].signal_id);
-                                if (se) cond = se->current;
-                                break;
+                /* Evaluate MONITOR block directives */
+                ts.current_time_ps = current_time_ps;
+                for (int mi = 0; mi < num_monitors; mi++) {
+                    const JZASTNode *mn = monitor_nodes[mi];
+                    if (mn->type == JZ_AST_PRINT_IF) {
+                        process_print(&ts, mn);
+                    } else if (mn->type == JZ_AST_SIM_MARK_IF ||
+                               mn->type == JZ_AST_SIM_ALERT_IF) {
+                        if (mn->child_count < 1) continue;
+                        const JZASTNode *cond_node = mn->children[0];
+                        SimValue mcond = eval_tb_ast_expr(&ts, cond_node);
+                        if (mcond.xmask[0] != 0 && cond_node->name) {
+                            for (int ti = 0; ti < num_sim_taps; ti++) {
+                                if (strcmp(sim_taps[ti].full_path, cond_node->name) == 0) {
+                                    SimSignalEntry *se = sim_ctx_lookup(ts.dut, sim_taps[ti].signal_id);
+                                    if (se) mcond = se->current;
+                                    break;
+                                }
                             }
                         }
-                    }
-                    if (sim_val_is_true(cond) == 1) {
-                        sim_wave_add_annotation(wave, current_time_ps, "alert",
-                                                 -1, an->name, an->text, 0);
+                        if (sim_val_is_true(mcond) == 1) {
+                            const char *mtype = (mn->type == JZ_AST_SIM_MARK_IF) ? "mark" : "alert";
+                            sim_wave_add_annotation(wave, current_time_ps, mtype,
+                                                     -1, mn->name, mn->text, 0);
+                        }
                     }
                 }
             }
@@ -1939,14 +1945,31 @@ static int sim_run_simulation(const JZASTNode *root,
                     PERF_TIMER_STOP(PERF_WAVEFORM_DUMP);
                 }
 
-                /* Evaluate @alert conditions */
-                for (int ai = 0; ai < num_alerts; ai++) {
-                    const JZASTNode *an = alert_nodes[ai];
-                    if (an->child_count < 1) continue;
-                    SimValue acond = eval_tb_ast_expr(&ts, an->children[0]);
-                    if (sim_val_is_true(acond) == 1) {
-                        sim_wave_add_annotation(wave, current_time_ps, "alert",
-                                                 -1, an->name, an->text, 0);
+                /* Evaluate MONITOR block directives */
+                ts.current_time_ps = current_time_ps;
+                for (int mi = 0; mi < num_monitors; mi++) {
+                    const JZASTNode *mn = monitor_nodes[mi];
+                    if (mn->type == JZ_AST_PRINT_IF) {
+                        process_print(&ts, mn);
+                    } else if (mn->type == JZ_AST_SIM_MARK_IF ||
+                               mn->type == JZ_AST_SIM_ALERT_IF) {
+                        if (mn->child_count < 1) continue;
+                        const JZASTNode *cond_node = mn->children[0];
+                        SimValue mcond = eval_tb_ast_expr(&ts, cond_node);
+                        if (mcond.xmask[0] != 0 && cond_node->name) {
+                            for (int ti = 0; ti < num_sim_taps; ti++) {
+                                if (strcmp(sim_taps[ti].full_path, cond_node->name) == 0) {
+                                    SimSignalEntry *se = sim_ctx_lookup(ts.dut, sim_taps[ti].signal_id);
+                                    if (se) mcond = se->current;
+                                    break;
+                                }
+                            }
+                        }
+                        if (sim_val_is_true(mcond) == 1) {
+                            const char *mtype = (mn->type == JZ_AST_SIM_MARK_IF) ? "mark" : "alert";
+                            sim_wave_add_annotation(wave, current_time_ps, mtype,
+                                                     -1, mn->name, mn->text, 0);
+                        }
                     }
                 }
 
@@ -2093,21 +2116,36 @@ static int sim_run_simulation(const JZASTNode *root,
             }
 
         } else if (child->type == JZ_AST_SIM_ALERT) {
-            /* @alert: register for per-tick evaluation during @run */
-            if (num_alerts >= cap_alerts) {
-                cap_alerts = cap_alerts ? cap_alerts * 2 : 8;
-                alert_nodes = (const JZASTNode **)realloc(
-                    (void *)alert_nodes,
-                    cap_alerts * sizeof(const JZASTNode *));
-            }
-            alert_nodes[num_alerts++] = child;
+            /* @alert: one-shot unconditional alert at current time */
+            const char *color = child->text ? child->text : "RED";
+            const char *message = child->name;
+            sim_wave_add_annotation(wave, current_time_ps, "alert",
+                                     -1, message, color, 0);
 
             if (verbose) {
-                fprintf(stdout, "@alert registered (%s%s%s) at line %d\n",
-                        child->text ? child->text : "?",
-                        child->name ? ", " : "",
-                        child->name ? child->name : "",
-                        child->loc.line);
+                fprintf(stdout, "@alert(%s%s%s) at %llu ps\n",
+                        color,
+                        message ? ", " : "",
+                        message ? message : "",
+                        (unsigned long long)current_time_ps);
+            }
+
+        } else if (child->type == JZ_AST_SIM_MONITOR_BLOCK) {
+            /* MONITOR: collect children for per-tick evaluation */
+            for (size_t mi = 0; mi < child->child_count; mi++) {
+                const JZASTNode *mc = child->children[mi];
+                if (!mc) continue;
+                if (num_monitors >= cap_monitors) {
+                    cap_monitors = cap_monitors ? cap_monitors * 2 : 8;
+                    monitor_nodes = (const JZASTNode **)realloc(
+                        (void *)monitor_nodes,
+                        cap_monitors * sizeof(const JZASTNode *));
+                }
+                monitor_nodes[num_monitors++] = mc;
+            }
+            if (verbose) {
+                fprintf(stdout, "MONITOR block: %d directives registered\n",
+                        num_monitors);
             }
         }
         /* Skip other node types (CLOCK_BLOCK, WIRE_BLOCK, TAP_BLOCK, etc.) */
@@ -2130,7 +2168,7 @@ static int sim_run_simulation(const JZASTNode *root,
     /* Cleanup */
     free(wave_ids);
     free(sim_taps);
-    free((void *)alert_nodes);
+    free((void *)monitor_nodes);
     sim_wave_close(wave);
 
 cleanup_dut:

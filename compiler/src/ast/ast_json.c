@@ -135,6 +135,7 @@ static const char *node_type_name(JZASTNodeType t) {
     case JZ_AST_SIM_MARK_IF:           return "SimMarkIf";
     case JZ_AST_SIM_ALERT:             return "SimAlert";
     case JZ_AST_SIM_ALERT_IF:          return "SimAlertIf";
+    case JZ_AST_SIM_MONITOR_BLOCK:     return "SimMonitorBlock";
 
     default:
         return "Unknown";

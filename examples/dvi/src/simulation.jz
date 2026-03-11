@@ -557,9 +557,12 @@
         tmds_d2  [10] = tmds_d2;
     }
 
-    // Alert when hsync or vsync is active
-    @alert(dut.hsync, CYAN, "HSYNC pulse")
-    @alert(dut.vsync, PURPLE, "VSYNC pulse")
+    // Per-tick monitoring for interesting conditions
+    MONITOR {
+        @alert_if(dut.hsync, CYAN, "HSYNC pulse")
+        @alert_if(dut.vsync, PURPLE, "VSYNC pulse")
+        @mark_if(dut.pattern_sel, ORANGE, "Non-default pattern active")
+    }
 
     // Start with DONE asserted (POR counting), button reset released,
     // pattern button released (active-low)
