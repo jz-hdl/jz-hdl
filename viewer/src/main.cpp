@@ -824,7 +824,7 @@ int main(int argc, char **argv)
             ImGui::SetScrollY(scroll_y);
         }
 
-        int total_row_count = row_idx; /* save for waveform area */
+        int total_row_count = row_idx + 1; /* +1 for empty padding row at bottom */
 
         ImGui::End();
 
@@ -1401,6 +1401,9 @@ int main(int argc, char **argv)
 
             float last_alert_px = -100.0f;
             float min_alert_spacing = 2.0f;
+            float hover_radius = icon_size + 2.0f;
+            bool mouse_in_gutter = (io.MousePos.y >= gutter_y && io.MousePos.y <= gutter_bottom);
+            std::string tooltip_text;
 
             for (int ai = ann_start; ai < (int)anns.size(); ai++) {
                 const auto &ann = anns[ai];
@@ -1417,29 +1420,40 @@ int main(int argc, char **argv)
                         ImVec2(ax + icon_size * 0.5f, icon_y_pos + icon_size),
                         col);
 
-                    if (io.MousePos.x >= ax - icon_size && io.MousePos.x <= ax + icon_size &&
-                        io.MousePos.y >= gutter_y && io.MousePos.y <= gutter_bottom) {
+                    if (mouse_in_gutter &&
+                        io.MousePos.x >= ax - hover_radius && io.MousePos.x <= ax + hover_radius) {
                         char tbuf[64];
                         format_time(tbuf, sizeof(tbuf), ann.time);
-                        if (!ann.message.empty())
-                            ImGui::SetTooltip("Mark: %s\nTime: %s\nColor: %s",
-                                              ann.message.c_str(), tbuf, ann.color.c_str());
-                        else
-                            ImGui::SetTooltip("Mark at %s", tbuf);
+                        if (!tooltip_text.empty()) tooltip_text += "\n---\n";
+                        if (!ann.message.empty()) {
+                            tooltip_text += "Mark: ";
+                            tooltip_text += ann.message;
+                            tooltip_text += "\nTime: ";
+                            tooltip_text += tbuf;
+                        } else {
+                            tooltip_text += "Mark at ";
+                            tooltip_text += tbuf;
+                        }
                     }
                 } else if (ann.type == "alert") {
-                    if (ax - last_alert_px < min_alert_spacing) {
-                        float cw = icon_size * 0.6f;
-                        if (io.MousePos.x >= ax - cw - 2 && io.MousePos.x <= ax + cw + 2 &&
-                            io.MousePos.y >= gutter_y && io.MousePos.y <= gutter_bottom) {
-                            char tbuf[64];
-                            format_time(tbuf, sizeof(tbuf), ann.time);
-                            if (!ann.message.empty())
-                                ImGui::SetTooltip("Alert: %s\nTime: %s",
-                                                  ann.message.c_str(), tbuf);
-                            else
-                                ImGui::SetTooltip("Alert at %s", tbuf);
+                    /* Check hover even for density-skipped alerts */
+                    if (mouse_in_gutter &&
+                        io.MousePos.x >= ax - hover_radius && io.MousePos.x <= ax + hover_radius) {
+                        char tbuf[64];
+                        format_time(tbuf, sizeof(tbuf), ann.time);
+                        if (!tooltip_text.empty()) tooltip_text += "\n---\n";
+                        if (!ann.message.empty()) {
+                            tooltip_text += "Alert: ";
+                            tooltip_text += ann.message;
+                            tooltip_text += "\nTime: ";
+                            tooltip_text += tbuf;
+                        } else {
+                            tooltip_text += "Alert at ";
+                            tooltip_text += tbuf;
                         }
+                    }
+
+                    if (ax - last_alert_px < min_alert_spacing) {
                         continue;
                     }
                     last_alert_px = ax;
@@ -1452,18 +1466,11 @@ int main(int argc, char **argv)
                         {ax + cw, icon_y_pos + ch}
                     };
                     gdl->AddTriangleFilled(tri[0], tri[1], tri[2], col);
-
-                    if (io.MousePos.x >= ax - cw - 2 && io.MousePos.x <= ax + cw + 2 &&
-                        io.MousePos.y >= gutter_y && io.MousePos.y <= gutter_bottom) {
-                        char tbuf[64];
-                        format_time(tbuf, sizeof(tbuf), ann.time);
-                        if (!ann.message.empty())
-                            ImGui::SetTooltip("Alert: %s\nTime: %s",
-                                              ann.message.c_str(), tbuf);
-                        else
-                            ImGui::SetTooltip("Alert at %s", tbuf);
-                    }
                 }
+            }
+
+            if (!tooltip_text.empty()) {
+                ImGui::SetTooltip("%s", tooltip_text.c_str());
             }
 
             gdl->PopClipRect();
