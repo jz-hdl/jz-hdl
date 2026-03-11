@@ -260,7 +260,9 @@ static int match_keyword(const char *lexeme, JZTokenType *out_type) {
     if (strcmp(lexeme, "@print_if") == 0)        { *out_type = JZ_TOK_KW_PRINT_IF; return 1; }
     if (strcmp(lexeme, "@trace") == 0)           { *out_type = JZ_TOK_KW_TRACE;    return 1; }
     if (strcmp(lexeme, "@mark") == 0)            { *out_type = JZ_TOK_KW_MARK;     return 1; }
+    if (strcmp(lexeme, "@mark_if") == 0)         { *out_type = JZ_TOK_KW_MARK_IF;  return 1; }
     if (strcmp(lexeme, "@alert") == 0)           { *out_type = JZ_TOK_KW_ALERT;    return 1; }
+    if (strcmp(lexeme, "@alert_if") == 0)        { *out_type = JZ_TOK_KW_ALERT_IF; return 1; }
 
     /* Block and structural keywords */
     if (strcmp(lexeme, "CONST") == 0)         { *out_type = JZ_TOK_KW_CONST;      return 1; }

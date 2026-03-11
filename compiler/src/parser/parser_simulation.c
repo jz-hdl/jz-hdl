@@ -486,6 +486,130 @@ static JZASTNode *parse_sim_alert(Parser *p)
 }
 
 /**
+ * @brief Parse @mark_if(condition, color) or @mark_if(condition, color, "message").
+ *
+ * The @mark_if keyword has already been consumed.
+ * Same syntax as @alert but produces a SIM_MARK_IF node.
+ */
+static JZASTNode *parse_sim_mark_if(Parser *p)
+{
+    const JZToken *kw = &p->tokens[p->pos - 1];
+
+    if (!match(p, JZ_TOK_LPAREN)) {
+        parser_error(p, "expected '(' after @mark_if");
+        return NULL;
+    }
+
+    JZASTNode *cond = parse_expression(p);
+    if (!cond) {
+        parser_error(p, "expected condition expression in @mark_if");
+        return NULL;
+    }
+
+    if (!match(p, JZ_TOK_COMMA)) {
+        parser_error(p, "expected ',' after @mark_if condition");
+        jz_ast_free(cond);
+        return NULL;
+    }
+
+    const JZToken *color_tok = peek(p);
+    if (color_tok->type != JZ_TOK_IDENTIFIER) {
+        parser_error(p, "expected color name in @mark_if");
+        jz_ast_free(cond);
+        return NULL;
+    }
+    const char *color = color_tok->lexeme;
+    advance(p);
+
+    const char *message = NULL;
+    if (peek(p)->type == JZ_TOK_COMMA) {
+        advance(p);
+        const JZToken *msg_tok = peek(p);
+        if (msg_tok->type != JZ_TOK_STRING) {
+            parser_error(p, "expected string literal for @mark_if message");
+            jz_ast_free(cond);
+            return NULL;
+        }
+        message = msg_tok->lexeme;
+        advance(p);
+    }
+
+    if (!match(p, JZ_TOK_RPAREN)) {
+        parser_error(p, "expected ')' after @mark_if(...)");
+        jz_ast_free(cond);
+        return NULL;
+    }
+
+    JZASTNode *node = jz_ast_new(JZ_AST_SIM_MARK_IF, kw->loc);
+    jz_ast_set_text(node, color);
+    if (message) jz_ast_set_name(node, message);
+    jz_ast_add_child(node, cond);
+    return node;
+}
+
+/**
+ * @brief Parse @alert_if(condition, color) or @alert_if(condition, color, "message").
+ *
+ * The @alert_if keyword has already been consumed.
+ * Same syntax as @alert but produces a SIM_ALERT_IF node.
+ */
+static JZASTNode *parse_sim_alert_if(Parser *p)
+{
+    const JZToken *kw = &p->tokens[p->pos - 1];
+
+    if (!match(p, JZ_TOK_LPAREN)) {
+        parser_error(p, "expected '(' after @alert_if");
+        return NULL;
+    }
+
+    JZASTNode *cond = parse_expression(p);
+    if (!cond) {
+        parser_error(p, "expected condition expression in @alert_if");
+        return NULL;
+    }
+
+    if (!match(p, JZ_TOK_COMMA)) {
+        parser_error(p, "expected ',' after @alert_if condition");
+        jz_ast_free(cond);
+        return NULL;
+    }
+
+    const JZToken *color_tok = peek(p);
+    if (color_tok->type != JZ_TOK_IDENTIFIER) {
+        parser_error(p, "expected color name in @alert_if");
+        jz_ast_free(cond);
+        return NULL;
+    }
+    const char *color = color_tok->lexeme;
+    advance(p);
+
+    const char *message = NULL;
+    if (peek(p)->type == JZ_TOK_COMMA) {
+        advance(p);
+        const JZToken *msg_tok = peek(p);
+        if (msg_tok->type != JZ_TOK_STRING) {
+            parser_error(p, "expected string literal for @alert_if message");
+            jz_ast_free(cond);
+            return NULL;
+        }
+        message = msg_tok->lexeme;
+        advance(p);
+    }
+
+    if (!match(p, JZ_TOK_RPAREN)) {
+        parser_error(p, "expected ')' after @alert_if(...)");
+        jz_ast_free(cond);
+        return NULL;
+    }
+
+    JZASTNode *node = jz_ast_new(JZ_AST_SIM_ALERT_IF, kw->loc);
+    jz_ast_set_text(node, color);
+    if (message) jz_ast_set_name(node, message);
+    jz_ast_add_child(node, cond);
+    return node;
+}
+
+/**
  * @brief Parse @trace(state=on/off) directive.
  *
  * Syntax: @trace(state=on) or @trace(state=off)
@@ -1222,9 +1346,19 @@ JZASTNode *parse_simulation(Parser *p)
             JZASTNode *mk = parse_sim_mark(p);
             if (!mk) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, mk);
+        } else if (t->type == JZ_TOK_KW_MARK_IF) {
+            advance(p);
+            JZASTNode *mk = parse_sim_mark_if(p);
+            if (!mk) { jz_ast_free(sim); return NULL; }
+            jz_ast_add_child(sim, mk);
         } else if (t->type == JZ_TOK_KW_ALERT) {
             advance(p);
             JZASTNode *al = parse_sim_alert(p);
+            if (!al) { jz_ast_free(sim); return NULL; }
+            jz_ast_add_child(sim, al);
+        } else if (t->type == JZ_TOK_KW_ALERT_IF) {
+            advance(p);
+            JZASTNode *al = parse_sim_alert_if(p);
             if (!al) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, al);
         } else {

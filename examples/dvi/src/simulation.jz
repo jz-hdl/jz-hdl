@@ -576,8 +576,16 @@
     @trace(state=on)
     @mark(GREEN, "POR complete, video starts")
 
+    // Check state right after POR
+    @alert_if(dut.reset, GREEN, "Reset deasserted after POR")
+    @mark_if(dut.de, CYAN, "Display already active")
+
     // Run ~3 scanlines of active video
     @run(ns=200000)
+
+    // Checkpoint: verify display enable is active
+    @mark_if(dut.de, BLUE, "Display active at 200µs checkpoint")
+    @alert_if(dut.vsync, PURPLE, "VSYNC active at 200µs checkpoint")
 
     // Press pattern-switch button (active-low)
     @update {
@@ -594,6 +602,12 @@
     }
     @mark(YELLOW, "Button released")
 
-    // Run a few more scanlines to see pattern switch on next vsync
-    @run(ns=200000)
+    // Run more scanlines to see pattern switch on next vsync
+    @run(ns=300000)
+
+    // Check if pattern changed
+    @alert_if(dut.pattern_sel, ORANGE, "Pattern switched")
+
+    // Continue running to observe new pattern
+    @run(ns=300000)
 @endsim

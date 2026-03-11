@@ -466,6 +466,67 @@ The `@alert` directive registers a conditional alert that is evaluated at every 
 | ALT-002 | `@alert` condition must reference a signal in scope (declared in `WIRE`, `CLOCK`, or `TAP`) |
 | ALT-003 | Color name must be one of the predefined names |
 
+### 4.12 @mark_if (Conditional One-Shot Marker)
+
+**Syntax:**
+```text
+@mark_if(<condition>, <color>)
+@mark_if(<condition>, <color>, "<message>")
+```
+
+The `@mark_if` directive evaluates a condition once at the current simulation time. If the condition is true (non-zero), a mark annotation is created — identical to what `@mark` would produce. If the condition is false, nothing happens.
+
+- `<condition>` is a testbench `WIRE` identifier or hierarchical signal reference (`TAP`). If the signal is multi-bit, it is truthy if any bit is `1`.
+- `<color>` is a color name (one of: `RED`, `ORANGE`, `YELLOW`, `GREEN`, `BLUE`, `PURPLE`, `CYAN`, `WHITE`).
+- `<message>` is an optional string literal describing the marker.
+- Unlike `@alert`, this is **not** registered for per-tick evaluation. It fires at most once, at the point it appears in the simulation sequence.
+
+**Example:**
+```text
+@run(ns=1000)
+@mark_if(dut.error_flag, RED, "Error detected at checkpoint")
+@run(ns=1000)
+```
+
+**Rules:**
+
+| Rule | Description |
+| :--- | :--- |
+| MKI-001 | `@mark_if` may not appear inside `@setup`, `@update`, or `@new` blocks |
+| MKI-002 | `@mark_if` condition must reference a signal in scope (declared in `WIRE`, `CLOCK`, or `TAP`) |
+| MKI-003 | Color name must be one of the predefined names |
+
+### 4.13 @alert_if (Conditional One-Shot Alert)
+
+**Syntax:**
+```text
+@alert_if(<condition>, <color>)
+@alert_if(<condition>, <color>, "<message>")
+```
+
+The `@alert_if` directive evaluates a condition once at the current simulation time. If the condition is true (non-zero), an alert annotation is created — identical to what a per-tick `@alert` would produce for a single tick. If the condition is false, nothing happens.
+
+- `<condition>` is a testbench `WIRE` identifier or hierarchical signal reference (`TAP`). If the signal is multi-bit, it is truthy if any bit is `1`.
+- `<color>` is a color name (one of: `RED`, `ORANGE`, `YELLOW`, `GREEN`, `BLUE`, `PURPLE`, `CYAN`, `WHITE`).
+- `<message>` is an optional string literal describing the alert.
+- Unlike `@alert`, this is **not** registered for per-tick evaluation. It fires at most once, at the point it appears in the simulation sequence.
+
+**Example:**
+```text
+@run(ns=5000)
+@alert_if(dut.fifo_full, RED, "FIFO full at 5µs checkpoint")
+@run(ns=5000)
+@alert_if(dut.fifo_full, RED, "FIFO full at 10µs checkpoint")
+```
+
+**Rules:**
+
+| Rule | Description |
+| :--- | :--- |
+| ALI-001 | `@alert_if` may not appear inside `@setup`, `@update`, or `@new` blocks |
+| ALI-002 | `@alert_if` condition must reference a signal in scope (declared in `WIRE`, `CLOCK`, or `TAP`) |
+| ALI-003 | Color name must be one of the predefined names |
+
 ---
 
 ## 5. CLI USAGE

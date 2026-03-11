@@ -2032,6 +2032,66 @@ static int sim_run_simulation(const JZASTNode *root,
             sim_wave_add_annotation(wave, current_time_ps, "mark",
                                      -1, message, color, 0);
 
+        } else if (child->type == JZ_AST_SIM_MARK_IF) {
+            /* @mark_if: one-shot conditional mark at current time */
+            if (child->child_count >= 1) {
+                const JZASTNode *cond_node = child->children[0];
+                SimValue cond = eval_tb_ast_expr(&ts, cond_node);
+                /* TAP signal fallback */
+                if (cond.xmask[0] != 0 && cond_node->name) {
+                    for (int ti = 0; ti < num_sim_taps; ti++) {
+                        if (strcmp(sim_taps[ti].full_path, cond_node->name) == 0) {
+                            SimSignalEntry *se = sim_ctx_lookup(ts.dut, sim_taps[ti].signal_id);
+                            if (se) cond = se->current;
+                            break;
+                        }
+                    }
+                }
+                if (sim_val_is_true(cond) == 1) {
+                    const char *color = child->text;
+                    const char *message = child->name;
+                    if (verbose) {
+                        fprintf(stdout, "@mark_if -> true (%s%s%s) at %llu ps\n",
+                                color ? color : "?",
+                                message ? ", " : "",
+                                message ? message : "",
+                                (unsigned long long)current_time_ps);
+                    }
+                    sim_wave_add_annotation(wave, current_time_ps, "mark",
+                                             -1, message, color, 0);
+                }
+            }
+
+        } else if (child->type == JZ_AST_SIM_ALERT_IF) {
+            /* @alert_if: one-shot conditional alert at current time */
+            if (child->child_count >= 1) {
+                const JZASTNode *cond_node = child->children[0];
+                SimValue cond = eval_tb_ast_expr(&ts, cond_node);
+                /* TAP signal fallback */
+                if (cond.xmask[0] != 0 && cond_node->name) {
+                    for (int ti = 0; ti < num_sim_taps; ti++) {
+                        if (strcmp(sim_taps[ti].full_path, cond_node->name) == 0) {
+                            SimSignalEntry *se = sim_ctx_lookup(ts.dut, sim_taps[ti].signal_id);
+                            if (se) cond = se->current;
+                            break;
+                        }
+                    }
+                }
+                if (sim_val_is_true(cond) == 1) {
+                    const char *color = child->text;
+                    const char *message = child->name;
+                    if (verbose) {
+                        fprintf(stdout, "@alert_if -> true (%s%s%s) at %llu ps\n",
+                                color ? color : "?",
+                                message ? ", " : "",
+                                message ? message : "",
+                                (unsigned long long)current_time_ps);
+                    }
+                    sim_wave_add_annotation(wave, current_time_ps, "alert",
+                                             -1, message, color, 0);
+                }
+            }
+
         } else if (child->type == JZ_AST_SIM_ALERT) {
             /* @alert: register for per-tick evaluation during @run */
             if (num_alerts >= cap_alerts) {
