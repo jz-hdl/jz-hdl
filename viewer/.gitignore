@@ -1,9 +1,9 @@
 # Build directories
-/build/
-/build-*/
-/out/
-/bin/
-/obj/
+build/
+build-*/
+out/
+bin/
+obj/
 
 # CMake generated files
 CMakeFiles/
