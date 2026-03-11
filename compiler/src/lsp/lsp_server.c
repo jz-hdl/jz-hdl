@@ -31,6 +31,9 @@
 /*  Forward declarations                                              */
 /* ------------------------------------------------------------------ */
 
+/* Workspace root path extracted from initialize request. */
+static char s_workspace_root[2048] = {0};
+
 static void handle_initialize(const char *msg, int id, LspDocStore *store);
 static void handle_initialized(void);
 static void handle_shutdown(int id);
@@ -160,9 +163,25 @@ static void send_notification(const char *method, const char *params_json) {
 /* ------------------------------------------------------------------ */
 
 static void handle_initialize(const char *msg, int id, LspDocStore *store) {
-    (void)msg;
     (void)store;
     lsp_log("received initialize request");
+
+    /* Extract workspace root from params.rootUri (preferred) or
+     * params.rootPath (deprecated fallback). */
+    char params[4096];
+    if (lsp_json_get_object(msg, "params", params, sizeof(params)) == 0) {
+        char root_uri[2048] = {0};
+        if (lsp_json_get_string(params, "rootUri", root_uri, sizeof(root_uri)) == 0 &&
+            root_uri[0] != '\0') {
+            lsp_uri_to_path(root_uri, s_workspace_root, sizeof(s_workspace_root));
+        } else {
+            lsp_json_get_string(params, "rootPath", s_workspace_root,
+                                sizeof(s_workspace_root));
+        }
+    }
+    if (s_workspace_root[0]) {
+        lsp_log("workspace root: %s", s_workspace_root);
+    }
 
     const char *result =
         "{"
@@ -176,11 +195,7 @@ static void handle_initialize(const char *msg, int id, LspDocStore *store) {
                 "\"completionProvider\":{"
                     "\"triggerCharacters\":[\"@\"]"
                 "},"
-                "\"definitionProvider\":true,"
-                "\"diagnosticProvider\":{"
-                    "\"interFileDependencies\":false,"
-                    "\"workspaceDiagnostics\":false"
-                "}"
+                "\"definitionProvider\":true"
             "},"
             "\"serverInfo\":{"
                 "\"name\":\"jz-hdl-lsp\","
@@ -218,6 +233,15 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
         filepath[sizeof(filepath) - 1] = '\0';
     }
 
+    /* Initialize path security sandbox. Use workspace root if available,
+     * otherwise fall back to the file's own directory. */
+    if (s_workspace_root[0]) {
+        jz_path_security_init(filepath);
+        jz_path_security_add_root(s_workspace_root);
+    } else {
+        jz_path_security_init(filepath);
+    }
+
     /* Run the compiler frontend on the in-memory document content. */
     JZCompiler compiler;
     jz_compiler_init(&compiler, JZ_COMPILER_MODE_LINT);
@@ -241,6 +265,22 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
         compiler.ast_root = ast;
     }
 
+    /* Detect whether the source file is a standalone module (no @project).
+     * Standalone modules are valid importable files; project-level
+     * diagnostics should be suppressed for them. */
+    int is_standalone_module = 0;
+    if (ast) {
+        int has_project = 0;
+        for (size_t i = 0; i < ast->child_count; ++i) {
+            if (ast->children[i] &&
+                ast->children[i]->type == JZ_AST_PROJECT) {
+                has_project = 1;
+                break;
+            }
+        }
+        is_standalone_module = !has_project;
+    }
+
     /* Template expansion + semantic analysis. */
     if (ast) {
         jz_template_expand(ast, &compiler.diagnostics, filepath);
@@ -257,9 +297,27 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
     JZDiagnostic *diags = (JZDiagnostic *)compiler.diagnostics.buffer.data;
     size_t diag_count = compiler.diagnostics.buffer.len / sizeof(JZDiagnostic);
 
+    /* Resolve the canonical base name of the current file for filtering. */
+    const char *base_name = strrchr(filepath, '/');
+    base_name = base_name ? base_name + 1 : filepath;
+
     int first = 1;
     for (size_t i = 0; i < diag_count; ++i) {
         JZDiagnostic *d = &diags[i];
+
+        /* Only publish diagnostics that belong to this file.  Diagnostics
+         * from @import-ed files have a different loc.filename. */
+        if (d->loc.filename) {
+            const char *diag_base = strrchr(d->loc.filename, '/');
+            diag_base = diag_base ? diag_base + 1 : d->loc.filename;
+            if (strcmp(diag_base, base_name) != 0) continue;
+        }
+
+        /* Suppress project-level diagnostics for standalone module files. */
+        if (is_standalone_module && d->code &&
+            strncmp(d->code, "PROJECT_", 8) == 0) {
+            continue;
+        }
 
         /* Map severity. LSP: 1=Error, 2=Warning, 3=Information, 4=Hint. */
         int lsp_severity;
@@ -304,6 +362,8 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
     jz_token_stream_free(&tokens);
     if (free_source) free(source);
     jz_compiler_dispose(&compiler);
+    jz_path_security_cleanup();
+    jz_parser_free_imported_filenames();
 }
 
 /* ------------------------------------------------------------------ */
@@ -780,6 +840,13 @@ static void handle_text_document_definition(const char *msg, int id,
         return;
     }
 
+    if (s_workspace_root[0]) {
+        jz_path_security_init(filepath);
+        jz_path_security_add_root(s_workspace_root);
+    } else {
+        jz_path_security_init(filepath);
+    }
+
     JZCompiler compiler;
     jz_compiler_init(&compiler, JZ_COMPILER_MODE_LINT);
 
@@ -827,4 +894,6 @@ static void handle_text_document_definition(const char *msg, int id,
     jz_token_stream_free(&tokens);
     if (free_src) free(compile_src);
     jz_compiler_dispose(&compiler);
+    jz_path_security_cleanup();
+    jz_parser_free_imported_filenames();
 }
