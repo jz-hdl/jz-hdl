@@ -60,7 +60,33 @@ jz-hdl sim.jz --simulate --jitter=clk_wr:200 --jitter=clk_rd:500
 ```
 
 ::: tip Matching hardware datasheets
-PLL datasheets typically specify jitter as peak-to-peak or RMS (σ). For a datasheet value of "200ps peak-to-peak", use `--jitter=clk:200`. For an RMS value of "33ps", use `--jitter=clk;198` (6 × 33).
+PLL datasheets typically specify jitter as peak-to-peak or RMS (σ). For a datasheet value of "200ps peak-to-peak", use `--jitter=clk:200`. For an RMS value of "33ps", use `--jitter=clk:198` (6 × 33).
+:::
+
+### Clock Drift
+
+The simulator supports optional **frequency drift** on any clock via the `--drift` command-line flag, modeling the crystal tolerance (ppm accuracy) of real oscillators.
+
+**Key properties:**
+
+- **Fixed frequency offset.** At simulation start, each drifted clock receives a fixed frequency offset (in ppm) that persists for the entire simulation. Unlike jitter, drift **accumulates** — the clock runs consistently faster or slower than nominal, causing its edges to progressively diverge from ideal timing.
+- **Gaussian selection, clamped.** The `--drift` parameter specifies the **maximum drift** in ppm. The actual value is drawn from a Gaussian distribution (σ = max/3, clamped at ±max) at simulation start. The value may be positive (fast) or negative (slow).
+- **Deterministic.** Each drifted clock's actual ppm is selected using a dedicated PRNG seeded from the simulation seed and clock declaration index. Given the same `--seed` and `--drift` flags, the selected drift is identical across runs.
+- **Combines with jitter.** When both are active, drift changes the base period and jitter adds random perturbation on top. The ideal next toggle accumulates using the drifted period.
+
+```bash
+# ±50 ppm crystal tolerance on clk
+jz-hdl sim.jz --simulate --drift=clk:50
+
+# Jitter + drift together
+jz-hdl sim.jz --simulate --jitter=clk:200 --drift=clk:50
+
+# Different drift per clock domain
+jz-hdl sim.jz --simulate --drift=clk_wr:20 --drift=clk_rd:100
+```
+
+::: tip Matching crystal datasheets
+Crystal datasheets typically specify frequency tolerance in ppm. For a crystal rated at "±50 ppm", use `--drift=clk:50`. The simulator selects a realistic value from within that tolerance range for each simulation run (deterministic per seed).
 :::
 
 ### Time 0 Initialization
@@ -404,6 +430,7 @@ jz-hdl sim_file.jz --simulate -o output.vcd      # explicit output path
 jz-hdl sim_file.jz --simulate --seed=0xCAFE      # reproducible register init
 jz-hdl sim_file.jz --simulate --verbose           # print tick resolution, events
 jz-hdl sim_file.jz --simulate --jitter=clk:200   # 200ps peak-to-peak jitter
+jz-hdl sim_file.jz --simulate --drift=clk:50    # ±50 ppm crystal tolerance
 ```
 
 Files containing `@simulation` blocks must be run with `--simulate`. Using `--lint` or `--test` on a file that contains `@simulation` will produce a `SIM_WRONG_TOOL` error.
@@ -418,6 +445,7 @@ Files containing `@simulation` blocks must be run with `--simulate`. Using `--li
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format (not yet supported). |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<ps>` is peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times. See [Clock Jitter](#clock-jitter). |
+| `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<ppm>` is the maximum drift in parts per million. Actual drift selected from Gaussian (σ = ppm/3, clamped at ±ppm). May be specified multiple times. See [Clock Drift](#clock-drift). |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 
 ## Complete Example

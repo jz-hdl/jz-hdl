@@ -75,6 +75,29 @@ The simulator supports optional **period jitter** on any clock, modeling the cyc
 
 **GCD tick for `@run(ticks=N)`:** The simulator also computes the Greatest Common Divisor (GCD) of all clock toggle intervals. This GCD defines the **tick unit** used when `@run(ticks=N)` is specified — the duration advanced is `N × GCD` picoseconds. For example, if `clk_a` has a period of 10ns (toggles every 5000ps) and `clk_b` has a period of 14ns (toggles every 7000ps), the GCD is 1000ps = 1ns, and `@run(ticks=10)` advances 10ns. The `@run(ns=...)` and `@run(ms=...)` forms are unaffected — they convert directly to picoseconds.
 
+### 2.2.2 Clock Drift
+
+The simulator supports optional **frequency drift** on any clock, modeling the crystal tolerance (ppm accuracy) of real oscillators. Drift is enabled per clock via the `--drift` command-line flag (see Section 5.2).
+
+**Drift model:**
+
+- **Type: Fixed frequency offset.** At simulation start, each drifted clock receives a fixed frequency offset (in parts per million) that persists for the entire simulation. This models the static frequency error of a real crystal oscillator operating at a particular temperature and voltage. Unlike jitter, drift **accumulates** — the clock runs consistently faster or slower than its nominal frequency, causing its edges to progressively diverge from ideal timing.
+
+- **Selection: Gaussian, clamped.** The actual drift value is drawn from a Gaussian distribution at simulation initialization. The `--drift` parameter specifies the **maximum drift** in ppm. The standard deviation is `σ = max_ppm / 3`, placing the ±max_ppm bounds at ±3σ. Values beyond ±max_ppm are clamped. The selected value may be positive (clock runs fast) or negative (clock runs slow).
+
+  For example, `--drift=clk:50` specifies ±50 ppm maximum drift on clock `clk`: σ ≈ 16.7 ppm, 99.7% of runs select a drift within ±50 ppm naturally, hard-clamped at ±50 ppm.
+
+- **Implementation: Adjusted half-period.** The drift is applied by computing a drifted half-period: `drifted_toggle_ps = toggle_ps × (1 + actual_ppm / 1,000,000)`. The simulator tracks the ideal next toggle time as a `double` to accumulate sub-picosecond fractional drift without rounding error. Each scheduled toggle rounds the accumulated double to the nearest integer picosecond.
+
+- **PRNG: Deterministic per-clock.** Each drifted clock's actual ppm is selected using a dedicated xorshift32 PRNG state, seeded from the simulation seed and the clock's declaration index: `drift_rng = seed ^ (clock_index + 0x44524654)`. This ensures drift selection is fully reproducible given the same `--seed` and `--drift` flags.
+
+**Interaction with jitter:**
+
+- When both jitter and drift are active on a clock, drift changes the base period (via `drifted_toggle_ps`), and jitter adds random perturbation on top. The ideal next toggle accumulates using the drifted period, and jitter offsets are applied relative to that drifted ideal position.
+- Drift does not affect the GCD tick computation. The GCD is computed from nominal (undrifted) toggle intervals and is used only for `@run(ticks=N)` conversion.
+- Drift does not affect `@run` duration accounting. The simulation runs until the requested wall-clock time has elapsed.
+- Drift metadata is recorded in JZW output (see Section 6.4).
+
 ### 2.3 Time 0 Initialization
 
 In hardware, clocks do not instantly start toggling the picosecond power is applied. The simulator models this with a deterministic initialization sequence at Time 0, before any clock edge occurs:
@@ -108,7 +131,7 @@ This ensures the waveform viewer shows the full initial setup state before the f
 This is a normative requirement. There is no implementation-defined ordering, no thread-dependent scheduling, and no platform-dependent evaluation. Every aspect of simulation is fully determined by the source text and the seed value:
 
 - Storage randomization is derived solely from the seed via a specified PRNG algorithm.
-- Clock scheduling uses event-driven `next_toggle_ps` timestamps computed from integer picosecond arithmetic (Section 2.1, 2.2).
+- Clock scheduling uses event-driven `next_toggle_ps` timestamps. Ideal toggle times are tracked as double-precision floats to accumulate sub-picosecond drift fractions, then rounded to integer picoseconds for scheduling (Sections 2.1, 2.2).
 - When multiple clocks toggle at the same time, toggle order is determined by declaration order.
 - Combinational settling follows a deterministic iteration order (Section 2.6).
 - Waveform output records signal values at every tick using exact bit-vector state with no floating-point arithmetic.
@@ -614,6 +637,8 @@ jz-hdl --simulate sim_file.jz --seed=0xCAFE         # reproducible register init
 jz-hdl --simulate sim_file.jz --verbose              # print tick resolution, events
 jz-hdl --simulate sim_file.jz --jitter=clk:200       # 200ps p-p jitter on clk
 jz-hdl --simulate sim_file.jz --jitter=clk_wr:200 --jitter=clk_rd:500
+jz-hdl --simulate sim_file.jz --drift=clk:50            # ±50 ppm crystal tolerance
+jz-hdl --simulate sim_file.jz --jitter=clk:200 --drift=clk:50  # jitter + drift
 ```
 
 ### 5.2 Flags
@@ -626,6 +651,7 @@ jz-hdl --simulate sim_file.jz --jitter=clk_wr:200 --jitter=clk_rd:500
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format (not yet supported). |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ps>` is the peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times for different clocks. See Section 2.2.1. |
+| `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ppm>` is the maximum drift in parts per million. The actual drift is selected from a Gaussian distribution (σ = ppm/3, clamped at ±ppm) at simulation start. May be specified multiple times for different clocks. See Section 2.2.2. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 
 ---
@@ -652,13 +678,15 @@ Every signal in `CLOCK`, `WIRE`, and `TAP` blocks is sampled and written to the 
 
 ### 6.4 JZW Metadata
 
-The JZW format stores simulation metadata in its `meta` table. In addition to the standard keys (`date`, `source_file`, `compiler_version`, `seed`, `tick_ps`, `module_name`), the following keys are written when clock jitter is enabled:
+The JZW format stores simulation metadata in its `meta` table. In addition to the standard keys (`date`, `source_file`, `compiler_version`, `seed`, `tick_ps`, `module_name`), the following keys are written when clock jitter or drift is enabled:
 
 | Key | Value | Example |
 |---|---|---|
 | `jitter_<clock_name>` | Peak-to-peak jitter in picoseconds | `jitter_clk = "200"` |
+| `drift_<clock_name>` | Maximum drift in ppm (configured value) | `drift_clk = "50.0"` |
+| `drift_actual_<clock_name>` | Actual selected drift in ppm | `drift_actual_clk = "8.027143"` |
 
-One key is written per jittered clock. Clocks without jitter have no corresponding key. This allows waveform viewers and analysis tools to determine whether jitter was active and with what parameters.
+One `jitter_` key is written per jittered clock. Two `drift_` keys are written per drifted clock: one for the configured maximum and one for the actual selected value. Clocks without jitter or drift have no corresponding keys. This allows waveform viewers and analysis tools to determine whether jitter/drift was active and with what parameters, and to reconstruct the exact timing behavior of each clock.
 
 ---
 
