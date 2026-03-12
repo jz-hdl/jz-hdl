@@ -12,7 +12,7 @@
   "resources": {
     "LUT6": 20800,
     "DFF": 41600,
-    "IOB": 210,
+    "IOB": 250,
     "DIFF_PAIRS": 100,
     "GSR": 1
   },
@@ -66,8 +66,8 @@
       "quantity": 50,
       "bits_per_block": 36864,
       "total_bits": 1843200,
-      "max_freq_mhz": 509,
-      "note": "50 blocks x 36,864 bits = 1,843,200 bits (1,800 Kb). Max freq for -2 speed grade. Each block can split into two 18 Kb blocks (100 total).",
+      "max_freq_mhz": 460,
+      "note": "50 blocks x 36,864 bits = 1,843,200 bits (1,800 Kb). Max freq 460.83 MHz for -2 speed grade (DS181 Table 30, F_MAX_BRAM_WF_NC). Each block can split into two 18 Kb blocks (100 total).",
       "modes": [{
         "name": "Single Port",
         "description": "Single port read/write (RAMB36E1 or RAMB18E1)",
@@ -80,8 +80,7 @@
           { "width": 4,  "depth": 8192 },
           { "width": 9,  "depth": 4096 },
           { "width": 18, "depth": 2048 },
-          { "width": 36, "depth": 1024 },
-          { "width": 72, "depth": 512 }
+          { "width": 36, "depth": 1024 }
         ]
       },
       {
@@ -129,8 +128,7 @@
           { "width": 4,  "depth": 8192 },
           { "width": 9,  "depth": 4096 },
           { "width": 18, "depth": 2048 },
-          { "width": 36, "depth": 1024 },
-          { "width": 72, "depth": 512 }
+          { "width": 36, "depth": 1024 }
         ]
       }]
     }
@@ -164,6 +162,15 @@
           "    .CLKOUT3_DIVIDE(%%CLKOUT3_DIVIDE%%),\n",
           "    .CLKOUT3_PHASE(0.0),\n",
           "    .CLKOUT3_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT4_DIVIDE(%%CLKOUT4_DIVIDE%%),\n",
+          "    .CLKOUT4_PHASE(0.0),\n",
+          "    .CLKOUT4_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT5_DIVIDE(%%CLKOUT5_DIVIDE%%),\n",
+          "    .CLKOUT5_PHASE(0.0),\n",
+          "    .CLKOUT5_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT6_DIVIDE(%%CLKOUT6_DIVIDE%%),\n",
+          "    .CLKOUT6_PHASE(0.0),\n",
+          "    .CLKOUT6_DUTY_CYCLE(0.5),\n",
           "    .DIVCLK_DIVIDE(%%DIVCLK_DIVIDE%%),\n",
           "    .STARTUP_WAIT(\"FALSE\")\n",
           ") u_mmcm_%%instance_idx%% (\n",
@@ -174,6 +181,9 @@
           "    .CLKOUT1(%%CLKOUT1%%),\n",
           "    .CLKOUT2(%%CLKOUT2%%),\n",
           "    .CLKOUT3(%%CLKOUT3%%),\n",
+          "    .CLKOUT4(%%CLKOUT4%%),\n",
+          "    .CLKOUT5(%%CLKOUT5%%),\n",
+          "    .CLKOUT6(%%CLKOUT6%%),\n",
           "    .LOCKED(%%LOCK%%),\n",
           "    .RST(1'b0),\n",
           "    .PWRDWN(1'b0)\n",
@@ -197,6 +207,15 @@
           "  parameter \\CLKOUT3_DIVIDE %%CLKOUT3_DIVIDE%%\n",
           "  parameter \\CLKOUT3_PHASE 0.0\n",
           "  parameter \\CLKOUT3_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT4_DIVIDE %%CLKOUT4_DIVIDE%%\n",
+          "  parameter \\CLKOUT4_PHASE 0.0\n",
+          "  parameter \\CLKOUT4_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT5_DIVIDE %%CLKOUT5_DIVIDE%%\n",
+          "  parameter \\CLKOUT5_PHASE 0.0\n",
+          "  parameter \\CLKOUT5_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT6_DIVIDE %%CLKOUT6_DIVIDE%%\n",
+          "  parameter \\CLKOUT6_PHASE 0.0\n",
+          "  parameter \\CLKOUT6_DUTY_CYCLE 0.5\n",
           "  parameter \\DIVCLK_DIVIDE %%DIVCLK_DIVIDE%%\n",
           "  parameter \\STARTUP_WAIT \"FALSE\"\n",
           "  connect \\CLKIN1 \\%%REF_CLK%%\n",
@@ -206,6 +225,9 @@
           "  connect \\CLKOUT1 \\%%CLKOUT1%%\n",
           "  connect \\CLKOUT2 \\%%CLKOUT2%%\n",
           "  connect \\CLKOUT3 \\%%CLKOUT3%%\n",
+          "  connect \\CLKOUT4 \\%%CLKOUT4%%\n",
+          "  connect \\CLKOUT5 \\%%CLKOUT5%%\n",
+          "  connect \\CLKOUT6 \\%%CLKOUT6%%\n",
           "  connect \\LOCKED \\%%LOCK%%\n",
           "  connect \\RST 1'0\n",
           "  connect \\PWRDWN 1'0\n",
@@ -271,6 +293,30 @@
           "default": 1,
           "min": 1,
           "max": 128
+        },
+
+        "CLKOUT4_DIVIDE": {
+          "description": "Output divider O4 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        },
+
+        "CLKOUT5_DIVIDE": {
+          "description": "Output divider O5 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        },
+
+        "CLKOUT6_DIVIDE": {
+          "description": "Output divider O6 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
         }
       },
 
@@ -279,7 +325,7 @@
           "description": "Internal VCO frequency: F_CLKIN * CLKFBOUT_MULT_F / DIVCLK_DIVIDE",
           "expr": "(1000.0 / REF_CLK_period_ns) * CLKFBOUT_MULT_F / DIVCLK_DIVIDE",
           "min": 600,
-          "max": 1200
+          "max": 1440
         }
       },
 
@@ -320,6 +366,33 @@
           }
         },
 
+        "CLKOUT4": {
+          "description": "MMCM output 4",
+          "port": "CLKOUT4",
+          "frequency_mhz": {
+            "description": "Output 4 frequency: FVCO / CLKOUT4_DIVIDE",
+            "expr": "FVCO / CLKOUT4_DIVIDE"
+          }
+        },
+
+        "CLKOUT5": {
+          "description": "MMCM output 5",
+          "port": "CLKOUT5",
+          "frequency_mhz": {
+            "description": "Output 5 frequency: FVCO / CLKOUT5_DIVIDE",
+            "expr": "FVCO / CLKOUT5_DIVIDE"
+          }
+        },
+
+        "CLKOUT6": {
+          "description": "MMCM output 6",
+          "port": "CLKOUT6",
+          "frequency_mhz": {
+            "description": "Output 6 frequency: FVCO / CLKOUT6_DIVIDE",
+            "expr": "FVCO / CLKOUT6_DIVIDE"
+          }
+        },
+
         "CLKFBOUT": {
           "description": "Feedback output, must be connected to CLKFBIN for internal feedback",
           "port": "CLKFBOUT"
@@ -333,7 +406,7 @@
 
       "constraints": [
         {
-          "description": "VCO frequency must be within 600-1200 MHz range for -2 speed grade.",
+          "description": "VCO frequency must be within 600-1440 MHz range for -2 speed grade.",
           "rule": "FVCO range check"
         },
         {
@@ -385,6 +458,261 @@
           }
         }
       }
+    },
+    {
+      "type": "pll",
+      "source": "DS180 v2.6.1, Section: Clock Management; DS181 v1.27.1, Table 38: PLL Specification; UG472 v1.13, Chapter 3: Clock Management Tile",
+      "description": "Phase-Locked Loop (PLLE2_BASE). Secondary clock synthesizer with 6 outputs (CLKOUT0-CLKOUT5), feedback output (CLKFBOUT). Integer-only dividers, no fractional divide.",
+
+      "count": 5,
+      "chaining": true,
+
+      "map": {
+        "verilog-2005": [
+          "PLLE2_BASE #(\n",
+          "    .BANDWIDTH(\"OPTIMIZED\"),\n",
+          "    .CLKFBOUT_MULT(%%CLKFBOUT_MULT%%),\n",
+          "    .CLKFBOUT_PHASE(0.0),\n",
+          "    .CLKIN1_PERIOD(%%REF_CLK_period_ns%%),\n",
+          "    .CLKOUT0_DIVIDE(%%CLKOUT0_DIVIDE%%),\n",
+          "    .CLKOUT0_PHASE(0.0),\n",
+          "    .CLKOUT0_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT1_DIVIDE(%%CLKOUT1_DIVIDE%%),\n",
+          "    .CLKOUT1_PHASE(0.0),\n",
+          "    .CLKOUT1_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT2_DIVIDE(%%CLKOUT2_DIVIDE%%),\n",
+          "    .CLKOUT2_PHASE(0.0),\n",
+          "    .CLKOUT2_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT3_DIVIDE(%%CLKOUT3_DIVIDE%%),\n",
+          "    .CLKOUT3_PHASE(0.0),\n",
+          "    .CLKOUT3_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT4_DIVIDE(%%CLKOUT4_DIVIDE%%),\n",
+          "    .CLKOUT4_PHASE(0.0),\n",
+          "    .CLKOUT4_DUTY_CYCLE(0.5),\n",
+          "    .CLKOUT5_DIVIDE(%%CLKOUT5_DIVIDE%%),\n",
+          "    .CLKOUT5_PHASE(0.0),\n",
+          "    .CLKOUT5_DUTY_CYCLE(0.5),\n",
+          "    .DIVCLK_DIVIDE(%%DIVCLK_DIVIDE%%),\n",
+          "    .STARTUP_WAIT(\"FALSE\")\n",
+          ") u_pll_%%instance_idx%% (\n",
+          "    .CLKIN1(%%REF_CLK%%),\n",
+          "    .CLKFBIN(%%CLKFBOUT%%),\n",
+          "    .CLKFBOUT(%%CLKFBOUT%%),\n",
+          "    .CLKOUT0(%%BASE%%),\n",
+          "    .CLKOUT1(%%CLKOUT1%%),\n",
+          "    .CLKOUT2(%%CLKOUT2%%),\n",
+          "    .CLKOUT3(%%CLKOUT3%%),\n",
+          "    .CLKOUT4(%%CLKOUT4%%),\n",
+          "    .CLKOUT5(%%CLKOUT5%%),\n",
+          "    .LOCKED(%%LOCK%%),\n",
+          "    .RST(1'b0),\n",
+          "    .PWRDWN(1'b0)\n",
+          ");\n"
+        ],
+        "rtlil": [
+          "cell \\PLLE2_BASE $auto$%%instance_idx%%\n",
+          "  parameter \\BANDWIDTH \"OPTIMIZED\"\n",
+          "  parameter \\CLKFBOUT_MULT %%CLKFBOUT_MULT%%\n",
+          "  parameter \\CLKFBOUT_PHASE 0.0\n",
+          "  parameter \\CLKIN1_PERIOD %%REF_CLK_period_ns%%\n",
+          "  parameter \\CLKOUT0_DIVIDE %%CLKOUT0_DIVIDE%%\n",
+          "  parameter \\CLKOUT0_PHASE 0.0\n",
+          "  parameter \\CLKOUT0_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT1_DIVIDE %%CLKOUT1_DIVIDE%%\n",
+          "  parameter \\CLKOUT1_PHASE 0.0\n",
+          "  parameter \\CLKOUT1_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT2_DIVIDE %%CLKOUT2_DIVIDE%%\n",
+          "  parameter \\CLKOUT2_PHASE 0.0\n",
+          "  parameter \\CLKOUT2_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT3_DIVIDE %%CLKOUT3_DIVIDE%%\n",
+          "  parameter \\CLKOUT3_PHASE 0.0\n",
+          "  parameter \\CLKOUT3_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT4_DIVIDE %%CLKOUT4_DIVIDE%%\n",
+          "  parameter \\CLKOUT4_PHASE 0.0\n",
+          "  parameter \\CLKOUT4_DUTY_CYCLE 0.5\n",
+          "  parameter \\CLKOUT5_DIVIDE %%CLKOUT5_DIVIDE%%\n",
+          "  parameter \\CLKOUT5_PHASE 0.0\n",
+          "  parameter \\CLKOUT5_DUTY_CYCLE 0.5\n",
+          "  parameter \\DIVCLK_DIVIDE %%DIVCLK_DIVIDE%%\n",
+          "  parameter \\STARTUP_WAIT \"FALSE\"\n",
+          "  connect \\CLKIN1 \\%%REF_CLK%%\n",
+          "  connect \\CLKFBIN \\%%CLKFBOUT%%\n",
+          "  connect \\CLKFBOUT \\%%CLKFBOUT%%\n",
+          "  connect \\CLKOUT0 \\%%BASE%%\n",
+          "  connect \\CLKOUT1 \\%%CLKOUT1%%\n",
+          "  connect \\CLKOUT2 \\%%CLKOUT2%%\n",
+          "  connect \\CLKOUT3 \\%%CLKOUT3%%\n",
+          "  connect \\CLKOUT4 \\%%CLKOUT4%%\n",
+          "  connect \\CLKOUT5 \\%%CLKOUT5%%\n",
+          "  connect \\LOCKED \\%%LOCK%%\n",
+          "  connect \\RST 1'0\n",
+          "  connect \\PWRDWN 1'0\n",
+          "end\n"
+        ]
+      },
+
+      "inputs": {
+        "REF_CLK": {
+          "description": "Reference clock input to the PLL (CLKIN1)",
+          "required": true,
+          "width": 1,
+          "requires_period": true,
+          "min_mhz": 19,
+          "max_mhz": 800
+        }
+      },
+
+      "parameters": {
+        "DIVCLK_DIVIDE": {
+          "description": "Input clock divider D (1-56)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 56
+        },
+
+        "CLKFBOUT_MULT": {
+          "description": "Feedback multiplier M (2-64, integer only)",
+          "type": "int",
+          "default": 5,
+          "min": 2,
+          "max": 64
+        },
+
+        "CLKOUT0_DIVIDE": {
+          "description": "Primary output divider O0 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        },
+
+        "CLKOUT1_DIVIDE": {
+          "description": "Secondary output divider O1 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        },
+
+        "CLKOUT2_DIVIDE": {
+          "description": "Tertiary output divider O2 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        },
+
+        "CLKOUT3_DIVIDE": {
+          "description": "Quaternary output divider O3 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        },
+
+        "CLKOUT4_DIVIDE": {
+          "description": "Output divider O4 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        },
+
+        "CLKOUT5_DIVIDE": {
+          "description": "Output divider O5 (1-128)",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 128
+        }
+      },
+
+      "derived": {
+        "FVCO": {
+          "description": "Internal VCO frequency: F_CLKIN * CLKFBOUT_MULT / DIVCLK_DIVIDE",
+          "expr": "(1000.0 / REF_CLK_period_ns) * CLKFBOUT_MULT / DIVCLK_DIVIDE",
+          "min": 800,
+          "max": 1600
+        }
+      },
+
+      "outputs": {
+        "BASE": {
+          "description": "Primary PLL output (CLKOUT0)",
+          "port": "CLKOUT0",
+          "frequency_mhz": {
+            "description": "Primary output frequency: FVCO / CLKOUT0_DIVIDE",
+            "expr": "FVCO / CLKOUT0_DIVIDE"
+          }
+        },
+
+        "CLKOUT1": {
+          "description": "Secondary PLL output",
+          "port": "CLKOUT1",
+          "frequency_mhz": {
+            "description": "Secondary output frequency: FVCO / CLKOUT1_DIVIDE",
+            "expr": "FVCO / CLKOUT1_DIVIDE"
+          }
+        },
+
+        "CLKOUT2": {
+          "description": "Tertiary PLL output",
+          "port": "CLKOUT2",
+          "frequency_mhz": {
+            "description": "Tertiary output frequency: FVCO / CLKOUT2_DIVIDE",
+            "expr": "FVCO / CLKOUT2_DIVIDE"
+          }
+        },
+
+        "CLKOUT3": {
+          "description": "Quaternary PLL output",
+          "port": "CLKOUT3",
+          "frequency_mhz": {
+            "description": "Quaternary output frequency: FVCO / CLKOUT3_DIVIDE",
+            "expr": "FVCO / CLKOUT3_DIVIDE"
+          }
+        },
+
+        "CLKOUT4": {
+          "description": "PLL output 4",
+          "port": "CLKOUT4",
+          "frequency_mhz": {
+            "description": "Output 4 frequency: FVCO / CLKOUT4_DIVIDE",
+            "expr": "FVCO / CLKOUT4_DIVIDE"
+          }
+        },
+
+        "CLKOUT5": {
+          "description": "PLL output 5",
+          "port": "CLKOUT5",
+          "frequency_mhz": {
+            "description": "Output 5 frequency: FVCO / CLKOUT5_DIVIDE",
+            "expr": "FVCO / CLKOUT5_DIVIDE"
+          }
+        },
+
+        "CLKFBOUT": {
+          "description": "Feedback output, must be connected to CLKFBIN for internal feedback",
+          "port": "CLKFBOUT"
+        },
+
+        "LOCK": {
+          "description": "PLL lock indicator, high when PLL is locked",
+          "port": "LOCKED"
+        }
+      },
+
+      "constraints": [
+        {
+          "description": "VCO frequency must be within 800-1600 MHz range for -2 speed grade.",
+          "rule": "FVCO range check"
+        },
+        {
+          "description": "Output frequency must not exceed 800 MHz.",
+          "rule": "output frequency range check"
+        }
+      ]
     }
   ],
 
@@ -411,6 +739,72 @@
             "end\n"
           ]
         }
+      },
+      "serializer": {
+        "description": "8:1 output serializer (OSERDESE2) for LVDS/TMDS output",
+        "ratio": 8,
+        "map": {
+          "verilog-2005": [
+            "OSERDESE2 #(\n",
+            "    .DATA_RATE_OQ(\"DDR\"),\n",
+            "    .DATA_RATE_TQ(\"SDR\"),\n",
+            "    .DATA_WIDTH(8),\n",
+            "    .SERDES_MODE(\"MASTER\"),\n",
+            "    .TRISTATE_WIDTH(1)\n",
+            ") u_%%instance%% (\n",
+            "    .OFB(),\n",
+            "    .OQ(%%output%%),\n",
+            "    .SHIFTOUT1(),\n",
+            "    .SHIFTOUT2(),\n",
+            "    .TBYTEOUT(),\n",
+            "    .TFB(),\n",
+            "    .TQ(),\n",
+            "    .CLK(%%fclk%%),\n",
+            "    .CLKDIV(%%pclk%%),\n",
+            "    .D1(%%D0%%),\n",
+            "    .D2(%%D1%%),\n",
+            "    .D3(%%D2%%),\n",
+            "    .D4(%%D3%%),\n",
+            "    .D5(%%D4%%),\n",
+            "    .D6(%%D5%%),\n",
+            "    .D7(%%D6%%),\n",
+            "    .D8(%%D7%%),\n",
+            "    .OCE(1'b1),\n",
+            "    .RST(%%reset%%),\n",
+            "    .SHIFTIN1(1'b0),\n",
+            "    .SHIFTIN2(1'b0),\n",
+            "    .T1(1'b0),\n",
+            "    .T2(1'b0),\n",
+            "    .T3(1'b0),\n",
+            "    .T4(1'b0),\n",
+            "    .TBYTEIN(1'b0),\n",
+            "    .TCE(1'b0)\n",
+            ");\n"
+          ],
+          "rtlil": [
+            "cell \\OSERDESE2 $auto$%%instance%%\n",
+            "  parameter \\DATA_RATE_OQ \"DDR\"\n",
+            "  parameter \\DATA_RATE_TQ \"SDR\"\n",
+            "  parameter \\DATA_WIDTH 8\n",
+            "  parameter \\SERDES_MODE \"MASTER\"\n",
+            "  parameter \\TRISTATE_WIDTH 1\n",
+            "  connect \\OQ \\%%output%%\n",
+            "  connect \\CLK \\%%fclk%%\n",
+            "  connect \\CLKDIV \\%%pclk%%\n",
+            "  connect \\D1 \\%%D0%%\n",
+            "  connect \\D2 \\%%D1%%\n",
+            "  connect \\D3 \\%%D2%%\n",
+            "  connect \\D4 \\%%D3%%\n",
+            "  connect \\D5 \\%%D4%%\n",
+            "  connect \\D6 \\%%D5%%\n",
+            "  connect \\D7 \\%%D6%%\n",
+            "  connect \\D8 \\%%D7%%\n",
+            "  connect \\OCE 1'1\n",
+            "  connect \\RST \\%%reset%%\n",
+            "  connect \\TCE 1'0\n",
+            "end\n"
+          ]
+        }
       }
     },
     "input": {
@@ -429,6 +823,74 @@
             "  connect \\I \\%%pin_p%%\n",
             "  connect \\IB \\%%pin_n%%\n",
             "  connect \\O \\%%output%%\n",
+            "end\n"
+          ]
+        }
+      },
+      "deserializer": {
+        "description": "1:8 input deserializer (ISERDESE2) for LVDS/TMDS input",
+        "ratio": 8,
+        "map": {
+          "verilog-2005": [
+            "ISERDESE2 #(\n",
+            "    .DATA_RATE(\"DDR\"),\n",
+            "    .DATA_WIDTH(8),\n",
+            "    .INTERFACE_TYPE(\"NETWORKING\"),\n",
+            "    .IOBDELAY(\"NONE\"),\n",
+            "    .SERDES_MODE(\"MASTER\"),\n",
+            "    .NUM_CE(1)\n",
+            ") u_%%instance%% (\n",
+            "    .Q1(%%Q0%%),\n",
+            "    .Q2(%%Q1%%),\n",
+            "    .Q3(%%Q2%%),\n",
+            "    .Q4(%%Q3%%),\n",
+            "    .Q5(%%Q4%%),\n",
+            "    .Q6(%%Q5%%),\n",
+            "    .Q7(%%Q6%%),\n",
+            "    .Q8(%%Q7%%),\n",
+            "    .SHIFTOUT1(),\n",
+            "    .SHIFTOUT2(),\n",
+            "    .BITSLIP(1'b0),\n",
+            "    .CE1(1'b1),\n",
+            "    .CE2(1'b1),\n",
+            "    .CLK(%%fclk%%),\n",
+            "    .CLKB(~%%fclk%%),\n",
+            "    .CLKDIV(%%pclk%%),\n",
+            "    .CLKDIVP(1'b0),\n",
+            "    .D(%%input%%),\n",
+            "    .DDLY(1'b0),\n",
+            "    .DYNCLKDIVSEL(1'b0),\n",
+            "    .DYNCLKSEL(1'b0),\n",
+            "    .OFB(1'b0),\n",
+            "    .OCLK(1'b0),\n",
+            "    .OCLKB(1'b0),\n",
+            "    .RST(%%reset%%),\n",
+            "    .SHIFTIN1(1'b0),\n",
+            "    .SHIFTIN2(1'b0)\n",
+            ");\n"
+          ],
+          "rtlil": [
+            "cell \\ISERDESE2 $auto$%%instance%%\n",
+            "  parameter \\DATA_RATE \"DDR\"\n",
+            "  parameter \\DATA_WIDTH 8\n",
+            "  parameter \\INTERFACE_TYPE \"NETWORKING\"\n",
+            "  parameter \\IOBDELAY \"NONE\"\n",
+            "  parameter \\SERDES_MODE \"MASTER\"\n",
+            "  parameter \\NUM_CE 1\n",
+            "  connect \\Q1 \\%%Q0%%\n",
+            "  connect \\Q2 \\%%Q1%%\n",
+            "  connect \\Q3 \\%%Q2%%\n",
+            "  connect \\Q4 \\%%Q3%%\n",
+            "  connect \\Q5 \\%%Q4%%\n",
+            "  connect \\Q6 \\%%Q5%%\n",
+            "  connect \\Q7 \\%%Q6%%\n",
+            "  connect \\Q8 \\%%Q7%%\n",
+            "  connect \\CE1 1'1\n",
+            "  connect \\CE2 1'1\n",
+            "  connect \\CLK \\%%fclk%%\n",
+            "  connect \\CLKDIV \\%%pclk%%\n",
+            "  connect \\D \\%%input%%\n",
+            "  connect \\RST \\%%reset%%\n",
             "end\n"
           ]
         }
