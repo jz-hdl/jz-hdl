@@ -580,10 +580,12 @@ static void draw_waveform(ImDrawList *dl, const Signal &sig,
                             snprintf(label, sizeof(label), "0x%04llX", (unsigned long long)val);
                         else
                             snprintf(label, sizeof(label), "0x%llX", (unsigned long long)val);
-                        float text_w = ImGui::CalcTextSize(label).x;
                         float avail = ex2 - ex1 - dw * 2 - 4;
-                        if (avail > text_w) {
-                            dl->AddText(ImVec2(ex1 + dw + 2, mid_y - 6), col_text, label);
+                        if (avail > 4.0f) {
+                            float tx = ex1 + dw + 2;
+                            dl->PushClipRect(ImVec2(tx, hi_y), ImVec2(ex2 - dw - 2, lo_y), true);
+                            dl->AddText(ImVec2(tx, mid_y - 6), col_text, label);
+                            dl->PopClipRect();
                         }
                     }
                 }
@@ -618,11 +620,12 @@ static void draw_waveform(ImDrawList *dl, const Signal &sig,
             else
                 snprintf(label, sizeof(label), "0x%llX", (unsigned long long)val);
 
-            float text_w = ImGui::CalcTextSize(label).x;
             float avail = x2 - x1 - dw * 2 - 4;
-            if (avail > text_w) {
+            if (avail > 4.0f) {
                 float tx = x1 + dw + 2;
+                dl->PushClipRect(ImVec2(tx, hi_y), ImVec2(x2 - dw - 2, lo_y), true);
                 dl->AddText(ImVec2(tx, mid_y - 6), col_text, label);
+                dl->PopClipRect();
             }
         }
     }
@@ -1562,6 +1565,70 @@ int main(int argc, char **argv)
                         } else if (active_cursor == 4) {
                             cursor4_ps = click_ps;
                             cursor4_visible = true;
+                        }
+                    }
+                }
+            }
+
+            /* Bus value tooltip on hover */
+            {
+                float wpad_x = ImGui::GetStyle().WindowPadding.x;
+                float wpad_y = ImGui::GetStyle().WindowPadding.y;
+                float mouse_rel_x = io.MousePos.x - (wave_x + wpad_x);
+                float ruler_h = 20.0f;
+                float mouse_rel_y = io.MousePos.y - (content_y + wpad_y + ruler_h) + scroll_y;
+                int hover_row = (int)(mouse_rel_y / row_height);
+
+                if (mouse_rel_x >= 0 && mouse_rel_y >= 0 && hover_row >= 0) {
+                    /* Find which signal this row belongs to */
+                    int cur_row = 0;
+                    const Signal *hover_sig = nullptr;
+                    for (size_t si = 0; si < jzw.signals.size(); si++) {
+                        if (cur_row == hover_row && jzw.signals[si].width > 1) {
+                            hover_sig = &jzw.signals[si];
+                            break;
+                        }
+                        cur_row++;
+                        if (jzw.signals[si].expanded && jzw.signals[si].width > 1)
+                            cur_row += jzw.signals[si].width;
+                        if (cur_row > hover_row) break;
+                    }
+
+                    if (hover_sig) {
+                        int64_t mouse_ps = scroll_ps + (int64_t)(mouse_rel_x * ps_per_px);
+                        auto it = jzw.changes.find(hover_sig->id);
+                        if (it != jzw.changes.end() && !it->second.empty()) {
+                            const auto &vc = it->second;
+                            /* Binary search for value at mouse time */
+                            int lo = 0, hi = (int)vc.size() - 1, best = 0;
+                            while (lo <= hi) {
+                                int mid = (lo + hi) / 2;
+                                if (vc[mid].time <= mouse_ps) { best = mid; lo = mid + 1; }
+                                else hi = mid - 1;
+                            }
+                            int64_t t_start_seg = vc[best].time;
+                            int64_t t_end_seg = (best + 1 < (int)vc.size()) ? vc[best + 1].time : jzw.sim_end_time;
+                            uint64_t val = binstr_to_u64(vc[best].value.c_str());
+
+                            char hex_buf[32], dec_buf[32], start_buf[64], end_buf[64], dur_buf[64];
+                            if (hover_sig->width <= 4)
+                                snprintf(hex_buf, sizeof(hex_buf), "0x%llX", (unsigned long long)val);
+                            else if (hover_sig->width <= 8)
+                                snprintf(hex_buf, sizeof(hex_buf), "0x%02llX", (unsigned long long)val);
+                            else if (hover_sig->width <= 16)
+                                snprintf(hex_buf, sizeof(hex_buf), "0x%04llX", (unsigned long long)val);
+                            else
+                                snprintf(hex_buf, sizeof(hex_buf), "0x%llX", (unsigned long long)val);
+                            snprintf(dec_buf, sizeof(dec_buf), "%llu", (unsigned long long)val);
+                            format_time(start_buf, sizeof(start_buf), t_start_seg);
+                            format_time(end_buf, sizeof(end_buf), t_end_seg);
+                            int64_t dur = t_end_seg - t_start_seg;
+                            format_time(dur_buf, sizeof(dur_buf), dur);
+
+                            ImGui::SetTooltip("%s\nHex: %s\nDec: %s\nBin: %s\nStart: %s\nEnd:   %s\nDur:   %s",
+                                hover_sig->display_name.c_str(),
+                                hex_buf, dec_buf, vc[best].value.c_str(),
+                                start_buf, end_buf, dur_buf);
                         }
                     }
                 }
