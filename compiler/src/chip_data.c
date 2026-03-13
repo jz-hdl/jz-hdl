@@ -1343,11 +1343,10 @@ static void jz_chip_parse_latches(const char *json,
             continue;
         }
 
-        int is_cfu = jz_json_token_eq(json, block_key, "CFU") ||
-                     jz_json_token_eq(json, block_key, "PLB");
+        int is_fab = jz_json_token_eq(json, block_key, "FAB");
         int is_iob = jz_json_token_eq(json, block_key, "IOB");
 
-        if (is_cfu || is_iob) {
+        if (is_fab || is_iob) {
             int inner = cur + 1;
             while (inner < count && toks[inner].start < block_val->end) {
                 const jsmntok_t *fkey = &toks[inner++];
@@ -1357,13 +1356,13 @@ static void jz_chip_parse_latches(const char *json,
                     fval->type == JSMN_PRIMITIVE) {
                     size_t len = (size_t)(fval->end - fval->start);
                     if (len == 4 && strncmp(json + fval->start, "true", 4) == 0) bval = 1;
-                    if (is_cfu) out->latches.cfu_d = bval;
+                    if (is_fab) out->latches.fab_d = bval;
                     else        out->latches.iob_d = bval;
                 } else if (jz_json_token_eq(json, fkey, "SR") &&
                            fval->type == JSMN_PRIMITIVE) {
                     size_t len = (size_t)(fval->end - fval->start);
                     if (len == 4 && strncmp(json + fval->start, "true", 4) == 0) bval = 1;
-                    if (is_cfu) out->latches.cfu_sr = bval;
+                    if (is_fab) out->latches.fab_sr = bval;
                     else        out->latches.iob_sr = bval;
                 }
                 inner = jz_json_skip(toks, count, inner);

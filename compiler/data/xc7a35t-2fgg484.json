@@ -19,7 +19,7 @@
 
   "latches": {
     "source": "DS180 v2.6.1, Section: CLBs, Slices, and LUTs; UG474 v1.8, Section: Storage Elements",
-    "SLICE": {
+    "FAB": {
       "description": "CLB Slice (General Logic)",
       "D": true,
       "SR": false,

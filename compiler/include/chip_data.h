@@ -163,8 +163,8 @@ typedef struct JZChipDifferential {
  * @brief Latch type support per resource block.
  */
 typedef struct JZChipLatchSupport {
-    int cfu_d;   /**< CFU supports D latches. */
-    int cfu_sr;  /**< CFU supports SR latches. */
+    int fab_d;   /**< Fabric supports D latches. */
+    int fab_sr;  /**< Fabric supports SR latches. */
     int iob_d;   /**< IOB supports D latches. */
     int iob_sr;  /**< IOB supports SR latches. */
 } JZChipLatchSupport;

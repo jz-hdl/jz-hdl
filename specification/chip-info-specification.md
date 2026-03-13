@@ -104,7 +104,7 @@ An object describing latch support in different logic blocks. Contains a `source
 |----------|--------|----------|------------------------------------------------|
 | `source` | string | Yes      | Datasheet reference for latch information      |
 
-Each named block (e.g., `CFU`, `PLB`, `PFU`, `IOB`) is an object:
+Each named block (`FAB` for fabric logic, `IOB` for I/O blocks) is an object:
 
 | Key           | Type     | Required | Description                                        |
 |---------------|----------|----------|----------------------------------------------------|
@@ -117,11 +117,11 @@ Each named block (e.g., `CFU`, `PLB`, `PFU`, `IOB`) is an object:
 ```json
 "latches": {
   "source": "DS226-2.6E, Section 2.1 (CFU Architecture)",
-  "CFU": {
+  "FAB": {
     "description": "Configurable Function Unit (General Logic)",
     "D": false,
     "SR": false,
-    "note": "CFU storage elements are strictly edge-triggered registers."
+    "note": "Fabric storage elements are strictly edge-triggered registers."
   },
   "IOB": {
     "description": "I/O Blocks (Input/Output Pins)",
