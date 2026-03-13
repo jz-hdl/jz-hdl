@@ -805,6 +805,17 @@ void sem_check_project_clock_gen(JZASTNode *project,
                     /* If not specified, default is guaranteed in-range; skip */
                     if (!user_val) continue;
 
+                    /* Type check: integer parameters must not have decimal values */
+                    if (!cparam->is_double && strchr(user_val, '.')) {
+                        char msg[512];
+                        snprintf(msg, sizeof(msg),
+                                 "CLOCK_GEN CONFIG '%s' requires an integer value, got '%s'",
+                                 cparam->name, user_val);
+                        sem_report_rule(diagnostics, val_loc,
+                                        "CLOCK_GEN_PARAM_TYPE_MISMATCH", msg);
+                        continue;  /* skip further validation for this param */
+                    }
+
                     if (cparam->has_min && cparam->has_max) {
                         /* Range check (double for fractional params, int otherwise) */
                         char *endptr = NULL;
