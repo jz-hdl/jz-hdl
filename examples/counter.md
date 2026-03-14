@@ -26,6 +26,13 @@ Two project files target the Tang Nano 20K (`GW2AR-18`) and Tang Nano 9K (`GW1NR
 
 ```jz
 @module counter
+    CONST {
+        CLK_MHZ = 27;
+        COUNTER_WIDTH = clog2(CLK_MHZ) + 22;
+        LED_HIGH = COUNTER_WIDTH - 1;
+        LED_LOW = COUNTER_WIDTH - 6;
+    }
+
     PORT {
         IN  [1] clk;
         IN  [1] por;
@@ -38,17 +45,17 @@ Two project files target the Tang Nano 20K (`GW2AR-18`) and Tang Nano 9K (`GW1NR
     }
 
     REGISTER {
-        counter [27] = 27'b1;
+        counter [COUNTER_WIDTH] = COUNTER_WIDTH'b1;
     }
 
     ASYNCHRONOUS {
         reset = por & rst_n;
 
-        leds <= ~counter[26:21];
+        leds <= counter[LED_HIGH:LED_LOW];
     }
 
     SYNCHRONOUS(CLK=clk RESET=reset RESET_ACTIVE=Low) {
-        counter <= counter + 27'b1;
+        counter <= counter + COUNTER_WIDTH'b1;
     }
 @endmod
 

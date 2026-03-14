@@ -99,20 +99,21 @@ All user-specified file paths — `@import` directives, `@file()` MEM initialize
 
 ## CLOCK\_GEN
 
-* Declares on-chip clock generators (PLL, DLL, CLKDIV, or OSC).
-* `<gen_type>` is one of: `PLL`, `DLL`, `CLKDIV`, or `OSC`.
+* Declares on-chip clock generators (PLL, DLL, CLKDIV, OSC, BUF, or numbered variants like PLL2).
+* `<gen_type>` is one of: `PLL`, `DLL`, `CLKDIV`, `OSC`, `BUF`, or a numbered variant (e.g., `PLL2`).
 * Input clock must have a period in CLOCKS (or be driven by a prior generator in the same block).
 * Output clocks must not have a period in CLOCKS (derived automatically).
-* Parameters are chip-specific and validated against chip data.
+* Parameters are chip-specific and validated against chip data. Integer parameters reject decimal values; double parameters accept both.
 * A single CLOCK\_GEN block may contain multiple generators for chaining (e.g., PLL + CLKDIV).
 * CLOCK\_GEN chaining is permitted only if explicitly supported by the project `CHIP`.
 
 ### Generator types
 
-* **PLL**: Frequency synthesis with VCO, feedback divider, and multiple outputs (BASE, PHASE, DIV, DIV3).
+* **PLL**: Frequency synthesis with VCO, feedback divider, and multiple outputs (BASE, PHASE, DIV, DIV3). Numbered variants (e.g., **PLL2**) represent alternate PLL implementations on the same chip with different capabilities (e.g., fractional dividers).
 * **DLL**: Phase alignment without frequency multiplication. Used for clock de-skew.
 * **CLKDIV**: Simple fixed-ratio frequency division. No VCO or feedback — simpler and lower-power than PLL. Produces a single BASE output. The `MODE` CONFIG parameter selects the chip-specific variant (e.g., `local` for IO-logic dividers, `global` for fabric-wide dividers).
 * **OSC**: On-chip RC oscillator that generates a clock without any external reference. Does not require an IN clock. The output frequency is determined by chip-specific CONFIG parameters (e.g., `FREQ_DIV`, `DEVICE`). Produces a single BASE output.
+* **BUF**: Clock buffer. Routes an input clock onto a global clock network without frequency change.
 
 ### OSC example
 
