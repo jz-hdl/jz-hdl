@@ -57,7 +57,7 @@ cmake --build compiler/build
 $ ./jz-hdl
 Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
-       ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
        ./jz-hdl JZ_FILE --memory-report [-o OUT_FILE]
        ./jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
