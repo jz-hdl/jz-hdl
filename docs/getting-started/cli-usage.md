@@ -11,21 +11,26 @@ outline: deep
 ## Synopsis
 
 ```bash
-jz-hdl JZ_FILE --lint [-o OUT_FILE] [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME]
-jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
-jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--tristate-default=GND|VCC]
-jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
-jz-hdl JZ_FILE --memory-report [-o OUT_FILE]
-jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
-jz-hdl JZ_FILE --ast [-o OUT_FILE]
-jz-hdl JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]
-jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX]
-jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX]
-jz-hdl --chip-info [CHIP_ID] [-o OUT_FILE]
-jz-hdl --lint-rules
-jz-hdl --lsp
-jz-hdl --help
-jz-hdl --version
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [-o OUT_FILE]
+       ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
+       ./jz-hdl JZ_FILE --memory-report [-o OUT_FILE]
+       ./jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
+       ./jz-hdl JZ_FILE --ast [-o OUT_FILE]
+       ./jz-hdl JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX]
+       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX]
+       ./jz-hdl --chip-info [CHIP_ID] [-o OUT_FILE]
+       ./jz-hdl --lint-rules
+       ./jz-hdl --lsp
+       ./jz-hdl --help
+       ./jz-hdl --version
+
+Path security options:
+  --sandbox-root=<dir>     Add permitted root directory for file access
+  --allow-absolute-paths   Allow absolute paths in @import / @file()
+  --allow-traversal        Allow '..' directory traversal in paths
 ```
 
 ## Modes

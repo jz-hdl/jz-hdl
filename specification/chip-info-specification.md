@@ -323,22 +323,23 @@ An array of clock generator objects. Each describes one type of clock generation
 
 ### 9.1 Common Fields
 
-| Key           | Type    | Required | Description                                    |
-|---------------|---------|----------|------------------------------------------------|
-| `type`        | string  | Yes      | Generator type: `"pll"`, `"dll"`, `"clkdiv"`,  |
-|               |         |          | `"osc"`, `"buf"`, or numbered variants         |
-|               |         |          | (e.g., `"clkdiv2"`, `"buf2"`)                  |
-| `source`      | string  | Yes      | Datasheet reference                            |
-| `description` | string  | Yes      | Human-readable description                     |
-| `count`       | integer | Yes      | Number of instances available on chip          |
-| `mode`        | string  | No       | Operating mode (e.g., `"local"` for clkdiv)    |
-| `chaining`    | boolean | No       | Whether PLLs can be chained (PLL only)         |
-| `map`         | object  | Yes      | Backend-specific instantiation templates       |
-| `parameters`  | object  | Yes      | Configurable parameters                        |
-| `outputs`     | object  | Yes      | Clock output definitions                       |
-| `inputs`      | object  | No       | Clock input definitions (PLL only)             |
-| `derived`     | object  | No       | Derived values computed from parameters        |
-| `constraints` | array   | No       | Validation constraints                         |
+| Key              | Type    | Required | Description                                    |
+|------------------|---------|----------|------------------------------------------------|
+| `type`           | string  | Yes      | Generator type: `"pll"`, `"pll2"`, `"dll"`,    |
+|                  |         |          | `"clkdiv"`, `"osc"`, `"buf"`, or numbered      |
+|                  |         |          | variants (e.g., `"clkdiv2"`, `"buf2"`)         |
+| `source`         | string  | Yes      | Datasheet reference                            |
+| `description`    | string  | Yes      | Human-readable description                     |
+| `count`          | integer | Yes      | Number of instances available on chip           |
+| `mode`           | string  | No       | Operating mode (e.g., `"local"` for clkdiv)    |
+| `chaining`       | boolean | No       | Whether PLLs can be chained (PLL only)         |
+| `feedback_wire`  | string  | No       | Base name for auto-generated feedback wire (see Section 9.8) |
+| `map`            | object  | Yes      | Backend-specific instantiation templates       |
+| `parameters`     | object  | Yes      | Configurable parameters                        |
+| `outputs`        | object  | Yes      | Clock output definitions                       |
+| `inputs`         | object  | No       | Clock input definitions (PLL only)             |
+| `derived`        | object  | No       | Derived values computed from parameters        |
+| `constraints`    | array   | No       | Validation constraints                         |
 
 ### 9.2 `map` Object
 
@@ -540,6 +541,50 @@ An array of constraint objects for validation.
 ]
 ```
 
+### 9.8 `feedback_wire` Field
+
+Some clock generators (PLLs, MMCMs) require an internal feedback path where the feedback output must be wired back to the feedback input. This is hardware plumbing that the user never configures or connects — the compiler handles it automatically.
+
+The `feedback_wire` field specifies the base name for the auto-generated feedback wire. When present, the compiler:
+
+1. Declares a wire named `<feedback_wire>_<cg_index>_<unit_index>` (e.g., `clkfb_0_0`)
+2. Makes the base name available as a template placeholder (e.g., `%%clkfb%%`)
+
+The placeholder resolves to the full wire name including indices, ensuring unique feedback wires when multiple clock generators are instantiated.
+
+```json
+{
+  "type": "pll",
+  "feedback_wire": "clkfb",
+  "map": {
+    "verilog-2005": [
+      "PLLE2_BASE #(\n",
+      "    ...\n",
+      ") u_pll_%%instance_idx%% (\n",
+      "    .CLKIN1(%%REF_CLK%%),\n",
+      "    .CLKFBIN(%%clkfb%%),\n",
+      "    .CLKFBOUT(%%clkfb%%),\n",
+      "    .CLKOUT0(%%BASE%%),\n",
+      "    ...\n",
+      ");\n"
+    ]
+  }
+}
+```
+
+In this example, for the first PLL unit in the first clock gen block, `%%clkfb%%` resolves to `clkfb_0_0`, producing:
+
+```verilog
+wire clkfb_0_0;
+PLLE2_BASE #(...) u_pll_0_0 (
+    .CLKFBIN(clkfb_0_0),
+    .CLKFBOUT(clkfb_0_0),
+    ...
+);
+```
+
+If `feedback_wire` is omitted, no feedback wire is generated and the placeholder is not available.
+
 ## 10. `differential`
 
 An object describing differential I/O support. Optional; omit if the device has no differential I/O.
@@ -656,8 +701,12 @@ Template strings in `map` arrays use `%%name%%` delimiters to mark substitution 
 **Input signal placeholders** reference input names from the `inputs` object:
 - `%%refclk%%` - Reference clock signal
 
+**Feedback wire placeholder** references the `feedback_wire` field (see Section 9.8):
+- `%%<feedback_wire>%%` - Auto-generated feedback wire name (e.g., `%%clkfb%%` resolves to `clkfb_0_0`)
+
 **Compiler-generated placeholders**:
-- `%%refclk_mhz%%` - Reference clock frequency in MHz (computed by compiler)
+- `%%<INPUT>_mhz%%` - Input clock frequency in MHz (computed by compiler from period)
+- `%%<INPUT>_period_ns%%` - Input clock period in nanoseconds
 - `%%instance_idx%%` - Unique instance index for naming
 - `%%instance%%` - Instance name for differential buffers/serializers
 
@@ -677,8 +726,11 @@ Template strings in `map` arrays use `%%name%%` delimiters to mark substitution 
 1. All placeholders use double-percent delimiters: `%%name%%`
 2. Placeholder names are case-sensitive
 3. String-typed parameters are substituted as-is; the template must include quotes if needed
-4. Integer-typed parameters are substituted as decimal numbers
-5. Signal placeholders are replaced with the actual wire/port name
+4. Integer-typed parameters are substituted as decimal numbers; the compiler rejects decimal values (e.g., `5.0`) for integer parameters with a `CLOCK_GEN_PARAM_TYPE_MISMATCH` error
+5. Double-typed parameters accept both integer and decimal values (e.g., `5` or `5.125`)
+6. Signal placeholders are replaced with the actual wire/port name
+7. For differential input pins, signal placeholders automatically resolve to the buffered wire (e.g., `%%REF_CLK%%` resolves to `jz_diff_SCLK` instead of `SCLK`)
+8. In RTLIL templates, floating-point parameter values must use `parameter real` with quoted string values (e.g., `parameter real \\PHASE "0.0"`)
 
 ## 13. Expression Syntax
 
