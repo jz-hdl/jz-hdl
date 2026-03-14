@@ -80,35 +80,10 @@ if ! JZ_HDL_BIN="$BUILD_DIR/jz-hdl" bash "$REPO_ROOT/compiler/tests/run_validati
   exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# 3. Update README Usage section
-# ---------------------------------------------------------------------------
-echo "==> Updating README Usage section..."
-
-USAGE_OUTPUT=$("$BUILD_DIR/jz-hdl" --help 2>&1 || true)
-
-awk -v usage="$USAGE_OUTPUT" '
-  /^## Usage$/ {
-    print "## Usage"
-    print ""
-    print "```bash"
-    print "$ ./jz-hdl --help"
-    print usage
-    print "```"
-    skip = 1
-    next
-  }
-  /^## / && skip {
-    skip = 0
-  }
-  !skip { print }
-' "$REPO_ROOT/README.md" > "$REPO_ROOT/README.md.tmp"
-mv "$REPO_ROOT/README.md.tmp" "$REPO_ROOT/README.md"
-
 rm -rf "$BUILD_DIR"
 
 # ---------------------------------------------------------------------------
-# 4. Commit version bump and updated PDFs
+# 3. Commit version bump and updated PDFs
 # ---------------------------------------------------------------------------
 echo "==> Committing version bump and PDFs..."
 
@@ -116,19 +91,18 @@ git -C "$REPO_ROOT" add \
   compiler/CMakeLists.txt \
   compiler/include/version.h \
   specification/ \
-  docs/public/pdf/ \
-  README.md
+  docs/public/pdf/
 
 git -C "$REPO_ROOT" commit -m "Bump version to ${VERSION}"
 
 # ---------------------------------------------------------------------------
-# 5. Tag the release
+# 4. Tag the release
 # ---------------------------------------------------------------------------
 echo "==> Tagging v${VERSION}..."
 git -C "$REPO_ROOT" tag -a "v${VERSION}" -m "Release v${VERSION}"
 
 # ---------------------------------------------------------------------------
-# 6. Build source tarball
+# 5. Build source tarball
 # ---------------------------------------------------------------------------
 echo "==> Building source tarball..."
 mkdir -p "$RELEASE_DIR"
@@ -140,7 +114,7 @@ git -C "$REPO_ROOT" archive \
   "v${VERSION}" -- compiler/
 
 # ---------------------------------------------------------------------------
-# 7. Build PDF tarball from committed PDFs
+# 6. Build PDF tarball from committed PDFs
 # ---------------------------------------------------------------------------
 echo "==> Building PDF tarball..."
 
@@ -155,7 +129,7 @@ tar -czf "$RELEASE_DIR/jz-hdl-${VERSION}-docs.tar.gz" \
 rm -rf "$(dirname "$PDF_STAGING")"
 
 # ---------------------------------------------------------------------------
-# 8. Build VS Code extension tarball
+# 7. Build VS Code extension tarball
 # ---------------------------------------------------------------------------
 echo "==> Building VS Code extension tarball..."
 
@@ -166,7 +140,7 @@ git -C "$REPO_ROOT" archive \
   "v${VERSION}" -- vscode-ext/
 
 # ---------------------------------------------------------------------------
-# 9. Build viewer tarball
+# 8. Build viewer tarball
 # ---------------------------------------------------------------------------
 echo "==> Building viewer tarball..."
 
