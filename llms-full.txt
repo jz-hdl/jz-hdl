@@ -1346,23 +1346,23 @@ url: /jz-hdl/examples/counter.md
 
 # Counter
 
-A 27-bit free-running counter drives 6 LEDs. The counter increments every clock cycle at 27 MHz, producing a visible binary counting pattern on the LEDs that changes approximately every 4 seconds per bit position.
+A free-running counter drives 6 LEDs. The counter width is computed at compile time from the clock frequency using `clog2(CLK_MHZ) + 22`, producing a visible binary counting pattern on the LEDs that changes approximately every 4 seconds per bit position.
 
 ## Modules
 
 ### `counter`
 
-The module takes a clock, two reset inputs (power-on reset and button reset), and outputs 6 LED signals.
+The module takes a clock, two reset inputs (power-on reset and button reset), and outputs 6 LED signals. Four compile-time constants (`CLK_MHZ`, `COUNTER_WIDTH`, `LED_HIGH`, `LED_LOW`) parameterize the design — the project file overrides `CLK_MHZ` via `CONFIG`, and the remaining constants derive automatically.
 
 A 1-bit wire `reset` combines the two reset sources: the FPGA's `DONE` signal (active-high power-on reset) ANDed with the button input `rst_n` (active-low). This produces an active-low reset that holds the design in reset during power-up and when the button is pressed.
 
-The `ASYNCHRONOUS` block drives `reset` and the LED output. The LEDs show the inverted upper 6 bits of the counter (`~counter[26:21]`) because the Tang Nano LEDs are active-low.
+The `ASYNCHRONOUS` block drives `reset` and the LED output. The LEDs show the upper 6 bits of the counter (`counter[LED_HIGH:LED_LOW]`). Active-low inversion for the Tang Nano LEDs is handled at the project level (`~LED` in the `@top` binding), keeping the module board-agnostic.
 
-The `SYNCHRONOUS` block clocks the 27-bit `counter` register on `clk` with active-low reset. The counter simply increments by 1 each cycle.
+The `SYNCHRONOUS` block clocks the counter register on `clk` with active-low reset. The counter increments by 1 each cycle.
 
 ### Project Files
 
-Two project files target the Tang Nano 20K (`GW2AR-18`) and Tang Nano 9K (`GW1NR-9`). Both declare a 27 MHz clock (`SCLK`), two buttons (`KEY[2]`), and six LEDs (`LED[6]`). The `@top` instance wires `SCLK` to `clk`, `DONE` to `por`, the first button to `rst_n`, and `LED` to `leds`. Pin assignments and button polarity differ between boards.
+Project files target the Tang Nano 20K (`GW2AR-18`), Tang Nano 9K (`GW1NR-9`), and PA35T-EDU. Each declares a `CONFIG` block with `CLK_MHZ`, a 27 MHz clock (`SCLK`), two buttons (`KEY[2]`), and six LEDs (`LED[6]`). The `@top` instance uses `OVERRIDE` to pass `CONFIG.CLK_MHZ` into the module, wires `SCLK` to `clk`, `DONE` to `por`, the first button to `rst_n`, and `~LED` to `leds` (inverting for active-low LEDs). Pin assignments differ between boards.
 
 ::: code-group
 
@@ -1407,7 +1407,9 @@ Two project files target the Tang Nano 20K (`GW2AR-18`) and Tang Nano 9K (`GW1NR
 
 ## JZ-HDL Language Features
 
-**Mandatory reset values.** The `REGISTER` declaration requires an initial value (`counter [27] = 27'b1`). The compiler guarantees every register has a defined reset state. In Verilog, omitting a register from the reset branch produces undefined power-on behavior that synthesizes silently.
+**Mandatory reset values.** The `REGISTER` declaration requires an initial value (`counter [COUNTER_WIDTH] = COUNTER_WIDTH'b1`). The compiler guarantees every register has a defined reset state. In Verilog, omitting a register from the reset branch produces undefined power-on behavior that synthesizes silently.
+
+**Compile-time constants and OVERRIDE.** The module declares `CONST { CLK_MHZ = 27; COUNTER_WIDTH = clog2(CLK_MHZ) + 22; }` — the counter width is computed at compile time from the clock frequency. The project file overrides `CLK_MHZ` via `OVERRIDE { CLK_MHZ = CONFIG.CLK_MHZ; }`, and all dependent constants recompute automatically. Verilog's `parameter` requires manual propagation through every module in the hierarchy.
 
 **Block separation.** Combinational logic lives in `ASYNCHRONOUS`, clocked logic lives in `SYNCHRONOUS`. The compiler enforces this boundary. Verilog relies on coding conventions and lint tools to distinguish `always @(*)` from `always @(posedge clk)`.
 
@@ -1562,9 +1564,9 @@ Both generators appear in a single `CLOCK_GEN` block. The CLKDIV's input referen
 
 CEA-861 compliant 1280x720 timing generator. Constants define the full timing: H\_ACTIVE=1280, H\_FRONT=110, H\_SYNC=40, H\_BACK=220 (H\_TOTAL=1650); V\_ACTIVE=720, V\_FRONT=5, V\_SYNC=5, V\_BACK=20 (V\_TOTAL=750). Two counters (`h_cnt`, `v_cnt`) free-run and wrap. Hsync and vsync are positive polarity. Outputs include pixel coordinates (`x_pos`, `y_pos`) and `display_enable`.
 
-### `tmds_encoder`
+### `tmds_encoder_10` / `tmds_encoder_2`
 
-DVI-specification TMDS 8b/10b encoder. The encoding pipeline:
+Two TMDS 8b/10b encoder variants, selected by `@feature CONFIG.serializer`. Both implement the same DVI-specification encoding pipeline:
 
 1. Popcount the 8-bit input via an adder tree.
 2. Select XOR or XNOR mode based on whether the popcount exceeds 4.
@@ -1572,6 +1574,12 @@ DVI-specification TMDS 8b/10b encoder. The encoding pipeline:
 4. Popcount the result, track running disparity with a 5-bit signed counter, and conditionally invert the output for DC balance.
 
 During blanking (`display_enable == 0`), the encoder outputs fixed control tokens based on `c0`/`c1` and resets disparity to zero.
+
+**`tmds_encoder_10`** outputs the full 10-bit encoded word each pixel clock, intended for connection to a 10:1 serializer (e.g., Gowin OSER10).
+
+**`tmds_encoder_2`** adds an internal 2-bit shift register that serializes the 10-bit word at 5× pixel clock, intended for 2:1 DDR primitives (e.g., Lattice ODDRX1F). The TMDS encoding and disparity update are gated to run once every 5 serial clocks (`shift_cnt == 0`).
+
+The project file sets `CONFIG.serializer = 10` or `CONFIG.serializer = 2` to select the appropriate variant via `@feature`/`@else` conditional compilation.
 
 ### `hbars` / `vbars`
 
@@ -3577,7 +3585,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Simple 1-Bit Register
 
-```text
+```jz
 @module flipflop
   PORT {
     IN  [1] d;
@@ -3601,7 +3609,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Bus Slice and Synchronous Update
 
-```text
+```jz
 @module slice_example
   CONST { W = 8; }
 
@@ -3627,7 +3635,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Module Instantiation
 
-```text
+```jz
 @module top
   PORT {
     IN  [8] a;
@@ -3645,7 +3653,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Tri-State / Bidirectional Port
 
-```text
+```jz
 @module tristate_buffer
   PORT {
     IN    [8] data_in;
@@ -3661,7 +3669,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Counter with Load and Reset
 
-```text
+```jz
 @module counter
   PORT {
     IN  [1] clk;
@@ -3697,7 +3705,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## ALU with SELECT / CASE
 
-```text
+```jz
 @module cpu_alu
   CONST {
     XLEN = 32;
@@ -3745,7 +3753,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Arithmetic with Carry Capture
 
-```text
+```jz
 @module adder_with_carry
   CONST { WIDTH = 8; }
 
@@ -3774,7 +3782,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Sign-Extend in SYNCHRONOUS Assignment
 
-```text
+```jz
 @module sign_extend_example
   PORT {
     IN  [8] input_byte;
@@ -3799,7 +3807,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Sliced Register Updates
 
-```text
+```jz
 @module sliced_register_example
   PORT {
     IN  [1] clk;
@@ -3832,7 +3840,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 * `rw = 1`: Internal driver sends `buffer` onto `data`; `buffer` captures (echoes own write)
 * `rw = 0`: Release bus (`z`); external drivers control `data`; `buffer` captures external data
 
-```text
+```jz
 @module tristate_transceiver
   PORT {
     IN    [1] clk;
@@ -8239,7 +8247,7 @@ The CPU declares a `BUS SIMPLE_BUS SOURCE` port. Each peripheral declares a `BUS
 
 Shared constants and enumerations used across all modules via `@global`:
 
-* **OP**: 8-bit opcodes for the accumulator CPU variant (NOP through HLT, 24 instructions).
+* **OP**: 8-bit opcodes for the accumulator CPU variant (NOP through ST\_X, 25 instructions).
 * **STATE**: CPU state machine states (FETCH through HALT, 12 states).
 * **WAVE**: Audio waveform types (SQUARE, TRIANGLE, SAWTOOTH, NOISE).
 * **ENV**: ADSR envelope states (IDLE, ATTACK, DECAY, SUSTAIN, RELEASE).
@@ -8853,6 +8861,151 @@ x <= t;  // ERROR: scratch t not visible here
 * No state
 * No driver surprises
 * Always visible in expanded form
+
+---
+
+---
+url: /jz-hdl/examples/terminal.md
+---
+
+# Terminal Emulator
+
+A full ANSI terminal emulator with 1280x720 @ 60Hz DVI output, 142×45 character grid with 9×16 pixel cells, SDRAM-backed framebuffer, and compressed font decompression. The host connects via 115200 baud UART; the FPGA renders text, cursor, and ANSI attributes to an HDMI monitor in real time. An EDID reader queries the connected monitor's identity over DDC/I2C.
+
+## Clock Tree
+
+```text
+27 MHz crystal (SCLK)
+  └─ PLL (IDIV=3, FBDIV=54, ODIV=2)
+       └─ 371.25 MHz serial_clk
+            └─ CLKDIV (DIV_MODE=5)
+                 └─ 74.25 MHz pixel_clk
+```
+
+PLL math: VCO = 27 × (54+1) × 2 / (3+1) = 742.5 MHz. Base output = 742.5/2 = 371.25 MHz. Pixel clock = 371.25/5 = 74.25 MHz, matching the CEA-861 1280×720@60Hz standard.
+
+## Architecture
+
+```text
+Startup:
+  BSRAM (compressed font) → LZSS decompressor → SDRAM
+
+Runtime:
+  UART RX → terminal (ANSI parser) → terminal_buffer → SDRAM
+  SDRAM → font_cache (scanline buffer) → pixel_generator → TMDS → DVI
+
+  sdram_arb multiplexes 3 clients:
+    1. decompressor (highest priority)
+    2. terminal_buffer
+    3. font_cache
+```
+
+## Modules
+
+### `terminal`
+
+Full ANSI terminal emulator. Processes escape sequences (CSI, OSC), manages cursor position, scroll region, character attributes (bold, underline, blink, inverse, strikethrough), 16-color ANSI palette with foreground/background, insert/delete line/character, and alternate screen buffer. Receives bytes from UART RX and drives the terminal buffer with character and attribute writes.
+
+### `terminal_buffer`
+
+142×45 SDRAM-backed double-buffered line cache. Characters and attributes are written by the terminal module and read by the pixel generator, with SDRAM as the backing store. Supports scroll, alternate screen, write-through caching, and read-back for insert mode. Two independent clock-domain ports: `sys_clk` for CPU writes and `pixel_clk` for video reads.
+
+### `pixel_generator`
+
+4-cycle pipeline pixel generator. Reads character and attribute data from the terminal buffer, fetches font bitmaps from the font cache, and produces RGB pixel output. Renders a 142×45 grid of 9×16 pixel cells. Supports 16-color ANSI palette with blink, underline, strikethrough, and inverse attributes. Cursor rendering supports 4 styles (underline, block, blinking variants).
+
+### `font_cache`
+
+SDRAM-backed double-buffered font cache. 256×8 BSRAM scanline buffers with character capture and prefetch coordination. Fetches glyph bitmaps from SDRAM (where the decompressor placed them at startup) and serves them to the pixel generator with minimal latency.
+
+### `lzss_decomp`
+
+LZSS + ZeroGlyph decompressor. Decompresses font data from 8 BSRAM banks into SDRAM at startup. Uses a state machine with parity checking and supports a double-layer compression scheme: ZeroGlyph outer layer with LZSS inner layer.
+
+### `sdram_arb`
+
+3-port SDRAM arbiter. Multiplexes the decompressor, terminal buffer, and font cache onto a single SDRAM controller with fixed priority: decompressor (highest, runs only at startup) > terminal buffer > font cache.
+
+### `sdram`
+
+Low-level SDRAM controller for the GW2AR-18's embedded 64 Mbit SDRAM (2M × 32). Initialization: 200µs power-up wait → PRECHARGE ALL → two AUTO REFRESH cycles → MODE REGISTER SET (CL=2, burst=1). Auto-refresh fires every ~7.8µs.
+
+### `edid_reader`
+
+EDID DDC/I2C reader. Reads 128-byte EDID blocks from the connected monitor, parses descriptors for monitor name, serial, and text fields, and extracts native resolution. Implements a full I2C state machine with SDA/SCL open-drain control.
+
+### `video_timing`
+
+CEA-861 compliant 1280×720@60Hz timing generator. 74.25 MHz pixel clock, positive sync polarity. H\_ACTIVE=1280, H\_TOTAL=1650; V\_ACTIVE=720, V\_TOTAL=750.
+
+### `tmds_encoder`
+
+DVI TMDS 8b/10b encoder with running disparity tracking for DC balance.
+
+### `uart_rx` / `uart_tx`
+
+8N1 UART at 115200 baud (74.25 MHz / 644 ≈ 115264 baud). The receiver includes a 2-stage metastability synchronizer and samples at mid-bit.
+
+### `por`
+
+Power-on reset. Counts clock cycles after DONE goes high before releasing active-low `por_n`.
+
+### `dvi_top`
+
+Top-level integration. Instantiates all submodules and orchestrates the startup sequence (font decompression to SDRAM) followed by runtime operation (UART → terminal → SDRAM → video pipeline → TMDS output).
+
+::: code-group
+
+```jz
+@module por
+    PORT {
+        IN  [1] clk;
+        IN  [1] done;
+        OUT [1] por_n;
+    }
+
+    CONST {
+        POR_CYCLES   = 16;
+        POR_CNT_BITS = clog2(POR_CYCLES);
+        POR_MAX      = POR_CYCLES - 1;
+    }
+
+    REGISTER {
+        por_reg [1] = 1'b0;
+        cnt     [POR_CNT_BITS] = POR_CNT_BITS'b0;
+    }
+
+    ASYNCHRONOUS {
+        por_n <= por_reg;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (done == 1'b0) {
+            por_reg <= 1'b0;
+            cnt <= POR_CNT_BITS'b0;
+        } ELIF (cnt == lit(POR_CNT_BITS, POR_MAX)) {
+            por_reg <= 1'b1;
+            cnt <= cnt;
+        } ELSE {
+            por_reg <= 1'b0;
+            cnt <= cnt + POR_CNT_BITS'b1;
+        }
+    }
+@endmod
+
+```
+
+:::
+
+## JZ-HDL Language Features
+
+**SDRAM tristate control.** The 32-bit `sdram_dq` bus uses `INOUT` ports — the SDRAM controller drives during writes and releases to high-Z during reads. The compiler proves at compile time that no two modules drive the bus simultaneously.
+
+**Multi-client bus arbitration.** The SDRAM arbiter multiplexes three independent clients using priority-based selection. Each client communicates through explicit request/acknowledge signals — no implicit bus sharing or synthesis-dependent arbitration.
+
+**Compressed data in BSRAM.** Font data is stored compressed in BSRAM (initialized via `@file`) and decompressed to SDRAM at startup. The compiler embeds binary data directly into block RAM initialization, replacing vendor-specific memory initialization files.
+
+**I2C open-drain modeling.** The EDID reader uses `INOUT` for SDA — driving low for logic 0 and releasing to high-Z for logic 1 (open-drain). The compiler tracks tristate ownership to prevent bus contention between the reader and the monitor's pull-up.
 
 ---
 
@@ -10148,3 +10301,138 @@ CONST { W = widthof(bus); }   // valid compile-time query inside same module
 * Use intrinsics (uadd, umul, ...) for safe automatic sizing when appropriate.
 * Use `clog2()` and `widthof()` for robust compile‑time sizing.
 * Ensure unary arithmetic is parenthesized (e.g., `(-a)`).
+
+---
+
+---
+url: /jz-hdl/examples/uart-audio.md
+---
+
+# UART Audio
+
+A 1280x720 @ 30Hz DVI display with UART-streamed audio playback. A host sends 16-bit mono PCM audio over UART; the FPGA buffers it in an 8192-sample BRAM ring buffer, plays back at 48 kHz via DVI/HDMI audio data islands, and renders an 80-bar Goertzel DFT spectrum analyzer with peak hold and VU meter on screen.
+
+The design uses the same clock architecture as the [DVI Color Bars](./dvi) example: 27 MHz crystal → 185.625 MHz serial clock (PLL) → 37.125 MHz pixel clock (CLKDIV).
+
+## Audio Pipeline
+
+```text
+Host (PCM over UART @ 115200 baud)
+  └─ uart_rx (8N1 deserializer)
+       └─ uart_audio_rx (packet protocol: [LEN][DATA×LEN][PARITY])
+            └─ audio_buffer (8192 × 16-bit BRAM ring buffer)
+                 ├─ mixer (signed sum + DVI subpacket + BCH ECC)
+                 │    └─ dvi_data_island (packet injection during hblank)
+                 └─ spectrum_analyzer (Goertzel DFT, 80 bins)
+                      └─ spectrum_display + level_display (visualization)
+```
+
+### `uart_audio_rx`
+
+UART audio packet receiver. Protocol: `[LEN][DATA×LEN][PARITY]`. Accepts packets of up to 64 samples, verifies XOR parity, and sends an ACK byte with the current buffer fill level (0–127) so the host can throttle transmission. A watchdog timer resets the receiver if a packet stalls mid-transfer.
+
+### `audio_buffer`
+
+8192 × 16-bit BRAM ring buffer with Bresenham rate conversion for 48 kHz playback from the 37.125 MHz system clock (step=16, threshold=12375). Reports fill level for flow control back to the host via `uart_audio_rx`. When the buffer underruns, the output holds at zero.
+
+### `mixer`
+
+Purely combinational. Sums signed 16-bit PCM channels using `sadd` for correct sign-extended widening, then formats the result as a DVI audio subpacket:
+
+* Left-justifies the 16-bit sample to 24 bits.
+* Computes even parity via XOR folding.
+* Builds status byte 6 with parity for both L and R channels (mono duplication).
+* Generates BCH(64,56) ECC using polynomial 0x83 in a combinational XOR network.
+
+### `dvi_data_island`
+
+Injects audio sample packets, Audio InfoFrame (AIF), Audio Clock Regeneration (ACR), and AVI InfoFrame packets into the horizontal blanking interval. Shadow registers pre-load each packet's header and subpackets one cycle before transmission for clean timing.
+
+The ACR packet carries N=6144 and CTS=37125, satisfying `48000 = 6144/37125 × 37,125,000`.
+
+### `spectrum_analyzer`
+
+Goertzel DFT spectrum analyzer. Computes 80 frequency bins (k=3 through k=102) from 2048-sample windows at 23.4 Hz resolution, covering approximately 55 Hz to 2400 Hz. Uses Q1.14 fixed-point coefficients. Includes auto-gain normalization and peak-hold display smoothing with exponential decay.
+
+### `spectrum_display`
+
+Renders 80 color-gradient bars with reflections. Each bar occupies a 16-pixel pitch (10px body + 6px gap). Bars grow upward in segments of 16 pixels (12px body + 4px gap), up to 25 segments (400px maximum height). A reflection at 1/4 brightness extends below the baseline.
+
+The color gradient runs from red (bar 0) through yellow (bar 39) to blue (bar 79).
+
+### `level_display`
+
+Audio VU meter and buffer fill indicator. Two horizontal bars: the VU meter (y=300–339) shows current audio amplitude, and the buffer bar (y=380–409) shows ring buffer fill level. Both use a green-to-yellow-to-red color gradient with peak-hold and decay.
+
+### `terc4_encoder`
+
+Purely combinational 4-to-10-bit lookup table implementing the 16 TERC4 codewords from the DVI specification. Three instances encode the three data island channels.
+
+### `tmds_encoder`
+
+DVI TMDS 8b/10b encoder with running disparity tracking.
+
+### `uart_rx` / `uart_tx`
+
+8N1 UART at 115200 baud. The receiver includes a 2-stage metastability synchronizer. The transmitter is used for sending ACK/status bytes back to the host.
+
+### `video_timing`
+
+CEA-861 compliant 1280×720@30Hz timing generator. 37.125 MHz pixel clock.
+
+### `por`
+
+Power-on reset timer. Counts clock cycles after DONE before releasing active-low `por_n`.
+
+::: code-group
+
+```jz
+@module por
+    PORT {
+        IN  [1] clk;
+        IN  [1] done;
+        OUT [1] por_n;
+    }
+
+    CONST {
+        POR_CYCLES   = 1_048_576;  // ~28ms at 37.125MHz — wait for PLL lock
+        POR_CNT_BITS = clog2(POR_CYCLES);
+        POR_MAX      = POR_CYCLES - 1;
+    }
+
+    REGISTER {
+        por_reg [1] = 1'b0;
+        cnt     [POR_CNT_BITS] = POR_CNT_BITS'b0;
+    }
+
+    ASYNCHRONOUS {
+        por_n <= por_reg;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (done == 1'b0) {
+            por_reg <= 1'b0;
+            cnt <= POR_CNT_BITS'b0;
+        } ELIF (cnt == lit(POR_CNT_BITS, POR_MAX)) {
+            por_reg <= 1'b1;
+            cnt <= cnt;
+        } ELSE {
+            por_reg <= 1'b0;
+            cnt <= cnt + POR_CNT_BITS'b1;
+        }
+    }
+@endmod
+
+```
+
+:::
+
+## JZ-HDL Language Features
+
+**BRAM ring buffer with rate conversion.** `MEM(TYPE=BLOCK)` explicitly places the 8192-sample audio buffer in block RAM. The Bresenham accumulator for 48 kHz sample rate derivation from 37.125 MHz uses purely integer arithmetic with compile-time constants — no floating-point IP or vendor clock-enable primitives needed.
+
+**Fixed-point DSP in combinational logic.** The Goertzel DFT coefficients and accumulator use Q1.14 fixed-point arithmetic expressed as standard integer operations with explicit bit widths. The compiler verifies every concatenation and slice produces exactly the declared width, preventing the silent truncation bugs that plague hand-written fixed-point Verilog.
+
+**Flow-control protocol.** The `uart_audio_rx` module implements a packet protocol with parity verification and fill-level ACK, all within a single `SYNCHRONOUS` block's state machine. The compiler's single-driver rule guarantees the UART TX is driven from exactly one place — either the ACK response or the idle state.
+
+**Data island integration.** Audio sample injection into DVI blanking intervals requires precise cycle-by-cycle control of TMDS vs. TERC4 encoding modes. The output mux in the top-level `SYNCHRONOUS` block selects between four encoding modes per cycle, and the compiler verifies that every output path is fully covered with no undriven cycles.

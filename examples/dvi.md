@@ -24,9 +24,9 @@ Both generators appear in a single `CLOCK_GEN` block. The CLKDIV's input referen
 
 CEA-861 compliant 1280x720 timing generator. Constants define the full timing: H\_ACTIVE=1280, H\_FRONT=110, H\_SYNC=40, H\_BACK=220 (H\_TOTAL=1650); V\_ACTIVE=720, V\_FRONT=5, V\_SYNC=5, V\_BACK=20 (V\_TOTAL=750). Two counters (`h_cnt`, `v_cnt`) free-run and wrap. Hsync and vsync are positive polarity. Outputs include pixel coordinates (`x_pos`, `y_pos`) and `display_enable`.
 
-### `tmds_encoder`
+### `tmds_encoder_10` / `tmds_encoder_2`
 
-DVI-specification TMDS 8b/10b encoder. The encoding pipeline:
+Two TMDS 8b/10b encoder variants, selected by `@feature CONFIG.serializer`. Both implement the same DVI-specification encoding pipeline:
 
 1. Popcount the 8-bit input via an adder tree.
 2. Select XOR or XNOR mode based on whether the popcount exceeds 4.
@@ -34,6 +34,12 @@ DVI-specification TMDS 8b/10b encoder. The encoding pipeline:
 4. Popcount the result, track running disparity with a 5-bit signed counter, and conditionally invert the output for DC balance.
 
 During blanking (`display_enable == 0`), the encoder outputs fixed control tokens based on `c0`/`c1` and resets disparity to zero.
+
+**`tmds_encoder_10`** outputs the full 10-bit encoded word each pixel clock, intended for connection to a 10:1 serializer (e.g., Gowin OSER10).
+
+**`tmds_encoder_2`** adds an internal 2-bit shift register that serializes the 10-bit word at 5× pixel clock, intended for 2:1 DDR primitives (e.g., Lattice ODDRX1F). The TMDS encoding and disparity update are gated to run once every 5 serial clocks (`shift_cnt == 0`).
+
+The project file sets `CONFIG.serializer = 10` or `CONFIG.serializer = 2` to select the appropriate variant via `@feature`/`@else` conditional compilation.
 
 ### `hbars` / `vbars`
 

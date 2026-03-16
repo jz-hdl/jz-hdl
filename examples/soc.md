@@ -52,7 +52,7 @@ The CPU declares a `BUS SIMPLE_BUS SOURCE` port. Each peripheral declares a `BUS
 
 Shared constants and enumerations used across all modules via `@global`:
 
-* **OP**: 8-bit opcodes for the accumulator CPU variant (NOP through HLT, 24 instructions).
+* **OP**: 8-bit opcodes for the accumulator CPU variant (NOP through ST\_X, 25 instructions).
 * **STATE**: CPU state machine states (FETCH through HALT, 12 states).
 * **WAVE**: Audio waveform types (SQUARE, TRIANGLE, SAWTOOTH, NOISE).
 * **ENV**: ADSR envelope states (IDLE, ATTACK, DECAY, SUSTAIN, RELEASE).

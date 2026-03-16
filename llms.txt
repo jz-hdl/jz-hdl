@@ -55,5 +55,7 @@ Hardware Correctness by Construction
 - [DVI with Audio](/jz-hdl/examples/dvi-audio.md)
 - [Ascon-128 Encryption](/jz-hdl/examples/ascon.md)
 - [CPU Examples](/jz-hdl/examples/cpu.md)
+- [Terminal Emulator](/jz-hdl/examples/terminal.md)
+- [UART Audio](/jz-hdl/examples/uart-audio.md)
 - [SOC](/jz-hdl/examples/soc.md)
 

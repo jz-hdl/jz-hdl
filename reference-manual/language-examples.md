@@ -8,7 +8,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Simple 1-Bit Register
 
-```text
+```jz
 @module flipflop
   PORT {
     IN  [1] d;
@@ -32,7 +32,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Bus Slice and Synchronous Update
 
-```text
+```jz
 @module slice_example
   CONST { W = 8; }
 
@@ -58,7 +58,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Module Instantiation
 
-```text
+```jz
 @module top
   PORT {
     IN  [8] a;
@@ -76,7 +76,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Tri-State / Bidirectional Port
 
-```text
+```jz
 @module tristate_buffer
   PORT {
     IN    [8] data_in;
@@ -92,7 +92,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Counter with Load and Reset
 
-```text
+```jz
 @module counter
   PORT {
     IN  [1] clk;
@@ -128,7 +128,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## ALU with SELECT / CASE
 
-```text
+```jz
 @module cpu_alu
   CONST {
     XLEN = 32;
@@ -176,7 +176,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Arithmetic with Carry Capture
 
-```text
+```jz
 @module adder_with_carry
   CONST { WIDTH = 8; }
 
@@ -205,7 +205,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Sign-Extend in SYNCHRONOUS Assignment
 
-```text
+```jz
 @module sign_extend_example
   PORT {
     IN  [8] input_byte;
@@ -230,7 +230,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 
 ## Sliced Register Updates
 
-```text
+```jz
 @module sliced_register_example
   PORT {
     IN  [1] clk;
@@ -263,7 +263,7 @@ Complete, self-contained JZ-HDL examples demonstrating core language features.
 * `rw = 1`: Internal driver sends `buffer` onto `data`; `buffer` captures (echoes own write)
 * `rw = 0`: Release bus (`z`); external drivers control `data`; `buffer` captures external data
 
-```text
+```jz
 @module tristate_transceiver
   PORT {
     IN    [1] clk;
