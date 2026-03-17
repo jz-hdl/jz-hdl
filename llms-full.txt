@@ -1963,6 +1963,12 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Cause: Literal missing width (e.g., `'hFF`).
 * Fix: Provide explicit width: `8'hFF`.
 
+### LITERALS\_AND\_TYPES.LIT\_BARE\_INTEGER — Bare integer in runtime expression
+
+* Severity: ERROR
+* Cause: An unsized decimal integer (e.g., `1`, `42`) appears in a runtime expression such as an assignment, condition, or operator operand inside an `ASYNCHRONOUS` or `SYNCHRONOUS` block. JZ-HDL requires all runtime values to have an explicit bit width (S2.1).
+* Fix: Use a sized literal (`1'b1`, `8'd42`), `lit(width, value)`, or a signal. Bare integers remain valid in compile-time contexts: `CONST`/`CONFIG` values, width brackets, slice indices, `CASE` labels, and builtin arguments.
+
 ### LITERALS\_AND\_TYPES.LIT\_OVERFLOW — Literal intrinsic width > declared width
 
 * Severity: ERROR
@@ -3334,7 +3340,7 @@ url: /jz-hdl/reference-manual/formal-reference/expressions-and-operators.md
 * `/` and `%` require equal widths; result width equals dividend width. Compile-time zero divisor is an error; runtime zero is indeterminate (implementation-defined). See [Division by zero](#division-by-zero).
 * Bitwise and comparison operators require equal widths.
 * Logical operators (`&&`, `||`, `!`) require width-1 operands.
-* Shifts keep LHS width; shift amount can be any width.
+* Shifts keep LHS width; shift amount can be any width but must have an explicit width — bare integers are not permitted (S2.1).
 * `>>>` is arithmetic right shift (sign-extends from MSB).
 * Ternary requires width-1 condition and equal-width branches.
 * Concatenation order is MSB-first.
@@ -7145,7 +7151,7 @@ Three blocks declare the chip's electrical I/O: IN\_PINS, OUT\_PINS and INOUT\_P
 | `standard` | Yes (all pins) | See I/O standards below | — | Electrical I/O standard |
 | `drive` | Yes (OUT, INOUT) | Integer or fractional (e.g., `8`, `3.5`) | — | Drive strength in milliamps |
 | `mode` | No | `SINGLE`, `DIFFERENTIAL` | `SINGLE` | Single-ended or differential signaling |
-| `term` | No | `ON`, `OFF` | `OFF` | On-die termination resistor |
+| `term` | No | `ON`, `OFF` | `OFF` | On-die termination resistor. Always emitted explicitly in constraints (e.g., `IN_TERM NONE` in XDC when `OFF`). |
 | `pull` | No | `UP`, `DOWN`, `NONE` | `NONE` | Pull-up/pull-down resistor |
 | `fclk` | No | clock name | — | Serialization clock for differential output (fast clock) |
 | `pclk` | No | clock name | — | Parallel clock for differential output (pixel/data clock) |
@@ -9913,7 +9919,7 @@ url: /jz-hdl/reference-manual/formal-reference/type-system.md
 * **base**: `b`, `d`, or `h`
 * Binary allows `0`, `1`, `x`, `z` (underscore `_` for readability)
 * Decimal/hex do not allow `x` or `z`
-* Unsized literals are not permitted
+* Unsized literals are not permitted — this includes both missing-width literals (`'hFF`) and bare decimal integers (`1`, `42`) in runtime expressions
 * `CONFIG.NAME` and `CONST` identifiers are compile-time integers and are not literals
 
 **Intrinsic width rules:**
@@ -9951,6 +9957,7 @@ Overflow (intrinsic width > declared width) is a compile error.
 **Error conditions:**
 
 * Unsized literals (`'hFF`) → error
+* Bare integer in runtime expression (`data <= data << 1`) → error; use `1'b1`
 * Decimal with `x`/`z` (`8'd10x`) → error
 * Hex with `x`/`z` (`8'hFx`, `8'hz0`) → error
 * Undefined CONST in width → error
@@ -10075,7 +10082,7 @@ Examples:
 * `d` (decimal): digits `0–9`, `_` only (no `x`/`z`)
 * `h` (hex): digits `0–9`, `A–F`/`a–f`, `_` only (no `x`/`z`)
 
-Unsized literals (e.g., `'hFF`) are illegal and cause compile errors.
+Unsized literals (e.g., `'hFF`) are illegal and cause compile errors. Bare decimal integers (e.g., `1`, `42`) are also unsized and are not permitted in runtime expressions — use a sized literal (`1'b1`, `8'd42`) or `lit(width, value)`. Bare integers remain valid in compile-time contexts such as `CONST`/`CONFIG` values, width brackets, slice indices, and `CASE` labels.
 
 ### Intrinsic bit‑width and extension
 
