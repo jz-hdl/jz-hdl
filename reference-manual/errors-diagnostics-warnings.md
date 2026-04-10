@@ -126,11 +126,11 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Cause: Literal has leading or trailing `_`.
 * Fix: Remove underscores at edges.
 
-### LITERALS\_AND\_TYPES.LIT\_UNDEFINED\_CONST\_WIDTH — Undefined CONST used as width
+### LITERALS\_AND\_TYPES.LIT\_UNDEFINED\_CONST\_WIDTH — Undefined CONST or CONFIG used as width
 
 * Severity: ERROR
-* Cause: Using a module CONST name in a literal width that does not exist.
-* Fix: Declare the CONST or use a numeric width; CONST scope is module-local.
+* Cause: Using a CONST or `CONFIG.<name>` in a literal width that does not exist.
+* Fix: Declare the CONST or CONFIG, or use a numeric width. CONST scope is module-local; CONFIG scope is project-level.
 
 ### WIDTHS\_AND\_SLICING.WIDTH\_NONPOSITIVE\_OR\_NONINT — Invalid declared width
 

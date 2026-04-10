@@ -1981,11 +1981,11 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Cause: Literal has leading or trailing `_`.
 * Fix: Remove underscores at edges.
 
-### LITERALS\_AND\_TYPES.LIT\_UNDEFINED\_CONST\_WIDTH — Undefined CONST used as width
+### LITERALS\_AND\_TYPES.LIT\_UNDEFINED\_CONST\_WIDTH — Undefined CONST or CONFIG used as width
 
 * Severity: ERROR
-* Cause: Using a module CONST name in a literal width that does not exist.
-* Fix: Declare the CONST or use a numeric width; CONST scope is module-local.
+* Cause: Using a CONST or `CONFIG.<name>` in a literal width that does not exist.
+* Fix: Declare the CONST or CONFIG, or use a numeric width. CONST scope is module-local; CONFIG scope is project-level.
 
 ### WIDTHS\_AND\_SLICING.WIDTH\_NONPOSITIVE\_OR\_NONINT — Invalid declared width
 
@@ -9915,7 +9915,7 @@ url: /jz-hdl/reference-manual/formal-reference/type-system.md
 
 **Syntax:** `width'base_value`
 
-* **width**: positive integer or `CONST` name
+* **width**: positive integer, `CONST` name, or `CONFIG.<name>`
 * **base**: `b`, `d`, or `h`
 * Binary allows `0`, `1`, `x`, `z` (underscore `_` for readability)
 * Decimal/hex do not allow `x` or `z`
@@ -9943,6 +9943,8 @@ Overflow (intrinsic width > declared width) is a compile error.
 12'd4095        // decimal, 12 bits
 4'bx            // intrinsic 1, extends to 4'bxxxx
 8'hF            // intrinsic 4, zero-extended to 8'h0F
+WIDTH'hAB       // CONST-based width
+CONFIG.W'hAB    // CONFIG-based width
 ```
 
 **Extension table:**
@@ -9960,7 +9962,7 @@ Overflow (intrinsic width > declared width) is a compile error.
 * Bare integer in runtime expression (`data <= data << 1`) → error; use `1'b1`
 * Decimal with `x`/`z` (`8'd10x`) → error
 * Hex with `x`/`z` (`8'hFx`, `8'hz0`) → error
-* Undefined CONST in width → error
+* Undefined CONST or CONFIG in width → error
 * Overflow (intrinsic width > declared width) → error
 
 ## Signedness model
@@ -10064,7 +10066,7 @@ A sized literal has form:
 <width>'<base><value>
 ```
 
-* **width**: positive integer or `CONST` name (compile‑time constant)
+* **width**: positive integer, `CONST` name, or `CONFIG.<name>` (compile‑time constant)
 * **base**: one of `b`, `d`, `h`
 * **value**: digits (underscores `_` allowed for readability, not leading/trailing)
 
