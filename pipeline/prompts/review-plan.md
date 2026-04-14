@@ -1,0 +1,232 @@
+# Plan: Project-Wide 1.0.0 Readiness Review
+
+## Context
+
+The user wants a full 1.0.0 release-readiness review of the `jz-hdl-dev` project. This is a meta-task: the work itself is reading the codebase and producing `release-todo.md` at the project root. No source code is modified.
+
+Deliverable: `/Users/justinzaun/Development/jz-hdl-dev/release-todo.md` — a markdown file that scores each logical unit of the project 1–10 against 1.0.0 release quality, explains the score, lists high-level items outstanding before 1.0.0, and gives an overall project score with rationale.
+
+User-specified execution process (3 steps, file is updated after each):
+1. Full scan → identify logical groups → write initial file with group list.
+2. Detailed per-group review → score, rationale, TODO list per group. Step 2a repeats #2 for every group found in #1.
+3. Overall review → aggregate judgment, explain how the overall rank was reached.
+
+Agreed clarifications from the user:
+- **Criteria:** I choose criteria per-group based on what makes sense for that unit (compiler vs. spec vs. example score on different things). Each group's criteria must be listed in the file.
+- **Depth:** Accurate, group-by-group. Deep enough to be trustworthy, not just a TODO/FIXME scan.
+- **Subagents:** `Explore` subagents may be dispatched in parallel as a **starting point** per group, but their summaries are not the final product — I must read critical files directly and form my own judgment before scoring.
+- **File lifecycle:** Additive. `release-todo.md` grows and becomes more complete with each step. Do not replace-in-place or lose earlier content.
+- **Overall rank:** Independent judgment that takes everything into account, with an explanation of how the score was reached.
+- **Priority tags on TODO items:** Not needed at this point.
+- **Format:** Markdown.
+- **Exclusions:** `datasheets/`, `.git/`, and any build/output folders (`build/`, `target/`, `dist/`, `out/`, `node_modules/`, compiler-emitted `*.jzw`/reports inside examples). `examples/` source is **in**; example build outputs are **out**.
+- **Approval gating:** None. The user wants this all in one pass.
+
+## Top-Level Project Map (from initial scan)
+
+Languages/tooling:
+- **C** (~165 files) — main compiler at `compiler/`, built with CMake, bundles SQLite3
+- **C++** — waveform viewer at `viewer/`, built with CMake
+- **TypeScript/Node** — VS Code extension at `vscode-ext/`
+- **Markdown + VitePress** — documentation site at `docs/`
+- **Markdown** — language/sim/testbench/chip-info/jzw specifications at `specification/`
+- **Makefile** — per-example builds at `examples/*/Makefile`
+
+Top-level directories in scope:
+- `compiler/` — lexer, parser, AST, semantic, IR, backends (Verilog, RTLIL), simulator, diagnostics, reports, LSP, CLI, chip data loader, SQLite
+- `compiler/data/` — `*.jzon` chip definition files (vendor FPGA support data)
+- `compiler/tests/` — validation/CTest suite
+- `specification/` — 5 authoritative spec documents
+- `pipeline/` — ~88 `test_*.md` rule-coverage specs (~316 test cases)
+- `examples/` — 14 example projects (counter, latch, uart_echo, ascon, lcd, dvi, pll, uart_audio, cpu, soc, domains, terminal, etc.) — sources only
+- `docs/` — VitePress documentation site
+- `viewer/` — C++ waveform viewer
+- `vscode-ext/` — VS Code extension + LSP client glue
+- `scripts/` — utility/build scripts
+- `.github/` — CI workflows
+- Root files: `README.md`, `CLAUDE.md`, `AGENTS.md`, root `CMakeLists.txt`
+
+Out of scope: `datasheets/`, `.git/`, `compiler/build/`, `viewer/build/`, `docs/.vitepress/dist/`, `vscode-ext/node_modules/`, `vscode-ext/out/`, any example `build/` directories, generated `*.jzw` inside example dirs.
+
+## Tentative Logical Groups (to be validated in Step 1)
+
+These are my starting-point groups. Step 1 will confirm, split, or merge them based on what the deep scan reveals. **Do not treat this list as final** — the actual group list is decided during execution.
+
+1. **Language & Specification** — `specification/`, `pipeline/` rule docs
+2. **Compiler — Frontend** — lexer, parser, AST, semantic analysis in `compiler/src/`
+3. **Compiler — IR & Middle-end** — IR representation, transforms
+4. **Compiler — Backends** — Verilog, RTLIL, any other code generation
+5. **Simulator** — `compiler/src/sim/` and related
+6. **Testbench & Verification** — testbench runner, assertions, validation tests
+7. **Diagnostics & Reports** — diagnostics, rules engine, alias/memory/tristate reports
+8. **Chip Data & Vendor Support** — `compiler/data/*.jzon`, `chip_data.c`, vendor FPGA data
+9. **CLI & LSP** — `main.c`, `cli_*.c`, `path_security.c`, LSP server
+10. **Waveform Viewer** — `viewer/`
+11. **VS Code Extension** — `vscode-ext/`
+12. **Examples** — `examples/` project sources
+13. **Documentation Site** — `docs/` VitePress site + root README
+14. **Build & CI Infrastructure** — root CMake, compiler CMake, `.github/`, `scripts/`, validation runner
+
+Expected final count: 10–14 groups. Step 1 finalizes this.
+
+## Per-Group Criteria (by group type)
+
+Different unit types score on different things. The specific criteria used for each group will be written into that group's section of `release-todo.md`. General rubric by type:
+
+**Specification/documentation groups** (Language Spec, Docs Site, Pipeline rules):
+- Completeness vs. what the implementation actually supports
+- Consistency across documents (no contradictions between spec and sim-spec, etc.)
+- Clarity for a new reader
+- Versioning/changelog presence
+- Broken links, dead references, stale content
+
+**Compiler component groups** (Frontend, IR, Backends, Diagnostics, CLI/LSP):
+- Feature completeness vs. language spec
+- Error handling & diagnostic quality (messages, source locations, recovery)
+- Test coverage (CTest + pipeline rule coverage)
+- Known compiler bugs / TODO / FIXME density
+- Memory safety, leak-freedom, UB (for C code)
+- Build cleanliness: warnings, sanitizer output if runnable
+- API/CLI stability — would changes break users at 1.0.0?
+
+**Simulator / testbench runtime groups**:
+- Spec conformance (sim-spec and testbench-spec)
+- Correctness on the examples (do they simulate and produce expected output?)
+- Performance sanity (no obvious pathologies)
+- Waveform output correctness (jzw spec conformance)
+
+**Chip data / vendor support**:
+- Chip coverage (which vendor parts are actually usable end-to-end)
+- `.jzon` correctness vs. `chip-info-specification.md`
+- Pin/resource definition completeness
+- Any "fixed_pins" / special resources correctly modeled
+
+**Tooling groups** (VS Code ext, Viewer):
+- Does it build / install / run on a clean machine?
+- Feature completeness vs. what the CLI/simulator can do
+- Packaging/distribution story for 1.0.0 (marketplace entry? release binaries?)
+- Error handling on missing tools, bad input
+
+**Examples**:
+- Do they all build from clean?
+- Do they all simulate (where applicable)?
+- Are they representative of the language's features?
+- Code quality (don't teach bad patterns)
+- README/comments explaining what each example demonstrates
+
+**Build & CI infrastructure**:
+- Reproducible build from clean checkout
+- CI coverage (does CI actually exercise everything it should?)
+- Release story (tags, binaries, version stamping)
+- Contributor on-ramp (README build instructions work as written)
+
+I will list the specific criteria I scored against at the top of each group's section in `release-todo.md`, so the score is auditable.
+
+## Execution Steps
+
+### Step 1 — Logical Group Identification & Initial File
+1. Glob the top-level project tree (in-scope only) to ground the groups in real directories and files.
+2. Skim `README.md`, `AGENTS.md`, root `CMakeLists.txt`, `compiler/CMakeLists.txt`, `compiler/src/main.c`, and one-line every file in `compiler/src/` via Glob, to finalize the group boundaries.
+3. Decide the final group list (expected 10–14 groups). Each group must be non-overlapping and must own specific paths.
+4. **Write** `/Users/justinzaun/Development/jz-hdl-dev/release-todo.md` with:
+   - Header (title, date, status: "Step 1 complete")
+   - Exclusions list
+   - Groups section: each group listed with its owned paths and the criteria I'll score it against (no score or rationale yet)
+   - Placeholder overall section
+5. Mark Step 1 done in the file's status header.
+
+### Step 2 — Detailed Per-Group Review (repeated for every group)
+
+**Execution model:** Each group's review runs in its own independent `Agent` (general-purpose subagent) context. The main context is kept lean — it only orchestrates. This protects against context pressure across a 10–14-group review. Groups run **serially**, one at a time, so the main context can sanity-check each returned section before dispatching the next.
+
+For each group in the finalized list, in order, the main context does this:
+
+1. **Read the current `release-todo.md`** to capture its full text (it has been updated with every prior group's completed section).
+2. **Dispatch a general-purpose `Agent`** with a fully self-contained prompt containing:
+   - The group name and its owned paths (from Step 1).
+   - The criteria the group is to be scored against (from Step 1).
+   - **The current full text of `release-todo.md`** — so the agent can see which groups have already been reviewed, what scores they received, and stay calibrated with the established tone and stringency. The agent is told: "use the prior groups as calibration anchors — do not invent your own scale."
+   - **Explicit scoring anchors** so the agent doesn't re-invent the scale: `1 = broken/missing`, `3 = fragile, many gaps`, `5 = usable but rough`, `7 = solid, minor gaps`, `8 = production-ready with minor rough edges`, `9 = spec-complete and polished`, `10 = shipped-quality`.
+   - The required work: explore the group's paths, read the critical files directly (not just grep), scan for `TODO`/`FIXME`/`XXX`/`HACK`/`assert(0)`/`abort(`/`not implemented`/`stub`/`unimplemented`, cross-reference against any relevant spec document, identify maturity signals (warnings, test coverage, empty error paths, stub functions), form an independent judgment.
+   - The exclusions list (datasheets/, .git/, build folders, generated .jzw/reports).
+   - The exact markdown section format to return (paths, criteria, score, rationale, "Needed before 1.0.0" bullet list, and a short "Surprising findings" note if anything unexpected showed up).
+   - A hard rule: **return only the completed markdown section**, no commentary, no preamble, no summary — it will be pasted directly into `release-todo.md`.
+3. **Receive the agent's section text.** Sanity-check it in the main context: does the score match the evidence in the rationale? Are the TODO items specific and actionable? Are the cited files real (spot-check one with Read)? If anything looks off, dispatch a follow-up agent with a corrective prompt rather than silently accepting.
+4. **Edit `release-todo.md`** to append/replace the group's section with the validated text. Update the status header to show which groups are complete.
+5. Move to the next group.
+
+**Why each agent sees the current `release-todo.md`:** (user-specified) it gives each new agent the established calibration signal from prior groups, keeps naming/formatting consistent, and lets the agent cross-reference findings (e.g. "the Compiler Frontend already noted diagnostic gaps, and the same gaps show up here"). Without this, each agent scores in a vacuum.
+
+**Calibration pass happens in Step 3**, not inside Step 2 — no re-scoring mid-review.
+
+### Step 3 — Calibration & Overall Review
+1. Re-read `release-todo.md` from top to bottom to reload the full picture in the main context.
+2. **Calibration pass.** Compare scores across groups against the agreed anchors (1 = broken, 5 = usable but rough, 8 = production-ready, etc.). Look for inconsistencies — e.g. a 7/10 with rationale that reads more like a 5/10, or two groups with nearly identical maturity but different scores. Adjust scores where warranted and add a one-line note to that group's rationale explaining the adjustment (e.g. "Score revised from 7 to 6 during calibration — gap depth comparable to Simulator group").
+3. Consider weighting: which groups are critical-path for 1.0.0? A weak compiler frontend matters more than a weak VS Code extension. State this weighting explicitly in the overall rationale.
+4. Form an independent overall score 1–10 and write 3–6 sentences explaining exactly how the score was reached (which groups pulled it up, which pulled it down, what the top 3 blockers are, and what the weighting was).
+5. Add a final **"Top 1.0.0 Blockers" consolidated list** at the top of the file (cross-cutting summary, not group-by-group) — the 5–10 items that most matter for the overall score.
+6. **Edit** `release-todo.md` to add the overall section, the calibration adjustments, and the consolidated blocker list. Update status header to "Review complete".
+
+## Critical Files
+
+Only one file is written/modified by this task:
+- `/Users/justinzaun/Development/jz-hdl-dev/release-todo.md` — created in Step 1, edited in every sub-part of Step 2, edited again in Step 3.
+
+All other files are read-only references. No source changes. No commits.
+
+## File Format for `release-todo.md`
+
+```markdown
+# jz-hdl-dev 1.0.0 Release Readiness
+
+**Status:** <step status>
+**Date:** 2026-04-13
+**Reviewer:** Claude (Opus 4.6)
+
+## Exclusions
+- <list>
+
+## Top 1.0.0 Blockers (cross-cutting)
+_(filled in Step 3)_
+
+## Overall Score: X / 10
+_(filled in Step 3, with rationale)_
+
+---
+
+## Groups
+
+### 1. <Group name> — Score: X / 10
+**Paths:** `<paths>`
+**Criteria scored against:**
+- <criterion 1>
+- <criterion 2>
+- ...
+**Rationale:**
+<2–4 sentences>
+
+**Needed before 1.0.0:**
+- <item>
+- <item>
+
+---
+<repeat for every group>
+```
+
+## Verification
+
+This task has no automated test. Verification = the user reads `release-todo.md` and sanity-checks the scores and TODO lists against their own mental model of the project. Specifically the user can check:
+
+- Does the group list cover the whole project (minus exclusions)?
+- Does each group's score match their intuition? Where it doesn't, the rationale should explain why.
+- Are the TODO items actionable and specific (not "improve quality")?
+- Does the overall score's rationale honestly reflect the group scores?
+
+If anything is wrong, the user tells me what, and per CLAUDE.md I stop and review before reverting.
+
+## Notes / Risks
+
+- **Context pressure.** A 13-group deep review is a lot of reading. I'll rely on subagents to absorb file bodies and return summaries, then spot-verify critical files myself. If context gets tight I'll note it and the user can decide whether to shorten remaining groups.
+- **Subagent accuracy.** Per the user's instruction, subagent summaries are a **starting point**, not the final word. I'll always read at least a few files directly before scoring.
+- **Scoring calibration drift.** First groups may score differently than later ones. In Step 3 I'll re-read all scores and adjust if any are clearly miscalibrated relative to siblings.
+- **Scope creep.** I will not fix anything I find, won't refactor, won't create side files (unless the user asks). Review only.
