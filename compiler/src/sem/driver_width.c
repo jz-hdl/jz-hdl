@@ -17,6 +17,41 @@ static int sem_eval_width_expr_internal(const char *expr,
                                         unsigned *out_width,
                                         int depth);
 
+static int sem_register_init_literal_overflows(const char *lit)
+{
+    if (!lit) return 0;
+
+    const char *tick = strchr(lit, '\'');
+    if (!tick || tick <= lit) return 0;
+
+    char wbuf[32];
+    size_t wlen = (size_t)(tick - lit);
+    if (wlen == 0 || wlen >= sizeof(wbuf)) return 0;
+    memcpy(wbuf, lit, wlen);
+    wbuf[wlen] = '\0';
+
+    unsigned declared_width = 0;
+    if (!parse_simple_positive_int(wbuf, &declared_width)) return 0;
+
+    char base_ch = tick[1];
+    JZNumericBase base = JZ_NUM_BASE_NONE;
+    if (base_ch == 'b' || base_ch == 'B') base = JZ_NUM_BASE_BIN;
+    else if (base_ch == 'd' || base_ch == 'D') base = JZ_NUM_BASE_DEC;
+    else if (base_ch == 'h' || base_ch == 'H') base = JZ_NUM_BASE_HEX;
+    else return 0;
+
+    const char *value_lexeme = tick + 2;
+    if (!value_lexeme || !*value_lexeme) return 0;
+
+    unsigned intrinsic = 0;
+    JZLiteralExtKind ext = JZ_LITERAL_EXT_NONE;
+    return jz_literal_analyze(base,
+                              value_lexeme,
+                              declared_width,
+                              &intrinsic,
+                              &ext) != 0;
+}
+
 int sem_instance_width_expr_is_invalid(const char *expr,
                                               const JZModuleScope *parent_scope,
                                               const JZBuffer *project_symbols)
@@ -1079,6 +1114,21 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                                     decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,
                                     "REG_INIT_CONTAINS_Z",
                                     "register initialization literal must not contain z bits");
+                }
+
+                /* LIT_OVERFLOW: register initialization literals still need
+                 * the normal sized-literal value check, even though register
+                 * initialization itself has stricter width-match rules below.
+                 */
+                if (decl->type == JZ_AST_REGISTER_DECL &&
+                    decl->child_count >= 1 && decl->children[0] &&
+                    decl->children[0]->type == JZ_AST_EXPR_LITERAL &&
+                    decl->children[0]->text &&
+                    sem_register_init_literal_overflows(decl->children[0]->text)) {
+                    sem_report_rule(diagnostics,
+                                    decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,
+                                    "LIT_OVERFLOW",
+                                    "literal numeric value exceeds declared width");
                 }
 
                 /* REG_INIT_WIDTH_MISMATCH: register initialization literal

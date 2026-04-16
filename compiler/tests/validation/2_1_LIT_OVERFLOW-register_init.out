@@ -1,0 +1,2 @@
+File: 2_1_LIT_OVERFLOW-register_init.jz
+      20:21   error LIT_OVERFLOW S2.1/S8.1 Literal numeric value exceeds declared width
