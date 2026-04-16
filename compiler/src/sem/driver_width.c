@@ -1049,6 +1049,17 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                     decl->child_count >= 1 && decl->children[0] &&
                     decl->children[0]->type == JZ_AST_EXPR_LITERAL &&
                     decl->children[0]->text &&
+                    !strchr(decl->children[0]->text, '\'')) {
+                    sem_report_rule(diagnostics,
+                                    decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,
+                                    "LIT_BARE_INTEGER",
+                                    "bare integer literal is not permitted in register initialization; use a sized literal or lit(width, value)");
+                }
+
+                if (decl->type == JZ_AST_REGISTER_DECL &&
+                    decl->child_count >= 1 && decl->children[0] &&
+                    decl->children[0]->type == JZ_AST_EXPR_LITERAL &&
+                    decl->children[0]->text &&
                     sem_literal_has_x_bits(decl->children[0]->text)) {
                     sem_report_rule(diagnostics,
                                     decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,

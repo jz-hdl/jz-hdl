@@ -1,0 +1,32 @@
+// LIT_BARE_INTEGER: Bare integer literal in register initialization.
+// Tests unsized decimal integer literals in REGISTER initializers.
+// Valid sized literal and lit() forms are included to avoid false positives.
+
+@project LIT_BARE_INTEGER_register_init
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        // Trigger: bare integer in register init should be rejected.
+        r_bad   [8] = 42;
+        r_sized [8] = 8'd42;
+        r_lit   [8] = lit(8, 42);
+    }
+
+    ASYNCHRONOUS {
+        data = r_bad ^ r_sized ^ r_lit;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_sized <= r_lit;
+    }
+@endmod
