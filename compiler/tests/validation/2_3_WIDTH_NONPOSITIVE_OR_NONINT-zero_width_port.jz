@@ -1,5 +1,5 @@
 // WIDTH_NONPOSITIVE_OR_NONINT: Zero-width PORT declaration rejected.
-// Tests zero-width input port in TopMod.
+// Tests zero-width output port in TopMod.
 // Valid positive-width ports included to verify no false positives.
 
 @project WIDTH_NONPOSITIVE_OR_NONINT_zero_width_port
@@ -32,8 +32,8 @@
     PORT {
         IN  [1] clk;
         IN  [8] data_in;
-        // Trigger: zero-width input port declaration
-        IN  [0] bad_in;
+        // Trigger: zero-width output port declaration
+        OUT [0] bad_out;
         OUT [8] data_out;
     }
     WIRE {

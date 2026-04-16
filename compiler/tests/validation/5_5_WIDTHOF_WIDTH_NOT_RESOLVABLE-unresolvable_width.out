@@ -1,3 +1,4 @@
 File: 5_5_WIDTHOF_WIDTH_NOT_RESOLVABLE-unresolvable_width.jz
       18:9    error WIDTHOF_WIDTH_NOT_RESOLVABLE S5.5.10 widthof() target found but its width cannot be resolved
       28:9    warn  WARN_UNUSED_WIRE S12.3 WIRE declared but never driven or read; remove it if unused
+      28:9    error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly

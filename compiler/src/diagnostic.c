@@ -139,6 +139,20 @@ static int get_rule_priority_for_diag(const JZDiagnostic *d)
     return rule->priority;
 }
 
+static int get_severity_rank_for_diag(const JZDiagnostic *d)
+{
+    if (!d) {
+        return JZ_SEVERITY_NOTE;
+    }
+    if (d->severity < JZ_SEVERITY_NOTE) {
+        return JZ_SEVERITY_NOTE;
+    }
+    if (d->severity > JZ_SEVERITY_ERROR) {
+        return JZ_SEVERITY_ERROR;
+    }
+    return d->severity;
+}
+
 static int compare_diag_location(const JZDiagnostic *a, const JZDiagnostic *b)
 {
     const char *fa = a->loc.filename ? a->loc.filename : "<input>";
@@ -448,12 +462,20 @@ void jz_diagnostic_print_all(const JZDiagnosticList *list,
             ++j;
         }
 
-        /* Determine the maximum priority among diagnostics on this line. */
+        /* Determine the maximum priority among diagnostics on this line.
+         * Also track errors separately so a high-priority warning cannot hide
+         * a lower-priority error reported at the same source line.
+         */
         int max_priority = 0;
+        int max_error_priority = -1;
         for (size_t k = i; k < j; ++k) {
+            int s = get_severity_rank_for_diag(order[k]);
             int p = get_rule_priority_for_diag(order[k]);
             if (p > max_priority) {
                 max_priority = p;
+            }
+            if (s == JZ_SEVERITY_ERROR && p > max_error_priority) {
+                max_error_priority = p;
             }
         }
 
@@ -472,19 +494,30 @@ void jz_diagnostic_print_all(const JZDiagnosticList *list,
             first_file = 0;
         }
 
-        /* Within this line, print only diagnostics whose rule priority equals
-         * max_priority, and remove duplicates (same column, code, and message).
+        /* Within this line, print diagnostics whose rule priority equals the
+         * line maximum. If that would suppress errors because a warning has a
+         * higher priority, also print the highest-priority errors. Remove
+         * duplicates (same column, code, and message).
          */
         for (size_t k = i; k < j; ++k) {
             const JZDiagnostic *d = order[k];
-            if (get_rule_priority_for_diag(d) != max_priority) {
+            int s = get_severity_rank_for_diag(d);
+            int p = get_rule_priority_for_diag(d);
+            int selected = (p == max_priority) ||
+                           (s == JZ_SEVERITY_ERROR && p == max_error_priority);
+            if (!selected) {
                 continue;
             }
 
             int is_duplicate = 0;
             for (size_t m = i; m < k; ++m) {
                 const JZDiagnostic *prev = order[m];
-                if (get_rule_priority_for_diag(prev) != max_priority) {
+                int prev_s = get_severity_rank_for_diag(prev);
+                int prev_p = get_rule_priority_for_diag(prev);
+                int prev_selected = (prev_p == max_priority) ||
+                                    (prev_s == JZ_SEVERITY_ERROR &&
+                                     prev_p == max_error_priority);
+                if (!prev_selected) {
                     continue;
                 }
                 if (prev->loc.column != d->loc.column) {
