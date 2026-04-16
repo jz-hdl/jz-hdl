@@ -1,0 +1,66 @@
+// HAPPY_PATH: Signals that would otherwise be candidates for
+// NET_DANGLING_UNUSED are all connected, driven, and read.
+// Exercises latches in helper and top modules so the dedicated dangling-net
+// path sees only fully used signals and emits no warning.
+
+@project NET_DANGLING_UNUSED_all_connected_ok
+    @top TopMod {
+        IN  [1] clk    = _;
+        IN  [1] enable = _;
+        IN  [1] din    = _;
+        OUT [1] data   = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    LATCH {
+        helper_lat [1] D;
+    }
+
+    ASYNCHRONOUS {
+        helper_lat <= enable : din;
+        data       <= helper_lat;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    LATCH {
+        top_lat [1] D;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        helper_data [1];
+    }
+
+    @new inst_a HelperA {
+        IN  [1] enable = enable;
+        IN  [1] din    = din;
+        OUT [1] data   = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        top_lat <= enable : helper_data;
+        data    <= top_lat;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= top_lat;
+    }
+@endmod
