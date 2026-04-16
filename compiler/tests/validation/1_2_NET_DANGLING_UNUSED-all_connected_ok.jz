@@ -9,6 +9,7 @@
         IN  [1] enable = _;
         IN  [1] din    = _;
         OUT [1] data   = _;
+        OUT [1] data_r = _;
     }
 @endproj
 
@@ -35,6 +36,7 @@
         IN  [1] enable;
         IN  [1] din;
         OUT [1] data;
+        OUT [1] data_r;
     }
 
     LATCH {
@@ -58,6 +60,7 @@
     ASYNCHRONOUS {
         top_lat <= enable : helper_data;
         data    <= top_lat;
+        data_r  <= r;
     }
 
     SYNCHRONOUS(CLK=clk) {
