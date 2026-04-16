@@ -1407,6 +1407,45 @@ static void sem_check_feature_cond_recursive(JZASTNode *node,
     }
 }
 
+/* OBS_X_TO_OBSERVABLE_SINK at module instantiation boundary.
+ * Per-spec, a value crossing a module boundary via @new port binding is
+ * observable to the child module. An x-literal in any binding RHS is
+ * therefore an observable-sink violation regardless of binding direction.
+ * IN/INOUT bindings carry parent->child expressions where literals are
+ * common; OUT bindings normally bind to a wire/identifier and rarely
+ * contain x literals, but checking all directions is uniform and safe.
+ */
+static void sem_check_instance_bindings_for_x_taint(JZASTNode *mod,
+                                                    JZDiagnosticList *diagnostics)
+{
+    if (!mod || !diagnostics) return;
+    for (size_t i = 0; i < mod->child_count; ++i) {
+        JZASTNode *inst = mod->children[i];
+        if (!inst || inst->type != JZ_AST_MODULE_INSTANCE) continue;
+
+        for (size_t bi = 0; bi < inst->child_count; ++bi) {
+            JZASTNode *bind = inst->children[bi];
+            if (!bind || bind->type != JZ_AST_PORT_DECL) continue;
+            if (bind->child_count == 0) continue;
+            JZASTNode *rhs = bind->children[0];
+            if (!rhs) continue;
+            if (!sem_expr_contains_x_literal_anywhere(rhs)) continue;
+
+            JZLocation loc = rhs->loc.line ? rhs->loc : bind->loc;
+            char explain[320];
+            snprintf(explain, sizeof(explain),
+                     "RHS expression contains x-valued literal bits that would\n"
+                     "propagate to a child-instance port (observable across\n"
+                     "module boundary). Mask or select away x bits before they\n"
+                     "reach the instance binding.");
+            sem_report_rule(diagnostics,
+                            loc,
+                            "OBS_X_TO_OBSERVABLE_SINK",
+                            explain);
+        }
+    }
+}
+
 void sem_check_module_expressions(const JZModuleScope *scope,
                                          const JZBuffer *project_symbols,
                                          JZDiagnosticList *diagnostics)
@@ -1472,6 +1511,9 @@ void sem_check_module_expressions(const JZModuleScope *scope,
         /* CONTROL_FLOW_IF_SELECT: IF/ELIF conditions and SELECT/CASE structure. */
         sem_check_block_control_flow(child, scope, project_symbols, is_async, is_sync, diagnostics);
     }
+
+    /* OBS_X_TO_OBSERVABLE_SINK at @new instance port bindings. */
+    sem_check_instance_bindings_for_x_taint(mod, diagnostics);
 }
 
 void sem_check_expressions(JZASTNode *root,

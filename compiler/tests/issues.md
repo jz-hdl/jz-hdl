@@ -109,16 +109,10 @@ _Last reconciled: 2026-04-15 by summary.md_
   Combinational loop through @new port binding (signal feeds into instance input and returns via instance output) does not trigger COMB_LOOP_UNCONDITIONAL. Compiler does not trace combinational loops across module boundaries. File attempted: `12_2_COMB_LOOP_UNCONDITIONAL-cross_module_loop.jz`.
 * NET_MULTIPLE_ACTIVE_DRIVERS : compiler-bug
   Instance output + local ASYNCHRONOUS driver on same wire does not trigger NET_MULTIPLE_ACTIVE_DRIVERS. Compiler appears to only detect multi-driver when multiple instance outputs bind to the same wire. File attempted: `11_3_NET_MULTIPLE_ACTIVE_DRIVERS-instance_plus_local.jz`.
-* OBS_X_TO_OBSERVABLE_SINK : compiler-bug
-  x-bit literal in MEM write data does not trigger OBS_X_TO_OBSERVABLE_SINK. Rule message says "drives REGISTER, MEM, or output" but MEM write path is not checked. File attempted: `1_2_OBS_X_TO_OBSERVABLE_SINK-x_to_mem.jz`.
-* OBS_X_TO_OBSERVABLE_SINK : compiler-bug
-  x-bit value passed through @new port binding to output does not trigger OBS_X_TO_OBSERVABLE_SINK. Compiler does not propagate x-taint across module boundaries through instance port bindings. File attempted: `1_2_OBS_X_TO_OBSERVABLE_SINK-x_through_instance.jz`.
 * NET_DANGLING_UNUSED : missing-coverage
   (`warning`, `S5.1/S8.3`) — test file `1_2_NET_DANGLING_UNUSED-unused_signal.jz` is named for this rule but compiler fires `WARN_UNUSED_WIRE` instead. NET_DANGLING_UNUSED has zero actual test coverage. Recommended: `1_6_NET_DANGLING_UNUSED-unused_port_signal.jz` (trigger on non-wire signals if the rule applies to them, or investigate whether the rule is dead code).
 * NET_MULTIPLE_ACTIVE_DRIVERS : missing-context
   Covered: two instances driving same wire (helper), two instances driving same wire (top), three instances driving same wire (top); missing: two ASYNCHRONOUS blocks in same module driving same wire, cross-module instance output + local async driver on same wire. Recommended new files: `11_3_NET_MULTIPLE_ACTIVE_DRIVERS-dual_async_block.jz`, `11_3_NET_MULTIPLE_ACTIVE_DRIVERS-instance_plus_local.jz`. Note: sweep confirmed both are compiler-bugs.
-* OBS_X_TO_OBSERVABLE_SINK : missing-context
-  Covered: x literal to OUT port, x literal to register, x in addition, x in bitwise OR, x in ternary, x in concatenation, x in subtraction; missing: x bits to MEM write data, x through instance port binding reaching output. Recommended new files: `1_2_OBS_X_TO_OBSERVABLE_SINK-x_to_mem.jz`, `1_2_OBS_X_TO_OBSERVABLE_SINK-x_through_instance.jz`. Note: sweep confirmed both are compiler-bugs.
 * COMB_LOOP_UNCONDITIONAL : missing-context
   Covered: self-assignment, two-signal cycle, three-signal cycle, four-signal cycle, cycle through expression, conditional same path; missing: loop through @new port binding (cross-module combinational path). Recommended new file: `12_2_COMB_LOOP_UNCONDITIONAL-cross_module_loop.jz`. Note: sweep confirmed compiler-bug — cross-module loop detection not implemented.
 * NET_FLOATING_WITH_SINK : missing-happy-path

@@ -62,6 +62,23 @@ void sem_lhs_observable_classify(JZASTNode *lhs,
         break;
     }
 
+    case JZ_AST_EXPR_QUALIFIED_IDENTIFIER: {
+        /* INOUT MEM port field write: mem.port.wdata or mem.port.addr.
+         * Both fields are observable sinks (writes flip-flopped into
+         * the memory). .data is read-only on INOUT and rejected by a
+         * separate rule, so it cannot reach this LHS path.
+         */
+        JZMemPortRef mref;
+        memset(&mref, 0, sizeof(mref));
+        if (sem_match_mem_port_qualified_ident(lhs, mod_scope, NULL, &mref) &&
+            mref.mem_decl && mref.port &&
+            (mref.field == MEM_PORT_FIELD_WDATA ||
+             mref.field == MEM_PORT_FIELD_ADDR)) {
+            if (out_has_mem) *out_has_mem = 1;
+        }
+        break;
+    }
+
     default:
         /* Recurse generically into children for any other expression forms. */
         for (size_t i = 0; i < lhs->child_count; ++i) {

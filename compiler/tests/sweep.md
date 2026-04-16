@@ -818,8 +818,6 @@ _None._
 |---------|----------------|----------|-------------|
 | NET_MULTIPLE_ACTIVE_DRIVERS | 11_3_NET_MULTIPLE_ACTIVE_DRIVERS-dual_async_block.jz | compiler-bug | Two ASYNCHRONOUS blocks in same module both driving same wire does not trigger NET_MULTIPLE_ACTIVE_DRIVERS. Compiler may merge multiple ASYNC blocks or only detect multi-driver via instance output port bindings. |
 | NET_MULTIPLE_ACTIVE_DRIVERS | 11_3_NET_MULTIPLE_ACTIVE_DRIVERS-instance_plus_local.jz | compiler-bug | Instance output + local ASYNCHRONOUS driver on same wire does not trigger NET_MULTIPLE_ACTIVE_DRIVERS. Compiler appears to only detect multi-driver when multiple instance outputs bind to the same wire. |
-| OBS_X_TO_OBSERVABLE_SINK | 1_2_OBS_X_TO_OBSERVABLE_SINK-x_to_mem.jz | compiler-bug | x-bit literal in MEM write data does not trigger OBS_X_TO_OBSERVABLE_SINK. Rule message says "drives REGISTER, MEM, or output" but MEM write path is not checked. |
-| OBS_X_TO_OBSERVABLE_SINK | 1_2_OBS_X_TO_OBSERVABLE_SINK-x_through_instance.jz | compiler-bug | x-bit value passed through @new port binding to output does not trigger OBS_X_TO_OBSERVABLE_SINK. Compiler does not propagate x-taint across module boundaries through instance port bindings. |
 | COMB_LOOP_UNCONDITIONAL | 12_2_COMB_LOOP_UNCONDITIONAL-cross_module_loop.jz | compiler-bug | Combinational loop through @new port binding (signal feeds into instance input and returns via instance output) does not trigger COMB_LOOP_UNCONDITIONAL. Compiler does not trace combinational loops across module boundaries. |
 
 ### Parser Recovery Findings (for next audit to log)
