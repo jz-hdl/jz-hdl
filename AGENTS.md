@@ -6,6 +6,7 @@
 # Decision Making
 - Always fix compiler bugs, never work around them
 - Don't guess, ask when uncertain
+- Don't expand scope without asking
 - Present options instead of choosing
 - Explain what you're about to do before doing it
 - When told something is wrong, stop and review all changes made
@@ -18,7 +19,7 @@
 - Don't apologize, just fix it
 - Don't explain obvious things
 - Don't use platitudes
-- Greet each new context with "Hello, I've read CLAUDE.md and am ready to procede."
+- Greet each new context with "Hello, I've read AGENTS.md and am ready to procede."
   *Explain all the rules are must follow*
 
 # Tools: These are **HARD CONSTRAINTS**
@@ -37,7 +38,7 @@
 - Don't overwrite uncommitted work
 
 # Information
-- specification/chip-info-specification.md : Chip data file format (compiler/data/*.jzon)
+- specification/chip-info-specification.md : Chip data file format (compiler/data/*.json)
 - specification/jz-hdl-specification.md : The JZ-HDL specification
 - specification/jzw.md : The jzw file format specification
 - specification/simulation-specification.md : The JZ-HDL simulation specification
