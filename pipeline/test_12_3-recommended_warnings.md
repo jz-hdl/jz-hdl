@@ -82,9 +82,9 @@ Verify all recommended warnings are correctly detected and reported: unused regi
 | WARN_INTERNAL_TRISTATE | warning | Internal tri-state without --tristate-default flag | `12_3_WARN_INTERNAL_TRISTATE-internal_tristate.jz` |
 | WARN_UNUSED_WIRE | warning | WIRE declared but never driven or read | `12_3_WARN_UNUSED_WIRE-unused_wire.jz` |
 | WARN_UNUSED_PORT | warning | PORT declared but never used | `12_3_WARN_UNUSED_PORT-unused_port.jz` |
+| WARN_INCOMPLETE_SELECT_ASYNC | warning | S5.4/S8.3 Incomplete SELECT coverage without DEFAULT in ASYNCHRONOUS block | 12_3_WARN_INCOMPLETE_SELECT_ASYNC-incomplete_select.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| WARN_INCOMPLETE_SELECT_ASYNC | warning | Dead code: SELECT_DEFAULT_RECOMMENDED_ASYNC + ASYNC_UNDEFINED_PATH_NO_DRIVER fire instead |
+All rules for this section are tested.
+

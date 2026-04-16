@@ -64,6 +64,6 @@ Verify the allowed and forbidden operands in `@check` expressions. Allowed: inte
 | CHECK_INVALID_EXPR_TYPE | error | `9_4_CHECK_INVALID_EXPR_TYPE-forbidden_operands.jz` (ports, registers, wires, slices) |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 9.4 rules covered; memory port field references in @check are not explicitly tested but would require a mem declaration within module scope and @check referencing `mem.port.field`, which is covered implicitly by the general runtime-signal rejection |
+
+All rules for this section are tested.
+

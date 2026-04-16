@@ -65,6 +65,7 @@ Verify that the lexer and parser correctly accept valid identifiers, reject inva
 | 1_1_ID_SYNTAX_INVALID-length_exceeded.jz | ID_SYNTAX_INVALID | Identifier does not match identifier regex or exceeds 255 chars |
 | 1_1_KEYWORD_AS_IDENTIFIER-keyword_in_declarations.jz | KEYWORD_AS_IDENTIFIER | Reserved keyword used as identifier in declarations |
 | 1_1_KEYWORD_AS_IDENTIFIER-reserved_identifier.jz | KEYWORD_AS_IDENTIFIER | Reserved identifier (VCC, GND, PLL, etc.) used as identifier |
+| 1_1_KEYWORD_AS_IDENTIFIER-vcc_gnd.jz | KEYWORD_AS_IDENTIFIER | Reserved identifiers VCC and GND used as declaration names |
 
 ## 5. Rules Matrix
 
@@ -74,7 +75,7 @@ Verify that the lexer and parser correctly accept valid identifiers, reject inva
 |---------|----------|-------------|--------------|
 | ID_SYNTAX_INVALID | error | S1.1 Identifier does not match identifier regex or exceeds 255 chars | 1_1_ID_SYNTAX_INVALID-length_exceeded.jz, 1_1_ID_SYNTAX_INVALID-valid_identifiers_ok.jz |
 | ID_SINGLE_UNDERSCORE | error | S1.1 Single underscore `_` used as regular identifier outside no-connect context | 1_1_ID_SINGLE_UNDERSCORE-non_connect_contexts.jz |
-| KEYWORD_AS_IDENTIFIER | error | S1.1 Reserved keyword used as identifier | 1_1_KEYWORD_AS_IDENTIFIER-keyword_in_declarations.jz, 1_1_KEYWORD_AS_IDENTIFIER-reserved_identifier.jz |
+| KEYWORD_AS_IDENTIFIER | error | S1.1 Reserved keyword used as identifier | 1_1_KEYWORD_AS_IDENTIFIER-keyword_in_declarations.jz, 1_1_KEYWORD_AS_IDENTIFIER-reserved_identifier.jz, 1_1_KEYWORD_AS_IDENTIFIER-vcc_gnd.jz |
 | DIRECTIVE_INVALID_CONTEXT | error | S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location | 4_1_DIRECTIVE_INVALID_CONTEXT-nested_structural_directives.jz, 9_3_DIRECTIVE_INVALID_CONTEXT-check_in_async.jz, 9_3_DIRECTIVE_INVALID_CONTEXT-check_in_sync.jz |
 
 ### 5.2 Rules Not Tested

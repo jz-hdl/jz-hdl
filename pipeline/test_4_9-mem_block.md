@@ -54,6 +54,5 @@ Verify MEM block declaration within module. Full MEM coverage is in Section 7 te
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| -- | -- | Full MEM coverage is in Section 7 test plans (test_7_1 through test_7_8) |
+All rules for this section are tested.
+

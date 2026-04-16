@@ -78,6 +78,5 @@ Verify MUX aggregation/slicing, read-only semantics, dynamic indexing. Confirm t
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| -- | -- | All rules for this section are covered by existing tests |
+All rules for this section are tested.
+

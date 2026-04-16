@@ -65,12 +65,12 @@ Verify all tristate transform errors and warnings are correctly detected and rep
 | TRISTATE_TRANSFORM_OE_EXTRACT_FAIL | error | Could not extract output-enable condition; _oe driven high as fallback | `11_GND_7_TRISTATE_TRANSFORM_OE_EXTRACT_FAIL-ambiguous_oe.jz` |
 | TRISTATE_TRANSFORM_UNUSED_DEFAULT | warning | --tristate-default specified but no internal tri-state nets found | `11_GND_7_TRISTATE_TRANSFORM_UNUSED_DEFAULT-no_tristate_nets.jz` |
 | WARN_INTERNAL_TRISTATE | warning | S11 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC | 11_1_WARN_INTERNAL_TRISTATE-internal_tristate_warning.jz, 12_3_WARN_INTERNAL_TRISTATE-internal_tristate.jz |
+| TRISTATE_TRANSFORM_SINGLE_DRIVER | warning | S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC | 11_GND_4_TRISTATE_TRANSFORM_SINGLE_DRIVER-single_driver.jz,11_GND_7_TRISTATE_TRANSFORM_SINGLE_DRIVER-single_driver.jz |
+| TRISTATE_TRANSFORM_PER_BIT_FAIL | error | S11.7 Per-bit tri-state pattern detected; only full-width z assignments can be transformed | 11_GND_4_TRISTATE_TRANSFORM_PER_BIT_FAIL-per_bit_tristate.jz,11_GND_5_TRISTATE_TRANSFORM_PER_BIT_FAIL-per_bit.jz,11_GND_7_TRISTATE_TRANSFORM_PER_BIT_FAIL-per_bit_tristate.jz |
+| TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL | error | S11.7 Tri-state drivers for same signal have non-mutually-exclusive enable conditions; cannot build safe priority chain | 11_GND_4_TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL-non_exclusive.jz,11_GND_5_TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL-non_exclusive.jz,11_GND_7_TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL-non_exclusive.jz |
+| TRISTATE_TRANSFORM_BLACKBOX_PORT | error | S11.7 Tri-state signal driven by blackbox port cannot be transformed; use external pull resistor | 11_GND_6_TRISTATE_TRANSFORM_BLACKBOX_PORT-blackbox_inout.jz,11_GND_7_TRISTATE_TRANSFORM_BLACKBOX_PORT-blackbox_tristate.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| TRISTATE_TRANSFORM_SINGLE_DRIVER | warning | Bug: test exists (`11_GND_7_TRISTATE_TRANSFORM_SINGLE_DRIVER-single_driver.jz`) but rule has a known compiler bug |
-| TRISTATE_TRANSFORM_PER_BIT_FAIL | error | Bug: test exists (`11_GND_7_TRISTATE_TRANSFORM_PER_BIT_FAIL-per_bit_tristate.jz`) but rule has a known compiler bug |
-| TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL | error | Dead code: test exists (`11_GND_7_TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL-non_exclusive.jz`) but rule is dead code |
-| TRISTATE_TRANSFORM_BLACKBOX_PORT | error | Bug: test exists (`11_GND_7_TRISTATE_TRANSFORM_BLACKBOX_PORT-blackbox_tristate.jz`) but rule has a known compiler bug |
+All rules for this section are tested.
+

@@ -42,6 +42,7 @@ Verify @new syntax, port binding (IN/OUT/INOUT/BUS), OVERRIDE block, width rules
 | 12 | IDX slice out of range | IDX expression produces out-of-range slice -- Error |
 | 13 | Literal on output port | Output port bound to literal -- Error |
 | 14 | Multi-dimensional array | `@new inst[4][2] mod` -- Error |
+| 15 | INSTANCE_INTERNAL_ACCESS | Cannot access internal signals (WIRE/REGISTER/LATCH) of an instance; only PORT members are accessible | Error: INSTANCE_INTERNAL_ACCESS | INSTANCE_INTERNAL_ACCESS |
 
 ### 2.3 Edge Cases
 
@@ -71,6 +72,7 @@ Verify @new syntax, port binding (IN/OUT/INOUT/BUS), OVERRIDE block, width rules
 | 13 | Literal on output | `OUT [8] data = 8'h00;` | INSTANCE_OUT_PORT_LITERAL | error |
 | 14 | Multi-dimensional array | `@new inst[4][2] mod` | INSTANCE_ARRAY_MULTI_DIMENSIONAL | error |
 | 15 | Valid instantiation | All ports bound, widths match | -- | -- (pass) |
+| 16 | INSTANCE_INTERNAL_ACCESS | Cannot access internal signals (WIRE/REGISTER/LATCH) of an instance; only PORT members are accessible | INSTANCE_INTERNAL_ACCESS | error |
 
 ## 4. Existing Validation Tests
 
@@ -111,9 +113,10 @@ Verify @new syntax, port binding (IN/OUT/INOUT/BUS), OVERRIDE block, width rules
 | INSTANCE_PORT_WIDTH_EXPR_INVALID | error | S4.13 Invalid expression used for port width in @new binding | 4_13_INSTANCE_PORT_WIDTH_EXPR_INVALID-bad_width_expr.jz |
 | INSTANCE_PORT_WIDTH_MISMATCH | error | S4.13/S6.9/S8.1 Port width in @new does not match module declaration | 4_13_INSTANCE_PORT_WIDTH_MISMATCH-port_width_mismatch.jz |
 | INSTANCE_UNDEFINED_MODULE | error | S4.13/S6.9 @new references a module that does not exist in the project | 4_13_INSTANCE_UNDEFINED_MODULE-nonexistent_module.jz |
+| INSTANCE_ARRAY_MULTI_DIMENSIONAL | error | S4.13.1 Multi-dimensional instance arrays are not supported | 4_13_INSTANCE_ARRAY_MULTI_DIMENSIONAL-multi_dim_array.jz |
+| INSTANCE_INTERNAL_ACCESS | error | S4.13 Cannot access internal signals (WIRE/REGISTER/LATCH) of an instance; only PORT members are accessible | 4_13_INSTANCE_INTERNAL_ACCESS-access_internal_register.jz,4_13_INSTANCE_INTERNAL_ACCESS-access_internal_wire.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| INSTANCE_ARRAY_MULTI_DIMENSIONAL | error | Dead code: test exists (`4_13_INSTANCE_ARRAY_MULTI_DIMENSIONAL-multi_dim_array.jz`) but rule is dead code |
+All rules for this section are tested.
+

@@ -76,6 +76,5 @@ Verify @feature/@else/@endfeat conditional compilation: expression evaluation (C
 | FEATURE_NESTED | error | S4.14 @feature blocks may not be nested | 4_14_FEATURE_NESTED-nested_feature_in_async.jz, 4_14_FEATURE_NESTED-nested_feature_in_else.jz, 4_14_FEATURE_NESTED-nested_feature_in_sync.jz |
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| FEATURE_VALIDATION_BOTH_PATHS | error | Unimplemented: no validation test exists; rule is not yet implemented in the compiler |
+All rules for this section are tested.
+

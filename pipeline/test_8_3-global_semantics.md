@@ -55,6 +55,6 @@ Verify that `@global` blocks create namespace roots (`<global_name>.<const_id>`)
 | GLOBAL_USED_WHERE_FORBIDDEN | error | `8_3_GLOBAL_USED_WHERE_FORBIDDEN-forbidden_context.jz` |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 8.3 rules have validation tests |
+
+All rules for this section are tested.
+

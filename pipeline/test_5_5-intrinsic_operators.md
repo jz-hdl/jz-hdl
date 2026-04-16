@@ -166,16 +166,16 @@ Verify all 28 intrinsic operators: their result widths, operand constraints, com
 | SSLICE_VALUE_WIDTH_MISMATCH | error | S5.5.9 sslice() value width != width param | 5_5_SSLICE_VALUE_WIDTH_MISMATCH-value_width_mismatch.jz |
 | SSLICE_WIDTH_INVALID | error | S5.5.9 sslice() width parameter is zero | 5_5_SSLICE_WIDTH_INVALID-zero_width_param.jz |
 | WIDTHOF_INVALID_CONTEXT | error | S5.5.10 widthof() in runtime context | 5_5_WIDTHOF_INVALID_CONTEXT-runtime_expression.jz |
+| WIDTHOF_INVALID_TARGET | error | S5.5.10 widthof() argument does not resolve to a WIRE, REGISTER, PORT, or BUS | 5_5_WIDTHOF_INVALID_TARGET-non_signal_target.jz |
+| WIDTHOF_INVALID_SYNTAX | error | S5.5.10 widthof() argument must be a plain identifier, not a slice/concat/qualified expression | 5_5_WIDTHOF_INVALID_SYNTAX-slice_argument.jz |
+| WIDTHOF_WIDTH_NOT_RESOLVABLE | error | S5.5.10 widthof() target found but its width cannot be resolved | 5_5_WIDTHOF_WIDTH_NOT_RESOLVABLE-unresolvable_width.jz |
+| FUNC_RESULT_TRUNCATED_SILENTLY | error | S5.5/S5.2 Function result truncated by assignment without explicit slice or width check | 5_5_FUNC_RESULT_TRUNCATED_SILENTLY-intrinsic_truncation.jz |
+| GBIT_INDEX_OUT_OF_RANGE | error | S5.5.6 gbit() index is out of range for source width | 5_5_GBIT_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz |
+| SBIT_INDEX_OUT_OF_RANGE | error | S5.5.7 sbit() index is out of range for source width | 5_5_SBIT_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz |
+| GSLICE_INDEX_OUT_OF_RANGE | error | S5.5.8 gslice() index is out of range for source width | 5_5_GSLICE_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz |
+| SSLICE_INDEX_OUT_OF_RANGE | error | S5.5.9 sslice() index is out of range for source width | 5_5_SSLICE_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz |
 
 ### 5.2 Rules Not Tested (in this section)
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| WIDTHOF_INVALID_TARGET | error | Bug: test exists (`5_5_WIDTHOF_INVALID_TARGET-non_signal_target.jz`) but rule has a known compiler bug |
-| WIDTHOF_INVALID_SYNTAX | error | Bug: test exists (`5_5_WIDTHOF_INVALID_SYNTAX-slice_argument.jz`) but rule has a known compiler bug |
-| WIDTHOF_WIDTH_NOT_RESOLVABLE | error | Bug: test exists (`5_5_WIDTHOF_WIDTH_NOT_RESOLVABLE-unresolvable_width.jz`) but rule has a known compiler bug |
-| FUNC_RESULT_TRUNCATED_SILENTLY | error | Bug: test exists (`5_5_FUNC_RESULT_TRUNCATED_SILENTLY-intrinsic_truncation.jz`) but rule has a known compiler bug |
-| GBIT_INDEX_OUT_OF_RANGE | error | Bug: test exists (`5_5_GBIT_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz`) but rule has a known compiler bug |
-| SBIT_INDEX_OUT_OF_RANGE | error | Bug: test exists (`5_5_SBIT_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz`) but rule has a known compiler bug |
-| GSLICE_INDEX_OUT_OF_RANGE | error | Bug: test exists (`5_5_GSLICE_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz`) but rule has a known compiler bug |
-| SSLICE_INDEX_OUT_OF_RANGE | error | Bug: test exists (`5_5_SSLICE_INDEX_OUT_OF_RANGE-const_index_exceeds_width.jz`) but rule has a known compiler bug |
+All rules for this section are tested.
+

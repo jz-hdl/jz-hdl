@@ -47,6 +47,6 @@ Verify that `@global`/`@endglob` syntax is parsed correctly, that constants must
 | GLOBAL_INVALID_EXPR_TYPE | error | `8_2_GLOBAL_INVALID_EXPR_TYPE-unsized_value.jz` |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 8.2 rules covered |
+
+All rules for this section are tested.
+

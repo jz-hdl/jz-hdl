@@ -49,6 +49,7 @@ Verify combinational loop detection: unconditional cycles (e.g., `a=b; b=a;`), f
 | `12_2_COMB_LOOP_UNCONDITIONAL-two_signal_cycle.jz` | COMB_LOOP_UNCONDITIONAL | Direct two-signal combinational cycle |
 | `12_2_COMB_LOOP_UNCONDITIONAL-three_signal_cycle.jz` | COMB_LOOP_UNCONDITIONAL | Three-signal combinational cycle |
 | `12_2_COMB_LOOP_UNCONDITIONAL-conditional_same_path.jz` | COMB_LOOP_UNCONDITIONAL | Cycle through conditional on same execution path |
+| `12_2_COMB_LOOP_UNCONDITIONAL-cross_module_loop.jz` | COMB_LOOP_UNCONDITIONAL | Cycle across a module-instance boundary (IN/OUT port binding) |
 | `12_2_COMB_LOOP_UNCONDITIONAL-valid_no_loop_ok.jz` | COMB_LOOP_UNCONDITIONAL | Happy path: no combinational loop |
 | `12_2_COMB_LOOP_CONDITIONAL_SAFE-mutually_exclusive_cycle.jz` | COMB_LOOP_CONDITIONAL_SAFE | Cycle only in mutually exclusive branches |
 
@@ -58,11 +59,10 @@ Verify combinational loop detection: unconditional cycles (e.g., `a=b; b=a;`), f
 
 | Rule ID | Severity | Description | Test Case(s) |
 |---------|----------|-------------|--------------|
-| COMB_LOOP_UNCONDITIONAL | error | Combinational loop: signal feeds back through ASYNCHRONOUS assignments | `12_2_COMB_LOOP_UNCONDITIONAL-two_signal_cycle.jz`, `12_2_COMB_LOOP_UNCONDITIONAL-three_signal_cycle.jz`, `12_2_COMB_LOOP_UNCONDITIONAL-conditional_same_path.jz` |
+| COMB_LOOP_UNCONDITIONAL | error | Combinational loop: signal feeds back through ASYNCHRONOUS assignments | `12_2_COMB_LOOP_UNCONDITIONAL-two_signal_cycle.jz`, `12_2_COMB_LOOP_UNCONDITIONAL-three_signal_cycle.jz`, `12_2_COMB_LOOP_UNCONDITIONAL-conditional_same_path.jz`, `12_2_COMB_LOOP_UNCONDITIONAL-cross_module_loop.jz` |
 | COMB_LOOP_CONDITIONAL_SAFE | warning | Cycles only within mutually exclusive branches considered safe | `12_2_COMB_LOOP_CONDITIONAL_SAFE-mutually_exclusive_cycle.jz` |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| PATH_OUTSIDE_SANDBOX | error | S12.2 Resolved path falls outside all permitted sandbox roots. Not testable via `--lint` -- this rule is enforced at the file-system access layer during compilation and requires a sandbox environment configuration that cannot be exercised through standard validation test infrastructure. |
+All rules for this section are tested.
+

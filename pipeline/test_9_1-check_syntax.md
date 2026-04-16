@@ -51,6 +51,6 @@ Verify that `@check (<constant_expression>, <string_message>);` syntax is parsed
 | CHECK_INVALID_EXPR_TYPE | error | `9_1_CHECK_INVALID_EXPR_TYPE-runtime_signal_in_check.jz` |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 9.1 rules covered |
+
+All rules for this section are tested.
+

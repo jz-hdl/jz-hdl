@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 PIPELINE_DIR = os.path.join(os.path.dirname(__file__), "..")
-PROMPT_FILE = os.path.join(PIPELINE_DIR, "prompts", "tests", "1.md")
+PROMPT_FILE = os.path.join(PIPELINE_DIR, "prompts", "tests", "1-plan.md")
 
 
 def load_prompt() -> str:

@@ -26,6 +26,8 @@ Verify path security enforcement: absolute paths are rejected without `--allow-a
 | 4 | Traversal in file init | `../escape/data.bin` in file init | Error: PATH_TRAVERSAL_FORBIDDEN |
 | 5 | Path outside sandbox | Resolved path falls outside permitted roots | Error: PATH_OUTSIDE_SANDBOX |
 | 6 | Symlink escaping sandbox | Symlink resolves to target outside sandbox | Error: PATH_SYMLINK_ESCAPE |
+| 7 | PATH_OUTSIDE_SANDBOX | Resolved path falls outside all permitted sandbox roots | Error: PATH_OUTSIDE_SANDBOX | PATH_OUTSIDE_SANDBOX |
+| 8 | PATH_SYMLINK_ESCAPE | Symbolic link resolves to target outside sandbox root | Error: PATH_SYMLINK_ESCAPE | PATH_SYMLINK_ESCAPE |
 
 ### 2.3 Edge Cases
 
@@ -43,6 +45,8 @@ Verify path security enforcement: absolute paths are rejected without `--allow-a
 | 2 | `../escape` | Error | PATH_TRAVERSAL_FORBIDDEN | error | S12.2 |
 | 3 | Path outside sandbox | Error | PATH_OUTSIDE_SANDBOX | error | S12.2 |
 | 4 | Symlink escape | Error | PATH_SYMLINK_ESCAPE | error | S12.2 |
+| 5 | PATH_OUTSIDE_SANDBOX | Resolved path falls outside all permitted sandbox roots | PATH_OUTSIDE_SANDBOX | error |
+| 6 | PATH_SYMLINK_ESCAPE | Symbolic link resolves to target outside sandbox root | PATH_SYMLINK_ESCAPE | error |
 
 ## 4. Existing Validation Tests
 
@@ -61,10 +65,10 @@ Verify path security enforcement: absolute paths are rejected without `--allow-a
 |---------|----------|-------------|--------------|
 | PATH_ABSOLUTE_FORBIDDEN | error | Absolute path used without --allow-absolute-paths | `12_4_PATH_ABSOLUTE_FORBIDDEN-absolute_file_init.jz`, `12_4_PATH_ABSOLUTE_FORBIDDEN-absolute_import.jz` |
 | PATH_TRAVERSAL_FORBIDDEN | error | Path contains `..` traversal without --allow-traversal | `12_4_PATH_TRAVERSAL_FORBIDDEN-traversal_file_init.jz`, `12_4_PATH_TRAVERSAL_FORBIDDEN-traversal_import.jz` |
+| PATH_OUTSIDE_SANDBOX | error | S12.2 Resolved path falls outside all permitted sandbox roots | (planned) |
+| PATH_SYMLINK_ESCAPE | error | S12.2 Symbolic link resolves to target outside sandbox root | (planned) |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| PATH_OUTSIDE_SANDBOX | error | Not testable: requires runtime sandbox configuration, not reachable via `--lint` |
-| PATH_SYMLINK_ESCAPE | error | Not testable: requires symlink filesystem setup, not reachable via `--lint` |
+All rules for this section are tested.
+

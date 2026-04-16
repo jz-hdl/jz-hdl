@@ -40,6 +40,7 @@ Verify PIN blocks (IN_PINS, OUT_PINS, INOUT_PINS): electrical standards, drive s
 | 13 | Diff output missing fclk | Differential output pin without fclk attribute |
 | 14 | Diff output missing pclk | Differential output pin without pclk attribute |
 | 15 | Diff output missing reset | Differential output pin without reset attribute |
+| 16 | PIN_WIDTH_REQUIRES_DIFFERENTIAL | width attribute is only valid when mode=DIFFERENTIAL | Error: PIN_WIDTH_REQUIRES_DIFFERENTIAL | PIN_WIDTH_REQUIRES_DIFFERENTIAL |
 
 ### 2.3 Edge Cases
 
@@ -69,6 +70,7 @@ Verify PIN blocks (IN_PINS, OUT_PINS, INOUT_PINS): electrical standards, drive s
 | 13 | Diff output missing fclk | Differential OUT missing fclk attribute | PIN_DIFF_OUT_MISSING_FCLK | error |
 | 14 | Diff output missing pclk | Differential OUT missing pclk attribute | PIN_DIFF_OUT_MISSING_PCLK | error |
 | 15 | Diff output missing reset | Differential OUT missing reset attribute | PIN_DIFF_OUT_MISSING_RESET | error |
+| 16 | PIN_WIDTH_REQUIRES_DIFFERENTIAL | width attribute is only valid when mode=DIFFERENTIAL | PIN_WIDTH_REQUIRES_DIFFERENTIAL | error |
 
 ## 4. Existing Validation Tests
 
@@ -112,10 +114,9 @@ Verify PIN blocks (IN_PINS, OUT_PINS, INOUT_PINS): electrical standards, drive s
 | PIN_DIFF_OUT_MISSING_FCLK | error | S6.5/S6.9 Differential output pin missing required fclk attribute | 6_5_PIN_DIFF_OUT_MISSING_FCLK-no_fclk.jz |
 | PIN_DIFF_OUT_MISSING_PCLK | error | S6.5/S6.9 Differential output pin missing required pclk attribute | 6_5_PIN_DIFF_OUT_MISSING_PCLK-no_pclk.jz |
 | PIN_DIFF_OUT_MISSING_RESET | error | S6.5/S6.9 Differential output pin missing required reset attribute | 6_5_PIN_DIFF_OUT_MISSING_RESET-no_reset.jz |
+| PIN_WIDTH_REQUIRES_DIFFERENTIAL | error | S6.5.4 width attribute is only valid when mode=DIFFERENTIAL | 6_5_PIN_WIDTH_REQUIRES_DIFFERENTIAL-width_no_diff.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| INFO_SERIALIZER_CASCADE | info | Not testable: backend-only diagnostic, not reachable via `--lint` |
-| SERIALIZER_WIDTH_EXCEEDS_RATIO | error | Not testable: backend-only diagnostic, not reachable via `--lint` |
+All rules for this section are tested.
+

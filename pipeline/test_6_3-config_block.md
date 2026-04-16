@@ -89,9 +89,9 @@ Verify CONFIG block: numeric and string entries, project-wide visibility via `CO
 | CONST_USED_WHERE_FORBIDDEN | error | S4.3/S6.3 CONST identifier used outside compile-time constant expression contexts (runtime expression) | 6_3_CONST_USED_WHERE_FORBIDDEN-const_runtime_use.jz |
 | CONST_STRING_IN_NUMERIC_CONTEXT | error | S4.3/S6.3 String CONST/CONFIG value used where a numeric expression is expected | 6_3_CONST_STRING_IN_NUMERIC_CONTEXT-string_as_number.jz |
 | CONST_NUMERIC_IN_STRING_CONTEXT | error | S4.3/S6.3 Numeric CONST/CONFIG value used where a string is expected (e.g. @file path) | 6_3_CONST_NUMERIC_IN_STRING_CONTEXT-numeric_as_string.jz |
+| CONFIG_MULTIPLE_BLOCKS | error | S6.3 More than one CONFIG block defined in project | 6_3_CONFIG_MULTIPLE_BLOCKS-multiple_config.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| CONFIG_MULTIPLE_BLOCKS | error | Dead code: test exists (`6_3_CONFIG_MULTIPLE_BLOCKS-multiple_config.jz`) but rule is dead code |
+All rules for this section are tested.
+

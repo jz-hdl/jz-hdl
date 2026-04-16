@@ -52,6 +52,6 @@ Verify `@check` evaluation semantics: true (nonzero integer) conditions pass sil
 | CHECK_FAILED | error | `9_2_CHECK_FAILED-false_assertion.jz` |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 9.2 rules covered |
+
+All rules for this section are tested.
+

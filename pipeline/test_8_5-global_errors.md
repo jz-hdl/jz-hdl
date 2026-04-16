@@ -56,6 +56,6 @@ Verify all error conditions enumerated in S8.5: forward references within a `@gl
 | GLOBAL_ASSIGN_FORBIDDEN | error | (covered by `8_1_GLOBAL_ASSIGN_FORBIDDEN-assign_to_global.jz` in test_8_1) |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 8.5 error conditions have validation tests |
+
+All rules for this section are tested.
+

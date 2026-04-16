@@ -84,9 +84,9 @@ Verify SYNC assignment forms (receive `<=`, with modifiers `<=z`/`<=s`, sliced, 
 | SYNC_NO_ALIAS | error | S5.2 Aliasing `=` forbidden in SYNCHRONOUS blocks | 5_2_SYNC_NO_ALIAS-alias_in_sync_block.jz |
 | SYNC_ROOT_AND_CONDITIONAL_ASSIGN | error | S5.2/S1.5/S8.1 Root-level + nested conditional assign | 5_2_SYNC_ROOT_AND_CONDITIONAL_ASSIGN-root_plus_conditional.jz |
 | WRITE_WIRE_IN_SYNC | error | S4.5/S5.2 Wire assigned with `<=` in SYNCHRONOUS block | 5_2_WRITE_WIRE_IN_SYNC-wire_in_sync.jz |
+| SYNC_SLICE_WIDTH_MISMATCH | error | S5.2 Register slice assignment expression width not equal to slice width | 5_2_SYNC_SLICE_WIDTH_MISMATCH-slice_width_mismatch.jz |
 
 ### 5.2 Rules Not Tested (in this section)
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| SYNC_SLICE_WIDTH_MISMATCH | error | Suppressed by ASSIGN_SLICE_WIDTH_MISMATCH: test exists (`5_2_SYNC_SLICE_WIDTH_MISMATCH-slice_width_mismatch.jz`) but rule is suppressed |
+All rules for this section are tested.
+

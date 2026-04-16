@@ -31,6 +31,7 @@ Verify @top directive: module/blackbox reference resolution, port-to-pin binding
 | 6 | Direction mismatch | Module IN port bound to OUT_PINS |
 | 7 | Literal on OUT port | OUT port bound to literal value |
 | 8 | No-connect without width | Port bound to `_` but missing explicit width |
+| 9 | TOP_PORT_SIGNAL_WIDTH_MISMATCH | Binding width does not match connected pin/signal width | Error: TOP_PORT_SIGNAL_WIDTH_MISMATCH | TOP_PORT_SIGNAL_WIDTH_MISMATCH |
 
 ### 2.3 Edge Cases
 
@@ -54,6 +55,7 @@ Verify @top directive: module/blackbox reference resolution, port-to-pin binding
 | 6 | Direction mismatch | `IN [1] clk = out_pin` where out_pin is OUT_PINS | TOP_PORT_PIN_DIRECTION_MISMATCH | error |
 | 7 | Literal on OUT port | `OUT [8] data = 8'hFF;` | TOP_OUT_LITERAL_BINDING | error |
 | 8 | No-connect without width | `OUT data = _;` missing width bracket | TOP_NO_CONNECT_WITHOUT_WIDTH | error |
+| 9 | TOP_PORT_SIGNAL_WIDTH_MISMATCH | Binding width does not match connected pin/signal width | TOP_PORT_SIGNAL_WIDTH_MISMATCH | error |
 
 ## 4. Existing Validation Tests
 
@@ -83,7 +85,9 @@ Verify @top directive: module/blackbox reference resolution, port-to-pin binding
 | TOP_PORT_PIN_DIRECTION_MISMATCH | error | S6.9/S6.10 Module IN/OUT/INOUT direction incompatible with pin category | 6_9_TOP_PORT_PIN_DIRECTION_MISMATCH-wrong_direction.jz |
 | TOP_OUT_LITERAL_BINDING | error | S6.9 OUT ports may not be bound to literal values in project-level @top | 6_9_TOP_OUT_LITERAL_BINDING-literal_on_out.jz |
 | TOP_NO_CONNECT_WITHOUT_WIDTH | error | S6.9 Port bound to `_` but missing explicit width in top-level @top list | 6_9_TOP_NO_CONNECT_WITHOUT_WIDTH-missing_width.jz |
+| TOP_PORT_SIGNAL_WIDTH_MISMATCH | error | S6.9/S6.10 Binding width does not match connected pin/signal width | TOP_PORT_SIGNAL_WIDTH_MISMATCH.jz |
 
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
+

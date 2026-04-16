@@ -51,6 +51,7 @@ Verify CLOCKS block (period, edge properties), clock source validation (must be 
 | 24 | CLOCK_GEN required input missing | Required input parameter not provided |
 | 25 | Clock port width not 1 | Clock pin width is not [1] |
 | 26 | Clock name not in pins | Clock name in CLOCKS has no matching IN_PINS or CLOCK_GEN output |
+| 27 | CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT | PLL reference clock pin cannot also be used as a logic signal in @top on pad_exclusive chips | Error: CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT | CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT |
 
 ### 2.3 Edge Cases
 
@@ -93,6 +94,7 @@ Verify CLOCKS block (period, edge properties), clock source validation (must be 
 | 25 | Clock pin width not 1 | `clk[4] = { standard=LVCMOS33 }` used as clock | CLOCK_PORT_WIDTH_NOT_1 | error |
 | 26 | Clock name not in pins | CLOCKS name with no IN_PINS match and no GEN | CLOCK_NAME_NOT_IN_PINS | error |
 | 27 | No chip data | CLOCK_GEN with CHIP=GENERIC (no chip data) | CLOCK_GEN_NO_CHIP_DATA | info |
+| 28 | CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT | PLL reference clock pin cannot also be used as a logic signal in @top on pad_exclusive chips | CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT | error |
 
 ## 4. Existing Validation Tests
 
@@ -159,9 +161,10 @@ Verify CLOCKS block (period, edge properties), clock source validation (must be 
 | CLOCK_GEN_REQUIRED_INPUT_MISSING | error | S6.4.1 Required input parameter not provided | 6_4_CLOCK_GEN_REQUIRED_INPUT_MISSING-missing_required.jz |
 | CLOCK_GEN_WIRE_IN_CLOCKS | error | S6.4.1 CLOCK_GEN WIRE output declared in CLOCKS block | 6_4_CLOCK_GEN_WIRE_IN_CLOCKS-wire_in_clocks.jz |
 | CLOCK_GEN_WIRE_IS_CLOCK | error | S6.4.1 WIRE used for clock output; should use OUT | 6_4_CLOCK_GEN_WIRE_IS_CLOCK-wire_for_clock.jz |
+| CLOCK_GEN_INVALID_TYPE | error | S6.4.1 CLOCK_GEN generator must be PLL, DLL, CLKDIV, OSC, or BUF (with optional numeric suffix) | 6_4_CLOCK_GEN_INVALID_TYPE-bad_type.jz |
+| CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT | error | S6.4.1 PLL reference clock pin cannot also be used as a logic signal in @top on pad_exclusive chips | 6_4_CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT-ref_clk_as_logic.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| CLOCK_GEN_INVALID_TYPE | error | Dead code: test exists (`6_4_CLOCK_GEN_INVALID_TYPE-bad_type.jz`) but rule is dead code |
+All rules for this section are tested.
+

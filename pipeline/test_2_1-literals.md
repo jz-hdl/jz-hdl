@@ -99,6 +99,5 @@ Verify sized literal syntax (`<width>'<base><value>`), base-specific digit rules
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| -- | -- | All rules from this section have validation tests |
+All rules for this section are tested.
+

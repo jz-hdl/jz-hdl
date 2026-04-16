@@ -145,14 +145,14 @@ Verify MEM access syntax for async reads (S7.3.1), sync reads (S7.3.2), sync wri
 | MEM_INOUT_INDEXED | error | S7.2.3 Bracket indexing on INOUT port | 7_2_MEM_INOUT_INDEXED-inout_bracket_access.jz |
 | MEM_INOUT_WDATA_IN_ASYNC | error | S7.2.3 INOUT wdata in ASYNC block | 7_2_MEM_INOUT_WDATA_IN_ASYNC-wdata_in_async.jz |
 | MEM_INOUT_ADDR_IN_ASYNC | error | S7.2.3 INOUT addr in ASYNC block | 7_2_MEM_INOUT_ADDR_IN_ASYNC-addr_in_async.jz |
+| MEM_SYNC_ADDR_IN_ASYNC_BLOCK | error | S7.2.1/S7.3.2/S7.7.2 SYNC read addresses must be assigned in SYNCHRONOUS blocks | 7_3_MEM_SYNC_ADDR_IN_ASYNC_BLOCK-sync_addr_in_async.jz |
+| MEM_SYNC_ADDR_WITHOUT_RECEIVE | error | S7.2.1/S7.3.2 MEM read address must use `<=` in SYNCHRONOUS block; did you mean `<=` instead of `=`? | 7_3_MEM_SYNC_ADDR_WITHOUT_RECEIVE-sync_addr_equals.jz |
+| MEM_READ_SYNC_WITH_EQUALS | error | S7.2.1/S7.3.2 Synchronous MEM read used `=` in SYNCHRONOUS block; did you mean `<=`? | 7_3_MEM_READ_SYNC_WITH_EQUALS-sync_read_equals.jz |
+| MEM_INOUT_WDATA_WRONG_OP | error | S7.2.3 INOUT port .wdata must be assigned with '<=' operator in SYNCHRONOUS blocks | 7_3_MEM_INOUT_WDATA_WRONG_OP-inout_wdata_equals.jz |
+| MEM_MULTIPLE_ADDR_ASSIGNS | error | S7.2.3 Multiple assignments to INOUT .addr within same execution path | 7_3_MEM_MULTIPLE_ADDR_ASSIGNS-dup_addr.jz,7_3_MEM_MULTIPLE_ADDR_ASSIGNS-inout_multi_addr.jz |
+| MEM_MULTIPLE_WDATA_ASSIGNS | error | S7.2.3 Multiple assignments to INOUT .wdata within same execution path | 7_3_MEM_MULTIPLE_WDATA_ASSIGNS-inout_multi_wdata.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| MEM_SYNC_ADDR_IN_ASYNC_BLOCK | error | Suppressed: test exists (`7_3_MEM_SYNC_ADDR_IN_ASYNC_BLOCK-sync_addr_in_async.jz`) but rule is suppressed |
-| MEM_SYNC_ADDR_WITHOUT_RECEIVE | error | Suppressed: test exists (`7_3_MEM_SYNC_ADDR_WITHOUT_RECEIVE-sync_addr_equals.jz`) but rule is suppressed |
-| MEM_READ_SYNC_WITH_EQUALS | error | Suppressed: test exists (`7_3_MEM_READ_SYNC_WITH_EQUALS-sync_read_equals.jz`) but rule is suppressed |
-| MEM_INOUT_WDATA_WRONG_OP | error | Suppressed: test exists (`7_3_MEM_INOUT_WDATA_WRONG_OP-inout_wdata_equals.jz`) but rule is suppressed |
-| MEM_MULTIPLE_ADDR_ASSIGNS | error | Unimplemented: test exists (`7_3_MEM_MULTIPLE_ADDR_ASSIGNS-inout_multi_addr.jz`) but rule is not yet implemented |
-| MEM_MULTIPLE_WDATA_ASSIGNS | error | Unimplemented: test exists (`7_3_MEM_MULTIPLE_WDATA_ASSIGNS-inout_multi_wdata.jz`) but rule is not yet implemented |
+All rules for this section are tested.
+

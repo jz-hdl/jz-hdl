@@ -84,10 +84,10 @@ Verify REGISTER declarations, mandatory reset, x/z prohibition, SYNC-only writes
 | WARN_UNDRIVEN_REGISTER | warning | S8.3 Register is read but never written in any SYNCHRONOUS block | 4_7_WARN_UNDRIVEN_REGISTER-read_never_written.jz |
 | WARN_UNSINKED_REGISTER | warning | S8.3 Register is written but its value is never read | 4_7_WARN_UNSINKED_REGISTER-written_never_read.jz |
 | WARN_UNUSED_REGISTER | warning | S8.3 Register is never read or written | 4_7_WARN_UNUSED_REGISTER-unused_register.jz |
+| REG_MULTI_DIMENSIONAL | error | S4.7 REGISTER declared with multi-dimensional syntax | 4_7_REG_MULTI_DIMENSIONAL-multi_dim_register.jz |
+| REG_MISSING_INIT_LITERAL | error | S4.7 Register declared without mandatory reset/power-on literal | 4_7_REG_MISSING_INIT_LITERAL-missing_init.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| REG_MULTI_DIMENSIONAL | error | Dead code: test exists (`4_7_REG_MULTI_DIMENSIONAL-multi_dim_register.jz`) but rule is dead code |
-| REG_MISSING_INIT_LITERAL | error | Dead code: test exists (`4_7_REG_MISSING_INIT_LITERAL-missing_init.jz`) but rule is dead code |
+All rules for this section are tested.
+

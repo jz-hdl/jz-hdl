@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run prompt 3.md against each test_*.md file using Claude Code CLI."""
+"""Run prompt against each test_*.md file using Claude Code CLI."""
 
 import argparse
 import glob
@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 PIPELINE_DIR = os.path.join(os.path.dirname(__file__), "..")
-PROMPT_FILE = os.path.join(PIPELINE_DIR, "prompts", "tests", "2.md")
+PROMPT_FILE = os.path.join(PIPELINE_DIR, "prompts", "tests", "2-create.md")
 
 # Sentinels that indicate "Rules Not Tested" has no real entries
 _NO_WORK_PATTERNS = re.compile(
@@ -71,7 +71,7 @@ def has_untested_rules(test_path: str) -> bool:
 
 
 def load_prompt(test_filename: str) -> str:
-    """Load prompt 3.md and replace the first-line target with the given test file."""
+    """Load prompt and replace the first-line target with the given test file."""
     with open(PROMPT_FILE, "r") as f:
         prompt = f.read()
 
@@ -124,7 +124,7 @@ def run_claude(prompt: str, dry_run: bool = False) -> int:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate validation tests by running prompt 3.md for each test plan."
+        description="Generate validation tests by running prompt for each test plan."
     )
     parser.add_argument(
         "--filter",

@@ -51,6 +51,6 @@ Verify that `@global` blocks define named collections of sized literal constants
 | GLOBAL_ASSIGN_FORBIDDEN | error | `8_1_GLOBAL_ASSIGN_FORBIDDEN-assign_to_global.jz` |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 8.1 rules covered |
+
+All rules for this section are tested.
+

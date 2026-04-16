@@ -104,10 +104,10 @@ Cross-references to all template validation tests:
 | TEMPLATE_COUNT_NOT_NONNEG_INT | @apply count not non-negative integer | S10.5 |
 | ASSIGN_MULTIPLE_SAME_BITS | Exclusive assignment violation via expansion | S10.6 |
 | SYNC_MULTI_ASSIGN_SAME_REG_BITS | Sync exclusive assignment violation via expansion | S10.6 |
+| TEMPLATE_SCRATCH_WIDTH_INVALID | error | S10.3 @scratch width must be a positive integer constant expression | 10_3_TEMPLATE_SCRATCH_WIDTH_INVALID-scratch_width_not_constant.jz,10_8_TEMPLATE_SCRATCH_WIDTH_INVALID-invalid_width_error.jz |
+| TEMPLATE_APPLY_OUTSIDE_BLOCK | error | S10.5 @apply may only appear inside ASYNCHRONOUS or SYNCHRONOUS blocks | 10_5_TEMPLATE_APPLY_OUTSIDE_BLOCK-apply_at_file_scope.jz,10_5_TEMPLATE_APPLY_OUTSIDE_BLOCK-apply_at_module_scope.jz,10_8_TEMPLATE_APPLY_OUTSIDE_BLOCK-apply_outside_error.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| TEMPLATE_SCRATCH_WIDTH_INVALID | error | Bug: test exists but rule has a known compiler bug |
-| TEMPLATE_APPLY_OUTSIDE_BLOCK | error | Bug: test exists but rule has a known compiler bug |
+All rules for this section are tested.
+

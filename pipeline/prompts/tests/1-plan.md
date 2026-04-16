@@ -8,7 +8,6 @@ There are two key documents:
 2. **The Rule ID Registry** (`compiler/src/rules.c`): Contains every concrete diagnostic rule ID the compiler implements (e.g., `CLOCK_GEN_MISSING_INPUT`, `BUS_SIGNAL_UNDEFINED`). This is the completeness checklist.
 
 ## CRITICAL CONSTRAINTS — files you must NEVER read, search, or reference:
-- `compiler/tests/validation_old/` or any directory containing "old"
 - `compiler/tests/not_tested.md`
 - `compiler/tests/summary.md`
 - `compiler/tests/summary-old.md`
@@ -22,8 +21,8 @@ Create/update a comprehensive **Test Plan** for every individual subsection iden
 - `specification/jz-hdl-specification.md` (primary — drives test plan structure and scenarios)
 - `compiler/src/rules.c` (completeness checklist — every rule ID must be accounted for)
 - `compiler/tests/validation/` (existing test baseline — do not duplicate)
-- `compiler/tests/issues.md` (known compiler bugs, unimplemented rules, dead code, and suppressed rules — used to determine which rules cannot be tested)
 - `pipeline/test_*.md` (existing test plans — update in place)
+- `compiler/tests/issues.md` (known compiler bugs, unimplemented rules, dead code, and suppressed rules — used to determine which rules need to be re-tested)
 
 ### Step 1: Review existing state.
 - Review existing test plans in `pipeline/test_*.md`. Update them in place — do not delete and recreate. If a plan already covers a spec subsection, add missing rules and scenarios to it rather than starting from scratch. Only create new plan files for spec subsections that have no existing plan.
@@ -59,9 +58,7 @@ Write a file `pipeline/rule_coverage.md` containing a markdown table with one ro
 Count the rows in `pipeline/rule_coverage.md`. This count MUST equal the count from Step 2. If it does not, you have missed rules — go back and find them. **This count MUST equal the count from Step 2 before moving forward**
 
 ### Step 5: Update/create test plans (guided by the coverage map).
-For any rule ID with bare Status "Not Tested" (no reason suffix) in `pipeline/rule_coverage.md`, add a test scenario to the named test plan file now. For any rule ID you cannot map to a spec subsection, add it to the closest related test plan — do not skip it.
-
-Rules with a qualified status ("Not Tested: Bug", "Not Tested: Unimplemented", "Not Tested: Dead code", "Not Tested: Suppressed", or "Not Testable") should NOT have test scenarios added — instead, add them to the test plan's "Rules Not Tested" (5.2) section with the reason from `issues.md`.
+For any rule ID with a "Not Tested" status (with or without reason suffix) in `pipeline/rule_coverage.md`, add a test scenario to the named test plan file now. For any rule ID you cannot map to a spec subsection, add it to the closest related test plan — do not skip it.
 
 ### Step 6: Reconcile "Rules Not Tested" sections against existing validation tests.
 After updating test plans, each plan's "Rules Not Tested" section (5.2) may contain stale entries — rules listed as untested that actually have validation tests (either in this section or cross-referenced from other sections). Fix this:

@@ -80,9 +80,9 @@ Verify literal and file-based MEM initialization, including inline sized literal
 | MEM_INIT_CONTAINS_X | error | S2.1/S7.5.1 x value in literal initialization | 7_5_MEM_INIT_CONTAINS_X-x_in_literal_init.jz |
 | MEM_INIT_FILE_TOO_LARGE | error | S7.5.2/S7.7.1 File has more entries than MEM depth | 7_5_MEM_INIT_FILE_TOO_LARGE-file_exceeds_depth.jz |
 | MEM_WARN_PARTIAL_INIT | warning | S7.5.2/S7.7.3 File smaller than depth, zero-padded | 7_5_MEM_WARN_PARTIAL_INIT-file_smaller_than_depth.jz |
+| MEM_INIT_FILE_CONTAINS_X | error | S7.5.2 Memory initialization file contains x or z values | 7_5_MEM_INIT_FILE_CONTAINS_X-xz_in_file.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| MEM_INIT_FILE_CONTAINS_X | error | Unimplemented: no validation test exists; rule is not yet implemented in the compiler |
+All rules for this section are tested.
+

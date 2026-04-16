@@ -59,6 +59,5 @@ Verify @project with CHIP property, chip ID resolution (case-insensitive, JSON f
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| -- | -- | All rules for this section are covered by existing tests |
+All rules for this section are tested.
+

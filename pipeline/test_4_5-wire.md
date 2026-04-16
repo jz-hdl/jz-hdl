@@ -57,9 +57,9 @@ Verify WIRE declarations, single-dimensional constraint, ASYNC-only assignment. 
 | Rule ID | Severity | Description | Test Case(s) |
 |---------|----------|-------------|--------------|
 | WRITE_WIRE_IN_SYNC | error | S4.5/S5.2 Cannot assign to WIRE in SYNCHRONOUS block; use a REGISTER, or move to ASYNCHRONOUS | 4_5_WRITE_WIRE_IN_SYNC-wire_in_sync_block.jz |
+| WIRE_MULTI_DIMENSIONAL | error | S4.5 WIRE declared with multi-dimensional syntax | 4_5_WIRE_MULTI_DIMENSIONAL-multi_dim_helper.jz,4_5_WIRE_MULTI_DIMENSIONAL-multi_dim_top.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| WIRE_MULTI_DIMENSIONAL | error | Dead code: test exists (`4_5_WIRE_MULTI_DIMENSIONAL-multi_dim_helper.jz`) but rule is dead code |
+All rules for this section are tested.
+

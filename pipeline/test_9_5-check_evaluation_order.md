@@ -51,6 +51,6 @@ Verify that `@check` evaluates after resolution of all preceding CONST definitio
 | CHECK_INVALID_EXPR_TYPE | error | `9_5_CHECK_INVALID_EXPR_TYPE-undefined_const_in_check.jz` |
 
 ### 5.2 Rules Not Tested
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| -- | -- | All section 9.5 rules covered. Note: OVERRIDE-affected @check evaluation is implicitly covered by the resolution order but no dedicated test exercises @check seeing a post-OVERRIDE CONST value. This could be added as an enhancement. |
+
+All rules for this section are tested.
+

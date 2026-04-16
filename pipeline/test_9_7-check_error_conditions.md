@@ -58,9 +58,9 @@ Cross-reference and consolidate all `@check` error conditions from sections 9.1-
 | CHECK_FAILED | error | `9_2_CHECK_FAILED-false_assertion.jz` |
 | CHECK_INVALID_EXPR_TYPE | error | `9_1_CHECK_INVALID_EXPR_TYPE-runtime_signal_in_check.jz`, `9_4_CHECK_INVALID_EXPR_TYPE-forbidden_operands.jz`, `9_5_CHECK_INVALID_EXPR_TYPE-undefined_const_in_check.jz` |
 | DIRECTIVE_INVALID_CONTEXT | error | `9_3_DIRECTIVE_INVALID_CONTEXT-check_in_async.jz`, `9_3_DIRECTIVE_INVALID_CONTEXT-check_in_sync.jz` |
+| CHECK_INVALID_PLACEMENT | error | S9.3 @check may not appear inside conditional or @feature bodies | 9_3_CHECK_INVALID_PLACEMENT-check_in_feature.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Gap Description |
-|---------|----------|-----------------|
-| CHECK_INVALID_PLACEMENT | error | Covered in test_9_3-check_placement_rules.md (cross-reference: @check inside conditional or @feature bodies). Test scenario added there. |
+All rules for this section are tested.
+

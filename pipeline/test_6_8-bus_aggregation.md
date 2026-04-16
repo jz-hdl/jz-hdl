@@ -29,6 +29,7 @@ Note: BUS port-level rules (BUS_PORT_UNKNOWN_BUS, BUS_PORT_NOT_BUS, BUS_PORT_ARR
 | 3 | Invalid signal direction | Signal direction not IN/OUT/INOUT |
 | 4 | Bulk assign mismatched BUS IDs | Bulk assignment between ports referencing different BUS types |
 | 5 | Bulk assign same role | SOURCE-to-SOURCE or TARGET-to-TARGET bulk assignment |
+| 6 | BUS_DEF_INVALID_DIR | BUS signal direction must be IN, OUT, or INOUT | Error: BUS_DEF_INVALID_DIR | BUS_DEF_INVALID_DIR |
 
 ### 2.3 Edge Cases
 
@@ -46,6 +47,7 @@ Note: BUS port-level rules (BUS_PORT_UNKNOWN_BUS, BUS_PORT_NOT_BUS, BUS_PORT_ARR
 | 3 | Invalid signal direction | Non-IN/OUT/INOUT direction in BUS definition | BUS_DEF_INVALID_DIR | error |
 | 4 | Bulk assign different BUS IDs | Bulk assign port with BUS_A to port with BUS_B | BUS_BULK_BUS_MISMATCH | error |
 | 5 | Bulk assign same role | SOURCE-to-SOURCE bulk assignment | BUS_BULK_ROLE_CONFLICT | error |
+| 6 | BUS_DEF_INVALID_DIR | BUS signal direction must be IN, OUT, or INOUT | BUS_DEF_INVALID_DIR | error |
 
 ## 4. Existing Validation Tests
 
@@ -68,11 +70,10 @@ Note: BUS port-level rules (BUS_PORT_UNKNOWN_BUS, BUS_PORT_NOT_BUS, BUS_PORT_ARR
 | BUS_DEF_SIGNAL_DUP_NAME | error | S6.8 Duplicate signal name inside BUS definition | 6_8_BUS_DEF_SIGNAL_DUP_NAME-duplicate_signal_in_bus.jz |
 | BUS_BULK_BUS_MISMATCH | error | S6.8 Bulk BUS assignment requires both sides to reference the same BUS id | 6_8_BUS_BULK_BUS_MISMATCH-bus_mismatch.jz |
 | BUS_BULK_ROLE_CONFLICT | error | S6.8 Bulk BUS assignment between instances with the same BUS role is not allowed | 6_8_BUS_BULK_ROLE_CONFLICT-role_conflict.jz |
+| BUS_DEF_INVALID_DIR | error | S6.8 BUS signal direction must be IN, OUT, or INOUT | (planned) |
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| BUS_DEF_INVALID_DIR | error | Dead code: test exists (`6_8_BUS_DEF_INVALID_DIR-invalid_direction.jz`) but rule is dead code |
+All rules for this section are tested.
 
 ### 5.3 Rules in BUS_RULES Group Tested Elsewhere (S4.4.1)
 

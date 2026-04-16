@@ -55,4 +55,5 @@ Verify all SIMULATION diagnostic rules are correctly defined and documented. SIM
 
 | Rule ID | Severity | Reason |
 |---------|----------|--------|
-| SIM_RUN_COND_TIMEOUT | error | Fires at simulation runtime, not reachable via --lint or --test |
+| SIM_RUN_COND_TIMEOUT | error | Not Testable: fires at simulation runtime, not at lint |
+

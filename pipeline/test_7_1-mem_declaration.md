@@ -113,8 +113,8 @@ Verify MEM declarations including word width, depth, port lists, storage types (
 | MEM_TYPE_BLOCK_WITH_ASYNC_OUT | error | S7.1 BLOCK type MEM declared with ASYNC OUT port | 7_1_MEM_TYPE_BLOCK_WITH_ASYNC_OUT-block_async_out.jz |
 | MEM_TYPE_INVALID | error | S7.1 Invalid storage type keyword | 7_1_MEM_TYPE_INVALID-bad_type_keyword.jz |
 | MEM_UNDEFINED_CONST_IN_WIDTH | error | S7.1/S7.7.1 Undefined CONST used in MEM width/depth | 7_1_MEM_UNDEFINED_CONST_IN_WIDTH-undefined_const.jz |
+| MEM_UNDEFINED_NAME | error | S7.7.1 Access to MEM name not declared in module | 7_1_MEM_UNDEFINED_NAME-undefined_mem_name.jz |
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| MEM_UNDEFINED_NAME | error | Suppressed by UNDECLARED_IDENTIFIER: test exists (`7_1_MEM_UNDEFINED_NAME-undefined_mem_name.jz`) but rule is suppressed |
+All rules for this section are tested.
+

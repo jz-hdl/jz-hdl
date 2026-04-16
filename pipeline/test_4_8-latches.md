@@ -92,11 +92,11 @@ Verify LATCH declaration (D-type and SR-type), guarded assignment syntax (enable
 | LATCH_CHIP_UNSUPPORTED | error | S4.8 Target chip does not support latches | 4_8_LATCH_CHIP_UNSUPPORTED-chip_no_latch.jz |
 | LATCH_ENABLE_WIDTH_NOT_1 | error | S4.8 Latch enable signal must be width 1 | 4_8_LATCH_ENABLE_WIDTH_NOT_1-enable_not_1bit.jz |
 | LATCH_INVALID_TYPE | error | S4.8 Invalid latch type keyword (must be D or SR) | 4_8_LATCH_INVALID_TYPE-invalid_latch_type.jz |
+| LATCH_WIDTH_INVALID | error | S4.8 LATCH width must be a positive integer | 4_8_LATCH_WIDTH_INVALID-invalid_latch_width.jz |
+| LATCH_SR_WIDTH_MISMATCH | error | S4.8 SR latch set/reset expression width does not match latch width | 4_8_LATCH_SR_WIDTH_MISMATCH-sr_width_mismatch.jz |
+| LATCH_IN_CONST_CONTEXT | error | S4.8 LATCH identifier may not be used in compile-time constant contexts (@check/@feature conditions) | 4_8_LATCH_IN_CONST_CONTEXT-latch_in_const.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| LATCH_WIDTH_INVALID | error | Suppressed by WIDTH_NONPOSITIVE_OR_NONINT: test exists (`4_8_LATCH_WIDTH_INVALID-invalid_latch_width.jz`) but rule is suppressed |
-| LATCH_SR_WIDTH_MISMATCH | error | Bug: test exists (`4_8_LATCH_SR_WIDTH_MISMATCH-sr_width_mismatch.jz`) but rule has a known compiler bug |
-| LATCH_IN_CONST_CONTEXT | error | Bug: test exists (`4_8_LATCH_IN_CONST_CONTEXT-latch_in_const.jz`) but rule has a known compiler bug |
+All rules for this section are tested.
+

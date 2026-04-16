@@ -74,9 +74,9 @@ Verify the Strict Matching Rule for binary operators (`+`, `-`, `*`, `/`, `%`, `
 | ASSIGN_CONCAT_WIDTH_MISMATCH | error | Concatenation width sum does not match paired expression | Error 7; 2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-concat_width_mismatch.jz |
 | TERNARY_BRANCH_WIDTH_MISMATCH | error | Ternary true/false branches have mismatched widths | Error 4; 2_3_TERNARY_BRANCH_WIDTH_MISMATCH-ternary_arm_widths.jz |
 | WIDTH_NONPOSITIVE_OR_NONINT | error | Declared width <= 0 or not an integer | 2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width.jz; also tested in test_2_2-signedness_model.md |
+| WIDTH_ASSIGN_MISMATCH_NO_EXT | error | S4.10/S5.0/S5.1 Width mismatch in assignment; add `=z` (zero-extend), `=s` (sign-extend), or use a slice | 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| WIDTH_ASSIGN_MISMATCH_NO_EXT | error | Suppressed by ASSIGN_WIDTH_NO_MODIFIER: test exists (`5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz`) but rule is suppressed |
+All rules for this section are tested.
+

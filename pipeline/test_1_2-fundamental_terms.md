@@ -87,9 +87,9 @@ Verify that the compiler correctly implements the semantic concepts defined in S
 | OBS_X_TO_OBSERVABLE_SINK | error | S1.2/S2.1/S3.2 Expression containing x bits drives observable sink | 1_2_OBS_X_TO_OBSERVABLE_SINK-x_bits_to_observable.jz |
 | COMB_LOOP_UNCONDITIONAL | error | S5.3/S8.2 Combinational loop: signal feeds back to itself | 12_2_COMB_LOOP_UNCONDITIONAL-two_signal_cycle.jz, 12_2_COMB_LOOP_UNCONDITIONAL-three_signal_cycle.jz (cross-ref S12.2) |
 | COMB_LOOP_CONDITIONAL_SAFE | warning | S5.3/S8.2 Cycle only within mutually exclusive branches | 12_2_COMB_LOOP_CONDITIONAL_SAFE-mutually_exclusive_cycle.jz (cross-ref S12.2) |
+| NET_TRI_STATE_ALL_Z_READ | error | S4.10 All drivers assign `z` (tri-state) but signal is read; at least one driver must provide a value | 11_3_NET_TRI_STATE_ALL_Z_READ-all_drivers_z_but_read.jz |
 
 ### 5.2 Rules Not Tested
 
-| Rule ID | Severity | Reason |
-|---------|----------|--------|
-| NET_TRI_STATE_ALL_Z_READ | error | Suppressed by ASYNC_FLOATING_Z_READ: test exists (`1_2_ASYNC_FLOATING_Z_READ-all_z_drivers_read.jz`) but rule is suppressed |
+All rules for this section are tested.
+
