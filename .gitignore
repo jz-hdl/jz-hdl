@@ -4,3 +4,5 @@ CLAUDE.md
 imgui.ini
 .jzhdl-lsp.rc
 boards
+__pycache__/
+*.pyc
