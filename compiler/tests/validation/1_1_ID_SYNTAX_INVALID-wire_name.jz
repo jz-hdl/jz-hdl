@@ -1,0 +1,25 @@
+// ID_SYNTAX_INVALID: 256-character identifier in WIRE declaration must be rejected.
+// S1.1 says identifiers must be 255 characters or fewer.
+
+@project ID_SYNTAX_INVALID_wire_name
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    WIRE {
+        // Trigger: wire name is exactly 256 characters
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa [1];
+    }
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

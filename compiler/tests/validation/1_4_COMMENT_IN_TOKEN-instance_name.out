@@ -1,0 +1,2 @@
+File: 1_4_COMMENT_IN_TOKEN-instance_name.jz
+      37:12   error COMMENT_IN_TOKEN S1.4 Comment appears inside a token (identifier/number/operator/literal)

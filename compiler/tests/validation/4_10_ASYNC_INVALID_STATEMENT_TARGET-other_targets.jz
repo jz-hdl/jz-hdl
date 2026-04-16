@@ -1,0 +1,59 @@
+// ASYNC_INVALID_STATEMENT_TARGET: LHS in ASYNCHRONOUS assignment is not assignable.
+// Extends coverage to CONST via = (alias) and => (drive) operators.
+// Valid assignments to WIRE and PORT OUT verify no false positives.
+
+@project ASYNC_INVALID_STATEMENT_TARGET_other_targets
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+// Helper module: CONST alias-assigned in ASYNC
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    CONST {
+        MY_CONST = 8;
+    }
+
+    WIRE {
+        w [8];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: alias-assign (=) to CONST in ASYNC
+        MY_CONST = din;
+        // Valid: wire assignment (no error)
+        w <= din;
+        dout = w;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    CONST {
+        TOP_CONST = 42;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] din = din;
+        OUT [8] dout = dout_a;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: drive-assign (=>) to CONST in ASYNC
+        din => TOP_CONST;
+        // Valid: PORT OUT assignment (no error)
+        dout_b <= din;
+    }
+@endmod

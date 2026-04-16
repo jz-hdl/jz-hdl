@@ -1,0 +1,82 @@
+// CHECK_INVALID_EXPR_TYPE: @check with forbidden operand nested in arithmetic.
+// S9.4 forbids runtime signals even when nested inside arithmetic expressions.
+// Valid CONST arithmetic included to verify no false positives.
+
+@project CHECK_INVALID_EXPR_TYPE_nested_forbidden
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST { DEPTH = 16; }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Valid: CONST arithmetic in @check (no error)
+    @check (DEPTH + 4 > 0, "const arith ok");
+
+    // Trigger: forbidden operand nested in arithmetic (helper module)
+    @check (DEPTH + din > 0, "nested port in helper");
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST { SIZE = 8; }
+
+    WIRE {
+        w [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Valid: CONST + CONFIG arithmetic in @check (no error)
+    @check (SIZE + CONFIG.WIDTH > 0, "const config arith ok");
+
+    // Valid: literal arithmetic (no error)
+    @check (4 + 8 > 0, "literal arith ok");
+
+    @new inst_a HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        w = din;
+        data = w | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

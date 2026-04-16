@@ -1,0 +1,47 @@
+// MAP_INVALID_BOARD_PIN_ID: Bus bit mapped to invalid board pin ID.
+// Valid bus bit mappings included to verify no false positives.
+
+@project MAP_INVALID_BOARD_PIN_ID_bad_bus_bit_pin
+    CHIP = "gw1nr-9-qn88-c6-i5";
+
+    IN_PINS {
+        clk_in [1] = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        led [3] = { standard=LVCMOS33, drive=4 };
+    }
+
+    MAP {
+        clk_in = 52;
+        // Valid: numeric pin IDs for bus bits
+        led[0] = 10;
+        led[1] = 11;
+        // Trigger: bus bit with invalid board pin ID
+        led[2] = B#7;
+    }
+
+    @top TopMod {
+        IN  [1] clk = clk_in;
+        OUT [3] leds = led;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [3] leds;
+    }
+
+    REGISTER {
+        r [3] = 3'b000;
+    }
+
+    ASYNCHRONOUS {
+        leds = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 3'b001;
+    }
+@endmod

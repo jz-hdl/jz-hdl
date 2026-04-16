@@ -1,0 +1,30 @@
+// DIRECTIVE_INVALID_CONTEXT: @endmod inside ASYNCHRONOUS block is forbidden.
+// S4.1/S6.2 says @endmod is a structural directive and may only appear at module scope.
+
+@project DIRECTIVE_INVALID_CONTEXT_endmod_inside_block
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: @endmod inside ASYNCHRONOUS block
+        @endmod
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

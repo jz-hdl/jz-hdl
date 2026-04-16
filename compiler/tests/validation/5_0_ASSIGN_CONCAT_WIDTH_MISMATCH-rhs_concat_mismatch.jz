@@ -1,0 +1,57 @@
+// ASSIGN_CONCAT_WIDTH_MISMATCH: RHS concatenation width sum does not match LHS width.
+// Existing tests cover LHS concat mismatch. This test covers RHS concat mismatch.
+// Valid same-width RHS concats included to verify no false positives.
+
+@project ASSIGN_CONCAT_WIDTH_MISMATCH_rhs_concat_mismatch
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+// Helper module: RHS concat mismatch in ASYNC
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: RHS concat sum (4+2=6) != LHS width (8), ASYNC helper
+        dout = {din[7:4], din[1:0]};
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] din = din;
+        OUT [8] dout = dout_a;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: RHS concat sum (4+4=8) == LHS width (8), no false positive
+        dout_b = {r[7:4], r[3:0]};
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: RHS concat sum (4+2=6) != register width (8), SYNC top
+        r <= {din[7:4], din[1:0]};
+    }
+@endmod

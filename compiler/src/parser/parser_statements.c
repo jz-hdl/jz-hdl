@@ -700,6 +700,23 @@ static int parse_feature_guard_body(Parser *p,
             advance(p);
             return -1;
         }
+        if (t->type == JZ_TOK_KW_NEW ||
+            t->type == JZ_TOK_KW_PROJECT ||
+            t->type == JZ_TOK_KW_ENDPROJ ||
+            t->type == JZ_TOK_KW_MODULE ||
+            t->type == JZ_TOK_KW_ENDMOD ||
+            t->type == JZ_TOK_KW_BLACKBOX ||
+            t->type == JZ_TOK_KW_IMPORT ||
+            t->type == JZ_TOK_KW_GLOBAL ||
+            t->type == JZ_TOK_KW_ENDGLOB) {
+            /* Structural directives are not allowed inside @feature bodies. */
+            parser_report_rule(p, t,
+                               "DIRECTIVE_INVALID_CONTEXT",
+                               "structural directive is not allowed inside a @feature guard body;\n"
+                               "move @new and other structural directives to module scope");
+            advance(p);
+            return -1;
+        }
 
         if (t->type == JZ_TOK_KW_IF) {
             if (parse_if_chain(p, parent, is_sync) != 0) {
@@ -1020,7 +1037,54 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
                                "DIRECTIVE_INVALID_CONTEXT",
                                "@check is not allowed inside ASYNCHRONOUS/SYNCHRONOUS blocks;\n"
                                "move it to module scope (directly inside @module...@endmod)");
+            /* Skip past the semicolon to avoid cascading parse errors from
+             * the @check argument list (e.g. "(1, \"msg\");"). */
             advance(p);
+            while (peek(p)->type != JZ_TOK_EOF &&
+                   peek(p)->type != JZ_TOK_SEMICOLON &&
+                   peek(p)->type != terminator) {
+                advance(p);
+            }
+            if (peek(p)->type == JZ_TOK_SEMICOLON) advance(p);
+            continue;
+        }
+        if (t->type == JZ_TOK_KW_NEW ||
+            t->type == JZ_TOK_KW_PROJECT ||
+            t->type == JZ_TOK_KW_ENDPROJ ||
+            t->type == JZ_TOK_KW_MODULE ||
+            t->type == JZ_TOK_KW_ENDMOD ||
+            t->type == JZ_TOK_KW_BLACKBOX ||
+            t->type == JZ_TOK_KW_IMPORT ||
+            t->type == JZ_TOK_KW_GLOBAL ||
+            t->type == JZ_TOK_KW_ENDGLOB) {
+            /* Structural directives are not allowed inside blocks. */
+            parser_report_rule(p, t,
+                               "DIRECTIVE_INVALID_CONTEXT",
+                               "structural directive is not allowed inside ASYNCHRONOUS/SYNCHRONOUS blocks;\n"
+                               "move @new and other structural directives to module scope");
+            JZTokenType kw = t->type;
+            advance(p);
+            /* @new has "name Type { ... };" syntax; skip past its trailing
+             * semicolon (respecting brace nesting) to avoid cascading parse
+             * errors. Other structural directives are single tokens or
+             * terminators that the main parser recovers from naturally. */
+            if (kw == JZ_TOK_KW_NEW) {
+                int depth = 0;
+                while (peek(p)->type != JZ_TOK_EOF) {
+                    if (depth == 0 && peek(p)->type == terminator) {
+                        break;
+                    }
+                    if (peek(p)->type == JZ_TOK_LBRACE) {
+                        depth++;
+                    } else if (peek(p)->type == JZ_TOK_RBRACE) {
+                        depth--;
+                    } else if (peek(p)->type == JZ_TOK_SEMICOLON && depth <= 0) {
+                        advance(p);
+                        break;
+                    }
+                    advance(p);
+                }
+            }
             continue;
         }
 

@@ -1,0 +1,4 @@
+File: 1_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-truly_undefined.jz
+      27:21   error UNDECLARED_IDENTIFIER S4.2/S8.1 Use of undeclared identifier in expression or statement
+      29:21   error UNDECLARED_IDENTIFIER S4.2/S8.1 Use of undeclared identifier in expression or statement
+      29:30   error UNDECLARED_IDENTIFIER S4.2/S8.1 Use of undeclared identifier in expression or statement

@@ -1,0 +1,41 @@
+// FEATURE_NESTED: Nested @feature guard in WIRE block.
+// Parser stops at first nested @feature; one trigger per file.
+
+@project FEATURE_NESTED_nested_feature_in_wire
+    CONFIG {
+        MODE = 1;
+    }
+
+    @top TopMod {
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST {
+        FLAG = 1;
+        LEVEL = 0;
+    }
+
+    WIRE {
+        w [1];
+
+        // Trigger: nested @feature inside WIRE block @feature body
+        @feature FLAG == 1
+            @feature LEVEL == 0
+                w2 [1];
+            @endfeat
+        @endfeat
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+        w = din;
+    }
+@endmod

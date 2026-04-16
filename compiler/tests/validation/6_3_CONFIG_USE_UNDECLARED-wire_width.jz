@@ -1,0 +1,66 @@
+// CONFIG_USE_UNDECLARED: Undeclared CONFIG reference in wire width context.
+// Tests CONFIG.NONEXISTENT used as wire width bracket expression.
+// Valid CONFIG references included to verify no false positives.
+
+@project CONFIG_USE_UNDECLARED_wire_width
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [CONFIG.WIDTH] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    WIRE {
+        // Trigger: wire width with undeclared CONFIG
+        w [CONFIG.NONEXISTENT];
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        w = din;
+        dout = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= w;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [CONFIG.WIDTH] data;
+    }
+
+    WIRE {
+        // Valid: wire width with declared CONFIG (no false positive)
+        h_out [CONFIG.WIDTH];
+    }
+
+    @new inst_h Helper {
+        IN  [1] clk = clk;
+        IN  [8] din = 8'hAA;
+        OUT [8] dout = h_out;
+    };
+
+    REGISTER {
+        r [CONFIG.WIDTH] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= h_out;
+    }
+@endmod

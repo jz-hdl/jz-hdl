@@ -1,0 +1,60 @@
+// ASYNC_UNDEFINED_PATH_NO_DRIVER: Signal undriven on some ASYNC paths.
+// Extends coverage to IF/ELIF without ELSE (missing paths).
+// Valid IF/ELIF/ELSE with full coverage verifies no false positives.
+
+@project ASYNC_UNDEFINED_PATH_NO_DRIVER_nested_conditional
+    @top TopMod {
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+// Helper module: IF/ELIF without ELSE leaves output undriven
+@module HelperMod
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: IF/ELIF without ELSE — dout undriven when neither condition met
+        IF (sel_a) {
+            dout <= din;
+        } ELIF (sel_b) {
+            dout <= din;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] sel_a = sel_a;
+        IN  [1] sel_b = sel_b;
+        IN  [8] din = din;
+        OUT [8] dout = dout_a;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: IF/ELIF/ELSE with full coverage (no error)
+        IF (sel_a) {
+            dout_b <= din;
+        } ELIF (sel_b) {
+            dout_b <= din;
+        } ELSE {
+            dout_b <= din;
+        }
+    }
+@endmod

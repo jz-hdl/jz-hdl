@@ -1,0 +1,60 @@
+// TRISTATE_TRANSFORM_PER_BIT_FAIL: Uneven split per-bit tri-state.
+// Existing tests use even 4+4 split. This uses uneven 7+1 split.
+// Trigger: uneven 7+1 per-bit tristate split (GND default)
+
+@project TRISTATE_TRANSFORM_PER_BIT_FAIL_uneven_split
+    @top TopMod {
+        IN  [1] en_a = _;
+        IN  [1] en_b = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: clean, no per-bit pattern
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'hAA;
+        } ELSE {
+            data <= 8'h55;
+        }
+    }
+@endmod
+
+// Top module with uneven 7+1 per-bit tri-state wire
+@module TopMod
+    PORT {
+        IN  [1] en_a;
+        IN  [1] en_b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en = en_a;
+        OUT [8] data = _;
+    };
+
+    // Trigger: uneven 7+1 per-bit tri-state
+    ASYNCHRONOUS {
+        IF (en_a) {
+            w[7:1] <= 7'b101_0101;
+        } ELSE {
+            w[7:1] <= 7'bzzz_zzzz;
+        }
+        IF (en_b) {
+            w[0:0] <= 1'b1;
+        } ELSE {
+            w[0:0] <= 1'bz;
+        }
+        data <= w;
+    }
+@endmod

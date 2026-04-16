@@ -1,0 +1,2 @@
+File: 6_3_CONST_STRING_IN_NUMERIC_CONTEXT-wire_width.jz
+      25:9    error CONST_STRING_IN_NUMERIC_CONTEXT S4.3/S6.3 String CONST/CONFIG value used where a numeric expression is expected

@@ -1,0 +1,29 @@
+// RPT_NO_MATCHING_END: @repeat at end of file without @end.
+// Tests that the repeat expander detects an unclosed @repeat when EOF is reached.
+
+@project RPT_NO_MATCHING_END_eof_without_end
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger: @repeat at end of file (no @endmod, no @end — just EOF)
+@repeat 2
+    r <= ~r;

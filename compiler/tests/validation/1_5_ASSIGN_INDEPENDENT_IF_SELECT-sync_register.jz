@@ -1,0 +1,51 @@
+// ASSIGN_INDEPENDENT_IF_SELECT (sync preemption): In SYNCHRONOUS blocks, the
+// generic "independent IF/SELECT chains on same target" rule is preempted by
+// the sync-specific SYNC_MULTI_ASSIGN_SAME_REG_BITS rule. This test documents
+// that preemption — two independent IF chains writing the same register
+// inside a SYNCHRONOUS block fire the sync-specific rule, not the async rule.
+
+@project ASSIGN_INDEPENDENT_IF_SELECT_sync_register
+    @top TopMod {
+        IN  [1] clk   = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [8] a     = _;
+        IN  [8] b     = _;
+        OUT [8] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] out_a;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: two independent IF chains writing the same register.
+        // Async classification would fire ASSIGN_INDEPENDENT_IF_SELECT, but
+        // the sync-specific rule preempts it in SYNCHRONOUS context.
+        IF (sel_a) {
+            r <= a;
+        } ELSE {
+            r <= b;
+        }
+        IF (sel_b) {
+            r <= a;
+        } ELSE {
+            r <= b;
+        }
+    }
+@endmod

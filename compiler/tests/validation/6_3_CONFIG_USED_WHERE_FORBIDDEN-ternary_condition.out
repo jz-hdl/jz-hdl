@@ -1,0 +1,2 @@
+File: 6_3_CONFIG_USED_WHERE_FORBIDDEN-ternary_condition.jz
+      29:16   error CONFIG_USED_WHERE_FORBIDDEN S6.3 CONFIG.<name> used outside compile-time constant expression contexts (runtime expression)

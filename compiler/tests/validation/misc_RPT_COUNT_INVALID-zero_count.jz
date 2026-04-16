@@ -1,5 +1,5 @@
 // RPT_COUNT_INVALID: @repeat with zero count is invalid.
-// Triggers RPT-001 because @repeat requires a positive integer count.
+// Triggers RPT-001 because @repeat count must be a positive integer.
 // The error is fatal — the repeat expander stops processing the file.
 
 @project RPT_COUNT_INVALID_zero_count

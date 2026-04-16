@@ -1,0 +1,88 @@
+// MUX_NAME_DUPLICATE: MUX identifier duplicates a const name in the same module.
+// One trigger for const-name context. Valid MUX included for negative testing.
+
+@project MUX_NAME_DUPLICATE_dup_const
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: MUX name conflicts with const name
+@module HelperMod
+    CONST {
+        limit = 42;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] data;
+    }
+
+    // Trigger: const name — MUX name 'limit' duplicates const 'limit'
+    MUX {
+        limit = a, b;
+    }
+
+    // Valid MUX — no conflict
+    MUX {
+        ok_mux = a, b;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = ok_mux[1'b0] | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod
+
+// Top module: instantiates helper, has valid MUX (no const conflict)
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        helper_out [8];
+    }
+
+    MUX {
+        top_mux = a, b;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        IN  [8] b = b;
+        OUT [8] data = helper_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = top_mux[1'b0] | helper_out | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod

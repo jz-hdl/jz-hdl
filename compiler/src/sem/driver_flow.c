@@ -75,6 +75,13 @@ typedef struct JZAssignRecord {
 
 typedef struct JZPathState {
     JZBuffer assigns;
+    /* Number of records in `assigns` that were inherited when this path was
+     * cloned for branch analysis. Records at index >= branch_base were added
+     * by statements in the current branch body; records below it came from
+     * outer scope (root-level or prior merged IF/SELECT chains). Used to
+     * distinguish "same-branch double-assign" from "independent chain
+     * conflict" when an overlap is detected. Zero on the root path. */
+    size_t   branch_base;
 } JZPathState;
 
 static void sem_excl_free_paths(JZBuffer *paths)
@@ -94,11 +101,17 @@ static int sem_excl_clone_path_state(const JZPathState *src,
     if (!dst) return -1;
     memset(dst, 0, sizeof(*dst));
     if (!src) return 0;
-    if (src->assigns.len == 0) return 0;
+    if (src->assigns.len == 0) {
+        /* No inherited records; branch_base stays 0. */
+        return 0;
+    }
     if (jz_buf_append(&dst->assigns, src->assigns.data, src->assigns.len) != 0) {
         jz_buf_free(&dst->assigns);
         return -1;
     }
+    /* Mark all inherited records as pre-branch; any records added subsequently
+     * by branch-body analysis will sit at index >= branch_base. */
+    dst->branch_base = dst->assigns.len / sizeof(JZAssignRecord);
     return 0;
 }
 
@@ -308,10 +321,23 @@ static void sem_excl_record_assignment_in_path(JZPathState *path,
                 } else if (!is_sync) {
                     int root_and_conditional = ((r->is_nested && !e->is_nested) ||
                                                 (!r->is_nested && e->is_nested));
+                    /* A conflicting record added during the CURRENT branch
+                     * body sits at index >= path->branch_base. Records below
+                     * that were inherited from outer scope (root or prior
+                     * merged IF/SELECT). This distinguishes "two assigns in
+                     * one branch body" (ASSIGN_MULTIPLE_SAME_BITS) from "same
+                     * target assigned in two independent chains"
+                     * (ASSIGN_INDEPENDENT_IF_SELECT). */
+                    int conflict_in_current_branch = (ri >= path->branch_base);
                     if (root_and_conditional) {
                         rule_id = "ASSIGN_SHADOWING";
                     } else if (!r->is_nested && !e->is_nested) {
                         /* Plain root-level multiple assign to same bits in ASYNCHRONOUS block. */
+                        rule_id = "ASSIGN_MULTIPLE_SAME_BITS";
+                    } else if (conflict_in_current_branch) {
+                        /* Both assignments are in the same branch body — a
+                         * single execution path violation, not independent
+                         * chains. */
                         rule_id = "ASSIGN_MULTIPLE_SAME_BITS";
                     } else {
                         rule_id = "ASSIGN_INDEPENDENT_IF_SELECT";
@@ -505,7 +531,15 @@ static void sem_excl_analyze_if_chain(JZASTNode *block,
                             break;
                         }
                     }
-                    rec->partial = in_all ? 0 : 1;
+                    /* Only upgrade to partial=1 when the decl is missing in
+                     * a sibling branch. Preserve any partial=1 flag already
+                     * set by recursive inner-branch analysis (e.g. a nested
+                     * IF without ELSE inside this branch body) — the outer
+                     * having full coverage does not negate an inner
+                     * uncovered path. */
+                    if (!in_all) {
+                        rec->partial = 1;
+                    }
                 }
             }
 
@@ -623,7 +657,11 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
                             break;
                         }
                     }
-                    rec->partial = in_all ? 0 : 1;
+                    /* Preserve inner-branch partial flags (see matching
+                     * comment in sem_excl_analyze_if_chain). */
+                    if (!in_all) {
+                        rec->partial = 1;
+                    }
                 }
             }
 

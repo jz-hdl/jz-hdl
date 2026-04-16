@@ -1,0 +1,47 @@
+// LIT_OVERFLOW: Literal intrinsic bit-width exceeds declared width.
+// Tests overflow in async RHS context.
+// Valid non-overflowing literal included to verify no false positives.
+
+@project LIT_OVERFLOW_async_rhs
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [4] sel;
+        OUT [4] data;
+    }
+    ASYNCHRONOUS {
+        // Trigger: binary overflow in async RHS — intrinsic 5 bits > declared 4
+        data <= sel + 4'b10101;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] data;
+    }
+    WIRE {
+        helper_data [4];
+    }
+
+    @new inst_a HelperA {
+        IN  [4] sel = 4'h1;
+        OUT [4] data = helper_data;
+    };
+
+    REGISTER {
+        r [4] = 4'h0;
+    }
+    ASYNCHRONOUS {
+        // Valid: 4'd15 fits exactly in 4 bits (no false positive)
+        data <= helper_data + 4'd15;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 4'h1;
+    }
+@endmod

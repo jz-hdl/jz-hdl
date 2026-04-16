@@ -1,6 +1,7 @@
 // SLICE_MSB_LESS_THAN_LSB: Slice with MSB < LSB (reversed indices).
-// Tests reversed slice indices in async RHS, sync RHS, sync LHS, and
-// CONST-based reversed indices across modules.
+// Tests reversed slice indices with integer literals in async RHS, sync RHS,
+// and sync LHS contexts. CONST-based reversed indices are covered by
+// 1_3_SLICE_MSB_LESS_THAN_LSB-const_reversed_indices.jz.
 // Valid slices (MSB >= LSB) included to verify no false positives.
 
 @project SLICE_MSB_LESS_THAN_LSB_reversed_indices
@@ -23,10 +24,6 @@
         OUT [1] out_a;
         OUT [1] out_b;
     }
-    CONST {
-        LOW = 3;
-        HIGH = 7;
-    }
     REGISTER {
         r [1] = 1'b0;
     }
@@ -47,10 +44,6 @@
         IN  [1] clk;
         OUT [1] out_a;
         OUT [1] out_b;
-    }
-    CONST {
-        LOW = 2;
-        HIGH = 8;
     }
     WIRE {
         ha_out_a [1];

@@ -1,0 +1,47 @@
+// COMMENT_IN_TOKEN: Comment inside a wire name declaration.
+// Valid wire names included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_wire_name
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] result = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    WIRE {
+        valid_wire [1];
+        // Trigger: wire name declaration
+        my/**/wire [1];
+    }
+
+    @new inst_h Helper {
+        IN  [1] clk = clk;
+        OUT [1] data = valid_wire;
+    };
+
+    ASYNCHRONOUS {
+        result = valid_wire;
+        mywire = 1'b0;
+    }
+@endmod

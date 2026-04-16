@@ -1,0 +1,60 @@
+// ASYNC_INVALID_STATEMENT_TARGET: LHS in ASYNC assignment is not assignable.
+// Missing from 5_1: CONST on LHS (existing 5_1 test fires wrong rule).
+// Also missing: function call result on LHS (e.g. clog2()).
+// Valid: wire and port assignments for no false positives.
+
+@project ASYNC_INVALID_STATEMENT_TARGET_const_and_func
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+// Helper module: CONST on LHS in ASYNC
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    CONST {
+        MY_CONST = 8;
+    }
+
+    WIRE {
+        w [8];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: CONST on LHS in ASYNC (helper)
+        MY_CONST <= din;
+        // Valid: wire assignment (no error)
+        w <= din;
+        dout = w;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    CONST {
+        TOP_CONST = 42;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] din = din;
+        OUT [8] dout = dout_a;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: CONST on LHS in ASYNC (top)
+        TOP_CONST <= din;
+        // Valid: port assignment (no error)
+        dout_b <= din;
+    }
+@endmod

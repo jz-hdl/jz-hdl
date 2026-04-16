@@ -1,0 +1,54 @@
+// GLOBAL_CONST_USE_UNDECLARED: Use of GLOBAL.<name> where the namespace or constant is not declared.
+// Tests undeclared global constant reference inside an operator expression.
+// Valid global references are included to verify no false positives.
+
+@global OPCODES
+    ADD = 4'b0001;
+    SUB = 4'b0010;
+@endglob
+
+@project GLOBAL_CONST_USE_UNDECLARED_in_expression
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [4] dout;
+    }
+    REGISTER {
+        r [4] = 4'b0000;
+    }
+    ASYNCHRONOUS {
+        dout = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: operator expression
+        r <= OPCODES.ADD | OPCODES.MUL;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] data;
+    }
+
+    @new inst_h Helper {
+        IN  [1] clk = clk;
+        OUT [4] dout = _;
+    };
+
+    REGISTER {
+        r [4] = 4'b0000;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= OPCODES.SUB;
+    }
+@endmod

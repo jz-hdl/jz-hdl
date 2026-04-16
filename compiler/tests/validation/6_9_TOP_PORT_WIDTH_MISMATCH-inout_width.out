@@ -1,0 +1,2 @@
+File: 6_9_TOP_PORT_WIDTH_MISMATCH-inout_width.jz
+      10:19   error TOP_PORT_WIDTH_MISMATCH S6.9/S6.10 Instantiated top port width does not match module port width

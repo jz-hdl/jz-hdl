@@ -1,0 +1,54 @@
+// PORT_MISSING_WIDTH: INOUT port declared without mandatory [N] width.
+// Trigger is on INOUT port direction. Valid ports with width included for no false positives.
+
+@project PORT_MISSING_WIDTH_inout_missing_width
+    @top TopMod {
+        IN  [1] ctrl = _;
+        IN  [8] din = _;
+        INOUT [8] bidir = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] ctrl;
+        IN  [8] din;
+        // Trigger: INOUT port without width
+        INOUT bidir;
+        OUT [8] data_out;
+    }
+
+    ASYNCHRONOUS {
+        IF (ctrl) {
+            bidir <= din;
+        } ELSE {
+            bidir <= 8'bz;
+        }
+        data_out <= bidir;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] ctrl;
+        IN  [8] din;
+        INOUT [8] bidir;
+        OUT [8] dout;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] ctrl = ctrl;
+        IN  [8] din = din;
+        INOUT bidir = _;
+        OUT [8] data_out = dout;
+    };
+
+    ASYNCHRONOUS {
+        IF (ctrl) {
+            bidir <= din;
+        } ELSE {
+            bidir <= 8'bz;
+        }
+    }
+@endmod

@@ -1,0 +1,78 @@
+// MUX_AGG_SOURCE_INVALID: Instance name used as aggregation source.
+// One trigger for instance-name-as-source context. Valid sources included for negative testing.
+
+@project MUX_AGG_SOURCE_INVALID_instance_name_source
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [1] sel = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: used as instantiation target
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod
+
+// Top module: instance name used as MUX aggregation source
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [1] sel;
+        OUT [8] data;
+    }
+
+    WIRE {
+        helper_out [8];
+    }
+
+    @new my_inst HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        OUT [8] data = helper_out;
+    };
+
+    // Trigger: instance name as source — 'my_inst' is an instance, not a signal
+    MUX {
+        bad_mux = a, my_inst;
+    }
+
+    // Valid MUX — only signal sources
+    MUX {
+        ok_mux = a, a;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = ok_mux[sel] | helper_out | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod

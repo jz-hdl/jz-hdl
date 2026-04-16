@@ -1,0 +1,64 @@
+// LATCH_ASSIGN_NON_GUARDED: Unguarded receive-assign to SR-latch in ASYNC.
+// Tests SR latch written with unguarded '<=' (no set:reset guard) in ASYNC block.
+// Valid guarded SR-latch assignments included to verify no false positives.
+
+@project LATCH_ASSIGN_NON_GUARDED_sr_unguarded
+    @top TopMod {
+        IN  [1] set_sig = _;
+        IN  [1] reset_sig = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module: SR-latch written with unguarded receive-assign
+@module HelperMod
+    PORT {
+        IN  [1] set_sig;
+        IN  [1] reset_sig;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    LATCH {
+        lat_ok [1] SR;
+        lat_bad [1] SR;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: guarded SR-latch assignment (should NOT trigger)
+        lat_ok <= set_sig : reset_sig;
+        // Trigger: unguarded receive-assign to SR-latch in helper module
+        lat_bad <= din;
+        data <= lat_ok;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] set_sig;
+        IN  [1] reset_sig;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] set_sig = set_sig;
+        IN  [1] reset_sig = reset_sig;
+        IN  [1] din = din;
+        OUT [1] data = _;
+    };
+
+    LATCH {
+        lat_top_ok [1] SR;
+        lat_top_bad [1] SR;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: guarded SR-latch assignment
+        lat_top_ok <= set_sig : reset_sig;
+        // Trigger: unguarded receive-assign to SR-latch in top module
+        lat_top_bad <= din;
+        data <= lat_top_ok;
+    }
+@endmod

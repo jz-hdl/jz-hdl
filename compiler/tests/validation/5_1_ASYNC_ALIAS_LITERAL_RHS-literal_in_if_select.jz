@@ -1,0 +1,86 @@
+// ASYNC_ALIAS_LITERAL_RHS: Alias with literal RHS inside IF branch and SELECT case.
+// Existing tests cover alias with literal at ASYNC root. This tests conditional contexts.
+// Valid: receive (<=) with literal inside IF/SELECT for no false positives.
+
+@project ASYNC_ALIAS_LITERAL_RHS_literal_in_if_select
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [2] sel2 = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+        OUT [8] dout_d = _;
+    }
+@endproj
+
+// Helper module: alias with literal in IF branch
+@module HelperMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] out_if;
+        OUT [8] out_sel;
+    }
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            // Trigger: alias with literal inside IF branch (helper)
+            out_if = 8'hAA;
+        } ELSE {
+            // Valid: receive with literal inside ELSE (no error)
+            out_if <= 8'h00;
+        }
+
+        SELECT (sel) {
+            CASE (1'b1) {
+                // Trigger: alias with literal inside SELECT CASE (helper)
+                out_sel = 8'hBB;
+            }
+            DEFAULT {
+                // Valid: receive with literal in DEFAULT (no error)
+                out_sel <= din;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [2] sel2;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+        OUT [8] dout_d;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] sel = sel;
+        IN  [8] din = din;
+        OUT [8] out_if = dout_a;
+        OUT [8] out_sel = dout_b;
+    };
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            // Trigger: alias with literal inside IF branch (top)
+            dout_c = 8'hCC;
+        } ELSE {
+            // Valid: receive with literal (no error)
+            dout_c <= din;
+        }
+
+        SELECT (sel2) {
+            CASE (2'b00) {
+                // Trigger: alias with literal inside SELECT CASE (top)
+                dout_d = 8'hDD;
+            }
+            DEFAULT {
+                // Valid: receive with signal RHS inside SELECT (no error)
+                dout_d <= din;
+            }
+        }
+    }
+@endmod

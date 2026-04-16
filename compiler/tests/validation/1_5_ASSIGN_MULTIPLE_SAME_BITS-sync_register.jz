@@ -1,0 +1,41 @@
+// ASSIGN_MULTIPLE_SAME_BITS (sync preemption): In SYNCHRONOUS blocks, the
+// generic "same bits twice on one path" rule is preempted by the
+// sync-specific SYNC_MULTI_ASSIGN_SAME_REG_BITS rule. This test documents
+// that preemption — two sequential assignments to the same register inside
+// a SYNCHRONOUS block fire the sync-specific rule, not the async rule.
+// See driver_flow.c classification: async mode → ASSIGN_MULTIPLE_SAME_BITS;
+// sync + register → SYNC_MULTI_ASSIGN_SAME_REG_BITS.
+
+@project ASSIGN_MULTIPLE_SAME_BITS_sync_register
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a   = _;
+        IN  [8] b   = _;
+        OUT [8] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] out_a;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: double assignment to same register at root of SYNC.
+        // Async rule would classify this as ASSIGN_MULTIPLE_SAME_BITS, but
+        // the sync-specific rule preempts it in SYNCHRONOUS context.
+        r <= a;
+        r <= b;
+    }
+@endmod

@@ -1,0 +1,58 @@
+// SYNC_SLICE_WIDTH_MISMATCH: Register slice assignment expression width not
+// equal to slice width.
+// Tests RHS wider than slice context.
+// Valid sliced assignment included to verify no false positives.
+
+@project SYNC_SLICE_WIDTH_MISMATCH_rhs_wider_than_slice
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] data = _;
+        OUT [8] out_a = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        OUT [8] out_a;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: RHS wider than slice (slice is 2 bits, RHS is 4 bits)
+        r[3:2] <= data[7:4];
+        // Valid: correct slice width (should NOT trigger)
+        r[7:4] <= data[3:0];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        OUT [8] out_a;
+    }
+    REGISTER {
+        r_x [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] data = data;
+        OUT [8] out_a = _;
+    };
+
+    ASYNCHRONOUS {
+        out_a = r_x;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: matching widths (should NOT trigger)
+        r_x[7:4] <= data[3:0];
+        r_x[3:0] <= data[7:4];
+    }
+@endmod

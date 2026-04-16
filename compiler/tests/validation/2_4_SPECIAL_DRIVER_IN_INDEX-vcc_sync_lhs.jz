@@ -1,0 +1,66 @@
+// SPECIAL_DRIVER_IN_INDEX: VCC as LHS bit-select index in SYNCHRONOUS block.
+// Tests VCC used as an index on the left-hand side of a synchronous assignment.
+// Valid standalone GND/VCC usage included to verify no false positives.
+
+@project SPECIAL_DRIVER_IN_INDEX_vcc_sync_lhs
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] data = _;
+        OUT [8] out_a = _;
+    }
+@endproj
+
+// Helper: structurally valid, no triggers
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        OUT [8] out_a;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: standalone assignment (no false positive)
+        r <= data;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        OUT [8] out_a;
+    }
+
+    WIRE {
+        ha_out_a [8];
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] data = data;
+        OUT [8] out_a = ha_out_a;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: GND as standalone assignment (no false positive)
+        out_a = ha_out_a | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= data;
+        // Trigger: VCC as LHS bit-select index (sync)
+        r[VCC] <= 1'b0;
+    }
+@endmod

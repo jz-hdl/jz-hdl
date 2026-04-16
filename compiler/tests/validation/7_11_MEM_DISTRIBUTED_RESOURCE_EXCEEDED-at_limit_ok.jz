@@ -1,0 +1,79 @@
+// MEM_DISTRIBUTED_RESOURCE_EXCEEDED: At-limit boundary — exactly 16384 bits of
+// DISTRIBUTED memory on gw1nr-9 (full capacity). Should NOT trigger error.
+
+@project(CHIP="gw1nr-9-qn88-c6-i5") MEM_DISTRIBUTED_RESOURCE_EXCEEDED_at_limit_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [16] wdata = _;
+        OUT [16] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // 8 * 16 = 128 bits
+    MEM(type=DISTRIBUTED) {
+        h_dist [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ h_dist.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= h_dist.rd[addr];
+        h_dist.wr[addr] <= wdata;
+    }
+@endmod
+
+// TopMod: 16256 bits + HelperMod: 128 bits = exactly 16384 bits
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [16] wdata;
+        OUT [16] data;
+    }
+
+    REGISTER {
+        r [16] = 16'h0000;
+    }
+
+    // 16 * 1016 = 16256 bits
+    MEM(type=DISTRIBUTED) {
+        dist_main [16] [1016] = 16'h0000 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata[7:0];
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r ^ dist_main.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= dist_main.rd[addr];
+        dist_main.wr[addr] <= wdata;
+    }
+@endmod

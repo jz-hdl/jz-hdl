@@ -1,0 +1,49 @@
+// COMB_LOOP_UNCONDITIONAL: Combinational loop across a module-instance boundary.
+// The outer wire `x` drives inst.i (IN) and is driven by inst.o (OUT). Sub's
+// ASYNCHRONOUS block has an unconditional combinational path i -> o, which
+// closes the loop through the instance.
+
+@project COMB_LOOP_UNCONDITIONAL_cross_module_loop
+    @top Top {
+        IN  [1] in_a = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper: unconditional combinational path from in port to out port.
+@module Sub
+    PORT {
+        IN  [1] i;
+        OUT [1] o;
+    }
+
+    ASYNCHRONOUS {
+        o <= i;
+    }
+@endmod
+
+@module Top
+    PORT {
+        IN  [1] in_a;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        x [1];
+    }
+
+    // Trigger: x drives inst.i and is driven by inst.o, closing the loop
+    // through Sub's internal i -> o combinational path.
+    @new inst Sub {
+        IN  [1] i = x;
+        OUT [1] o = x;
+    };
+
+    ASYNCHRONOUS {
+        out_a = x;
+        // Valid: feed-forward (no loop)
+        out_b = in_a;
+    }
+@endmod

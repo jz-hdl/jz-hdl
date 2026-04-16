@@ -1,0 +1,73 @@
+// SELECT_CASE_WIDTH_MISMATCH: @global constant CASE value width must match selector width.
+// Tests that width mismatch is detected when CASE value is a @global constant.
+// Valid matching-width @global constant included to verify no false positive.
+
+@global CMDS
+    OP_ADD  = 8'hA0;
+    OP_SUB  = 8'hB0;
+    OP_NOP  = 4'h0;
+@endglob
+
+@project SELECT_CASE_WIDTH_MISMATCH_global_width_mismatch
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] sel = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [4] sel;
+        OUT [1] out_a;
+    }
+    ASYNCHRONOUS {
+        // Trigger: @global CASE wider than selector (8-bit global vs 4-bit selector)
+        SELECT (sel) {
+            CASE CMDS.OP_ADD {
+                out_a <= VCC;
+            }
+            // Valid: matching 4-bit @global constant (no false positive)
+            CASE CMDS.OP_NOP {
+                out_a <= GND;
+            }
+            DEFAULT {
+                out_a <= GND;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] sel;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    @new inst_h HelperMod {
+        IN  [4] sel = sel;
+        OUT [1] out_a = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+        out_b = sel[0];
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: @global CASE wider than selector (8-bit global vs 4-bit selector) in SYNC
+        SELECT (sel) {
+            CASE CMDS.OP_SUB {
+                r <= VCC;
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

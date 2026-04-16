@@ -1,0 +1,74 @@
+// TRISTATE_TRANSFORM_BLACKBOX_PORT: Multiple blackbox INOUT ports on same wire.
+// Trigger: two blackbox modules both have INOUT ports connected to the same
+// shared wire, alongside a local tri-state driver.
+// Context: multiple blackbox INOUT ports on same wire.
+
+@project BLACKBOX_PORT_multi_blackbox
+    @blackbox ExtModA {
+        PORT {
+            IN    [1] en;
+            INOUT [8] data;
+        }
+    }
+
+    @blackbox ExtModB {
+        PORT {
+            IN    [1] sel;
+            INOUT [8] data;
+        }
+    }
+
+    @top TopMod {
+        IN  [1] en = _;
+        IN  [1] sel = _;
+        IN  [8] din = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// Driver module with standard ternary z pattern
+@module DriverMod
+    PORT {
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        data <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// Trigger: multiple blackbox INOUT ports on shared wire
+@module TopMod
+    PORT {
+        IN  [1] en;
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] result;
+    }
+
+    WIRE {
+        bus [8];
+    }
+
+    @new inst_drv DriverMod {
+        IN    [1] en = en;
+        IN    [8] din = din;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_ext_a ExtModA {
+        IN    [1] en = en;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_ext_b ExtModB {
+        IN    [1] sel = sel;
+        INOUT [8] data = bus;
+    };
+
+    ASYNCHRONOUS {
+        result <= bus;
+    }
+@endmod

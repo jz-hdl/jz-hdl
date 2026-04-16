@@ -1,0 +1,70 @@
+// TRISTATE_TRANSFORM_PER_BIT_FAIL: VCC default variant with per-bit z via
+// INOUT ports across instances. Verifies that per-bit tri-state detection
+// fires under --tristate-default=VCC.
+// Contexts: driver module per-bit tristate via INOUT, top module per-bit wire.
+
+@project TRISTATE_TRANSFORM_PER_BIT_FAIL_per_bit_vcc
+    @top TopMod {
+        IN  [1] en_a = _;
+        IN  [1] en_b = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Driver module with per-bit tri-state via INOUT port
+@module DriverMod
+    PORT {
+        IN    [1] en_a;
+        IN    [1] en_b;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: per-bit z via INOUT port (4+4 split with different enables)
+        IF (en_a) {
+            data[7:4] <= 4'hA;
+        } ELSE {
+            data[7:4] <= 4'bzzzz;
+        }
+        IF (en_b) {
+            data[3:0] <= 4'hB;
+        } ELSE {
+            data[3:0] <= 4'bzzzz;
+        }
+    }
+@endmod
+
+// Top module with per-bit tri-state pattern on internal wire
+@module TopMod
+    PORT {
+        IN  [1] en_a;
+        IN  [1] en_b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        bus [8];
+        w_top [8];
+    }
+
+    @new inst_drv DriverMod {
+        IN    [1] en_a = en_a;
+        IN    [1] en_b = en_b;
+        INOUT [8] data = bus;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: per-bit z in top module wire
+        IF (en_a) {
+            w_top[7:4] <= 4'hC;
+        } ELSE {
+            w_top[7:4] <= 4'bzzzz;
+        }
+        IF (en_b) {
+            w_top[3:0] <= 4'hD;
+        } ELSE {
+            w_top[3:0] <= 4'bzzzz;
+        }
+        data <= w_top;
+    }
+@endmod

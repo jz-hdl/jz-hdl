@@ -1,0 +1,2 @@
+File: 4_3_CONST_CIRCULAR_DEP-self_reference.jz
+      17:9    error CONST_CIRCULAR_DEP S4.3/S7.10 Circular dependency in CONST/CONFIG definitions

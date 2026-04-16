@@ -1,0 +1,58 @@
+// CONST_NEGATIVE_OR_NONINT: Expression evaluating to negative in CONST.
+// Tests that CONST expressions resulting in negative values are caught.
+// Valid CONST expressions included to verify no false positives.
+
+@project CONST_NEGATIVE_OR_NONINT_negative_expression
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+        OUT [1] out_h = _;
+    }
+@endproj
+
+@module HelperMod
+    CONST {
+        GOOD = 8;
+        // Trigger: expression evaluating to negative
+        BAD_EXPR = 1 - 5;
+    }
+
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        WIDTH = 4;
+        VALID_EXPR = 10 - 2;
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        OUT [1] out_h;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = out_h;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

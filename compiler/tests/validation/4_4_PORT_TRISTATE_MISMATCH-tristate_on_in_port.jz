@@ -1,0 +1,69 @@
+// PORT_TRISTATE_MISMATCH: z assigned to IN port (only INOUT may use z).
+// Trigger is z literal assigned to IN port in ASYNC block.
+// PORT_DIRECTION_MISMATCH_IN co-fires because writing to IN port is also a direction error.
+// WARN_INTERNAL_TRISTATE co-fires on the port because z is assigned to it.
+
+@project PORT_TRISTATE_MISMATCH_tristate_on_in_port
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] ctrl = _;
+        IN  [8] din = _;
+        INOUT [8] bidir = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] ctrl;
+        IN  [8] data_in;
+        INOUT [8] bidir;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data_out <= r;
+        IF (ctrl) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 8'bz;
+        }
+        // Trigger: z assigned to IN port
+        data_in <= 8'bz;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] ctrl;
+        IN  [8] din;
+        INOUT [8] bidir;
+        OUT [8] dout;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] ctrl = ctrl;
+        IN  [8] data_in = din;
+        INOUT [8] bidir = bidir;
+        OUT [8] data_out = dout;
+    };
+
+    ASYNCHRONOUS {
+        IF (ctrl) {
+            bidir <= din;
+        } ELSE {
+            bidir <= 8'bz;
+        }
+    }
+@endmod

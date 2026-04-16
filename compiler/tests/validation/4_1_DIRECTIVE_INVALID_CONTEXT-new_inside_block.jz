@@ -1,0 +1,51 @@
+// DIRECTIVE_INVALID_CONTEXT: @new inside ASYNCHRONOUS block is forbidden.
+// S4.1/S6.2 says @new is a structural directive and may only appear at module scope,
+// not inside ASYNCHRONOUS or SYNCHRONOUS blocks.
+
+@project DIRECTIVE_INVALID_CONTEXT_new_inside_block
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    // Valid: @new at module scope (no error)
+    @new inst_a HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: @new inside ASYNCHRONOUS block
+        @new inst_b HelperMod {
+            IN  [1] din = r;
+            OUT [1] data = _;
+        };
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

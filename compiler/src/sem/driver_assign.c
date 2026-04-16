@@ -15,7 +15,8 @@
 void sem_lhs_observable_classify(JZASTNode *lhs,
                                         const JZModuleScope *mod_scope,
                                         int *out_has_register,
-                                        int *out_has_out_inout)
+                                        int *out_has_out_inout,
+                                        int *out_has_mem)
 {
     if (!lhs || !mod_scope) return;
 
@@ -23,16 +24,27 @@ void sem_lhs_observable_classify(JZASTNode *lhs,
     case JZ_AST_EXPR_CONCAT:
         for (size_t i = 0; i < lhs->child_count; ++i) {
             sem_lhs_observable_classify(lhs->children[i], mod_scope,
-                                        out_has_register, out_has_out_inout);
+                                        out_has_register, out_has_out_inout,
+                                        out_has_mem);
         }
         break;
 
-    case JZ_AST_EXPR_SLICE:
+    case JZ_AST_EXPR_SLICE: {
+        /* MEM port write target like `mem.wr[addr]` is an observable sink. */
+        JZMemPortRef mref;
+        memset(&mref, 0, sizeof(mref));
+        if (sem_match_mem_port_slice(lhs, mod_scope, NULL, &mref) &&
+            mref.mem_decl) {
+            if (out_has_mem) *out_has_mem = 1;
+            break;
+        }
         if (lhs->child_count >= 1) {
             sem_lhs_observable_classify(lhs->children[0], mod_scope,
-                                        out_has_register, out_has_out_inout);
+                                        out_has_register, out_has_out_inout,
+                                        out_has_mem);
         }
         break;
+    }
 
     case JZ_AST_EXPR_IDENTIFIER: {
         if (!lhs->name) return;
@@ -54,7 +66,8 @@ void sem_lhs_observable_classify(JZASTNode *lhs,
         /* Recurse generically into children for any other expression forms. */
         for (size_t i = 0; i < lhs->child_count; ++i) {
             sem_lhs_observable_classify(lhs->children[i], mod_scope,
-                                        out_has_register, out_has_out_inout);
+                                        out_has_register, out_has_out_inout,
+                                        out_has_mem);
         }
         break;
     }

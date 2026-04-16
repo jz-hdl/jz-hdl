@@ -1,0 +1,70 @@
+// TEMPLATE_COUNT_NOT_NONNEG_INT: @apply count is a non-integer expression.
+// Existing tests cover negative integer counts. This tests non-integer expressions
+// such as identifiers and string-like values in the count position.
+// Valid @apply[1] included to verify no false positives.
+
+@project TEMPLATE_COUNT_NOT_NONNEG_INT_non_integer_expr
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template simple(a, b)
+    a <= b;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    WIRE {
+        w1 [1];
+    }
+
+    ASYNCHRONOUS {
+        // Valid: @apply[1] with integer count (no error)
+        @apply[1] simple(w1, din);
+        // Trigger: non-integer count expression (identifier)
+        @apply[abc] simple(w1, din);
+        data = w1;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_a HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        w1 [1];
+    }
+
+    ASYNCHRONOUS {
+        // Valid: @apply[1] with integer count (no error)
+        @apply[1] simple(w1, r);
+        data = w1;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: non-integer count expression in SYNC
+        @apply[xyz] simple(r, clk);
+        r <= ~r;
+    }
+@endmod

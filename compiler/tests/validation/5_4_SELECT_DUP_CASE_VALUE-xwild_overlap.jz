@@ -1,0 +1,80 @@
+// SELECT_DUP_CASE_VALUE: Overlapping x-wildcard CASE patterns detected as duplicate.
+// Tests that the compiler detects when two x-wildcard CASE values overlap.
+// Non-overlapping x-wildcard patterns included to verify no false positive.
+
+@project SELECT_DUP_CASE_VALUE_xwild_overlap
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] opcode = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [8] opcode;
+        OUT [1] out_a;
+    }
+    ASYNCHRONOUS {
+        // Trigger: overlapping x-wildcard patterns in ASYNC
+        SELECT (opcode) {
+            CASE 8'b1010_xxxx {
+                out_a <= VCC;
+            }
+            CASE 8'b1010_xxxx {
+                out_a <= GND;
+            }
+            DEFAULT {
+                out_a <= GND;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] opcode;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] opcode = opcode;
+        OUT [1] out_a = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+        // Valid: non-overlapping x-wildcard patterns (no false positive)
+        SELECT (opcode) {
+            CASE 8'b1010_xxxx {
+                out_b <= VCC;
+            }
+            CASE 8'b0101_xxxx {
+                out_b <= GND;
+            }
+            DEFAULT {
+                out_b <= GND;
+            }
+        }
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: overlapping x-wildcard patterns in SYNC
+        SELECT (opcode) {
+            CASE 8'bxxxx_0011 {
+                r <= VCC;
+            }
+            CASE 8'bxxxx_0011 {
+                r <= GND;
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

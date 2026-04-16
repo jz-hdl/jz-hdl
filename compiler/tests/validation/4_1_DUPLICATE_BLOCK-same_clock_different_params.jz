@@ -1,0 +1,65 @@
+// DUPLICATE_BLOCK: Same clock with different EDGE/RESET params still counts as duplicate.
+// Existing test covers same clock same params and different clocks (negative).
+// This file tests that changing EDGE or RESET params does not avoid the duplicate check.
+
+@project DUPLICATE_BLOCK_same_clock_different_params
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] rst = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r1 [1] = 1'b0;
+        r2 [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r1;
+    }
+    // Valid: first SYNCHRONOUS block for clk (Rising edge, no reset)
+    SYNCHRONOUS(CLK=clk) {
+        r1 <= ~r1;
+    }
+    // Trigger: same clock with different EDGE param (should still be duplicate)
+    SYNCHRONOUS(CLK=clk EDGE=Falling) {
+        r2 <= ~r2;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] rst;
+        OUT [1] data;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r_a [1] = 1'b0;
+        r_b [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r_a;
+    }
+
+    // Valid: first SYNCHRONOUS block for clk (no reset)
+    SYNCHRONOUS(CLK=clk) {
+        r_a <= ~r_a;
+    }
+
+    // Trigger: same clock with RESET param added (should still be duplicate)
+    SYNCHRONOUS(CLK=clk RESET=rst) {
+        r_b <= ~r_b;
+    }
+@endmod

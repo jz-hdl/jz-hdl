@@ -1,0 +1,57 @@
+// TOP_PORT_NOT_LISTED: INOUT port omitted from @top binding.
+// Tests INOUT port direction not listed in @top block.
+// Valid IN/OUT port bindings included for no false positives.
+
+@project TOP_PORT_NOT_LISTED_inout_port_omitted
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        result = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        // Trigger: INOUT port omitted
+        INOUT [1] bidir;
+    }
+
+    @new helper_inst Helper {
+        IN  [1] clk = clk;
+        OUT [1] result = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        IF (clk) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 1'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

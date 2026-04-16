@@ -1,0 +1,3 @@
+File: 7_3_MEM_PORT_FIELD_UNDEFINED-async_port_invalid_field.jz
+      41:14   error MEM_PORT_FIELD_UNDEFINED S7.2/S7.7.2 Invalid MEM port field; expected '.addr', '.data', or '.wdata'
+      78:14   error MEM_PORT_FIELD_UNDEFINED S7.2/S7.7.2 Invalid MEM port field; expected '.addr', '.data', or '.wdata'

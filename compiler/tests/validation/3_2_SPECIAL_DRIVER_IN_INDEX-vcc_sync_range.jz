@@ -1,0 +1,66 @@
+// SPECIAL_DRIVER_IN_INDEX: VCC in range expression within SYNCHRONOUS block.
+// Existing test covers GND as bit-select in ASYNC single module.
+// This adds: VCC as index, SYNCHRONOUS context, range-expression context.
+// A single trigger covers all three missing contexts at once.
+
+@project SPECIAL_DRIVER_IN_INDEX_vcc_sync_range
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] val = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+// Helper module: valid bit-select (no special drivers — no false positive)
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] val;
+        OUT [8] out_a;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+        r_slice [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        out_a = r_slice;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= val;
+        // Valid: literal index in SYNC (no false positive)
+        r_slice <= r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] val;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+    WIRE {
+        ha_a [8];
+    }
+    REGISTER {
+        r [8] = 8'h00;
+        r_slice [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] val = val;
+        OUT [8] out_a = ha_a;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_a;
+        out_b = r_slice;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= val;
+        // Trigger: VCC as range bound in SYNCHRONOUS context
+        r_slice <= r[VCC:3'd0];
+    }
+@endmod

@@ -1,0 +1,79 @@
+// TOP_PORT_PIN_DIRECTION_MISMATCH: INOUT port bound to wrong pin category.
+// Tests INOUT port bound to IN_PINS and INOUT port bound to OUT_PINS.
+// Valid: IN→IN_PINS, OUT→OUT_PINS included for no false positives.
+
+@project TOP_PORT_PIN_DIRECTION_MISMATCH_inout_wrong_category
+    IN_PINS {
+        in_pin = { standard=LVCMOS33 };
+        in_pin2 = { standard=LVCMOS33 };
+    }
+    OUT_PINS {
+        out_pin = { standard=LVCMOS33, drive=8 };
+        out_pin2 = { standard=LVCMOS33, drive=8 };
+    }
+    MAP {
+        in_pin = 1;
+        in_pin2 = 2;
+        out_pin = 3;
+        out_pin2 = 4;
+    }
+    @top TopMod {
+        // Valid: IN port bound to IN_PINS
+        IN  [1] clk = in_pin;
+        // Valid: OUT port bound to OUT_PINS
+        OUT [1] data = out_pin;
+        // Trigger 1: INOUT port bound to IN_PINS
+        INOUT [1] bidir_a = in_pin2;
+        // Trigger 2: INOUT port bound to OUT_PINS
+        INOUT [1] bidir_b = out_pin2;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        result = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        INOUT [1] bidir_a;
+        INOUT [1] bidir_b;
+    }
+
+    @new helper_inst Helper {
+        IN  [1] clk = clk;
+        OUT [1] result = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        IF (clk) {
+            bidir_a <= r;
+            bidir_b <= r;
+        } ELSE {
+            bidir_a <= 1'bz;
+            bidir_b <= 1'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

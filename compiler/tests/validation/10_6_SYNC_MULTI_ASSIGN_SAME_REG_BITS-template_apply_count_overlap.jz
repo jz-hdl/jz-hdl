@@ -1,0 +1,74 @@
+// SYNC_MULTI_ASSIGN_SAME_REG_BITS: @apply with count causing overlapping register bit assignments.
+// When @apply[count] expands a template targeting the same register without
+// IDX-differentiated slicing in a SYNCHRONOUS block, multiple expansions assign
+// the same register bits, violating exclusive assignment after expansion.
+// Valid use: single @apply (no count overlap).
+
+@project SYNC_MULTI_ASSIGN_template_count_overlap
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@template set_reg(reg, val)
+    reg <= val;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] out_a;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: single @apply, no overlap
+        @apply set_reg(r, din);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        ha [1];
+    }
+
+    REGISTER {
+        r1 [1] = 1'b0;
+        r2 [1] = 1'b0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] din = r1;
+        OUT [1] out_a = ha;
+    };
+
+    ASYNCHRONOUS {
+        out_a = r1 | ha;
+        out_b = r2;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: @apply[2] without IDX causes overlapping register bit assignments
+        @apply[2] set_reg(r1, VCC);
+
+        // Valid: single @apply, no overlap
+        @apply set_reg(r2, VCC);
+    }
+@endmod

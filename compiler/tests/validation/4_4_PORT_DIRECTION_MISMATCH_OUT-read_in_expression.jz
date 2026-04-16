@@ -1,0 +1,64 @@
+// PORT_DIRECTION_MISMATCH_OUT: Reading from OUT port in nested expression.
+// Trigger is OUT port used as operand in an expression. Valid writes included for no false positives.
+
+@project PORT_DIRECTION_MISMATCH_OUT_read_in_expression
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+        OUT [8] data_err;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: drive OUT ports
+        data_out <= r;
+        // Trigger: read OUT port in expression (data_out + data_in)
+        data_err <= data_out + data_in;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= data_in;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] data_in = din;
+        OUT [8] data_out = dout_a;
+        OUT [8] data_err = dout_b;
+    };
+
+    ASYNCHRONOUS {
+        dout_a <= r;
+        dout_b <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

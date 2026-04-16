@@ -1,0 +1,40 @@
+// MODULE_PORT_IN_ONLY: Negative test — module with only INOUT ports should NOT trigger.
+// The rule warns when a module declares only IN ports (no OUT/INOUT).
+// A module with INOUT ports is not input-only and should compile cleanly.
+
+@project MODULE_PORT_IN_ONLY_inout_only_ok
+    @top TopMod {
+        IN    [1] clk = _;
+        INOUT [8] bus = _;
+    }
+@endproj
+
+@module HelperInout
+    PORT {
+        IN    [1] en;
+        INOUT [8] data;
+    }
+    ASYNCHRONOUS {
+        data <= en ? 8'hAA : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        INOUT [8] bus;
+    }
+
+    @new inst_h HelperInout {
+        IN    [1] en = r;
+        INOUT [8] data = bus;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

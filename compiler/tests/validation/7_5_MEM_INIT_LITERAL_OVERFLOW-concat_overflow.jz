@@ -1,0 +1,83 @@
+// MEM_INIT_LITERAL_OVERFLOW: Concatenation/replication expression overflows word width.
+// Trigger in helper (concatenation) and top (replication). Valid concat init included.
+
+@project MEM_INIT_LITERAL_OVERFLOW_concat_overflow
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Trigger: concatenation resulting in 12 bits for 8-bit word
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_a [8] [4] = {8'hFF, 4'hF} {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_a.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        mem_a.wr[addr] <= 8'h00;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Trigger: replication resulting in 16 bits for 8-bit word
+    MEM {
+        mem_b [8] [4] = {2{8'hAA}} {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Valid: concatenation that fits exactly (4+4=8 bits for 8-bit word)
+    MEM {
+        mem_ok [8] [4] = {4'hF, 4'h0} {
+            OUT rd_ok ASYNC;
+            IN  wr_ok;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] addr = addr;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_b.rd[addr] ^ mem_ok.rd_ok[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        mem_b.wr[addr] <= 8'h00;
+        mem_ok.wr_ok[addr] <= 8'h00;
+    }
+@endmod

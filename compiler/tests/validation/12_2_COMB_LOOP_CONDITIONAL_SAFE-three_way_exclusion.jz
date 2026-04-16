@@ -1,0 +1,89 @@
+// COMB_LOOP_CONDITIONAL_SAFE: Three-way mutual exclusion with multiple conditions.
+// Tests that the compiler warns (not errors) when a two-signal cycle exists
+// across three mutually exclusive IF/ELSE IF/ELSE branches.
+// Valid linear paths included to verify no false positives.
+
+@project COMB_LOOP_CONDITIONAL_SAFE_three_way_exclusion
+    @top TopMod {
+        IN  [1] sel0  = _;
+        IN  [1] sel1  = _;
+        IN  [1] in_a  = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper: two-signal cycle across three mutually exclusive branches
+@module HelperThreeWay
+    PORT {
+        IN  [1] sel0;
+        IN  [1] sel1;
+        IN  [1] in_a;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        a [1];
+        b [1];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: cycle across three mutually exclusive branches
+        IF (sel0) {
+            a <= in_a;
+            b <= a;
+        } ELSE {
+            IF (sel1) {
+                b <= in_a;
+                a <= b;
+            } ELSE {
+                a <= in_a;
+                b <= in_a;
+            }
+        }
+        out_a = a;
+        out_b = b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel0;
+        IN  [1] sel1;
+        IN  [1] in_a;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        x [1];
+        y [1];
+    }
+
+    @new inst_h HelperThreeWay {
+        IN  [1] sel0 = sel0;
+        IN  [1] sel1 = sel1;
+        IN  [1] in_a = in_a;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: cycle across three mutually exclusive branches in top module
+        IF (sel0) {
+            x <= in_a;
+            y <= x;
+        } ELSE {
+            IF (sel1) {
+                y <= in_a;
+                x <= y;
+            } ELSE {
+                x <= in_a;
+                y <= in_a;
+            }
+        }
+        out_a = x;
+        out_b = y;
+    }
+@endmod

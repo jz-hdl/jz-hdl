@@ -1,0 +1,36 @@
+// OBS_X_TO_OBSERVABLE_SINK: x-valued literal bits propagating to a MEM write.
+// Covers the MEM write sink explicitly (REGISTER and OUT sinks are covered by
+// other tests under this rule). Writing `mem.wr[addr] <= 8'bxxxx_0000` in a
+// SYNCHRONOUS block must fire OBS_X_TO_OBSERVABLE_SINK.
+
+@project OBS_X_TO_OBSERVABLE_SINK_x_bits_to_mem
+    @top TopMod {
+        IN  [1] clk  = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        m [8] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = m.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: x-valued literal written directly into MEM IN port
+        m.wr[addr] <= 8'bxxxx_0000;
+    }
+@endmod

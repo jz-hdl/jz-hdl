@@ -1,0 +1,75 @@
+// TRISTATE_TRANSFORM_OE_EXTRACT_FAIL: Nested ternary z pattern.
+// DriverA uses standard ternary z pattern — OE extracts fine.
+// DriverB uses a nested ternary where both top-level branches are
+// non-literal expressions (inner ternaries), so neither Pattern A nor A'
+// matches in the OE extractor. The z values are concatenation expressions.
+// Enables are clearly exclusive (en==1 vs en==0) for the semantic prover.
+// Trigger: nested ternary z pattern (GND default)
+
+@project OE_EXTRACT_FAIL_nested_ternary
+    @top TopMod {
+        IN  [1] en = _;
+        IN  [1] sel = _;
+        IN  [8] din = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// DriverA: standard ternary z pattern, OE extraction succeeds
+@module DriverA
+    PORT {
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        data <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// DriverB: nested ternary with concatenated z in both top branches
+@module DriverB
+    PORT {
+        IN    [1] en;
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: nested ternary z pattern — both branches are sub-expressions
+        data <= (en == 1'b0) ? ((sel == 1'b1) ? din : {4'bzzzz, 4'bzzzz}) : {4'bzzzz, 4'bzzzz};
+    }
+@endmod
+
+// Top module: two drivers sharing INOUT wire with exclusive enables
+@module TopMod
+    PORT {
+        IN  [1] en;
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] result;
+    }
+
+    WIRE {
+        bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [1] en = en;
+        IN    [8] din = din;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [1] en = en;
+        IN    [1] sel = sel;
+        IN    [8] din = din;
+        INOUT [8] data = bus;
+    };
+
+    ASYNCHRONOUS {
+        result <= bus;
+    }
+@endmod

@@ -1,0 +1,56 @@
+// CONST_UNDEFINED_IN_WIDTH_OR_SLICE: Undefined CONST in output port width.
+// Tests that an undeclared CONST name in OUT port width is caught.
+// Valid CONST-based output port width included to verify no false positives.
+
+@project CONST_UNDEFINED_IN_WIDTH_OR_SLICE_output_port_width
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+        OUT [1] out_h = _;
+    }
+@endproj
+
+@module HelperMod
+    CONST {
+        VALID_W = 1;
+    }
+
+    PORT {
+        IN  [1] din;
+        // Trigger: undefined CONST in output port width
+        OUT [UNDEF_OUT_W] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        MY_W = 1;
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [MY_W] data;
+        OUT [MY_W] out_h;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = out_h;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

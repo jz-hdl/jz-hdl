@@ -1,0 +1,125 @@
+// NET_TRI_STATE_ALL_Z_READ: All-z via multiple instance INOUT ports.
+// Tests that the compiler detects when all instance drivers assign z to a shared
+// wire (multi-driver all-z scenario) and the signal is still read.
+// Valid: wire with at least one non-z driver included for negative testing.
+
+@project NET_TRI_STATE_ALL_Z_READ_instance_all_z
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en  = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Driver that always assigns z via INOUT port
+@module ZDriverA
+    PORT {
+        IN    [1] en;
+        INOUT [8] data;
+        OUT   [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'bzzzz_zzzz;
+        } ELSE {
+            data <= 8'bzzzz_zzzz;
+        }
+        ack <= en;
+    }
+@endmod
+
+// Another driver that always assigns z via INOUT port
+@module ZDriverB
+    PORT {
+        IN    [1] en;
+        INOUT [8] data;
+        OUT   [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'bzzzz_zzzz;
+        } ELSE {
+            data <= 8'bzzzz_zzzz;
+        }
+        ack <= en;
+    }
+@endmod
+
+// Helper module: multi-instance all-z INOUT wire that is read
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    WIRE {
+        // Trigger: all instance INOUT drivers assign z, but wire is read
+        h_allz [8];
+    }
+
+    @new h_za ZDriverA {
+        IN    [1] en = en;
+        INOUT [8] data = h_allz;
+        OUT   [1] ack = _;
+    };
+
+    @new h_zb ZDriverB {
+        IN    [1] en = en;
+        INOUT [8] data = h_allz;
+        OUT   [1] ack = _;
+    };
+
+    ASYNCHRONOUS {
+        data <= h_allz;
+    }
+@endmod
+
+// Top module: multi-instance all-z wire and helper instantiation
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    WIRE {
+        // Trigger: all instance INOUT drivers assign z in top, but wire is read
+        t_allz [8];
+        h_out [8];
+    }
+
+    @new inst_za ZDriverA {
+        IN    [1] en = en;
+        INOUT [8] data = t_allz;
+        OUT   [1] ack = _;
+    };
+
+    @new inst_zb ZDriverB {
+        IN    [1] en = en;
+        INOUT [8] data = t_allz;
+        OUT   [1] ack = _;
+    };
+
+    @new inst_h HelperMod {
+        IN  [1] en = en;
+        OUT [8] data = h_out;
+    };
+
+    ASYNCHRONOUS {
+        data <= t_allz | h_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

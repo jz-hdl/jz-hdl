@@ -1,0 +1,74 @@
+// TOP_PORT_SIGNAL_WIDTH_MISMATCH: INOUT port binding width doesn't match pin width.
+// Tests INOUT port bound to INOUT_PINS where widths differ.
+// Valid: IN and OUT bindings with correct widths for no false positives.
+
+@project TOP_PORT_SIGNAL_WIDTH_MISMATCH_inout_signal_width
+    IN_PINS {
+        clk_pin = { standard=LVCMOS33 };
+    }
+    OUT_PINS {
+        led = { standard=LVCMOS33, drive=8 };
+    }
+    INOUT_PINS {
+        sda = { standard=LVCMOS33, drive=4 };
+    }
+    MAP {
+        clk_pin = 1;
+        led = 2;
+        sda = 3;
+    }
+    @top TopMod {
+        // Valid: IN port with matching width
+        IN  [1] clk = clk_pin;
+        // Valid: OUT port with matching width
+        OUT [1] data = led;
+        // Trigger: INOUT port width [4] doesn't match pin width [1]
+        INOUT [4] bidir = sda;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        result = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        INOUT [4] bidir;
+    }
+
+    @new helper_inst Helper {
+        IN  [1] clk = clk;
+        OUT [1] result = _;
+    };
+
+    REGISTER {
+        r [4] = 4'h0;
+    }
+
+    ASYNCHRONOUS {
+        data = r[0:0];
+        IF (clk) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 4'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

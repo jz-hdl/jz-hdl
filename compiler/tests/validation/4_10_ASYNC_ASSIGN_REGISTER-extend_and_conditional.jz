@@ -1,0 +1,135 @@
+// ASYNC_ASSIGN_REGISTER: Cannot write REGISTER in ASYNCHRONOUS block.
+// Extends coverage to extension modifier forms (<=z, =z, =>z) and
+// register write inside IF/ELSE conditional. Valid register reads
+// in ASYNC verify no false positives.
+
+@project ASYNC_ASSIGN_REGISTER_extend_and_conditional
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        IN  [4] din_narrow = _;
+        IN  [8] din_wide = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+    }
+@endproj
+
+// Helper module: <=z to register in ASYNC
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din_narrow;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: <=z to register in ASYNC
+        r <=z din_narrow;
+        // Valid: register read in ASYNC (no error)
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod
+
+// Second helper: =z to register in ASYNC
+@module HelperMod2
+    PORT {
+        IN  [1] clk;
+        IN  [4] din_narrow;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: =z to register in ASYNC
+        r =z din_narrow;
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod
+
+// Third helper: =>z to register in ASYNC
+@module HelperMod3
+    PORT {
+        IN  [1] clk;
+        IN  [4] din_narrow;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: =>z to register in ASYNC
+        din_narrow =>z r;
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [4] din_narrow;
+        IN  [8] din_wide;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] din_narrow = din_narrow;
+        OUT [8] dout = dout_a;
+    };
+
+    @new inst_h2 HelperMod2 {
+        IN  [1] clk = clk;
+        IN  [4] din_narrow = din_narrow;
+        OUT [8] dout = dout_b;
+    };
+
+    @new inst_h3 HelperMod3 {
+        IN  [1] clk = clk;
+        IN  [4] din_narrow = din_narrow;
+        OUT [8] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: register write inside IF/ELSE conditional
+        IF (sel) {
+            r <= din_wide;
+        } ELSE {
+            r <= din_wide;
+        }
+        // Valid: register read in ASYNC (no error)
+        dout_c = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

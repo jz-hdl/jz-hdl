@@ -1,0 +1,66 @@
+// TOP_OUT_LITERAL_BINDING: Literal within concatenation on OUT port in @top.
+// Tests OUT port bound to concatenation containing a literal value.
+// Valid: IN port bound to literal, OUT bound to no-connect, OUT bound to pin.
+
+@project TOP_OUT_LITERAL_BINDING_literal_in_concat
+    OUT_PINS {
+        led_a = { standard=LVCMOS33, drive=8 };
+        led_b = { standard=LVCMOS33, drive=8 };
+    }
+    MAP {
+        led_a = 1;
+        led_b = 2;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        // Valid: IN port bound to literal tie-off
+        IN  [1] tie_high = 1'b1;
+        // Valid: OUT port bound to pin
+        OUT [1] valid_out = led_a;
+        // Trigger: literal within concatenation on OUT port
+        OUT [2] data = { led_b, 1'b0 };
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        result = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] tie_high;
+        OUT [1] valid_out;
+        OUT [2] data;
+    }
+
+    @new helper_inst Helper {
+        IN  [1] clk = clk;
+        OUT [1] result = _;
+    };
+
+    REGISTER {
+        r [2] = 2'b00;
+    }
+
+    ASYNCHRONOUS {
+        valid_out = tie_high;
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

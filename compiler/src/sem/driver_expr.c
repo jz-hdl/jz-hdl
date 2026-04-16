@@ -902,16 +902,22 @@ static void sem_check_block_expressions_inner(JZASTNode *block,
             if (sem_expr_contains_x_literal_anywhere(rhs)) {
                 int has_reg = 0;
                 int has_out_inout = 0;
+                int has_mem = 0;
                 sem_lhs_observable_classify(lhs, mod_scope,
-                                            &has_reg, &has_out_inout);
+                                            &has_reg, &has_out_inout,
+                                            &has_mem);
 
-                if ((has_reg && is_sync) || has_out_inout) {
+                if ((has_reg && is_sync) || (has_mem && is_sync) ||
+                    has_out_inout) {
                     /* Point the diagnostic at the RHS expression for
                      * better usability when complex expressions are involved.
                      */
                     JZLocation loc = rhs->loc.line ? rhs->loc : stmt->loc;
                     char explain[256];
-                    const char *sink_type = has_out_inout ? "OUT/INOUT port" : "register";
+                    const char *sink_type =
+                        has_out_inout ? "OUT/INOUT port" :
+                        has_reg       ? "register" :
+                                        "MEM";
                     snprintf(explain, sizeof(explain),
                              "RHS expression contains x-valued literal bits that would\n"
                              "propagate to a %s. Mask or select away x bits\n"
@@ -1014,6 +1020,64 @@ static void sem_check_slice_expr(JZASTNode *slice,
         if (sem_try_const_eval_ast_expr(lsb_node, &v) && v >= 0) {
             lsb_val = (unsigned)v;
             lsb_valid = 1;
+        }
+    }
+
+    /* Identifier indices: resolve CONST or CONFIG names to their values so
+     * SLICE_MSB_LESS_THAN_LSB and SLICE_INDEX_OUT_OF_RANGE can fire on
+     * named-constant slices like bus[HIGH:LOW]. */
+    if (!msb_valid &&
+        msb_node->type == JZ_AST_EXPR_IDENTIFIER && msb_node->name &&
+        strcmp(msb_node->name, "IDX") != 0) {
+        const JZSymbol *c_sym = module_scope_lookup_kind(scope, msb_node->name, JZ_SYM_CONST);
+        const char *value_text = NULL;
+        if (c_sym && c_sym->node && c_sym->node->text) {
+            value_text = c_sym->node->text;
+        } else if (project_symbols && project_symbols->data) {
+            const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+            size_t count = project_symbols->len / sizeof(JZSymbol);
+            for (size_t i = 0; i < count; ++i) {
+                if (syms[i].kind == JZ_SYM_CONFIG && syms[i].name &&
+                    strcmp(syms[i].name, msb_node->name) == 0 &&
+                    syms[i].node && syms[i].node->text) {
+                    value_text = syms[i].node->text;
+                    break;
+                }
+            }
+        }
+        if (value_text) {
+            long long v = 0;
+            if (jz_const_eval_expr(value_text, NULL, &v) == 0 && v >= 0) {
+                msb_val = (unsigned)v;
+                msb_valid = 1;
+            }
+        }
+    }
+    if (!lsb_valid &&
+        lsb_node->type == JZ_AST_EXPR_IDENTIFIER && lsb_node->name &&
+        strcmp(lsb_node->name, "IDX") != 0) {
+        const JZSymbol *c_sym = module_scope_lookup_kind(scope, lsb_node->name, JZ_SYM_CONST);
+        const char *value_text = NULL;
+        if (c_sym && c_sym->node && c_sym->node->text) {
+            value_text = c_sym->node->text;
+        } else if (project_symbols && project_symbols->data) {
+            const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+            size_t count = project_symbols->len / sizeof(JZSymbol);
+            for (size_t i = 0; i < count; ++i) {
+                if (syms[i].kind == JZ_SYM_CONFIG && syms[i].name &&
+                    strcmp(syms[i].name, lsb_node->name) == 0 &&
+                    syms[i].node && syms[i].node->text) {
+                    value_text = syms[i].node->text;
+                    break;
+                }
+            }
+        }
+        if (value_text) {
+            long long v = 0;
+            if (jz_const_eval_expr(value_text, NULL, &v) == 0 && v >= 0) {
+                lsb_val = (unsigned)v;
+                lsb_valid = 1;
+            }
         }
     }
 

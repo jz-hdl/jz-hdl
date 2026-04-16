@@ -1,0 +1,92 @@
+// KEYWORD_AS_IDENTIFIER: Happy-path test for identifiers that resemble but are
+// not exactly reserved keywords.
+// The reserved list is case-sensitive and applies only to UPPERCASE forms like
+// CONST, PORT, WIRE, REGISTER, LATCH, MEM, MUX, CDC, IN, OUT, INOUT,
+// ASYNCHRONOUS, SYNCHRONOUS, IF, ELIF, ELSE, SELECT, CASE, DEFAULT,
+// OVERRIDE, CONFIG, CLOCKS, IN_PINS, OUT_PINS, INOUT_PINS, MAP, IDX, VCC, GND.
+// Near-keywords (different casing, suffixes, prefixes) remain valid.
+// No diagnostics expected.
+
+@project KEYWORD_AS_IDENTIFIER_valid_identifiers_ok
+    @top TopMod {
+        IN  [1] clk  = _;
+        OUT [1] dout = _;
+    }
+@endproj
+
+// Module name that resembles a keyword but isn't one
+@module Register_Bank
+    PORT {
+        IN  [1] clk;
+        // Port names: lowercase versions of keywords are valid
+        IN  [1] in_bit;
+        IN  [1] port_val;
+        OUT [1] out_bit;
+        OUT [1] wire_x;
+    }
+
+    // CONST names: underscore-suffixed and lowercase-keyword-like
+    CONST {
+        idx      = 4;
+        const_v  = 1;
+        Mux      = 2;
+        myVCC    = 3;
+    }
+
+    // REGISTER names: keyword-adjacent identifiers
+    REGISTER {
+        register_r [1] = 1'b0;
+        latch_r    [1] = 1'b0;
+        mem_r      [1] = 1'b0;
+        selectOne  [1] = 1'b0;
+    }
+
+    WIRE {
+        case_w    [1];
+        default_w [1];
+        ifCond    [1];
+    }
+
+    ASYNCHRONOUS {
+        out_bit   = register_r;
+        wire_x    = latch_r;
+        case_w    = mem_r;
+        default_w = selectOne;
+        ifCond    = register_r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        register_r <= in_bit;
+        latch_r    <= port_val;
+        mem_r      <= ~mem_r;
+        selectOne  <= ~selectOne;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] dout;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    // Instance name resembles a keyword but is valid
+    @new port_inst Register_Bank {
+        IN  [1] clk      = clk;
+        IN  [1] in_bit   = r;
+        IN  [1] port_val = r;
+        OUT [1] out_bit  = dout;
+        OUT [1] wire_x   = _;
+    };
+
+    ASYNCHRONOUS {
+        // wires/regs using near-keyword names; valid in expressions
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

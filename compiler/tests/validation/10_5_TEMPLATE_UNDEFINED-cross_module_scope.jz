@@ -1,0 +1,76 @@
+// TEMPLATE_UNDEFINED: @apply references a module-scoped template from a different module.
+// Module-scoped templates are visible only within their defining module (S10.5).
+// Valid @apply of file-scoped template included to verify no false positives.
+
+@project TEMPLATE_UNDEFINED_cross_module_scope
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// File-scoped template — visible to all modules
+@template file_tmpl(a, b)
+    a <= b;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    // Module-scoped template — visible only inside HelperMod
+    @template helper_only(a, b)
+        a <= b;
+    @endtemplate
+
+    WIRE {
+        w1 [1];
+        w2 [1];
+    }
+
+    ASYNCHRONOUS {
+        // Valid: apply file-scoped template (no error)
+        @apply file_tmpl(w1, din);
+        // Valid: apply own module-scoped template (no error)
+        @apply helper_only(w2, din);
+        data = w1;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_a HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        w1 [1];
+    }
+
+    ASYNCHRONOUS {
+        // Valid: apply file-scoped template (no error)
+        @apply file_tmpl(w1, r);
+        // Trigger: cross-module scope — helper_only is module-scoped to HelperMod
+        @apply helper_only(w1, r);
+        data = w1;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

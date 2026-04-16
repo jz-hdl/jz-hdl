@@ -1,0 +1,2 @@
+File: 1_1_ID_SYNTAX_INVALID-instance_name.jz
+      35:5    error ID_SYNTAX_INVALID S1.1 Identifier does not match identifier regex or exceeds 255 chars

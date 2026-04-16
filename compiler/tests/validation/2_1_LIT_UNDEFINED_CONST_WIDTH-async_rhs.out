@@ -1,0 +1,2 @@
+File: 2_1_LIT_UNDEFINED_CONST_WIDTH-async_rhs.jz
+      22:23   error LIT_UNDEFINED_CONST_WIDTH S2.1 Width uses undefined CONST name

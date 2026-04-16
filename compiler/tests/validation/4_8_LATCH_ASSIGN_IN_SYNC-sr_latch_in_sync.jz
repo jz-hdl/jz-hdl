@@ -1,0 +1,83 @@
+// LATCH_ASSIGN_IN_SYNC: SR-latch assignment in SYNCHRONOUS block.
+// Tests SR latch guarded assignment inside SYNCHRONOUS block across modules.
+// Valid SR-latch assignment in ASYNCHRONOUS and valid register write in SYNC
+// included to verify no false positives.
+
+@project LATCH_ASSIGN_IN_SYNC_sr_latch_in_sync
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] set_sig = _;
+        IN  [1] reset_sig = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module: SR-latch written inside SYNCHRONOUS block
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] set_sig;
+        IN  [1] reset_sig;
+        OUT [1] data;
+    }
+
+    LATCH {
+        lat_ok [1] SR;
+        lat_bad [1] SR;
+    }
+
+    REGISTER {
+        r_ok [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: SR-latch assignment in ASYNC (should NOT trigger)
+        lat_ok <= set_sig : reset_sig;
+        data <= r_ok;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: register write in SYNC (should NOT trigger)
+        r_ok <= lat_ok;
+        // Trigger: SR-latch guarded assignment in SYNC block (helper module)
+        lat_bad <= set_sig : reset_sig;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] set_sig;
+        IN  [1] reset_sig;
+        OUT [1] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] set_sig = set_sig;
+        IN  [1] reset_sig = reset_sig;
+        OUT [1] data = _;
+    };
+
+    LATCH {
+        lat_top_ok [1] SR;
+        lat_top_bad [1] SR;
+    }
+
+    REGISTER {
+        r_top [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: SR-latch assignment in ASYNC
+        lat_top_ok <= set_sig : reset_sig;
+        data <= r_top;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: register write in SYNC
+        r_top <= lat_top_ok;
+        // Trigger: SR-latch guarded assignment in SYNC block (top module)
+        lat_top_bad <= set_sig : reset_sig;
+    }
+@endmod

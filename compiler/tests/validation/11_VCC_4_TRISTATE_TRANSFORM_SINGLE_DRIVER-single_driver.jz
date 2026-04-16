@@ -1,0 +1,69 @@
+// TRISTATE_TRANSFORM_SINGLE_DRIVER: VCC default variant.
+// Verifies that single-driver tri-state net transformation emits
+// TRISTATE_TRANSFORM_SINGLE_DRIVER warning when --tristate-default=VCC.
+// Contexts: helper module with single-driver tristate wire, top module with
+// single-driver tristate wire.
+// Valid: non-tri-state wire does not trigger the warning.
+
+@project TRISTATE_TRANSFORM_SINGLE_DRIVER_single_driver_vcc
+    @top TopMod {
+        IN  [1] en = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module with single-driver tri-state wire
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w [8];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: single-driver tri-state in helper module
+        IF (en) {
+            w <= din;
+        } ELSE {
+            w <= 8'bzzzz_zzzz;
+        }
+        data <= w;
+    }
+@endmod
+
+// Top module with single-driver tri-state wire
+@module TopMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w_top [8];
+        w_plain [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en = en;
+        IN  [8] din = 8'hFF;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: single-driver tri-state in top module
+        IF (en) {
+            w_top <= 8'hCC;
+        } ELSE {
+            w_top <= 8'bzzzz_zzzz;
+        }
+
+        // Valid: non-tri-state wire, no z
+        w_plain <= 8'h00;
+
+        data <= w_top | w_plain;
+    }
+@endmod

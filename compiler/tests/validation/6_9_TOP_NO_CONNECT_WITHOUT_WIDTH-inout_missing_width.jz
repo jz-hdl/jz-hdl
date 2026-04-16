@@ -1,0 +1,60 @@
+// TOP_NO_CONNECT_WITHOUT_WIDTH: INOUT port bound to _ without explicit width.
+// Tests INOUT port missing width bracket in @top no-connect.
+// Valid: IN and OUT no-connect with explicit width included for no false positives.
+
+@project TOP_NO_CONNECT_WITHOUT_WIDTH_inout_missing_width
+    @top TopMod {
+        // Valid: IN no-connect with explicit width
+        IN  [1] clk = _;
+        // Valid: OUT no-connect with explicit width
+        OUT [1] data = _;
+        // Trigger: INOUT port missing width
+        INOUT [] bidir = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        result = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        INOUT [1] bidir;
+    }
+
+    @new helper_inst Helper {
+        IN  [1] clk = clk;
+        OUT [1] result = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        IF (clk) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 1'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

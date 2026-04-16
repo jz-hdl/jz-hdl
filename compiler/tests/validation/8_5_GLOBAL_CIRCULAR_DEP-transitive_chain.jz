@@ -1,0 +1,40 @@
+// GLOBAL_CIRCULAR_DEP: Transitive chain cycle in @global block.
+// Tests three-node circular dependency: A=B, B=C, C=A.
+// Valid block included to verify no false positives.
+
+// Trigger: transitive chain cycle
+@global CHAIN
+    A = B;
+    B = C;
+    C = A;
+    D = 8'h42;
+@endglob
+
+// Valid: no circular dependencies
+@global SAFE
+    X = 8'hAA;
+    Y = 8'hBB;
+@endglob
+
+@project GLOBAL_CIRCULAR_DEP_transitive_chain
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= SAFE.X;
+    }
+@endmod

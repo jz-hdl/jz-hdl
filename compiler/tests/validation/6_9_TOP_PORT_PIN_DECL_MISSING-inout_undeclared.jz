@@ -1,0 +1,70 @@
+// TOP_PORT_PIN_DECL_MISSING: INOUT port connected to undeclared pin name.
+// Tests INOUT port bound to name not in INOUT_PINS.
+// Valid IN/OUT pin bindings included for no false positives.
+
+@project TOP_PORT_PIN_DECL_MISSING_inout_undeclared
+    IN_PINS {
+        real_in = { standard=LVCMOS33 };
+    }
+    OUT_PINS {
+        real_out = { standard=LVCMOS33, drive=8 };
+    }
+    MAP {
+        real_in = 1;
+        real_out = 2;
+    }
+    @top TopMod {
+        // Valid: bound to declared IN pin
+        IN  [1] clk = real_in;
+        // Valid: bound to declared OUT pin
+        OUT [1] data = real_out;
+        // Trigger: INOUT port bound to undeclared pin name
+        INOUT [1] bidir = ghost_pin;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        result = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        INOUT [1] bidir;
+    }
+
+    @new helper_inst Helper {
+        IN  [1] clk = clk;
+        OUT [1] result = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        IF (clk) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 1'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -431,7 +431,8 @@ int sem_expr_contains_x_literal_anywhere(const JZASTNode *expr);
 void sem_lhs_observable_classify(JZASTNode *lhs,
                                  const JZModuleScope *mod_scope,
                                  int *out_has_register,
-                                 int *out_has_out_inout);
+                                 int *out_has_out_inout,
+                                 int *out_has_mem);
 
 int sem_expr_has_latch_identifier(const JZASTNode *expr,
                                   const JZModuleScope *mod_scope);
@@ -542,11 +543,29 @@ int sem_block_reads_name(const JZASTNode *node, const char *name);
 JZNetBinding *sem_net_find_binding(JZBuffer *bindings,
                                    JZASTNode *decl);
 
+/* Build a complete net graph for a single module: declarations, aliases, usage,
+ * CDC clock sinks, and instance bindings. On success, *nets and *bindings are
+ * populated and owned by the caller (must free via sem_net_free_module_graph).
+ * Returns 0 on success, non-zero on failure (buffers are freed on failure).
+ */
+int sem_net_build_module_graph(const JZModuleScope *scope,
+                               const JZBuffer *project_symbols,
+                               JZBuffer *nets_out,
+                               JZBuffer *bindings_out);
+
+/* Free a net graph populated by sem_net_build_module_graph. */
+void sem_net_free_module_graph(JZBuffer *nets, JZBuffer *bindings);
+
 /* driver_comb.c */
 void sem_check_combinational_loops_for_module(const JZModuleScope *scope,
                                               JZBuffer *nets,
                                               JZBuffer *bindings,
+                                              JZBuffer *module_scopes,
+                                              const JZBuffer *project_symbols,
+                                              JZBuffer *module_comb_cache,
                                               JZDiagnosticList *diagnostics);
+
+void sem_comb_free_module_comb_cache(JZBuffer *cache);
 
 void sem_comb_collect_targets_from_lhs(JZASTNode *lhs,
                                        const JZModuleScope *scope,

@@ -1,0 +1,35 @@
+// GLOBAL_INVALID_EXPR_TYPE: Decimal literal overflow in @global block.
+// Tests that decimal base literal exceeding declared width triggers the error.
+// Valid decimal literals included to verify no false positives.
+
+@global DVALS
+    VALID_A = 4'd15;
+    VALID_B = 4'd0;
+    VALID_C = 8'd255;
+    // Trigger: decimal overflow
+    OVER_A  = 4'd16;
+    VALID_D = 5'd16;
+@endglob
+
+@project GLOBAL_INVALID_EXPR_TYPE_decimal_overflow
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= DVALS.VALID_C;
+    }
+@endmod

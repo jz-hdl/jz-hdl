@@ -296,6 +296,33 @@ static int sem_node_has_assignment_for_name(const JZASTNode *node,
     return 0;
 }
 
+/* Returns 1 if `target` is `node` or any descendant of `node`. */
+static int sem_node_contains_node(const JZASTNode *node,
+                                  const JZASTNode *target)
+{
+    if (!node || !target) return 0;
+    if (node == target) return 1;
+    for (size_t i = 0; i < node->child_count; ++i) {
+        if (sem_node_contains_node(node->children[i], target)) return 1;
+    }
+    return 0;
+}
+
+/* Find the top-level ASYNC/SYNC/CDC block inside `mod` that contains `stmt`.
+ * Returns NULL if `stmt` is not inside any such block (e.g., it's a
+ * top-level @new instance binding). */
+static JZASTNode *sem_find_containing_block_for_stmt(JZASTNode *mod,
+                                                      JZASTNode *stmt)
+{
+    if (!mod || !stmt) return NULL;
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *blk = mod->children[ci];
+        if (!blk || blk->type != JZ_AST_BLOCK || !blk->block_kind) continue;
+        if (sem_node_contains_node(blk, stmt)) return blk;
+    }
+    return NULL;
+}
+
 /* Conservative AST-based check: does this block contain any *read* of the
  * given identifier name (as opposed to just assignments)? We approximate reads
  * as occurrences in expression contexts: RHS of assignments, IF/ELIF
@@ -1853,6 +1880,7 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
              * considers guard conditions, distinct constants, IF/ELSE branches,
              * and pairwise mutual exclusion proofs.
              */
+            int fired_multi_driver = 0;
             if (instance_driver_count > 1 && net_name && module_scopes) {
                 if (!sem_tristate_check_net(net, net_name, scope, module_scopes)) {
                     /* Fallback: for BUS instance drivers, check per-field.
@@ -1879,6 +1907,7 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
                                             "NET_MULTIPLE_ACTIVE_DRIVERS",
                                             "net has multiple active (non-z) drivers; tri-state requires all but one driver to assign z");
                         }
+                        fired_multi_driver = 1;
                     }
                 }
             }
@@ -1896,6 +1925,128 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
                 }
             }
             int total_non_z = non_z_assign_driver_count + instance_non_z_capable_count;
+
+            /* Cross-block / mixed multi-driver check.
+             *
+             * The instance-only tristate check above only runs when there are
+             * multiple instance drivers. It does NOT catch:
+             *   a) Non-z assignments in two or more distinct ASYNC blocks
+             *      in the same module driving the same net, OR
+             *   b) A mix of instance OUT driver + local non-z assignment.
+             *
+             * Spec §1.6.4 requires multi-driver analysis across different
+             * ASYNC blocks and instance port drivers.
+             *
+             * We group non-z assignment drivers by their containing ASYNC
+             * block so that multiple assignments within ONE block are treated
+             * as a single driver source — within-block double-assignment is
+             * already handled by ASSIGN_MULTIPLE_SAME_BITS in driver_flow.c
+             * and we don't want a duplicate diagnostic.
+             *
+             * Instance drivers that can produce non-z each count as one
+             * source (already de-duplicated by feature-guard branch logic
+             * when instance_drivers[] was populated).
+             */
+            /* When the instance-only tristate check above didn't run
+             * (instance_driver_count <= 1), look for cross-block or mixed
+             * multi-driver situations: different ASYNC blocks driving the
+             * same net, or instance OUT driver combined with a local driver.
+             *
+             * We count distinct driver sources:
+             *   - Each unique module-instance driver counts as 1 source.
+             *   - Each unique ASYNC/SYNC block that contains at least one
+             *     non-z drive statement counts as 1 source. Grouping by
+             *     block means multiple non-z drives inside ONE block share
+             *     a single source, leaving that case to be diagnosed by
+             *     ASSIGN_MULTIPLE_SAME_BITS (driver_flow.c) — no duplicate.
+             */
+            if (!fired_multi_driver && instance_driver_count <= 1 &&
+                net_name && mod_node && drv_count > 0) {
+                JZASTNode *assign_source_blocks[16];
+                size_t assign_source_count = 0;
+                JZASTNode *seen_instance[16];
+                size_t seen_instance_count = 0;
+                /* Nets merged via alias assignments ( `=`, `=z`, `=s` ) carry
+                 * JZAliasEdge records. Shadowing/conflict patterns involving
+                 * such merged nets are the domain of ASSIGN_SHADOWING — don't
+                 * double-diagnose with NET_MULTIPLE_ACTIVE_DRIVERS. */
+                int net_has_alias = (net->alias_edges.len > 0);
+
+                for (size_t d = 0; d < drv_count; ++d) {
+                    JZASTNode *stmt = drv[d];
+                    if (!stmt) continue;
+
+                    if (stmt->type == JZ_AST_MODULE_INSTANCE) {
+                        int found = 0;
+                        for (size_t i = 0; i < seen_instance_count; ++i) {
+                            if (seen_instance[i] == stmt) { found = 1; break; }
+                        }
+                        if (!found && seen_instance_count < 16) {
+                            seen_instance[seen_instance_count++] = stmt;
+                        }
+                        continue;
+                    }
+
+                    if (stmt->type != JZ_AST_STMT_ASSIGN || stmt->child_count < 2) continue;
+                    JZASTNode *rhs = stmt->children[1];
+                    if (sem_expr_is_all_z_literal(rhs)) continue;
+
+                    /* Aliases (`=`, `=z`, `=s`) connect two signals and do
+                     * not count as a separate driver source for multi-driver
+                     * analysis — they're net-merging connections, not
+                     * directional drives. Conflicts involving aliases are
+                     * handled by ASSIGN_SHADOWING and related rules. */
+                    const char *op = stmt->block_kind ? stmt->block_kind : "";
+                    if (strncmp(op, "ALIAS", 5) == 0) continue;
+
+                    JZASTNode *blk = sem_find_containing_block_for_stmt(mod_node, stmt);
+                    if (!blk) continue;
+                    /* Only ASYNCHRONOUS block drives participate in the
+                     * wire/port multi-driver analysis. SYNC writes target
+                     * registers; a SYNC assignment to a LATCH or wire is
+                     * flagged by its own rule (LATCH_ASSIGN_IN_SYNC etc.)
+                     * and isn't a net-level multi-driver conflict. */
+                    if (!blk->block_kind ||
+                        strcmp(blk->block_kind, "ASYNCHRONOUS") != 0) {
+                        continue;
+                    }
+
+                    int found = 0;
+                    for (size_t ai = 0; ai < assign_source_count; ++ai) {
+                        if (assign_source_blocks[ai] == blk) { found = 1; break; }
+                    }
+                    if (!found && assign_source_count < 16) {
+                        assign_source_blocks[assign_source_count++] = blk;
+                    }
+                }
+
+                /* Fire when either:
+                 *   (a) two or more distinct ASYNC blocks each drive the net
+                 *       (clear cross-block multi-driver conflict), or
+                 *   (b) the net has an instance driver PLUS a local ASYNC
+                 *       block drive, AND the net has no alias edges — the
+                 *       alias-free constraint avoids overlap with
+                 *       ASSIGN_SHADOWING which handles root-alias + nested-
+                 *       drive patterns on merged nets.
+                 */
+                /* If any driver emits an all-z literal somewhere, the design
+                 * is using the tri-state pattern — mutual-exclusion between
+                 * drivers is intended. Leave tri-state correctness to the
+                 * dedicated engine (sem_tristate_check_net) and don't flag
+                 * this as a multi-driver error. */
+                int fire_a = (assign_source_count >= 2);
+                int fire_b = (seen_instance_count >= 1 &&
+                              assign_source_count >= 1 &&
+                              !net_has_alias);
+                if ((fire_a || fire_b) && !has_z_only_driver) {
+                    sem_report_rule(diagnostics,
+                                    atoms[0]->loc,
+                                    "NET_MULTIPLE_ACTIVE_DRIVERS",
+                                    "net has multiple active (non-z) drivers; tri-state requires all but one driver to assign z");
+                    fired_multi_driver = 1;
+                }
+            }
+            (void)fired_multi_driver;
             if (total_non_z == 0 && has_z_only_driver && effective_has_sink) {
                 /* Report at the point where the net is actually read, not at
                  * its declaration. This makes the diagnostic much more
@@ -1963,6 +2114,114 @@ static void sem_net_collect_instance_usage(JZASTNode *inst_node,
     }
 }
 
+int sem_net_build_module_graph(const JZModuleScope *scope,
+                               const JZBuffer *project_symbols,
+                               JZBuffer *nets_out,
+                               JZBuffer *bindings_out)
+{
+    if (!scope || !scope->node || !nets_out || !bindings_out) return -1;
+
+    *nets_out = (JZBuffer){0};
+    *bindings_out = (JZBuffer){0};
+
+    if (sem_net_build_initial_for_module(scope, nets_out, bindings_out) != 0) {
+        jz_buf_free(nets_out);
+        jz_buf_free(bindings_out);
+        return -1;
+    }
+
+    JZASTNode *mod = scope->node;
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *child = mod->children[ci];
+        if (!child || child->type != JZ_AST_BLOCK || !child->block_kind) continue;
+        int is_async = (strcmp(child->block_kind, "ASYNCHRONOUS") == 0);
+        int is_sync  = (strcmp(child->block_kind, "SYNCHRONOUS") == 0);
+        if (!is_async && !is_sync) continue;
+
+        sem_net_collect_aliases_in_block(child, scope, nets_out, bindings_out, is_sync);
+    }
+
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *child = mod->children[ci];
+        if (!child || child->type != JZ_AST_BLOCK || !child->block_kind) continue;
+        int is_async = (strcmp(child->block_kind, "ASYNCHRONOUS") == 0);
+        int is_sync  = (strcmp(child->block_kind, "SYNCHRONOUS") == 0);
+        if (!is_async && !is_sync) continue;
+
+        sem_net_collect_usage_in_block(child, scope, nets_out, bindings_out, is_sync);
+    }
+
+    /* Treat CDC clock expressions as sinks so that CDC clocks are
+     * considered "used" for net diagnostics (e.g. NET_DANGLING_UNUSED),
+     * matching the treatment of clocks referenced by SYNCHRONOUS(CLK=...).
+     */
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *blk = mod->children[ci];
+        if (!blk || blk->type != JZ_AST_BLOCK || !blk->block_kind) continue;
+        if (strcmp(blk->block_kind, "CDC") != 0) continue;
+
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *cdc = blk->children[j];
+            if (!cdc || cdc->type != JZ_AST_CDC_DECL) continue;
+            if (cdc->child_count < 4) continue;
+
+            JZASTNode *src_clk = cdc->children[1];
+            JZASTNode *dst_clk = cdc->children[3];
+
+            if (src_clk) {
+                sem_net_mark_expr_sinks(src_clk, scope, nets_out, bindings_out, NULL);
+            }
+            if (dst_clk) {
+                sem_net_mark_expr_sinks(dst_clk, scope, nets_out, bindings_out, NULL);
+            }
+        }
+    }
+
+    /* Collect net usage from module instances (including those inside
+     * @feature guards). Instances inside feature guards are walked for
+     * BOTH branches so that net analysis stays consistent with the
+     * declaration scanning (which also registers both branches).
+     */
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *child = mod->children[ci];
+        if (!child) continue;
+
+        /* Collect instances from a feature guard's branches. */
+        if (child->type == JZ_AST_FEATURE_GUARD) {
+            for (size_t fi = 1; fi < child->child_count; ++fi) {
+                JZASTNode *branch = child->children[fi];
+                if (!branch) continue;
+                for (size_t gi = 0; gi < branch->child_count; ++gi) {
+                    JZASTNode *inst_node = branch->children[gi];
+                    if (!inst_node || inst_node->type != JZ_AST_MODULE_INSTANCE) continue;
+                    sem_net_collect_instance_usage(inst_node, scope, nets_out, bindings_out, project_symbols);
+                }
+            }
+            continue;
+        }
+
+        if (child->type != JZ_AST_MODULE_INSTANCE) continue;
+        sem_net_collect_instance_usage(child, scope, nets_out, bindings_out, project_symbols);
+    }
+
+    return 0;
+}
+
+void sem_net_free_module_graph(JZBuffer *nets, JZBuffer *bindings)
+{
+    if (nets) {
+        size_t net_count = nets->len / sizeof(JZNet);
+        JZNet *net_arr = (JZNet *)nets->data;
+        for (size_t ni = 0; ni < net_count; ++ni) {
+            sem_net_free(&net_arr[ni]);
+        }
+        jz_buf_free(nets);
+    }
+    if (bindings) {
+        jz_buf_free(bindings);
+    }
+}
+
 void sem_build_net_graphs(JZASTNode *root,
                           JZBuffer *module_scopes,
                           const JZBuffer *project_symbols,
@@ -1977,6 +2236,12 @@ void sem_build_net_graphs(JZASTNode *root,
 
     size_t scope_count = module_scopes->len / sizeof(JZModuleScope);
     JZModuleScope *scopes = (JZModuleScope *)module_scopes->data;
+
+    /* Cache of per-module combinational port-to-port transparency edges,
+     * populated lazily by sem_comb_module_port_edges when the cycle check
+     * walks an instance. Freed at the end of this function.
+     */
+    JZBuffer module_comb_cache = (JZBuffer){0};
 
     for (size_t i = 0; i < scope_count; ++i) {
         const JZModuleScope *scope = &scopes[i];
@@ -1999,88 +2264,14 @@ void sem_build_net_graphs(JZASTNode *root,
         JZBuffer nets = (JZBuffer){0};
         JZBuffer bindings = (JZBuffer){0};
 
-        if (sem_net_build_initial_for_module(scope, &nets, &bindings) != 0) {
-            jz_buf_free(&nets);
-            jz_buf_free(&bindings);
+        if (sem_net_build_module_graph(scope, project_symbols, &nets, &bindings) != 0) {
             continue;
         }
 
-        JZASTNode *mod = scope->node;
-        for (size_t ci = 0; ci < mod->child_count; ++ci) {
-            JZASTNode *child = mod->children[ci];
-            if (!child || child->type != JZ_AST_BLOCK || !child->block_kind) continue;
-            int is_async = (strcmp(child->block_kind, "ASYNCHRONOUS") == 0);
-            int is_sync  = (strcmp(child->block_kind, "SYNCHRONOUS") == 0);
-            if (!is_async && !is_sync) continue;
-
-            sem_net_collect_aliases_in_block(child, scope, &nets, &bindings, is_sync);
-        }
-
-        for (size_t ci = 0; ci < mod->child_count; ++ci) {
-            JZASTNode *child = mod->children[ci];
-            if (!child || child->type != JZ_AST_BLOCK || !child->block_kind) continue;
-            int is_async = (strcmp(child->block_kind, "ASYNCHRONOUS") == 0);
-            int is_sync  = (strcmp(child->block_kind, "SYNCHRONOUS") == 0);
-            if (!is_async && !is_sync) continue;
-
-            sem_net_collect_usage_in_block(child, scope, &nets, &bindings, is_sync);
-        }
-
-        /* Treat CDC clock expressions as sinks so that CDC clocks are
-         * considered "used" for net diagnostics (e.g. NET_DANGLING_UNUSED),
-         * matching the treatment of clocks referenced by SYNCHRONOUS(CLK=...).
-         */
-        for (size_t ci = 0; ci < mod->child_count; ++ci) {
-            JZASTNode *blk = mod->children[ci];
-            if (!blk || blk->type != JZ_AST_BLOCK || !blk->block_kind) continue;
-            if (strcmp(blk->block_kind, "CDC") != 0) continue;
-
-            for (size_t j = 0; j < blk->child_count; ++j) {
-                JZASTNode *cdc = blk->children[j];
-                if (!cdc || cdc->type != JZ_AST_CDC_DECL) continue;
-                if (cdc->child_count < 4) continue;
-
-                JZASTNode *src_clk = cdc->children[1];
-                JZASTNode *dst_clk = cdc->children[3];
-
-                if (src_clk) {
-                    sem_net_mark_expr_sinks(src_clk, scope, &nets, &bindings, NULL);
-                }
-                if (dst_clk) {
-                    sem_net_mark_expr_sinks(dst_clk, scope, &nets, &bindings, NULL);
-                }
-            }
-        }
-
-        /* Collect net usage from module instances (including those inside
-         * @feature guards). Instances inside feature guards are walked for
-         * BOTH branches so that net analysis stays consistent with the
-         * declaration scanning (which also registers both branches).
-         */
-        for (size_t ci = 0; ci < mod->child_count; ++ci) {
-            JZASTNode *child = mod->children[ci];
-            if (!child) continue;
-
-            /* Collect instances from a feature guard's branches. */
-            if (child->type == JZ_AST_FEATURE_GUARD) {
-                for (size_t fi = 1; fi < child->child_count; ++fi) {
-                    JZASTNode *branch = child->children[fi];
-                    if (!branch) continue;
-                    for (size_t gi = 0; gi < branch->child_count; ++gi) {
-                        JZASTNode *inst_node = branch->children[gi];
-                        if (!inst_node || inst_node->type != JZ_AST_MODULE_INSTANCE) continue;
-                        sem_net_collect_instance_usage(inst_node, scope, &nets, &bindings, project_symbols);
-                    }
-                }
-                continue;
-            }
-
-            if (child->type != JZ_AST_MODULE_INSTANCE) continue;
-            sem_net_collect_instance_usage(child, scope, &nets, &bindings, project_symbols);
-        }
-
         sem_net_apply_simple_rules_for_module(scope, &nets, &bindings, module_scopes, project_symbols, diagnostics);
-        sem_check_combinational_loops_for_module(scope, &nets, &bindings, diagnostics);
+        sem_check_combinational_loops_for_module(scope, &nets, &bindings,
+                                                 module_scopes, project_symbols,
+                                                 &module_comb_cache, diagnostics);
 
         /* Always delegate to alias-report module; it is a no-op when
          * alias reporting is not enabled.
@@ -2092,14 +2283,10 @@ void sem_build_net_graphs(JZASTNode *root,
          */
         sem_emit_tristate_report_for_module(scope, &nets, module_scopes, project_symbols, root);
 
-        size_t net_count = nets.len / sizeof(JZNet);
-        JZNet *net_arr = (JZNet *)nets.data;
-        for (size_t ni = 0; ni < net_count; ++ni) {
-            sem_net_free(&net_arr[ni]);
-        }
-        jz_buf_free(&nets);
-        jz_buf_free(&bindings);
+        sem_net_free_module_graph(&nets, &bindings);
     }
+
+    sem_comb_free_module_comb_cache(&module_comb_cache);
 
     sem_emit_alias_report_finalize();
     sem_emit_tristate_report_finalize();

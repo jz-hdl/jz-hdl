@@ -1,0 +1,84 @@
+// DOMAIN_CONFLICT: CDC dest alias read in SYNCHRONOUS block whose CLK does not match
+// the alias's destination domain clock.
+// Valid same-domain alias reads included to verify no false positives.
+
+@project DOMAIN_CONFLICT_cdc_alias_wrong_domain
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module: CDC alias read in wrong domain
+@module HelperMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        src_reg [1] = 1'b0;
+        r_a [1] = 1'b0;
+        r_b [1] = 1'b0;
+    }
+
+    CDC {
+        BIT src_reg (clk_a) => synced_flag (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        data = r_a ^ r_b;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        src_reg <= ~src_reg;
+        // Trigger: CDC alias used in wrong SYNCHRONOUS block domain
+        r_a <= synced_flag;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // Valid: synced_flag read in correct dest domain
+        r_b <= synced_flag;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk_a = clk_a;
+        IN  [1] clk_b = clk_b;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        top_src [1] = 1'b0;
+        r_top_a [1] = 1'b0;
+        r_top_b [1] = 1'b0;
+    }
+
+    CDC {
+        BIT top_src (clk_a) => top_synced (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        data = r_top_a ^ r_top_b;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        top_src <= ~top_src;
+        // Trigger: CDC alias used in wrong SYNCHRONOUS block domain
+        r_top_a <= top_synced;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // Valid: top_synced read in correct dest domain
+        r_top_b <= top_synced;
+    }
+@endmod
