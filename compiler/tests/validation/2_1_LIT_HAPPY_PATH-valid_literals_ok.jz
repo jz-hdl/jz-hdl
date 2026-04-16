@@ -9,8 +9,9 @@
     }
 
     @top TopMod {
-        IN  [1] clk = _;
-        OUT [8] data = _;
+        IN    [1] clk = _;
+        INOUT [8] bus = _;
+        OUT   [8] data = _;
     }
 @endproj
 
@@ -53,10 +54,27 @@
     }
 @endmod
 
+// Helper: complements the top-level INOUT driver so z-extension does not float
+@module HelperC
+    PORT {
+        IN    [1] clk;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        IF (clk) {
+            bus <= 8'h00;
+        } ELSE {
+            // Binary z-extend (intrinsic 1 bit, extended to 8)
+            bus <= 8'bz;
+        }
+    }
+@endmod
+
 @module TopMod
     PORT {
-        IN  [1] clk;
-        OUT [8] data;
+        IN    [1] clk;
+        INOUT [8] bus;
+        OUT   [8] data;
     }
 
     CONST {
@@ -66,6 +84,7 @@
     WIRE {
         ha_data [8];
         hb_data [8];
+        x_ext [8];
     }
 
     @new inst_a HelperA {
@@ -78,6 +97,11 @@
         OUT [8] data = hb_data;
     };
 
+    @new inst_c HelperC {
+        IN    [1] clk = clk;
+        INOUT [8] bus = bus;
+    };
+
     REGISTER {
         r [8] = 8'h00;
         // CONST-based width in init
@@ -88,6 +112,14 @@
         v [8] = 8'hAb;
     }
     ASYNCHRONOUS {
+        // Binary x-extend (intrinsic 1 bit, extended to 8)
+        x_ext <= 8'bx;
+        IF (!clk) {
+            bus <= 8'h00;
+        } ELSE {
+            // Binary z-extend (intrinsic 1 bit, extended to 8)
+            bus <= 8'bz;
+        }
         data = ha_data ^ hb_data ^ r ^ s ^ u ^ v;
     }
     SYNCHRONOUS(CLK=clk) {
