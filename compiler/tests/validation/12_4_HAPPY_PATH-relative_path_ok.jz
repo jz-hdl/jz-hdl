@@ -1,0 +1,25 @@
+// HAPPY_PATH: Relative @import within the project sandbox is allowed.
+// Covers valid relative paths without absolute-path or traversal diagnostics.
+// No diagnostics expected.
+
+@project HAPPY_PATH_relative_path_ok
+
+    @import "12_4_PATH_SECURITY-valid_lib.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_rel PathSecurityImported {
+        IN  [1] din = clk;
+        OUT [1] dout = data;
+    };
+@endmod

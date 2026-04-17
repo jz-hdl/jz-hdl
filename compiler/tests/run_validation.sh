@@ -47,6 +47,7 @@ for file in "${validation_files[@]}"; do
   case "$(basename "${file}")" in
     *_GND_*) extra_flags+=(--tristate-default=GND) ;;
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
+    12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
   esac
 
   # Run linter by default; serializer coverage needs backend emission because

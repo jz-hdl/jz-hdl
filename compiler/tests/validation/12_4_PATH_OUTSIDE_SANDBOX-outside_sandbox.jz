@@ -1,0 +1,32 @@
+// PATH_OUTSIDE_SANDBOX: Canonical path outside the sandbox is forbidden.
+// The validation runner enables traversal for this file so the sandbox check is reached.
+
+@project PATH_OUTSIDE_SANDBOX_outside_sandbox
+
+    // Trigger 1: traversal resolves to a file outside compiler/tests/validation.
+    @import "../path_security_escape_target.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
