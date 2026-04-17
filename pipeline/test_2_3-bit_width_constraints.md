@@ -56,11 +56,17 @@ Verify the Strict Matching Rule for binary operators (`+`, `-`, `*`, `/`, `%`, `
 
 | Test File | Rule ID | Description |
 |-----------|---------|-------------|
-| 2_3_BIT_WIDTH_CONSTRAINTS-valid_operations_ok.jz | -- | Happy path: valid bit-width operations accepted |
+| 2_3_HAPPY_PATH-bit_width_constraints_ok.jz | -- | Happy path: valid bit-width operations accepted |
 | 2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-concat_width_mismatch.jz | ASSIGN_CONCAT_WIDTH_MISMATCH | Concatenation width does not match target |
-| 2_3_ASSIGN_WIDTH_NO_MODIFIER-assign_width_mismatch.jz | ASSIGN_WIDTH_NO_MODIFIER, WIDTH_ASSIGN_MISMATCH_NO_EXT | Assignment width mismatch without extend/truncate modifier |
+| 2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-mux_context.jz | ASSIGN_CONCAT_WIDTH_MISMATCH | Concatenation containing a MUX read does not match target |
+| 2_3_ASSIGN_WIDTH_NO_MODIFIER-assign_width_mismatch.jz | ASSIGN_WIDTH_NO_MODIFIER | Assignment width mismatch without extend/truncate modifier |
+| 2_3_ASSIGN_WIDTH_NO_MODIFIER-mux_latch_contexts.jz | ASSIGN_WIDTH_NO_MODIFIER | LATCH and MUX read width mismatch contexts |
+| 2_3_TERNARY_BRANCH_WIDTH_MISMATCH-mux_context.jz | TERNARY_BRANCH_WIDTH_MISMATCH | Ternary branch width mismatch with a MUX read branch |
 | 2_3_TERNARY_BRANCH_WIDTH_MISMATCH-ternary_arm_widths.jz | TERNARY_BRANCH_WIDTH_MISMATCH | Ternary true/false arms have mismatched widths |
+| 2_3_TYPE_BINOP_WIDTH_MISMATCH-mux_block.jz | TYPE_BINOP_WIDTH_MISMATCH | Binary operator width mismatch with a MUX read operand |
 | 2_3_TYPE_BINOP_WIDTH_MISMATCH-mismatched_operand_widths.jz | TYPE_BINOP_WIDTH_MISMATCH | Binary operator operands differ in width |
+| 2_3_WIDTH_NONPOSITIVE_OR_NONINT-negative_width.jz | WIDTH_NONPOSITIVE_OR_NONINT | Declared width is negative |
+| 2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width_port.jz | WIDTH_NONPOSITIVE_OR_NONINT | Zero-width OUT port declaration |
 | 2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width.jz | WIDTH_NONPOSITIVE_OR_NONINT | Declared width of zero (non-positive) |
 
 ## 5. Rules Matrix
@@ -69,14 +75,13 @@ Verify the Strict Matching Rule for binary operators (`+`, `-`, `*`, `/`, `%`, `
 
 | Rule ID | Severity | Description | Test Case(s) |
 |---------|----------|-------------|--------------|
-| TYPE_BINOP_WIDTH_MISMATCH | error | Binary operator requires equal operand widths | Error 1, 2, 3; 2_3_TYPE_BINOP_WIDTH_MISMATCH-mismatched_operand_widths.jz |
-| ASSIGN_WIDTH_NO_MODIFIER | error | S4.10/S5.0 Width mismatch without `<=z`/`<=s`/`<=t` modifier | Error 5, 6; 2_3_ASSIGN_WIDTH_NO_MODIFIER-assign_width_mismatch.jz |
-| ASSIGN_CONCAT_WIDTH_MISMATCH | error | Concatenation width sum does not match paired expression | Error 7; 2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-concat_width_mismatch.jz |
-| TERNARY_BRANCH_WIDTH_MISMATCH | error | Ternary true/false branches have mismatched widths | Error 4; 2_3_TERNARY_BRANCH_WIDTH_MISMATCH-ternary_arm_widths.jz |
-| WIDTH_NONPOSITIVE_OR_NONINT | error | Declared width <= 0 or not an integer | 2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width.jz; also tested in test_2_2-signedness_model.md |
-| WIDTH_ASSIGN_MISMATCH_NO_EXT | error | S4.10/S5.0/S5.1 Width mismatch in assignment; add `=z` (zero-extend), `=s` (sign-extend), or use a slice | 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz |
+| TYPE_BINOP_WIDTH_MISMATCH | error | Binary operator requires equal operand widths | Error 1, 2, 3; `2_3_TYPE_BINOP_WIDTH_MISMATCH-mismatched_operand_widths.jz`; `2_3_TYPE_BINOP_WIDTH_MISMATCH-mux_block.jz` |
+| ASSIGN_WIDTH_NO_MODIFIER | error | S4.10/S5.0 Width mismatch without `<=z`/`<=s`/`<=t` modifier | Error 5, 6; `2_3_ASSIGN_WIDTH_NO_MODIFIER-assign_width_mismatch.jz`; `2_3_ASSIGN_WIDTH_NO_MODIFIER-mux_latch_contexts.jz` |
+| ASSIGN_CONCAT_WIDTH_MISMATCH | error | Concatenation width sum does not match paired expression | Error 7; `2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-concat_width_mismatch.jz`; `2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-mux_context.jz` |
+| TERNARY_BRANCH_WIDTH_MISMATCH | error | Ternary true/false branches have mismatched widths | Error 4; `2_3_TERNARY_BRANCH_WIDTH_MISMATCH-ternary_arm_widths.jz`; `2_3_TERNARY_BRANCH_WIDTH_MISMATCH-mux_context.jz` |
+| WIDTH_NONPOSITIVE_OR_NONINT | error | Declared width <= 0 or not an integer | `2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width.jz`; `2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width_port.jz`; `2_3_WIDTH_NONPOSITIVE_OR_NONINT-negative_width.jz`; also tested in test_2_2-signedness_model.md |
+| WIDTH_ASSIGN_MISMATCH_NO_EXT | error | S4.10/S5.0/S5.1 Width mismatch in assignment; add `=z` (zero-extend), `=s` (sign-extend), or use a slice | Internally emitted with `ASSIGN_WIDTH_NO_MODIFIER` but suppressed in rendered output by the higher-priority assignment rule |
 
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
-

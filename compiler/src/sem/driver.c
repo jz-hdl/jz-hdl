@@ -922,10 +922,11 @@ int parse_simple_signed_int(const char *s, long long *out)
  *
  * Return values:
  *   1  -> successfully parsed a positive integer > 0 into *out.
- *   0  -> expression is non-simple (contains non-digits) or empty; caller
- *         should treat the value as unknown and avoid emitting errors.
- *  -1  -> expression consists only of digits but is invalid (e.g. 0 or
- *         overflow); callers should report MEM_*_INVALID style errors.
+ *   0  -> expression is non-simple (contains non-digits beyond an optional
+ *         sign) or empty; caller should treat the value as unknown and avoid
+ *         emitting errors.
+ *  -1  -> expression is a simple integer but invalid (e.g. <= 0 or overflow);
+ *         callers should report MEM_*_INVALID style errors.
  */
 int eval_simple_positive_decl_int(const char *s, unsigned *out)
 {
@@ -933,11 +934,28 @@ int eval_simple_positive_decl_int(const char *s, unsigned *out)
 
     int saw_digit = 0;
     int saw_nondigit = 0;
+    int saw_sign = 0;
+    int negative = 0;
+    int overflow = 0;
+    unsigned value = 0;
+
     for (const char *p = s; *p; ++p) {
         if (isspace((unsigned char)*p) || *p == '_') continue;
+        if (!saw_digit && !saw_sign && (*p == '-' || *p == '+')) {
+            saw_sign = 1;
+            negative = (*p == '-');
+            continue;
+        }
         if (*p < '0' || *p > '9') {
             saw_nondigit = 1;
             break;
+        }
+        unsigned d = (unsigned)(*p - '0');
+        if (value > (unsigned)(~0u) / 10u ||
+            (value == (unsigned)(~0u) / 10u && d > (unsigned)(~0u) % 10u)) {
+            overflow = 1;
+        } else {
+            value = value * 10u + d;
         }
         saw_digit = 1;
     }
@@ -948,11 +966,10 @@ int eval_simple_positive_decl_int(const char *s, unsigned *out)
         return 0; /* complex expression (CONST/CONFIG/etc.), defer */
     }
 
-    unsigned tmp = 0;
-    if (!parse_simple_positive_int(s, &tmp)) {
-        return -1; /* digits-only but <= 0 or overflow */
+    if (negative || value == 0u || overflow) {
+        return -1; /* simple integer but <= 0 or overflow */
     }
-    if (out) *out = tmp;
+    if (out) *out = value;
     return 1;
 }
 

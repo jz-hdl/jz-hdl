@@ -33,7 +33,7 @@ Verify all 9 assignment operator variants: base operators (`=`, `=>`, `<=`), zer
 | 3 | Truncation without modifier | `narrow <= wide;` (8 <= 16) | Error | ASSIGN_TRUNCATES |
 | 4 | Slice width mismatch | `bus[7:4] <= expr[2:0];` (4 vs 3) | Error | ASSIGN_SLICE_WIDTH_MISMATCH |
 | 5 | Concat width mismatch | `{a, b} <= expr;` (sum != expr width) | Error | ASSIGN_CONCAT_WIDTH_MISMATCH |
-| 6 | Alias width mismatch no modifier | `wide = narrow;` (16 = 8) | Error | WIDTH_ASSIGN_MISMATCH_NO_EXT |
+| 6 | Alias width mismatch no modifier | `wide = narrow;` (16 = 8) | Error | ASSIGN_WIDTH_NO_MODIFIER |
 
 ### 2.3 Edge Cases
 
@@ -52,7 +52,7 @@ Verify all 9 assignment operator variants: base operators (`=`, `=>`, `<=`), zer
 | 3 | Truncation without modifier | `narrow <= wide;` (8 <= 16) | ASSIGN_TRUNCATES | error |
 | 4 | Slice assignment width mismatch | `bus[7:4] <= 3'b101;` (4 vs 3) | ASSIGN_SLICE_WIDTH_MISMATCH | error |
 | 5 | Concat total width != RHS width | `{a, b} <= expr;` (sum mismatch) | ASSIGN_CONCAT_WIDTH_MISMATCH | error |
-| 6 | Alias width mismatch, no modifier | `wide = narrow;` (16 = 8) | WIDTH_ASSIGN_MISMATCH_NO_EXT | error |
+| 6 | Alias width mismatch, no modifier | `wide = narrow;` (16 = 8) | ASSIGN_WIDTH_NO_MODIFIER | error |
 | 7 | Valid zero-extend receive | `wide <=z narrow;` | -- | pass |
 | 8 | Valid sign-extend alias | `wide =s narrow;` | -- | pass |
 | 9 | Valid redundant modifier | `a =z b;` (same width) | -- | pass |
@@ -66,7 +66,7 @@ Verify all 9 assignment operator variants: base operators (`=`, `=>`, `<=`), zer
 | 5_0_ASSIGN_TRUNCATES-truncation_with_modifier.jz | ASSIGN_TRUNCATES | Assignment truncates RHS into smaller LHS even with modifier |
 | 5_0_ASSIGN_SLICE_WIDTH_MISMATCH-slice_width_mismatch.jz | ASSIGN_SLICE_WIDTH_MISMATCH | Slice assignment width mismatch |
 | 5_0_ASSIGN_CONCAT_WIDTH_MISMATCH-concat_width_mismatch.jz | ASSIGN_CONCAT_WIDTH_MISMATCH | Concatenation width does not match RHS width |
-| 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz | WIDTH_ASSIGN_MISMATCH_NO_EXT | Width mismatch on alias; add =z/=s or slice |
+| 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz | ASSIGN_WIDTH_NO_MODIFIER | Alias width mismatch; `WIDTH_ASSIGN_MISMATCH_NO_EXT` is internally emitted but suppressed in rendered output |
 
 ## 5. Rules Matrix
 

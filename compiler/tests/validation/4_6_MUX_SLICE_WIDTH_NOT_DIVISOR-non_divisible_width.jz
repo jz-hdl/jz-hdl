@@ -36,7 +36,7 @@
     }
 
     ASYNCHRONOUS {
-        data = ok_slice[sel] | r;
+        data = {ok_slice[sel], ok_slice[sel]} ^ r;
     }
 
     SYNCHRONOUS(CLK=clk) {

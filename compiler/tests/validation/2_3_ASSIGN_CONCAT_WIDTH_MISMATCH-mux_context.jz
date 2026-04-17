@@ -1,0 +1,36 @@
+// ASSIGN_CONCAT_WIDTH_MISMATCH: MUX read inside concatenation.
+// Tests that mux[sel] contributes its selected element width to concat checks.
+// Valid same-width MUX concat included to verify no false positives.
+
+@project ASSIGN_CONCAT_WIDTH_MISMATCH_mux_context
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [4] c = _;
+        OUT [8] data = _;
+        OUT [12] wide_data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [4] c;
+        OUT [8] data;
+        OUT [12] wide_data;
+    }
+
+    MUX {
+        choices = a, b;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: MUX element is 8 bits, so concat is 8+4=12 to 8-bit target
+        data <= {choices[sel], c};
+        // Valid: 12-bit concat to 12-bit target
+        wide_data <= {choices[sel], c};
+    }
+@endmod

@@ -147,13 +147,6 @@ _Last reconciled: 2026-04-15 by summary.md_
 
 ## test_2_2-signedness_model.md
 
-* WIDTH_NONPOSITIVE_OR_NONINT : compiler-bug
-  `OUT [0] bad_out` does NOT trigger WIDTH_NONPOSITIVE_OR_NONINT — only `IN [0]` triggers it. The compiler appears to skip the width check for output port declarations. Observed during sweep for `2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width_port.jz`.
-* WIDTH_NONPOSITIVE_OR_NONINT : missing-context
-  Covered: zero-width WIRE, zero-width REGISTER; missing: zero-width PORT declaration (OUT port does not fire). Recommended new file: `2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width_port.jz`. Note: sweep created file but found OUT port does not trigger the rule (compiler-bug). Zero-width literal context was found to be a different rule (LIT_WIDTH_NOT_POSITIVE).
-* WIDTH_NONPOSITIVE_OR_NONINT : missing-happy-path
-  No dedicated happy-path file for this rule. The `2_2_SIGNEDNESS_HAPPY_PATH-unsigned_arithmetic_ok.jz` uses positive widths implicitly but does not specifically target this rule. Recommended: `2_3_WIDTH_NONPOSITIVE_OR_NONINT-valid_widths_ok.jz`.
-
 ## test_10_3-template_allowed_content.md
 
 * 10_3_TEMPLATE_EXTERNAL_REF-external_signal_reference.jz : test-quality
@@ -347,31 +340,6 @@ _Last reconciled: 2026-04-15 by summary.md_
 
 ## test_2_3-bit_width_constraints.md
 
-* ASSIGN_CONCAT_WIDTH_MISMATCH : compiler-bug
-  Concat containing MUX read (`{mux[sel], c}` = 8+4=12 bits to 8-bit target) does not fire ASSIGN_CONCAT_WIDTH_MISMATCH. MUX element widths are not resolved during lint analysis. File attempted: `2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-mux_context.jz`.
-* ASSIGN_WIDTH_NO_MODIFIER : compiler-bug
-  MUX read expressions assigned to narrower targets (`narrow_out <= mux[sel]` where MUX is 8-bit and target is 4-bit) do not fire ASSIGN_WIDTH_NO_MODIFIER. MUX element widths are not resolved for lint checks. LATCH trigger in same file works correctly and was kept. File attempted: `2_3_ASSIGN_WIDTH_NO_MODIFIER-mux_latch_contexts.jz` (MUX trigger only).
-* TYPE_BINOP_WIDTH_MISMATCH : compiler-bug
-  MUX read expressions (`mux[sel]`) do not have resolved widths for binop width checking. `mux[sel] + small_signal` with 8-bit MUX elements and 4-bit signal produces no TYPE_BINOP_WIDTH_MISMATCH diagnostic. File attempted: `2_3_TYPE_BINOP_WIDTH_MISMATCH-mux_block.jz`. Note: systemic MUX width resolution bug affects all width-related rules.
-* WIDTH_NONPOSITIVE_OR_NONINT : compiler-bug
-  `OUT [0] bad_out` does not fire WIDTH_NONPOSITIVE_OR_NONINT, while `IN [0] bad_in` does (already covered by existing `zero_width_port.jz`). The rule appears to only check input port widths, not output port widths. File attempted: `2_3_WIDTH_NONPOSITIVE_OR_NONINT-port_zero_width.jz`.
-* WIDTH_ASSIGN_MISMATCH_NO_EXT : compiler-bug
-  (`5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz`) — rule never fires in any validation test; always suppressed by higher-priority `ASSIGN_WIDTH_NO_MODIFIER` (per rules.c line 13 priority comment). The `.out` only contains `ASSIGN_WIDTH_NO_MODIFIER`. Either WIDTH_ASSIGN_MISMATCH_NO_EXT is dead code, or it should fire in a context not yet tested. Investigate whether a scenario exists where this rule fires without ASSIGN_WIDTH_NO_MODIFIER suppressing it.
-* ASSIGN_CONCAT_WIDTH_MISMATCH : missing-context
-  Covered: RHS too narrow, RHS too wide, LHS mismatch in ASYNC and SYNC; missing: MUX block context. Recommended: `2_3_ASSIGN_CONCAT_WIDTH_MISMATCH-mux_context.jz`. Note: sweep confirmed compiler-bug — MUX width resolution not implemented.
-* ASSIGN_WIDTH_NO_MODIFIER : missing-context
-  Covered: alias (=), receive (<=), drive (=>) in ASYNC and SYNC, both wider-to-narrower and narrower-to-wider; missing: MUX block. Recommended: `2_3_ASSIGN_WIDTH_NO_MODIFIER-mux_latch_contexts.jz`. Note: LATCH context was resolved by sweep; MUX context is a compiler-bug.
-* TERNARY_BRANCH_WIDTH_MISMATCH : missing-context
-  Covered: signals, literals, registers in ASYNC and SYNC; missing: MUX block context. Recommended: `2_3_TERNARY_BRANCH_WIDTH_MISMATCH-nested_ternary.jz`. Note: nested ternary was resolved by sweep; MUX context remains but was not separately recommended.
-* TYPE_BINOP_WIDTH_MISMATCH : missing-context
-  Covered: ASYNCHRONOUS (all 14 operators), SYNCHRONOUS (3 operators), cross-module; missing: MUX block source expressions. Recommended: `2_3_TYPE_BINOP_WIDTH_MISMATCH-mux_block.jz`. Note: sweep confirmed compiler-bug — MUX width resolution not implemented.
-* WIDTH_NONPOSITIVE_OR_NONINT : missing-context
-  Covered: zero-width WIRE, zero-width REGISTER, IN [0] port; missing: OUT [0] port, negative width declaration. Recommended: `2_3_WIDTH_NONPOSITIVE_OR_NONINT-port_zero_width.jz`. Note: sweep confirmed compiler-bug — OUT port width not checked.
-* 2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width.jz : test-quality
-  Scaffolding: `.out` contains `WARN_UNUSED_WIRE` at lines 23 and 47 from zero-width wires that are inherently unusable. Unavoidable cascade but adds noise. Fix: accept as inherent or add a comment in the test noting the expected cascade.
-* Plan section 4 : test-quality
-  Plan filename `2_3_BIT_WIDTH_CONSTRAINTS-valid_operations_ok.jz` does not match actual file `2_3_HAPPY_PATH-bit_width_constraints_ok.jz`. Fix: update plan section 4 filename.
-
 ## test_3_1-operator_categories.md
 
 * 3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
@@ -454,8 +422,6 @@ _Last reconciled: 2026-04-15 by summary.md_
   Rule ID in plan 5.1 — not present in `compiler/src/rules.c`. Listed as error rule for "Reading a net whose only driver is z (floating)" but no such rule exists. Likely never implemented or renamed.
 * ASYNC_UNDEFINED_PATH_NO_DRIVER : compiler-bug
   Nested IF with partial inner coverage (`IF (a) { IF (b) { out <= in; } } ELSE { out <= in; }`) does not trigger ASYNC_UNDEFINED_PATH_NO_DRIVER when `a=1, b=0` leaves signal undriven. The compiler does not analyze sub-paths within an outer IF branch that has at least one assignment. Only the IF/ELIF-without-ELSE variant was kept in the final test. Found during sweep for test_4_10.
-* 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz : test-quality
-  Wrong rule triggered: test is named for WIDTH_ASSIGN_MISMATCH_NO_EXT but compiler emits ASSIGN_WIDTH_NO_MODIFIER (higher-priority rule suppresses it). The .out file contains zero WIDTH_ASSIGN_MISMATCH_NO_EXT diagnostics. Fix: create a test that actually triggers WIDTH_ASSIGN_MISMATCH_NO_EXT, or determine if the rule is dead code.
 * 4_10_ASYNC_INVALID_STATEMENT_TARGET-invalid_lhs_in_async.jz : test-quality
   Limited target variety: only tests CONST as invalid LHS via `<=`. Missing: `=` and `=>` operator variants with CONST, and other non-assignable targets mentioned in the rule message (e.g. function call). Fix: add triggers for `=`/`=>` to CONST and other invalid target types.
 
@@ -588,8 +554,6 @@ _Last reconciled: 2026-04-15 by summary.md_
   Covered: independent IFs on port/wire (ASYNC), independent SELECTs on port (ASYNC); missing: SYNCHRONOUS context. Recommended new file: `5_0_ASSIGN_INDEPENDENT_IF_SELECT-sync_context.jz`. Note: sweep found rule-not-fired — SYNC_MULTI_ASSIGN_SAME_REG_BITS preempts. Mixed IF-then-SELECT context was resolved.
 * ASSIGN_SHADOWING : missing-context
   Covered: root-then-IF on port/wire (ASYNC), root-then-SELECT on port (ASYNC); missing: SYNCHRONOUS context (root register assignment shadowed by nested IF). Recommended new file: `5_0_ASSIGN_SHADOWING-sync_context.jz`. Note: sweep found rule-not-fired — SYNC_ROOT_AND_CONDITIONAL_ASSIGN preempts.
-* 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz : test-quality
-  Rule suppression: test is named for WIDTH_ASSIGN_MISMATCH_NO_EXT but ASSIGN_WIDTH_NO_MODIFIER (higher priority) always fires instead. The .out contains only ASSIGN_WIDTH_NO_MODIFIER diagnostics. The test documents the suppression behavior but does NOT validate WIDTH_ASSIGN_MISMATCH_NO_EXT. Fix: either find a scenario where WIDTH_ASSIGN_MISMATCH_NO_EXT fires without being suppressed, or reclassify this test as documenting suppression behavior only.
 * 5_0_ASSIGN_SLICE_WIDTH_MISMATCH-slice_width_mismatch.jz : test-quality
   Cross-rule firing: SYNC triggers at lines 39 and 72 fire SYNC_SLICE_WIDTH_MISMATCH instead of ASSIGN_SLICE_WIDTH_MISMATCH. This is correct compiler behavior (SYNC has its own rule) but means the test does not validate ASSIGN_SLICE_WIDTH_MISMATCH in SYNC context. Consider: is this the intended design, or should ASSIGN_SLICE_WIDTH_MISMATCH also fire in SYNC?
 
