@@ -1148,38 +1148,48 @@ void sem_check_module_const_blocks(const JZModuleScope *scope,
                 memset(&batch_opts, 0, sizeof(batch_opts));
                 int batch_rc = jz_const_eval_all(batch_defs, bc, &batch_opts, batch_vals);
                 if (batch_rc == -2) {
-                    /* Circular dependency detected.  Mark all CONSTs involved
-                     * (those whose batch eval did NOT complete) and report
-                     * CONST_CIRCULAR_DEP with the correct source location.
-                     * We rely on the fact that jz_const_eval_all stops at the
-                     * first cycle, so we check which CONSTs didn't get a value.
-                     * Re-run to identify each one individually.
+                    /* Circular dependency detected.  Identify all CONSTs
+                     * that participate in cycles (including transitive chains
+                     * like A→B→C→A) using Floyd-Warshall reachability.
+                     *
+                     * 1. Build adjacency matrix: adj[i][j] = 1 when expr
+                     *    of decl[i] textually references name of decl[j].
+                     * 2. Compute transitive closure (Floyd-Warshall).
+                     * 3. Any CONST reachable from itself (adj[i][i]) is in
+                     *    a cycle — mark ok[i] = -1.
                      */
-                    /* Identify which CONSTs are part of cycles by checking
-                     * if they can be evaluated without the others. Simple
-                     * approach: any CONST whose expression references another
-                     * CONST in the same block that also failed is circular.
-                     * For simplicity, mark any CONST that failed batch eval
-                     * and whose name appears in another failed CONST's expr.
-                     */
-                    for (size_t di2 = 0; di2 < decl_count; ++di2) {
-                        if (!decls[di2]) continue;
-                        if (decls[di2]->block_kind && strcmp(decls[di2]->block_kind, "STRING") == 0) continue;
-                        const char *dname = decls[di2]->name;
-                        const char *dexpr = decls[di2]->text ? decls[di2]->text : "0";
-                        /* Check if this CONST's expression references any other
-                         * CONST that also references it back (simple cycle check). */
-                        for (size_t di3 = 0; di3 < decl_count; ++di3) {
-                            if (di3 == di2 || !decls[di3]) continue;
-                            if (decls[di3]->block_kind && strcmp(decls[di3]->block_kind, "STRING") == 0) continue;
-                            const char *oname = decls[di3]->name;
-                            const char *oexpr = decls[di3]->text ? decls[di3]->text : "0";
-                            if (strstr(dexpr, oname) && strstr(oexpr, dname)) {
-                                /* Mutual reference — mark as circular. */
-                                ok[di2] = -1; /* -1 = circular dep */
-                                break;
+                    int *adj = (int *)calloc(decl_count * decl_count, sizeof(int));
+                    if (adj) {
+                        /* Build adjacency matrix. */
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            if (!decls[di2]) continue;
+                            if (decls[di2]->block_kind && strcmp(decls[di2]->block_kind, "STRING") == 0) continue;
+                            const char *dexpr = decls[di2]->text ? decls[di2]->text : "0";
+                            for (size_t di3 = 0; di3 < decl_count; ++di3) {
+                                if (di3 == di2 || !decls[di3]) continue;
+                                if (decls[di3]->block_kind && strcmp(decls[di3]->block_kind, "STRING") == 0) continue;
+                                if (strstr(dexpr, decls[di3]->name)) {
+                                    adj[di2 * decl_count + di3] = 1;
+                                }
                             }
                         }
+                        /* Floyd-Warshall transitive closure. */
+                        for (size_t k = 0; k < decl_count; ++k) {
+                            for (size_t i = 0; i < decl_count; ++i) {
+                                for (size_t j = 0; j < decl_count; ++j) {
+                                    if (adj[i * decl_count + k] && adj[k * decl_count + j]) {
+                                        adj[i * decl_count + j] = 1;
+                                    }
+                                }
+                            }
+                        }
+                        /* Mark diagonal entries (self-reachable = in a cycle). */
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            if (adj[di2 * decl_count + di2]) {
+                                ok[di2] = -1; /* circular dep */
+                            }
+                        }
+                        free(adj);
                     }
                 }
             }

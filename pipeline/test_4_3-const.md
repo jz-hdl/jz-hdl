@@ -60,7 +60,10 @@ Verify CONST declarations, compile-time evaluation, string/numeric types. Confir
 | 4_3_CONST_STRING_IN_NUMERIC_CONTEXT-string_as_width.jz | CONST_STRING_IN_NUMERIC_CONTEXT | String CONST used where a numeric expression is expected |
 | 4_3_CONST_USED_WHERE_FORBIDDEN-const_in_runtime_expr.jz | CONST_USED_WHERE_FORBIDDEN | CONST identifier used outside compile-time constant expression contexts |
 | 4_3_CONST_CIRCULAR_DEP-circular_dependency.jz | CONST_CIRCULAR_DEP | Circular dependency in CONST definitions |
+| 4_3_CONST_CIRCULAR_DEP-transitive_chain.jz | CONST_CIRCULAR_DEP | Three-member transitive cycle in CONST definitions |
 | 4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-undefined_const.jz | CONST_UNDEFINED_IN_WIDTH_OR_SLICE | Undefined CONST used in width or slice expression |
+| 4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-mem_depth.jz | CONST_UNDEFINED_IN_WIDTH_OR_SLICE | Undefined CONST used as MEM depth |
+| 4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-slice_context.jz | CONST_UNDEFINED_IN_WIDTH_OR_SLICE | Undefined CONST used as slice bound |
 
 ## 5. Rules Matrix
 
@@ -69,8 +72,11 @@ Verify CONST declarations, compile-time evaluation, string/numeric types. Confir
 | Rule ID | Severity | Description | Test Case(s) |
 |---------|----------|-------------|--------------|
 | CONST_NEGATIVE_OR_NONINT | error | S4.3/S7.10 CONST initialized with negative or non-integer value where nonnegative integer required | 4_3_CONST_NEGATIVE_OR_NONINT-negative_const_value.jz |
-| CONST_UNDEFINED_IN_WIDTH_OR_SLICE | error | S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly | 4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-undefined_const.jz |
-| CONST_CIRCULAR_DEP | error | S4.3/S7.10 Circular dependency in CONST/CONFIG definitions | 4_3_CONST_CIRCULAR_DEP-circular_dependency.jz |
+| CONST_UNDEFINED_IN_WIDTH_OR_SLICE | error | S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly | 4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-undefined_const.jz, 4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-mem_depth.jz, 4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-slice_context.jz |
+| CONST_CIRCULAR_DEP | error | S4.3/S7.10 Circular dependency in CONST/CONFIG definitions | 4_3_CONST_CIRCULAR_DEP-circular_dependency.jz, 4_3_CONST_CIRCULAR_DEP-transitive_chain.jz |
+| CONST_STRING_IN_NUMERIC_CONTEXT | error | S4.3/S6.3 String CONST/CONFIG value used where a numeric expression is expected | 4_3_CONST_STRING_IN_NUMERIC_CONTEXT-string_as_width.jz |
+| CONST_NUMERIC_IN_STRING_CONTEXT | error | S4.3/S6.3 Numeric CONST/CONFIG value used where a string is expected | 4_3_CONST_NUMERIC_IN_STRING_CONTEXT-numeric_as_file_path.jz |
+| CONST_USED_WHERE_FORBIDDEN | error | S4.3/S6.3 CONST identifier used outside compile-time constant expression contexts | 4_3_CONST_USED_WHERE_FORBIDDEN-const_in_runtime_expr.jz |
 
 ### 5.2 Rules Not Tested
 

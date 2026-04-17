@@ -2029,6 +2029,37 @@ void resolve_names_recursive(JZASTNode *node,
         }
     }
 
+    /* Slice bounds (children[1], children[2]) are compile-time constant
+     * contexts where only CONST/CONFIG names and literals are valid (S3.2).
+     * Skip them here so that undefined identifiers in slice bounds are
+     * reported as CONST_UNDEFINED_IN_WIDTH_OR_SLICE by sem_check_slice_expr
+     * rather than as UNDECLARED_IDENTIFIER by the general name resolver.
+     *
+     * Exception: MUX selectors (mux_id[idx]) use runtime expressions as
+     * indices, so their bounds must go through normal name resolution.
+     */
+    if (node->type == JZ_AST_EXPR_SLICE && node->child_count >= 3) {
+        int is_mux_selector = 0;
+        JZASTNode *base = node->children[0];
+        if (base && base->type == JZ_AST_EXPR_IDENTIFIER && base->name &&
+            current_scope) {
+            const JZSymbol *mux_sym = module_scope_lookup_kind(current_scope,
+                                                                base->name,
+                                                                JZ_SYM_MUX);
+            if (mux_sym) {
+                is_mux_selector = 1;
+            }
+        }
+        if (!is_mux_selector) {
+            /* Signal slice: only recurse into base, not bounds. */
+            if (base) {
+                resolve_names_recursive(base, module_scopes, project_symbols,
+                                        current_scope, diagnostics);
+            }
+            return;
+        }
+    }
+
     for (size_t i = 0; i < node->child_count; ++i) {
         resolve_names_recursive(node->children[i], module_scopes, project_symbols,
                                 current_scope, diagnostics);

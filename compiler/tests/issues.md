@@ -1,19 +1,4 @@
 
-## test_4_3-const.md
-
-* CONST_CIRCULAR_DEP : compiler-bug
-  Three-member transitive cycle (A=B; B=C; C=A) fires CONST_NEGATIVE_OR_NONINT instead of CONST_CIRCULAR_DEP. Compiler detects direct 2-member cycles but fails to detect longer transitive chains as circular dependencies. File attempted: `4_3_CONST_CIRCULAR_DEP-transitive_chain.jz`.
-* CONST_UNDEFINED_IN_WIDTH_OR_SLICE : compiler-bug
-  MEM depth with undefined CONST fires MEM_UNDEFINED_CONST_IN_WIDTH (S7.1/S7.7.1) instead of CONST_UNDEFINED_IN_WIDTH_OR_SLICE. The MEM-specific rule takes precedence. File attempted: `4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-mem_depth.jz`.
-* CONST_UNDEFINED_IN_WIDTH_OR_SLICE : compiler-bug
-  Undefined CONST in slice expression (e.g., `din[TOP_HI:UNDEF_LO]`) fires UNDECLARED_IDENTIFIER (S4.2/S8.1) instead of CONST_UNDEFINED_IN_WIDTH_OR_SLICE. Slice bounds are not treated as CONST-expected contexts. File attempted: `4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-slice_context.jz`.
-* CONST_CIRCULAR_DEP : missing-context
-  Covered: direct 2-member cycle (A=B; B=A) in helper and top modules, self-reference (resolved); missing: 3-member transitive cycle (A=B; B=C; C=A). Recommended new file: `4_3_CONST_CIRCULAR_DEP-transitive_chain.jz`. Note: sweep confirmed compiler-bug — transitive chains not detected.
-* CONST_UNDEFINED_IN_WIDTH_OR_SLICE : missing-context
-  Covered: input port width, wire width, register width, output port width (resolved); missing: MEM depth, slice context. Recommended new files: `4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-mem_depth.jz`, `4_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-slice_context.jz`. Note: sweep confirmed both are preempted by other rules.
-* Plan section 4 / 5.1 inconsistency : test-quality
-  Plan Section 4 lists test files for CONST_STRING_IN_NUMERIC_CONTEXT, CONST_NUMERIC_IN_STRING_CONTEXT, and CONST_USED_WHERE_FORBIDDEN, but these rules are absent from Section 5.1. In `rule_coverage.md` these rules are tracked under `test_6_3-config_block.md`. Fix: either add these 3 rules to Section 5.1 or remove the corresponding files from Section 4 to avoid confusion.
-
 ## test_4_4-port.md
 
 * ASYNC_ALIAS_IN_CONDITIONAL : missing-happy-path

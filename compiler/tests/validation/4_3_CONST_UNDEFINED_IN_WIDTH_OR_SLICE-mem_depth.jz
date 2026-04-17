@@ -1,0 +1,48 @@
+// CONST_UNDEFINED_IN_WIDTH_OR_SLICE: Undefined CONST in MEM depth.
+// Tests that an undeclared CONST name used as MEM depth is caught.
+// Valid CONST-based MEM depth included to verify no false positives.
+
+@project CONST_UNDEFINED_IN_WIDTH_OR_SLICE_mem_depth
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        VALID_DEPTH = 16;
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    MEM {
+        // Valid: declared CONST in MEM depth
+        good_mem [8] [VALID_DEPTH] = 8'h00 {
+            IN  rw WRITE_FIRST;
+            OUT rd ASYNC;
+        };
+        // Trigger: undefined CONST in MEM depth
+        bad_mem [8] [UNDEF_DEPTH] = 8'h00 {
+            IN  rw2 WRITE_FIRST;
+            OUT rd2 ASYNC;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = good_mem.rd[4'h0];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+        good_mem.rw[4'h0] <= r;
+        bad_mem.rw2[4'h0] <= r;
+    }
+@endmod
