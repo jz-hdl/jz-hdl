@@ -95,7 +95,7 @@ Verify detailed semantics of each operator: unary arithmetic parenthesization re
 
 | Test File | Rule ID | Description |
 |-----------|---------|-------------|
-| `3_2_OPERATOR_SEMANTICS-operator_semantics_ok.jz` | -- | Happy path: valid operator usage accepted |
+| `3_2_HAPPY_PATH-operator_semantics_ok.jz` | -- | Happy path: valid operator usage accepted |
 | `3_2_UNARY_ARITH_MISSING_PARENS-unparenthesized_unary.jz` | UNARY_ARITH_MISSING_PARENS | Unary arithmetic operator used without required parentheses |
 | `3_2_LOGICAL_WIDTH_NOT_1-multibit_logical_operands.jz` | LOGICAL_WIDTH_NOT_1 | Logical operator used with operands wider than 1 bit |
 | `3_2_TERNARY_COND_WIDTH_NOT_1-multibit_condition.jz` | TERNARY_COND_WIDTH_NOT_1 | Ternary condition expression is wider than 1 bit |
@@ -104,6 +104,8 @@ Verify detailed semantics of each operator: unary arithmetic parenthesization re
 | `3_2_DIV_CONST_ZERO-constant_zero_divisor.jz` | DIV_CONST_ZERO | Division or modulus by compile-time constant zero |
 | `3_2_DIV_UNGUARDED_RUNTIME_ZERO-unguarded_division.jz` | DIV_UNGUARDED_RUNTIME_ZERO | Divisor may be zero at runtime without a nonzero guard |
 | `3_2_OBS_X_TO_OBSERVABLE_SINK-x_bits_in_expressions.jz` | OBS_X_TO_OBSERVABLE_SINK | x-bits reaching observable sink outside CASE pattern |
+| `3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz` | OBS_X_TO_OBSERVABLE_SINK | x-bits reaching output and MEM sinks |
+| `3_2_SPECIAL_DRIVER_IN_INDEX-vcc_sync_range.jz` | SPECIAL_DRIVER_IN_INDEX | VCC used as bit-select and range-bound index in SYNCHRONOUS contexts |
 
 ## 5. Rules Matrix
 
@@ -118,14 +120,13 @@ Verify detailed semantics of each operator: unary arithmetic parenthesization re
 | CONCAT_EMPTY | error | Empty concatenation `{}` is not allowed | `3_2_CONCAT_EMPTY-empty_concatenation.jz` |
 | DIV_CONST_ZERO | error | Division/modulus by compile-time constant zero | `3_2_DIV_CONST_ZERO-constant_zero_divisor.jz` |
 | DIV_UNGUARDED_RUNTIME_ZERO | warning | Divisor may be zero at runtime without a nonzero guard | `3_2_DIV_UNGUARDED_RUNTIME_ZERO-unguarded_division.jz` |
-| OBS_X_TO_OBSERVABLE_SINK | error | x-bits reaching observable sink outside CASE pattern | `3_2_OBS_X_TO_OBSERVABLE_SINK-x_bits_in_expressions.jz` |
+| OBS_X_TO_OBSERVABLE_SINK | error | x-bits reaching observable sink outside CASE pattern | `3_2_OBS_X_TO_OBSERVABLE_SINK-x_bits_in_expressions.jz`, `3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz` |
 | SPECIAL_DRIVER_IN_EXPRESSION | error | S2.3 GND/VCC may not appear in arithmetic/logical expressions | 2_4_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz |
 | SPECIAL_DRIVER_IN_CONCAT | error | S2.3 GND/VCC may not appear in concatenations | 2_4_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz |
 | SPECIAL_DRIVER_SLICED | error | S2.3 GND/VCC may not be sliced or indexed | 1_3_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz, 2_4_SPECIAL_DRIVER_SLICED-gnd_vcc_sliced.jz |
 | TYPE_BINOP_WIDTH_MISMATCH | error | S2.2/3.2/8.1 Binary operator requires equal operand widths but receives mismatched widths | 2_2_TYPE_BINOP_WIDTH_MISMATCH-width_mismatch.jz, 2_3_TYPE_BINOP_WIDTH_MISMATCH-mismatched_operand_widths.jz, 3_1_TYPE_BINOP_WIDTH_MISMATCH-width_mismatch.jz |
-| SPECIAL_DRIVER_IN_INDEX | error | S2.3 GND/VCC may not appear in slice/index expressions | 2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz,3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz |
+| SPECIAL_DRIVER_IN_INDEX | error | S2.3 GND/VCC may not appear in slice/index expressions | 2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz, 3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz, 3_2_SPECIAL_DRIVER_IN_INDEX-vcc_sync_range.jz |
 
 ### 5.2 Rules Not Tested Here (covered by Section 2.4 tests)
 
 All rules for this section are tested.
-

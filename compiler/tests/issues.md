@@ -4,15 +4,6 @@
 * Plan section 4 : test-quality
   Lists only 3 of 13 existing `3_1_*` validation files. Missing 10 files: `3_1_UNARY_ARITH_MISSING_PARENS-*.jz`, `3_1_TERNARY_COND_WIDTH_NOT_1-*.jz`, `3_1_TERNARY_BRANCH_WIDTH_MISMATCH-*.jz`, `3_1_CONCAT_EMPTY-*.jz`, `3_1_DIV_CONST_ZERO-*.jz`, `3_1_DIV_UNGUARDED_RUNTIME_ZERO-*.jz`, `3_1_SPECIAL_DRIVER_IN_EXPRESSION-*.jz`, `3_1_SPECIAL_DRIVER_IN_CONCAT-*.jz`, `3_1_SPECIAL_DRIVER_SLICED-*.jz`, `3_1_SPECIAL_DRIVER_IN_INDEX-*.jz`. Fix: update plan to list all existing files.
 
-## test_3_2-operator_definitions.md
-
-* OBS_X_TO_OBSERVABLE_SINK : compiler-bug
-  SYNC to MEM context does not fire: `sem_lhs_observable_classify` in `driver_assign.c` only classifies REGISTER/LATCH and OUT/INOUT as observable sinks, not MEM write ports. Rule message says "REGISTER, MEM, or output" but MEM is not checked. Test covers ASYNC to output only. File attempted: `3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz`.
-* DIV_UNGUARDED_RUNTIME_ZERO : missing-context
-  Covered: SYNC unguarded `/` and `%`, plus guard patterns `!=`, `>`, `==`, `>= N`, `!= N ELSE`, `< N ELSE`, literal-on-left; originally missing guard patterns were resolved by sweep file `3_2_DIV_UNGUARDED_RUNTIME_ZERO-additional_guard_patterns.jz`. Note: this entry is fully resolved.
-* Plan section 4 : test-quality
-  Plan lists `3_2_OPERATOR_SEMANTICS-operator_semantics_ok.jz` but actual file is `3_2_HAPPY_PATH-operator_semantics_ok.jz`. Fix: update plan to match actual filename.
-
 ## test_3_4-operator_examples.md
 
 * Plan section 4 : test-quality

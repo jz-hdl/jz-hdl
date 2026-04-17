@@ -1,7 +1,5 @@
-// SPECIAL_DRIVER_IN_INDEX: VCC in range expression within SYNCHRONOUS block.
-// Existing test covers GND as bit-select in ASYNC single module.
-// This adds: VCC as index, SYNCHRONOUS context, range-expression context.
-// A single trigger covers all three missing contexts at once.
+// SPECIAL_DRIVER_IN_INDEX: special drivers in SYNCHRONOUS index expressions.
+// Covers multiple diagnostics across modules and includes a range bound.
 
 @project SPECIAL_DRIVER_IN_INDEX_vcc_sync_range
     @top TopMod {
@@ -9,26 +7,32 @@
         IN  [8] val = _;
         OUT [8] out_a = _;
         OUT [8] out_b = _;
+        OUT [1] out_bit = _;
     }
 @endproj
 
-// Helper module: valid bit-select (no special drivers — no false positive)
+// Helper module: bit-select trigger plus valid register assignment.
 @module HelperMod
     PORT {
         IN  [1] clk;
         IN  [8] val;
         OUT [8] out_a;
+        OUT [1] out_bit;
     }
     REGISTER {
         r [8] = 8'h00;
         r_slice [8] = 8'h00;
+        r_bit [1] = 1'b0;
     }
     ASYNCHRONOUS {
         out_a = r_slice;
+        out_bit = r_bit;
     }
     SYNCHRONOUS(CLK=clk) {
         r <= val;
-        // Valid: literal index in SYNC (no false positive)
+        // Trigger 1: VCC as bit-select index in SYNCHRONOUS context
+        r_bit <= r[VCC];
+        // Valid: no special drivers (no false positive)
         r_slice <= r;
     }
 @endmod
@@ -39,28 +43,35 @@
         IN  [8] val;
         OUT [8] out_a;
         OUT [8] out_b;
+        OUT [1] out_bit;
     }
     WIRE {
         ha_a [8];
+        ha_bit [1];
     }
     REGISTER {
         r [8] = 8'h00;
         r_slice [8] = 8'h00;
+        r_bit [1] = 1'b0;
     }
 
     @new inst_h HelperMod {
         IN  [1] clk = clk;
         IN  [8] val = val;
         OUT [8] out_a = ha_a;
+        OUT [1] out_bit = ha_bit;
     };
 
     ASYNCHRONOUS {
         out_a = ha_a;
         out_b = r_slice;
+        out_bit = r_bit | ha_bit;
     }
     SYNCHRONOUS(CLK=clk) {
         r <= val;
-        // Trigger: VCC as range bound in SYNCHRONOUS context
-        r_slice <= r[VCC:3'd0];
+        // Trigger 2: VCC as range bound in SYNCHRONOUS context
+        r_slice <= r[VCC:0];
+        // Valid: signal/literal index in SYNC (no false positive)
+        r_bit <= r[0];
     }
 @endmod

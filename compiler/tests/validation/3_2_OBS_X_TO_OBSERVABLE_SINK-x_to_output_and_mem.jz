@@ -1,11 +1,10 @@
-// OBS_X_TO_OBSERVABLE_SINK: x bits driving output port in ASYNCHRONOUS block.
-// Existing test covers SYNC → REGISTER; this adds ASYNC → OUT.
-// Note: SYNC → MEM context not tested here — compiler does not classify MEM
-// writes as observable sinks (see compiler bug report).
+// OBS_X_TO_OBSERVABLE_SINK: x bits driving observable sinks.
+// Covers ASYNCHRONOUS output ports and SYNCHRONOUS MEM write ports.
 
 @project OBS_X_TO_OBSERVABLE_SINK_x_to_output_and_mem
     @top TopMod {
         IN  [1] clk = _;
+        IN  [2] addr = _;
         IN  [8] val = _;
         OUT [8] out_a = _;
         OUT [8] out_b = _;
@@ -39,6 +38,7 @@
 @module TopMod
     PORT {
         IN  [1] clk;
+        IN  [2] addr;
         IN  [8] val;
         OUT [8] out_a;
         OUT [8] out_b;
@@ -51,6 +51,12 @@
     }
     REGISTER {
         r_ok [8] = 8'h00;
+    }
+    MEM {
+        m [8] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
     }
 
     @new inst_h HelperMod {
@@ -66,9 +72,11 @@
         // Valid: no x bits (no false positive)
         out_b = ha_b;
         out_c = r_ok;
-        out_d = val;
+        out_d = m.rd[addr];
     }
     SYNCHRONOUS(CLK=clk) {
         r_ok <= val;
+        // Trigger: SYNC -> MEM write port
+        m.wr[addr] <= val | 8'bxxxx_0000;
     }
 @endmod

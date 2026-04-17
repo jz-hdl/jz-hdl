@@ -1067,8 +1067,8 @@ _None._
 ### Files Created
 | Rule ID | Context | File |
 |---------|---------|------|
-| OBS_X_TO_OBSERVABLE_SINK | ASYNC → output port | 3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz |
-| SPECIAL_DRIVER_IN_INDEX | VCC as index, SYNC context, range expression | 3_2_SPECIAL_DRIVER_IN_INDEX-vcc_sync_range.jz |
+| OBS_X_TO_OBSERVABLE_SINK | ASYNC output port and SYNC MEM write port | 3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz |
+| SPECIAL_DRIVER_IN_INDEX | VCC as index, SYNC context, bit-select and range expression | 3_2_SPECIAL_DRIVER_IN_INDEX-vcc_sync_range.jz |
 | DIV_UNGUARDED_RUNTIME_ZERO | guard patterns >= N, != N ELSE, < N ELSE, literal-on-left | 3_2_DIV_UNGUARDED_RUNTIME_ZERO-additional_guard_patterns.jz |
 
 ### Skipped Files
@@ -1079,7 +1079,7 @@ _None._
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| OBS_X_TO_OBSERVABLE_SINK | 3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz | compiler-bug | SYNC → MEM context does not fire: `sem_lhs_observable_classify` in `driver_assign.c` only classifies REGISTER/LATCH and OUT/INOUT as observable sinks, not MEM write ports. Rule message says "REGISTER, MEM, or output" but MEM is not checked. Test covers ASYNC → output only. |
+| (none) | | | |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |
