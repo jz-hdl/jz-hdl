@@ -1,6 +1,7 @@
 // ASYNC_INVALID_STATEMENT_TARGET: LHS in ASYNC assignment is not assignable.
 // Missing from 5_1: CONST on LHS (existing 5_1 test fires wrong rule).
-// Also missing: function call result on LHS (e.g. clog2()).
+// Function-call LHS is parser-invalid, so this semantic rule covers parse-valid
+// non-assignable targets.
 // Valid: wire and port assignments for no false positives.
 
 @project ASYNC_INVALID_STATEMENT_TARGET_const_and_func

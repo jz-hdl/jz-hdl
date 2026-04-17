@@ -4,17 +4,6 @@
 * Plan section 4 : test-quality
   Lists only 3 of 13 existing `3_1_*` validation files. Missing 10 files: `3_1_UNARY_ARITH_MISSING_PARENS-*.jz`, `3_1_TERNARY_COND_WIDTH_NOT_1-*.jz`, `3_1_TERNARY_BRANCH_WIDTH_MISMATCH-*.jz`, `3_1_CONCAT_EMPTY-*.jz`, `3_1_DIV_CONST_ZERO-*.jz`, `3_1_DIV_UNGUARDED_RUNTIME_ZERO-*.jz`, `3_1_SPECIAL_DRIVER_IN_EXPRESSION-*.jz`, `3_1_SPECIAL_DRIVER_IN_CONCAT-*.jz`, `3_1_SPECIAL_DRIVER_SLICED-*.jz`, `3_1_SPECIAL_DRIVER_IN_INDEX-*.jz`. Fix: update plan to list all existing files.
 
-## test_4_10-asynchronous_block.md
-
-* ASYNC_FLOATING_Z_READ : compiler-bug
-  Rule ID in plan 5.1 — not present in `compiler/src/rules.c`. Listed as error rule for "Reading a net whose only driver is z (floating)" but no such rule exists. Likely never implemented or renamed.
-* ASYNC_UNDEFINED_PATH_NO_DRIVER : compiler-bug
-  Nested IF with partial inner coverage (`IF (a) { IF (b) { out <= in; } } ELSE { out <= in; }`) does not trigger ASYNC_UNDEFINED_PATH_NO_DRIVER when `a=1, b=0` leaves signal undriven. The compiler does not analyze sub-paths within an outer IF branch that has at least one assignment. Only the IF/ELIF-without-ELSE variant was kept in the final test. Found during sweep for test_4_10.
-* 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz : test-quality
-  Wrong rule triggered: test is named for WIDTH_ASSIGN_MISMATCH_NO_EXT but compiler emits ASSIGN_WIDTH_NO_MODIFIER (higher-priority rule suppresses it). The .out file contains zero WIDTH_ASSIGN_MISMATCH_NO_EXT diagnostics. Fix: create a test that actually triggers WIDTH_ASSIGN_MISMATCH_NO_EXT, or determine if the rule is dead code.
-* 4_10_ASYNC_INVALID_STATEMENT_TARGET-invalid_lhs_in_async.jz : test-quality
-  Limited target variety: only tests CONST as invalid LHS via `<=`. Missing: `=` and `=>` operator variants with CONST, and other non-assignable targets mentioned in the rule message (e.g. function call). Fix: add triggers for `=`/`=>` to CONST and other invalid target types.
-
 ## test_4_12-cdc_block.md
 
 * CDC_DEST_ALIAS_DUP : compiler-bug
@@ -144,17 +133,11 @@
   Covered: independent IFs on port/wire (ASYNC), independent SELECTs on port (ASYNC); missing: SYNCHRONOUS context. Recommended new file: `5_0_ASSIGN_INDEPENDENT_IF_SELECT-sync_context.jz`. Note: sweep found rule-not-fired — SYNC_MULTI_ASSIGN_SAME_REG_BITS preempts. Mixed IF-then-SELECT context was resolved.
 * ASSIGN_SHADOWING : missing-context
   Covered: root-then-IF on port/wire (ASYNC), root-then-SELECT on port (ASYNC); missing: SYNCHRONOUS context (root register assignment shadowed by nested IF). Recommended new file: `5_0_ASSIGN_SHADOWING-sync_context.jz`. Note: sweep found rule-not-fired — SYNC_ROOT_AND_CONDITIONAL_ASSIGN preempts.
-* 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz : test-quality
-  Rule suppression: test is named for WIDTH_ASSIGN_MISMATCH_NO_EXT but ASSIGN_WIDTH_NO_MODIFIER (higher priority) always fires instead. The .out contains only ASSIGN_WIDTH_NO_MODIFIER diagnostics. The test documents the suppression behavior but does NOT validate WIDTH_ASSIGN_MISMATCH_NO_EXT. Fix: either find a scenario where WIDTH_ASSIGN_MISMATCH_NO_EXT fires without being suppressed, or reclassify this test as documenting suppression behavior only.
 * 5_0_ASSIGN_SLICE_WIDTH_MISMATCH-slice_width_mismatch.jz : test-quality
   Cross-rule firing: SYNC triggers at lines 39 and 72 fire SYNC_SLICE_WIDTH_MISMATCH instead of ASSIGN_SLICE_WIDTH_MISMATCH. This is correct compiler behavior (SYNC has its own rule) but means the test does not validate ASSIGN_SLICE_WIDTH_MISMATCH in SYNC context. Consider: is this the intended design, or should ASSIGN_SLICE_WIDTH_MISMATCH also fire in SYNC?
 
 ## test_5_1-asynchronous_assignments.md
 
-* ASYNC_FLOATING_Z_READ : compiler-bug
-  Rule ID in plan 5.1 table — not present in `compiler/src/rules.c`. Rule was never implemented or has been renamed/removed. Plan lists test file `5_1_ASYNC_FLOATING_Z_READ-floating_z_read.jz` which does not exist.
-* ASYNC_INVALID_STATEMENT_TARGET : compiler-bug
-  Function call on LHS (e.g. `clog2(8) <= din;`) gets PARSE000 before semantic analysis; ASYNC_INVALID_STATEMENT_TARGET is unreachable for function-call-on-LHS context. Only CONST on LHS was testable. Observed during sweep for `5_1_ASYNC_INVALID_STATEMENT_TARGET-const_and_func.jz`.
 * ASYNC_UNDEFINED_PATH_NO_DRIVER : missing-coverage
   (`error`, `S1.5/S4.10/S5.1`) — no `5_1_` prefixed validation file exists. Rule is tested by `1_5_ASYNC_UNDEFINED_PATH_NO_DRIVER-partial_coverage.jz` and `4_10_ASYNC_UNDEFINED_PATH_NO_DRIVER-partial_coverage.jz` (cross-section). Recommended: `5_1_ASYNC_UNDEFINED_PATH_NO_DRIVER-partial_coverage.jz`.
 * 5_1_ASYNC_INVALID_STATEMENT_TARGET-mem_sync_in_async.jz : test-quality

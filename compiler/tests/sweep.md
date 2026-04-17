@@ -1214,7 +1214,7 @@ Note: The audit mentioned "function call as LHS" for ASYNC_INVALID_STATEMENT_TAR
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| ASYNC_UNDEFINED_PATH_NO_DRIVER | (nested IF variant, removed) | compiler-bug | Nested IF with partial inner coverage (`IF (a) { IF (b) { out <= in; } } ELSE { out <= in; }`) does not trigger ASYNC_UNDEFINED_PATH_NO_DRIVER when `a=1, b=0` leaves signal undriven. The compiler does not analyze sub-paths within an outer IF branch that has at least one assignment. Only the IF/ELIF-without-ELSE variant was kept in the final test. |
+| ASYNC_UNDEFINED_PATH_NO_DRIVER | `1_5_ASYNC_UNDEFINED_PATH_NO_DRIVER-nested_partial.jz` | resolved-stale | Current compiler reports ASYNC_UNDEFINED_PATH_NO_DRIVER for nested IF partial coverage; this case is covered by the validation file. |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |

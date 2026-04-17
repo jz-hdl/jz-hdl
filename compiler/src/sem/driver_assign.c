@@ -1458,26 +1458,31 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
     }
 
     if (!skip_width_checks && lhs_w > 0 && rhs_w > 0) {
-        /* Bare operators require equal widths. */
+        /* Bare operators require equal widths. Alias assignments use the
+         * WIDTHS_AND_SLICING rule; directional receive/drive assignments use
+         * the ASSIGNMENTS_AND_EXCLUSIVE rule.
+         */
         if (!has_ext && lhs_w != rhs_w) {
             char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "LHS width is %u but RHS width is %u\n"
-                     "bare operator requires equal widths; add 'z' or 's' suffix to extend",
-                     lhs_w, rhs_w);
-            sem_report_rule(diagnostics,
-                            stmt->loc,
-                            "ASSIGN_WIDTH_NO_MODIFIER",
-                            msg);
-            /* Also classify under WIDTHS_AND_SLICING for rule coverage. */
-            char msg2[320];
-            snprintf(msg2, sizeof(msg2),
-                     "LHS width %u != RHS width %u; use <=z/<=s or =>z/=>s to zero/sign-extend",
-                     lhs_w, rhs_w);
-            sem_report_rule(diagnostics,
-                            stmt->loc,
-                            "WIDTH_ASSIGN_MISMATCH_NO_EXT",
-                            msg2);
+            if (is_alias) {
+                snprintf(msg, sizeof(msg),
+                         "LHS width is %u but RHS width is %u\n"
+                         "bare alias operator requires equal widths; add '=z' or '=s' suffix to extend",
+                         lhs_w, rhs_w);
+                sem_report_rule(diagnostics,
+                                stmt->loc,
+                                "WIDTH_ASSIGN_MISMATCH_NO_EXT",
+                                msg);
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "LHS width is %u but RHS width is %u\n"
+                         "bare operator requires equal widths; add 'z' or 's' suffix to extend",
+                         lhs_w, rhs_w);
+                sem_report_rule(diagnostics,
+                                stmt->loc,
+                                "ASSIGN_WIDTH_NO_MODIFIER",
+                                msg);
+            }
         }
 
         /* Truncation detection for directional assignments with explicit
