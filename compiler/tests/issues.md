@@ -1,31 +1,4 @@
 
-
-## test_5_0-assignment_operators_summary.md
-
-* ASSIGN_INDEPENDENT_IF_SELECT : compiler-bug
-  SYNC_MULTI_ASSIGN_SAME_REG_BITS fires instead — more specific SYNC rule preempts ASSIGN_INDEPENDENT_IF_SELECT in SYNCHRONOUS context. Correct compiler behavior. File attempted: `5_0_ASSIGN_INDEPENDENT_IF_SELECT-sync_context.jz`.
-* ASSIGN_MULTIPLE_SAME_BITS : compiler-bug
-  SYNC_MULTI_ASSIGN_SAME_REG_BITS fires instead — more specific SYNC rule preempts ASSIGN_MULTIPLE_SAME_BITS in SYNCHRONOUS context. Correct compiler behavior. File attempted: `5_0_ASSIGN_MULTIPLE_SAME_BITS-sync_double_assign.jz`.
-* ASSIGN_SHADOWING : compiler-bug
-  SYNC_ROOT_AND_CONDITIONAL_ASSIGN fires instead — more specific SYNC rule preempts ASSIGN_SHADOWING in SYNCHRONOUS context. Correct compiler behavior. File attempted: `5_0_ASSIGN_SHADOWING-sync_context.jz`.
-* ASSIGN_MULTIPLE_SAME_BITS : missing-context
-  Covered: unconditional double assign to port/wire in ASYNC, template @apply double assign in ASYNC; missing: SYNCHRONOUS context (double register assignment on same path). Recommended new file: `5_0_ASSIGN_MULTIPLE_SAME_BITS-sync_double_assign.jz`. Note: sweep found rule-not-fired — SYNC_MULTI_ASSIGN_SAME_REG_BITS preempts.
-* ASSIGN_INDEPENDENT_IF_SELECT : missing-context
-  Covered: independent IFs on port/wire (ASYNC), independent SELECTs on port (ASYNC); missing: SYNCHRONOUS context. Recommended new file: `5_0_ASSIGN_INDEPENDENT_IF_SELECT-sync_context.jz`. Note: sweep found rule-not-fired — SYNC_MULTI_ASSIGN_SAME_REG_BITS preempts. Mixed IF-then-SELECT context was resolved.
-* ASSIGN_SHADOWING : missing-context
-  Covered: root-then-IF on port/wire (ASYNC), root-then-SELECT on port (ASYNC); missing: SYNCHRONOUS context (root register assignment shadowed by nested IF). Recommended new file: `5_0_ASSIGN_SHADOWING-sync_context.jz`. Note: sweep found rule-not-fired — SYNC_ROOT_AND_CONDITIONAL_ASSIGN preempts.
-* 5_0_ASSIGN_SLICE_WIDTH_MISMATCH-slice_width_mismatch.jz : test-quality
-  Cross-rule firing: SYNC triggers at lines 39 and 72 fire SYNC_SLICE_WIDTH_MISMATCH instead of ASSIGN_SLICE_WIDTH_MISMATCH. This is correct compiler behavior (SYNC has its own rule) but means the test does not validate ASSIGN_SLICE_WIDTH_MISMATCH in SYNC context. Consider: is this the intended design, or should ASSIGN_SLICE_WIDTH_MISMATCH also fire in SYNC?
-
-## test_5_1-asynchronous_assignments.md
-
-* ASYNC_UNDEFINED_PATH_NO_DRIVER : missing-coverage
-  (`error`, `S1.5/S4.10/S5.1`) — no `5_1_` prefixed validation file exists. Rule is tested by `1_5_ASYNC_UNDEFINED_PATH_NO_DRIVER-partial_coverage.jz` and `4_10_ASYNC_UNDEFINED_PATH_NO_DRIVER-partial_coverage.jz` (cross-section). Recommended: `5_1_ASYNC_UNDEFINED_PATH_NO_DRIVER-partial_coverage.jz`.
-* 5_1_ASYNC_INVALID_STATEMENT_TARGET-mem_sync_in_async.jz : test-quality
-  Wrong rule tested: file is named for ASYNC_INVALID_STATEMENT_TARGET but compiler fires MEM_SYNC_ADDR_IN_ASYNC_BLOCK (a MEM_ACCESS rule). The .jz uses MEM SYNC OUT port `.addr` assignment in ASYNC, which triggers the more specific MEM rule, not the general ASYNC_INVALID_STATEMENT_TARGET. Fix: rewrite test to use a non-assignable target that actually triggers ASYNC_INVALID_STATEMENT_TARGET (e.g. CONST on LHS as in `4_10_ASYNC_INVALID_STATEMENT_TARGET-invalid_lhs_in_async.jz`).
-* 5_1_ASYNC_ASSIGN_REGISTER-register_in_async.jz : test-quality
-  Exact duplicate: file is byte-identical to `4_7_ASYNC_ASSIGN_REGISTER-register_in_async.jz`. Both produce identical .out. One copy is sufficient; the duplicate adds maintenance burden without additional coverage.
-
 ## test_5_2-synchronous_assignments.md
 
 * SYNC_MULTI_ASSIGN_SAME_REG_BITS : compiler-bug
