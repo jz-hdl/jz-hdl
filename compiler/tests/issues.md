@@ -1,14 +1,4 @@
 
-## test_4_7-register.md
-
-* REG_MISSING_INIT_LITERAL : compiler-bug
-  (`4_7_REG_MISSING_INIT_LITERAL-missing_init.jz`) — .jz has 3 triggers (lines 22, 50, 52) but compiler only emits diagnostic for line 22 (HelperMod). TopMod triggers `r_noinit_top [8];` and `r_noinit_1bit [1];` are silently ignored. Minimal repro: two modules with missing register inits; only the first module's error fires.
-* REG_MULTI_DIMENSIONAL : compiler-bug
-  (`4_7_REG_MULTI_DIMENSIONAL-multi_dim_register.jz`) — .jz has 2 triggers (lines 22, 50) but compiler only emits diagnostic for line 22 (HelperMod). TopMod trigger `r_bad_top [16] [2];` is silently ignored. Minimal repro: two modules with multi-dimensional registers; only the first module's error fires.
-* REG_HAPPY_PATH : missing-context
-  Covered: standard 8-bit register, 1-bit register, multiple registers in one block, read in ASYNC, write in SYNC, read-current/write-next; missing: GND keyword reset, VCC keyword reset. Recommended: update `4_7_REG_HAPPY_PATH-register_ok.jz` to include `data [8] = GND;` and `flags [8] = VCC;`. Note: sweep skipped as "already exists" — existing file needs manual update.
-* 4_7_WARN_UNDRIVEN_REGISTER-read_never_written.jz : test-quality
-  Non-idiomatic syntax: lines 27 and 55 use `<=` (register write operator) in ASYNCHRONOUS blocks instead of `=` (combinational assignment). Fix: change `data_out <= r_undriven;` to `data_out = r_undriven;` and `dout <= r_undriven_top;` to `dout = r_undriven_top;`.
 
 ## test_4_8-latches.md
 
