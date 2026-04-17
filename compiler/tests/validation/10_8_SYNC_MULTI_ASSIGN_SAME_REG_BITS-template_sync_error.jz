@@ -68,7 +68,7 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 2: two @apply same register in top module SYNC
+        // Trigger 2: same template-body error as Trigger 1; diagnostic deduplicates
         @apply set_reg(r1, sel);
         @apply set_reg(r1, sel);
 

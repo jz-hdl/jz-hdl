@@ -1,6 +1,6 @@
 // TEMPLATE_SCRATCH_WIDTH_INVALID: Cross-reference test for S10.3 @scratch width error.
 // Tests @scratch with zero width and non-constant (parameter) width.
-// NOTE: Known compiler bug — this rule is not enforced. See issues.md.
+// NOTE: This rule is enforced; invalid @scratch widths below must emit diagnostics.
 // Valid @scratch with literal and CONST widths included for negative testing.
 
 @project TEMPLATE_SCRATCH_WIDTH_INVALID_invalid_width_error
