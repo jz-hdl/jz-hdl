@@ -1,30 +1,4 @@
 
-## test_4_14-feature_guards.md
-
-* FEATURE_NESTED : compiler-bug
-  Nested @feature at module level (outside any block like REGISTER, WIRE, ASYNCHRONOUS, SYNCHRONOUS) does not fire FEATURE_NESTED. The compiler silently accepts the nesting and only emits warnings for unused declarations inside the inner @feature. Nesting is correctly detected inside block contexts (ASYNC, SYNC, REGISTER, WIRE) but not at the bare module level. File attempted: `4_14_FEATURE_NESTED-nested_feature_at_module_level.jz`.
-* FEATURE_VALIDATION_BOTH_PATHS : compiler-bug
-  Rule ID in plan section 3 (I/O matrix rows 4 and 6) — not present in `compiler/src/rules.c`. The plan references this as an expected rule for both-path validation failures, but no such rule exists in the compiler. Both-path validation may produce other existing diagnostics (e.g. `UNDECLARED_IDENTIFIER`, port-undriven errors) rather than a dedicated rule.
-* FEATURE_NESTED : missing-context
-  Covered: ASYNCHRONOUS, SYNCHRONOUS, REGISTER, @else body, WIRE block (resolved by sweep); missing: module level. Recommended new file: `4_14_FEATURE_NESTED-nested_feature_at_module_level.jz`. Note: sweep confirmed compiler-bug — nesting not detected at module level.
-* 4_14_FEATURE_COND_WIDTH_NOT_1-wide_cond_in_decl.jz : test-quality
-  Scaffolding: `.out` includes `WARN_UNUSED_REGISTER` (line 40) and `WARN_UNUSED_WIRE` (line 47) from declarations inside error-triggering feature guards that exist solely as trigger content. Fix: add reads/writes for `r2` and `w` in ASYNCHRONOUS/SYNCHRONOUS blocks to eliminate unrelated warnings.
-* 4_14_FEATURE_EXPR_INVALID_CONTEXT-signal_in_decl_block.jz : test-quality
-  Scaffolding: `.out` includes `WARN_UNUSED_REGISTER` (line 40) and `WARN_UNUSED_WIRE` (line 47) from declarations inside error-triggering feature guards. Fix: same as above — use `r2` and `w` in logic blocks.
-* 4_14_FEATURE_NESTED-nested_feature_in_register.jz : test-quality
-  Scaffolding: `.out` includes `WARN_UNUSED_REGISTER` (line 32) for `r2` declared inside nested feature guard. Fix: add a read of `r2` in ASYNCHRONOUS block.
-
-## test_4_2-scope_and_uniqueness.md
-
-* UNDECLARED_IDENTIFIER : compiler-bug
-  @new targeting non-existent module fires INSTANCE_UNDEFINED_MODULE (S4.13/S6.9) instead of UNDECLARED_IDENTIFIER. The compiler uses a dedicated, more specific rule for this context. File attempted: `4_2_UNDECLARED_IDENTIFIER-nonexistent_module.jz`.
-* UNDECLARED_IDENTIFIER : missing-context
-  Covered: ASYNC RHS, SYNC RHS, CLK parameter, @new port binding value, instance port reference (inst.bad_port), RESET parameter (resolved), MUX select expression (resolved), slice index and concat operand (resolved); missing: @new target module name (non-existent module). Recommended new file: `4_2_UNDECLARED_IDENTIFIER-nonexistent_module.jz`. Note: sweep found rule-not-fired — INSTANCE_UNDEFINED_MODULE preempts.
-* BLACKBOX_NAME_DUP_IN_PROJECT : missing-happy-path
-  The shared happy-path file `4_2_HAPPY_PATH-scope_uniqueness_ok.jz` does not include any `@blackbox` declarations, so there is no happy-path regression test for unique blackbox names. Recommended: `4_2_HAPPY_PATH-blackbox_unique_ok.jz`.
-* 4_2_BLACKBOX_NAME_DUP_IN_PROJECT-blackbox_name_conflicts.jz : test-quality
-  Scaffolding: `.out` includes `WARN_UNUSED_MODULE` (line 45:1) for `SharedName` module that exists solely to trigger the blackbox-module name collision. Fix: restructure so SharedName is instantiated elsewhere or accept this as an inherent consequence of the test scenario.
-
 ## test_4_3-const.md
 
 * CONST_CIRCULAR_DEP : compiler-bug
