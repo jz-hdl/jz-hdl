@@ -1,0 +1,44 @@
+// NET_MULTIPLE_ACTIVE_DRIVERS: Direct ASYNCHRONOUS tri-state assignments.
+// Two independent direct drivers can both provide non-z values on the same
+// parent signal. The net-level multi-driver rule must own this diagnostic, not
+// the exclusive assignment IF/SELECT rule.
+
+@project NET_MULTIPLE_ACTIVE_DRIVERS_direct_async_conflict
+    @top TopMod {
+        IN    [1] en_a = _;
+        IN    [1] en_b = _;
+        IN    [8] data_a = _;
+        IN    [8] data_b = _;
+        INOUT [8] bus = _;
+        OUT   [8] observed = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] en_a;
+        IN    [1] en_b;
+        IN    [8] data_a;
+        IN    [8] data_b;
+        INOUT [8] bus;
+        OUT   [8] observed;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: independent direct tri-state drivers are not provably
+        // mutually exclusive, so both may drive non-z at once.
+        IF (en_a) {
+            bus <= data_a;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+        }
+
+        IF (en_b) {
+            bus <= data_b;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+        }
+
+        observed <= bus;
+    }
+@endmod

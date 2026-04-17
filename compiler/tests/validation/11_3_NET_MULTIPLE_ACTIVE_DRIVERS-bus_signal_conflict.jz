@@ -1,0 +1,70 @@
+// NET_MULTIPLE_ACTIVE_DRIVERS: BUS bulk connections with multiple writers.
+// Two SOURCE instances connected to the same TARGET place multiple drivers on
+// SOURCE-driven BUS signals in the connected parent BUS net.
+
+@project NET_MULTIPLE_ACTIVE_DRIVERS_bus_signal_conflict
+    BUS DATA_BUS {
+        OUT [8] tx;
+        IN  [1] ack;
+    }
+
+    @top TopMod {
+        IN  [8] data_a = _;
+        IN  [8] data_b = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+@module SourceMod
+    PORT {
+        IN  [8] data;
+        BUS DATA_BUS SOURCE bus;
+    }
+
+    ASYNCHRONOUS {
+        bus.tx <= data;
+    }
+@endmod
+
+@module TargetMod
+    PORT {
+        BUS DATA_BUS TARGET bus;
+        OUT [8] observed;
+    }
+
+    ASYNCHRONOUS {
+        bus.ack <= 1'b0;
+        observed <= bus.tx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] data_a;
+        IN  [8] data_b;
+        OUT [8] observed;
+    }
+
+    @new src_a SourceMod {
+        IN  [8] data = data_a;
+        BUS DATA_BUS SOURCE bus = _;
+    };
+
+    @new src_b SourceMod {
+        IN  [8] data = data_b;
+        BUS DATA_BUS SOURCE bus = _;
+    };
+
+    @new tgt TargetMod {
+        BUS DATA_BUS TARGET bus = _;
+        OUT [8] observed = observed;
+    };
+
+    ASYNCHRONOUS {
+        // Valid alone: one SOURCE connected to one TARGET.
+        src_a.bus = tgt.bus;
+
+        // Trigger: a second SOURCE connects to the same TARGET BUS net.
+        src_b.bus = tgt.bus;
+    }
+@endmod

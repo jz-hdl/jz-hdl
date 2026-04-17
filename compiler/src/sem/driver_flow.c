@@ -70,6 +70,7 @@ typedef struct JZAssignRecord {
     JZAssignRange range;
     int           is_nested;
     int           partial;    /* 1 if only assigned in SOME branches (not all paths) */
+    int           can_drive_z;
     JZASTNode    *stmt;
 } JZAssignRecord;
 
@@ -83,6 +84,85 @@ typedef struct JZPathState {
      * conflict" when an overlap is detected. Zero on the root path. */
     size_t   branch_base;
 } JZPathState;
+
+static int sem_flow_expr_contains_z_literal(const JZASTNode *expr)
+{
+    if (!expr) return 0;
+
+    if (expr->type == JZ_AST_EXPR_LITERAL && expr->text) {
+        const char *tick = strchr(expr->text, '\'');
+        if (!tick) return 0;
+        const char *value = tick + 2;
+        for (const char *p = value; *p; ++p) {
+            if (*p == 'z' || *p == 'Z') {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        if (sem_flow_expr_contains_z_literal(expr->children[i])) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int sem_flow_lhs_targets_decl(const JZASTNode *lhs,
+                                     const JZASTNode *decl)
+{
+    if (!lhs || !decl || !decl->name) return 0;
+
+    switch (lhs->type) {
+    case JZ_AST_EXPR_IDENTIFIER:
+        return lhs->name && strcmp(lhs->name, decl->name) == 0;
+
+    case JZ_AST_EXPR_SLICE:
+        return lhs->child_count >= 1 &&
+               sem_flow_lhs_targets_decl(lhs->children[0], decl);
+
+    case JZ_AST_EXPR_CONCAT:
+        for (size_t i = 0; i < lhs->child_count; ++i) {
+            if (sem_flow_lhs_targets_decl(lhs->children[i], decl)) {
+                return 1;
+            }
+        }
+        return 0;
+
+    default:
+        return 0;
+    }
+}
+
+static int sem_flow_node_has_z_assignment_to_decl(const JZASTNode *node,
+                                                  const JZASTNode *decl)
+{
+    if (!node || !decl) return 0;
+
+    if (node->type == JZ_AST_STMT_ASSIGN && node->child_count >= 2) {
+        const char *op = node->block_kind ? node->block_kind : "";
+        int is_alias = (strcmp(op, "ALIAS") == 0 ||
+                        strcmp(op, "ALIAS_Z") == 0 ||
+                        strcmp(op, "ALIAS_S") == 0);
+        int is_drive = (strncmp(op, "DRIVE", 5) == 0);
+        if (!is_alias) {
+            const JZASTNode *target = is_drive ? node->children[1] : node->children[0];
+            const JZASTNode *rhs = node->children[1];
+            if (sem_flow_lhs_targets_decl(target, decl) &&
+                sem_flow_expr_contains_z_literal(rhs)) {
+                return 1;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < node->child_count; ++i) {
+        if (sem_flow_node_has_z_assignment_to_decl(node->children[i], decl)) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 static void sem_excl_free_paths(JZBuffer *paths)
 {
@@ -309,6 +389,9 @@ static void sem_excl_record_assignment_in_path(JZPathState *path,
 
             if (overlap) {
                 const char *rule_id = NULL;
+                if (!is_sync && (r->can_drive_z || e->can_drive_z)) {
+                    continue;
+                }
 
                 if (r->range.has_range && e->range.has_range) {
                     rule_id = "ASSIGN_SLICE_OVERLAP";
@@ -360,6 +443,7 @@ static void sem_excl_record_assignment_in_path(JZPathState *path,
         rec.range           = e->range;
         rec.is_nested       = e->is_nested;
         rec.partial         = 0;
+        rec.can_drive_z     = e->can_drive_z;
         rec.stmt            = NULL;
         (void)jz_buf_append(&path->assigns, &rec, sizeof(rec));
         records = (JZAssignRecord *)path->assigns.data;
@@ -710,6 +794,11 @@ static void sem_excl_analyze_stmt(JZASTNode *stmt,
 
         size_t target_count = targets.len / sizeof(JZAssignTargetEntry);
         JZAssignTargetEntry *entries = (JZAssignTargetEntry *)targets.data;
+        int can_drive_z = sem_flow_expr_contains_z_literal(rhs);
+        for (size_t ti = 0; ti < target_count; ++ti) {
+            entries[ti].can_drive_z = can_drive_z ||
+                sem_flow_node_has_z_assignment_to_decl(scope->node, entries[ti].decl);
+        }
 
         size_t path_count = paths->len / sizeof(JZPathState);
         JZPathState *path_arr = (JZPathState *)paths->data;

@@ -1478,6 +1478,250 @@ static int sem_tristate_check_bus_per_field(
     return 1;
 }
 
+typedef struct JZBusBulkEndpoint {
+    char bus_id[128];
+    char role[128];
+    char key[256];
+} JZBusBulkEndpoint;
+
+typedef struct JZBusBulkEdge {
+    JZBusBulkEndpoint a;
+    JZBusBulkEndpoint b;
+    JZASTNode *stmt;
+} JZBusBulkEdge;
+
+static int sem_net_split_qualified_name(const char *name,
+                                        char *head,
+                                        size_t head_size,
+                                        char *tail,
+                                        size_t tail_size)
+{
+    if (!name || !head || head_size == 0 || !tail || tail_size == 0) return 0;
+    const char *dot = strchr(name, '.');
+    if (!dot || dot == name || !dot[1]) return 0;
+
+    size_t head_len = (size_t)(dot - name);
+    if (head_len >= head_size) head_len = head_size - 1;
+    memcpy(head, name, head_len);
+    head[head_len] = '\0';
+
+    strncpy(tail, dot + 1, tail_size - 1);
+    tail[tail_size - 1] = '\0';
+    return 1;
+}
+
+static const JZASTNode *sem_net_find_bus_port_decl(const JZASTNode *module_node,
+                                                   const char *port_name)
+{
+    if (!module_node || !port_name) return NULL;
+    for (size_t i = 0; i < module_node->child_count; ++i) {
+        JZASTNode *blk = module_node->children[i];
+        if (!blk || blk->type != JZ_AST_PORT_BLOCK) continue;
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *decl = blk->children[j];
+            if (!decl || decl->type != JZ_AST_PORT_DECL || !decl->name) continue;
+            if (!decl->block_kind || strcmp(decl->block_kind, "BUS") != 0) continue;
+            if (strcmp(decl->name, port_name) == 0) return decl;
+        }
+    }
+    return NULL;
+}
+
+static const JZASTNode *sem_net_find_project_node(const JZBuffer *project_symbols,
+                                                  const char *name,
+                                                  JZSymbolKind kind)
+{
+    if (!project_symbols || !project_symbols->data || !name) return NULL;
+    const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+    size_t count = project_symbols->len / sizeof(JZSymbol);
+    for (size_t i = 0; i < count; ++i) {
+        if (syms[i].kind == kind && syms[i].name &&
+            strcmp(syms[i].name, name) == 0) {
+            return syms[i].node;
+        }
+    }
+    return NULL;
+}
+
+static int sem_net_resolve_bulk_endpoint(const JZASTNode *expr,
+                                         const JZModuleScope *scope,
+                                         const JZBuffer *project_symbols,
+                                         JZBusBulkEndpoint *out)
+{
+    if (!expr || !scope || !project_symbols || !out) return 0;
+    if (expr->type != JZ_AST_EXPR_QUALIFIED_IDENTIFIER || !expr->name) return 0;
+
+    char inst_name[128];
+    char port_name[128];
+    if (!sem_net_split_qualified_name(expr->name,
+                                      inst_name, sizeof(inst_name),
+                                      port_name, sizeof(port_name))) {
+        return 0;
+    }
+
+    const JZSymbol *inst_sym = module_scope_lookup_kind(scope, inst_name, JZ_SYM_INSTANCE);
+    if (!inst_sym || !inst_sym->node || inst_sym->node->type != JZ_AST_MODULE_INSTANCE) {
+        return 0;
+    }
+
+    const char *module_name = inst_sym->node->text;
+    if (!module_name) return 0;
+
+    const JZASTNode *child = sem_net_find_project_node(project_symbols, module_name, JZ_SYM_MODULE);
+    if (!child) {
+        child = sem_net_find_project_node(project_symbols, module_name, JZ_SYM_BLACKBOX);
+    }
+    if (!child) return 0;
+
+    const JZASTNode *bus_port = sem_net_find_bus_port_decl(child, port_name);
+    if (!bus_port || !bus_port->text) return 0;
+
+    char bus_id[128] = {0};
+    char role[128] = {0};
+    if (sscanf(bus_port->text, "%127s %127s", bus_id, role) != 2) return 0;
+    if (bus_id[0] == '\0' || role[0] == '\0') return 0;
+
+    memset(out, 0, sizeof(*out));
+    strncpy(out->bus_id, bus_id, sizeof(out->bus_id) - 1);
+    strncpy(out->role, role, sizeof(out->role) - 1);
+    snprintf(out->key, sizeof(out->key), "%s.%s", inst_name, port_name);
+    return 1;
+}
+
+static int sem_net_bulk_endpoint_same(const JZBusBulkEndpoint *a,
+                                      const JZBusBulkEndpoint *b)
+{
+    return a && b && strcmp(a->key, b->key) == 0;
+}
+
+static int sem_net_bulk_endpoint_in_set(const JZBusBulkEndpoint *set,
+                                        size_t count,
+                                        const JZBusBulkEndpoint *endpoint)
+{
+    for (size_t i = 0; i < count; ++i) {
+        if (sem_net_bulk_endpoint_same(&set[i], endpoint)) return 1;
+    }
+    return 0;
+}
+
+static int sem_net_bulk_edges_share_endpoint(const JZBusBulkEdge *a,
+                                             const JZBusBulkEdge *b)
+{
+    if (!a || !b) return 0;
+    return sem_net_bulk_endpoint_same(&a->a, &b->a) ||
+           sem_net_bulk_endpoint_same(&a->a, &b->b) ||
+           sem_net_bulk_endpoint_same(&a->b, &b->a) ||
+           sem_net_bulk_endpoint_same(&a->b, &b->b);
+}
+
+static int sem_net_bulk_endpoint_writes_field(const JZBusBulkEndpoint *endpoint,
+                                              const JZASTNode *field)
+{
+    if (!endpoint || !field || !field->block_kind) return 0;
+    int readable = 0;
+    int writable = 0;
+    sem_bus_signal_access_dirs_flow(field->block_kind, endpoint->role,
+                                    &readable, &writable);
+    (void)readable;
+    return writable;
+}
+
+static int sem_net_bulk_pair_has_multi_driver(const JZBusBulkEdge *a,
+                                              const JZBusBulkEdge *b,
+                                              const JZBuffer *project_symbols)
+{
+    if (!a || !b || !project_symbols) return 0;
+    if (strcmp(a->a.bus_id, b->a.bus_id) != 0) return 0;
+    if (!sem_net_bulk_edges_share_endpoint(a, b)) return 0;
+
+    JZBusBulkEndpoint endpoints[4];
+    size_t endpoint_count = 0;
+    const JZBusBulkEndpoint *candidates[4] = { &a->a, &a->b, &b->a, &b->b };
+    for (size_t i = 0; i < 4; ++i) {
+        if (!sem_net_bulk_endpoint_in_set(endpoints, endpoint_count, candidates[i]) &&
+            endpoint_count < 4) {
+            endpoints[endpoint_count++] = *candidates[i];
+        }
+    }
+
+    const JZASTNode *bus_def = sem_net_find_project_node(project_symbols, a->a.bus_id, JZ_SYM_BUS);
+    if (!bus_def) return 0;
+
+    for (size_t fi = 0; fi < bus_def->child_count; ++fi) {
+        const JZASTNode *field = bus_def->children[fi];
+        if (!field || field->type != JZ_AST_BUS_DECL || !field->block_kind) continue;
+        if (strcmp(field->block_kind, "INOUT") == 0) continue;
+
+        size_t writers = 0;
+        for (size_t ei = 0; ei < endpoint_count; ++ei) {
+            if (sem_net_bulk_endpoint_writes_field(&endpoints[ei], field)) {
+                writers++;
+            }
+        }
+        if (writers > 1) return 1;
+    }
+
+    return 0;
+}
+
+static void sem_net_collect_bus_bulk_edges_in_node(const JZASTNode *node,
+                                                   const JZModuleScope *scope,
+                                                   const JZBuffer *project_symbols,
+                                                   JZBuffer *edges)
+{
+    if (!node || !scope || !project_symbols || !edges) return;
+
+    if (node->type == JZ_AST_STMT_ASSIGN && node->child_count >= 2) {
+        const char *op = node->block_kind ? node->block_kind : "";
+        if (strcmp(op, "ALIAS") == 0) {
+            JZBusBulkEdge edge;
+            memset(&edge, 0, sizeof(edge));
+            if (sem_net_resolve_bulk_endpoint(node->children[0], scope, project_symbols, &edge.a) &&
+                sem_net_resolve_bulk_endpoint(node->children[1], scope, project_symbols, &edge.b) &&
+                strcmp(edge.a.bus_id, edge.b.bus_id) == 0 &&
+                strcmp(edge.a.role, edge.b.role) != 0) {
+                edge.stmt = (JZASTNode *)node;
+                (void)jz_buf_append(edges, &edge, sizeof(edge));
+            }
+        }
+    }
+
+    for (size_t i = 0; i < node->child_count; ++i) {
+        sem_net_collect_bus_bulk_edges_in_node(node->children[i], scope, project_symbols, edges);
+    }
+}
+
+static void sem_net_check_bus_bulk_multi_drivers(const JZModuleScope *scope,
+                                                 const JZBuffer *project_symbols,
+                                                 JZDiagnosticList *diagnostics)
+{
+    if (!scope || !scope->node || !project_symbols || !diagnostics) return;
+
+    JZBuffer edges = {0};
+    for (size_t i = 0; i < scope->node->child_count; ++i) {
+        JZASTNode *child = scope->node->children[i];
+        if (!child || child->type != JZ_AST_BLOCK || !child->block_kind) continue;
+        if (strcmp(child->block_kind, "ASYNCHRONOUS") != 0) continue;
+        sem_net_collect_bus_bulk_edges_in_node(child, scope, project_symbols, &edges);
+    }
+
+    size_t edge_count = edges.len / sizeof(JZBusBulkEdge);
+    JZBusBulkEdge *edge_arr = (JZBusBulkEdge *)edges.data;
+    for (size_t i = 0; i < edge_count; ++i) {
+        for (size_t j = i + 1; j < edge_count; ++j) {
+            if (sem_net_bulk_pair_has_multi_driver(&edge_arr[i], &edge_arr[j], project_symbols)) {
+                sem_report_rule(diagnostics,
+                                edge_arr[j].stmt ? edge_arr[j].stmt->loc : scope->node->loc,
+                                "NET_MULTIPLE_ACTIVE_DRIVERS",
+                                "BUS bulk connections place multiple active drivers on the same BUS signal");
+                break;
+            }
+        }
+    }
+
+    jz_buf_free(&edges);
+}
+
 static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
                                                    JZBuffer *nets,
                                                    JZBuffer *bindings,
@@ -1487,6 +1731,8 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
 {
     (void)bindings;
     if (!scope || !scope->node || !nets) return;
+
+    sem_net_check_bus_bulk_multi_drivers(scope, project_symbols, diagnostics);
 
     size_t net_count = nets->len / sizeof(JZNet);
     JZNet *arr = (JZNet *)nets->data;
@@ -1881,7 +2127,13 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
              * and pairwise mutual exclusion proofs.
              */
             int fired_multi_driver = 0;
-            if (instance_driver_count > 1 && net_name && module_scopes) {
+            int needs_tristate_proof = (instance_driver_count > 1);
+            if (!needs_tristate_proof && has_z_only_driver && !g_tristate_default_active) {
+                if (non_z_assign_driver_count > 1) {
+                    needs_tristate_proof = 1;
+                }
+            }
+            if (needs_tristate_proof && net_name && module_scopes) {
                 if (!sem_tristate_check_net(net, net_name, scope, module_scopes)) {
                     /* Fallback: for BUS instance drivers, check per-field.
                      * Different bus fields (ADDR, CMD, DATA, ...) are driven by
@@ -1889,7 +2141,7 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
                      * check fails even though no individual field has a conflict.
                      */
                     int bus_ok = 0;
-                    if (project_symbols) {
+                    if (instance_driver_count > 1 && project_symbols) {
                         bus_ok = sem_tristate_check_bus_per_field(
                             net, net_name, scope, module_scopes,
                             project_symbols, instance_drivers,

@@ -106,6 +106,7 @@ typedef struct JZAssignTargetEntry {
     int           is_register;
     JZAssignRange range;
     int           is_nested;
+    int           can_drive_z;
 } JZAssignTargetEntry;
 
 typedef struct JZBusAccessInfo {
