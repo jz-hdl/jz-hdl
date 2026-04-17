@@ -164,8 +164,6 @@ static void sem_check_select_stmt_control_flow(JZASTNode *select_stmt,
         (void)jz_buf_append(&keys, &key, sizeof(key));
     }
 
-    jz_buf_free(&keys);
-
     /* DEFAULT coverage diagnostics differ between ASYNCHRONOUS and SYNCHRONOUS. */
     if (!has_default) {
         if (is_async) {
@@ -210,6 +208,8 @@ static void sem_check_select_stmt_control_flow(JZASTNode *select_stmt,
                             "This is legal but a DEFAULT may improve readability.");
         }
     }
+
+    jz_buf_free(&keys);
 }
 
 static void sem_check_control_flow_stmt(JZASTNode *stmt,

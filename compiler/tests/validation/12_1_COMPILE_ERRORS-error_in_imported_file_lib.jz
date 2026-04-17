@@ -1,0 +1,21 @@
+// Library for COMPILE_ERRORS imported-file source-location test.
+
+@module ImportedBad
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        // Trigger: error should be reported against this imported file.
+        r [1] = 4'b0001;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

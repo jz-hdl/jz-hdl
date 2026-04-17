@@ -5,3 +5,4 @@ File: 4_7_ASYNC_ASSIGN_REGISTER-register_in_async.jz
       76:17   error ASYNC_ASSIGN_REGISTER S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block
       79:17   error ASYNC_ASSIGN_REGISTER S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block
       82:17   error ASYNC_ASSIGN_REGISTER S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block
+      82:17   warn  WARN_DEAD_CODE_UNREACHABLE S7.7.3/S8.3 Dead code (unreachable statements detected by analysis)

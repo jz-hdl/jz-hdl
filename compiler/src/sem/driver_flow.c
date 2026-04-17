@@ -1190,8 +1190,90 @@ static void sem_dead_check_if_chain(JZASTNode *block,
     }
 }
 
+static int sem_dead_select_cases_exhaustive(JZASTNode *select_stmt,
+                                            const JZModuleScope *scope,
+                                            const JZBuffer *project_symbols)
+{
+    if (!select_stmt || select_stmt->type != JZ_AST_STMT_SELECT ||
+        select_stmt->child_count < 2 || !scope) {
+        return 0;
+    }
+
+    JZASTNode *selector = select_stmt->children[0];
+    if (!selector) return 0;
+
+    JZBitvecType sel_t;
+    sel_t.width = 0;
+    sel_t.is_signed = 0;
+    infer_expr_type(selector, scope, project_symbols, NULL, &sel_t);
+    if (sel_t.width == 0 || sel_t.width > 20) {
+        return 0;
+    }
+
+    size_t total = (size_t)1u << sel_t.width;
+    unsigned char *seen = (unsigned char *)calloc(total, sizeof(unsigned char));
+    if (!seen) return 0;
+
+    size_t covered = 0;
+    for (size_t i = 1; i < select_stmt->child_count; ++i) {
+        JZASTNode *case_node = select_stmt->children[i];
+        if (!case_node || case_node->type != JZ_AST_STMT_CASE ||
+            case_node->child_count == 0) {
+            continue;
+        }
+
+        JZASTNode *val = case_node->children[0];
+        if (!val || val->type != JZ_AST_EXPR_LITERAL || !val->text) {
+            continue;
+        }
+
+        unsigned value = 0;
+        if (!parse_literal_unsigned_value(val->text, &value)) {
+            continue;
+        }
+        if ((size_t)value >= total || seen[value]) {
+            continue;
+        }
+
+        seen[value] = 1;
+        covered++;
+        if (covered == total) {
+            free(seen);
+            return 1;
+        }
+    }
+
+    free(seen);
+    return 0;
+}
+
+static void sem_dead_check_select(JZASTNode *select_stmt,
+                                  const JZModuleScope *scope,
+                                  const JZBuffer *project_symbols,
+                                  JZDiagnosticList *diagnostics)
+{
+    if (!select_stmt || !scope || !diagnostics) return;
+    if (select_stmt->type != JZ_AST_STMT_SELECT) return;
+    if (!sem_dead_select_cases_exhaustive(select_stmt, scope, project_symbols)) {
+        return;
+    }
+
+    for (size_t i = 1; i < select_stmt->child_count; ++i) {
+        JZASTNode *branch = select_stmt->children[i];
+        if (!branch || branch->type != JZ_AST_STMT_DEFAULT) continue;
+
+        for (size_t j = 0; j < branch->child_count; ++j) {
+            JZASTNode *body = branch->children[j];
+            if (!body) continue;
+            sem_dead_mark_unreachable_branch_body(body, scope, diagnostics);
+        }
+        return;
+    }
+}
+
 static void sem_check_dead_code_for_block(JZASTNode *block,
                                           const JZModuleScope *scope,
+                                          const JZBuffer *project_symbols,
                                           JZDiagnosticList *diagnostics)
 {
     if (!block || !scope) return;
@@ -1221,12 +1303,15 @@ static void sem_check_dead_code_for_block(JZASTNode *block,
 
             sem_dead_check_if_chain(block, start, end, scope, diagnostics);
             i = end - 1;
+        } else if (stmt->type == JZ_AST_STMT_SELECT) {
+            sem_dead_check_select(stmt, scope, project_symbols, diagnostics);
         }
     }
 }
 
 void sem_check_dead_code(JZASTNode *root,
                          JZBuffer *module_scopes,
+                         const JZBuffer *project_symbols,
                          JZDiagnosticList *diagnostics)
 {
     if (!root || root->type != JZ_AST_PROJECT || !module_scopes) return;
@@ -1245,7 +1330,7 @@ void sem_check_dead_code(JZASTNode *root,
             (void)is_async;
             (void)is_sync;
             if (!is_async && !is_sync) continue;
-            sem_check_dead_code_for_block(child, scope, diagnostics);
+            sem_check_dead_code_for_block(child, scope, project_symbols, diagnostics);
         }
     }
 }

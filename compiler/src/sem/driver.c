@@ -2696,7 +2696,7 @@ int jz_sem_run(JZASTNode *root,
 
     /* 8. Dead-code analysis (WARN_DEAD_CODE_UNREACHABLE, MEM_WARN_DEAD_CODE_ACCESS). */
     st0 = clock();
-    sem_check_dead_code(root, &module_scopes, diagnostics);
+    sem_check_dead_code(root, &module_scopes, &project_symbols, diagnostics);
     if (verbose) fprintf(stderr, "[verbose]   sem: dead_code: %.1f ms\n",
                          (double)(clock() - st0) / CLOCKS_PER_SEC * 1000.0);
 

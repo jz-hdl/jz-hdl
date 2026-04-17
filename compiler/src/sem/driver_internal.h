@@ -414,6 +414,7 @@ void sem_excl_collect_targets_from_lhs(JZASTNode *lhs,
 
 void sem_check_dead_code(JZASTNode *root,
                          JZBuffer *module_scopes,
+                         const JZBuffer *project_symbols,
                          JZDiagnosticList *diagnostics);
 
 void sem_check_sync_clock_domains(JZBuffer *module_scopes,
