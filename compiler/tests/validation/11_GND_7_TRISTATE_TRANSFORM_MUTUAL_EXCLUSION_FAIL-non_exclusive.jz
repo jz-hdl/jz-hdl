@@ -2,13 +2,14 @@
 // conditions on multiple tri-state drivers of the same signal.
 // Expected: compiler emits TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL when the
 // transform cannot prove that multiple INOUT instance drivers are mutually
-// exclusive. Two instances driving the same wire via INOUT with the same enable
-// are non-exclusive and cannot form a safe priority chain.
+// exclusive. Two instances driving the same wire via INOUT with independent
+// enables are non-exclusive and cannot form a safe priority chain.
 // The expected diagnostic is anchored on the shared parent bus.
 
 @project TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL_non_exclusive
     @top TopMod {
-        IN  [1] en = _;
+        IN  [1] en_a = _;
+        IN  [1] en_b = _;
         OUT [8] data = _;
     }
 @endproj
@@ -29,11 +30,12 @@
     }
 @endmod
 
-// Top module: two instances drive same wire with same enable (non-exclusive)
+// Top module: two instances drive same wire with independent enables.
 // This triggers TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL after transform.
 @module TopMod
     PORT {
-        IN  [1] en;
+        IN  [1] en_a;
+        IN  [1] en_b;
         OUT [8] data;
     }
 
@@ -41,14 +43,13 @@
         bus [8];
     }
 
-    // Trigger: two instances share same INOUT wire with same enable
     @new inst_a DriverMod {
-        IN    [1] en = en;
+        IN    [1] en = en_a;
         INOUT [8] data = bus;
     };
 
     @new inst_b DriverMod {
-        IN    [1] en = en;
+        IN    [1] en = en_b;
         INOUT [8] data = bus;
     };
 

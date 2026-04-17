@@ -1,0 +1,54 @@
+// HAPPY_PATH: Full-width z assignments are transformable under 11_GND_7.
+// Covers: full-width z on 8-bit wires does not trigger
+// TRISTATE_TRANSFORM_PER_BIT_FAIL.
+
+@project HAPPY_PATH_fullwidth_z_ok
+    @top TopMod {
+        IN  [1] en_a = _;
+        IN  [1] en_b = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w [8];
+    }
+
+    ASYNCHRONOUS {
+        w <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
+        data <= w;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en_a;
+        IN  [1] en_b;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    WIRE {
+        w_top [8];
+        helper_data [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en = en_a;
+        IN  [8] din = din;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        w_top <= (en_b == 1'b1) ? helper_data : 8'bzzzz_zzzz;
+        dout <= w_top;
+    }
+@endmod

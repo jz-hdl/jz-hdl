@@ -1,7 +1,7 @@
 // TRISTATE_TRANSFORM_OE_EXTRACT_FAIL: Ambiguous output-enable condition.
 // DriverA uses standard ternary z pattern — OE extracts fine.
-// DriverB uses concatenation in z literal — confuses OE extractor because
-// the z is not a simple literal.
+// DriverB uses concatenation in the true branch z literal, which confuses
+// OE extraction because the z is not a simple literal.
 // Both share the same parent wire through INOUT ports.
 // Context: INOUT multi-driver with ambiguous OE condition.
 
@@ -26,7 +26,7 @@
     }
 @endmod
 
-// DriverB: concatenation in z literal — confuses OE extractor
+// DriverB: concatenation in true-branch z literal confuses OE extractor
 @module DriverB
     PORT {
         IN    [1] en;
@@ -35,7 +35,7 @@
     }
 
     ASYNCHRONOUS {
-        data <= (en == 1'b0) ? din : {4'bzzzz, 4'bzzzz};
+        data <= (en == 1'b1) ? {4'bzzzz, 4'bzzzz} : din;
     }
 @endmod
 

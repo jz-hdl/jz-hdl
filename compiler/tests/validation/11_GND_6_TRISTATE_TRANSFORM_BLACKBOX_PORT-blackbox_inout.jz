@@ -1,10 +1,6 @@
 // TRISTATE_TRANSFORM_BLACKBOX_PORT: Tri-state signal driven by blackbox INOUT port.
 // Verifies error when a blackbox module's INOUT port is connected to a wire
 // that also has a local tri-state driver, making the wire untransformable.
-// NOTE: Compiler emits TRISTATE_TRANSFORM_OE_EXTRACT_FAIL instead of
-// TRISTATE_TRANSFORM_BLACKBOX_PORT — the rule is defined in rules.c but
-// never emitted. See issues.md.
-
 @project BLACKBOX_PORT_blackbox_inout
     @blackbox ExtMod {
         PORT {

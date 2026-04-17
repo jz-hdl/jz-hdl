@@ -1,0 +1,40 @@
+// HAPPY_PATH: Blackbox INOUT connected without a local tri-state driver.
+// Covers: a blackbox INOUT port bound to a top-level INOUT pad does not trigger
+// TRISTATE_TRANSFORM_BLACKBOX_PORT while a separate local tri-state net transforms.
+
+@project HAPPY_PATH_blackbox_non_tristate_ok_11_7
+    @blackbox ExtPad {
+        PORT {
+            INOUT [8] pad;
+        }
+    }
+
+    @top TopMod {
+        IN  [1] en = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+        INOUT [8] pad = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] dout;
+        INOUT [8] pad;
+    }
+
+    WIRE {
+        internal_bus [8];
+    }
+
+    @new ext ExtPad {
+        INOUT [8] pad = pad;
+    };
+
+    ASYNCHRONOUS {
+        internal_bus <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
+        dout <= internal_bus;
+    }
+@endmod
