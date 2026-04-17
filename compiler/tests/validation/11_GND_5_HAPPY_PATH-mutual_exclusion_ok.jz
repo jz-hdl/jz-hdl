@@ -1,0 +1,64 @@
+// HAPPY_PATH: Multi-driver tristate net with mutually exclusive enables succeeds.
+// Context: two child INOUT drivers use complementary output-enable conditions.
+
+@project HAPPY_PATH_mutual_exclusion_ok
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [8] data_a = _;
+        IN  [8] data_b = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b1) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b0) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        shared_bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [1] sel = sel;
+        IN    [8] din = data_a;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [1] sel = sel;
+        IN    [8] din = data_b;
+        INOUT [8] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        observed <= shared_bus;
+    }
+@endmod
