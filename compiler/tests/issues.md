@@ -1,28 +1,4 @@
 
-## test_3_1-operator_categories.md
-
-* Plan section 4 : test-quality
-  Lists only 3 of 13 existing `3_1_*` validation files. Missing 10 files: `3_1_UNARY_ARITH_MISSING_PARENS-*.jz`, `3_1_TERNARY_COND_WIDTH_NOT_1-*.jz`, `3_1_TERNARY_BRANCH_WIDTH_MISMATCH-*.jz`, `3_1_CONCAT_EMPTY-*.jz`, `3_1_DIV_CONST_ZERO-*.jz`, `3_1_DIV_UNGUARDED_RUNTIME_ZERO-*.jz`, `3_1_SPECIAL_DRIVER_IN_EXPRESSION-*.jz`, `3_1_SPECIAL_DRIVER_IN_CONCAT-*.jz`, `3_1_SPECIAL_DRIVER_SLICED-*.jz`, `3_1_SPECIAL_DRIVER_IN_INDEX-*.jz`. Fix: update plan to list all existing files.
-
-## test_4_12-cdc_block.md
-
-* CDC_DEST_ALIAS_DUP : compiler-bug
-  CDC_DEST_ALIAS_DUP does not fire when dest alias conflicts with a wire name; only ID_DUP_IN_MODULE fires. The rule fires correctly for register, port, const, and instance conflicts but not wire. File attempted: `4_12_CDC_DEST_ALIAS_DUP-conflict_with_wire.jz`.
-* CDC_DEST_ALIAS_DUP : compiler-bug
-  CDC_DEST_ALIAS_DUP does not fire when dest alias conflicts with another CDC dest alias; only ID_DUP_IN_MODULE fires. Two CDC entries with the same dest alias name should trigger CDC_DEST_ALIAS_DUP on the second entry. File attempted: `4_12_CDC_DEST_ALIAS_DUP-conflict_with_alias.jz`.
-* CDC_SOURCE_NOT_PLAIN_REG : compiler-bug
-  Parser intercepts concatenation syntax `{a, b}` as CDC source with PARSE000 before CDC_SOURCE_NOT_PLAIN_REG semantic check runs. The CDC parser expects a bare identifier token; `{` is not valid at that position. Rule is unreachable for concatenation context. File attempted: `4_12_CDC_SOURCE_NOT_PLAIN_REG-concat_source.jz`.
-* CDC_SOURCE_NOT_PLAIN_REG : compiler-bug
-  Parser intercepts expression syntax `(a & b)` as CDC source with PARSE000 before CDC_SOURCE_NOT_PLAIN_REG semantic check runs. Same root cause as concat: CDC parser requires identifier token; `(` is rejected. Rule is only reachable via slice syntax (e.g., `reg[0:0]`). File attempted: `4_12_CDC_SOURCE_NOT_PLAIN_REG-expr_source.jz`.
-* CDC_DEST_ALIAS_DUP : missing-context
-  Covered: conflict with register name, conflict with port name, conflict with const name (resolved), conflict with instance name (resolved); missing: conflict with wire name, conflict with another CDC dest alias. Recommended new files: `4_12_CDC_DEST_ALIAS_DUP-conflict_with_wire.jz`, `4_12_CDC_DEST_ALIAS_DUP-conflict_with_alias.jz`. Note: sweep confirmed both are compiler-bugs.
-* CDC_SOURCE_NOT_PLAIN_REG : missing-context
-  Covered: sliced register; missing: concatenation as source, expression as source. Recommended new files: `4_12_CDC_SOURCE_NOT_PLAIN_REG-concat_source.jz`, `4_12_CDC_SOURCE_NOT_PLAIN_REG-expr_source.jz`. Note: sweep confirmed both are compiler-bugs (parser intercepts before semantic check).
-* 4_12_CDC_SOURCE_NOT_PLAIN_REG-sliced_source.jz : test-quality
-  Scaffolding: `.out` includes `WARN_UNSINKED_REGISTER` at lines 22 and 57 because the rejected CDC slice source leaves wide_reg/top_reg with no read path. Fix: add an explicit combinational read of wide_reg/top_reg (e.g., wire them to an output port) to eliminate unrelated warnings.
-* 4_12_CDC_DEST_ALIAS_DUP-alias_name_conflict.jz : test-quality
-  Scaffolding: `.out` includes cascading `CDC_DEST_ALIAS_ASSIGNED` at line 40 because `existing_reg` is both a register and a (duplicate) dest alias, so writing to the register triggers the alias-assign rule. Also includes `ID_DUP_IN_MODULE` at lines 29 and 62 as cascading from the same duplicate name. These are legitimate cascading diagnostics but add noise. Fix: use a register name that isn't written in any block to avoid triggering `CDC_DEST_ALIAS_ASSIGNED`.
-
 ## test_4_14-feature_guards.md
 
 * FEATURE_NESTED : compiler-bug

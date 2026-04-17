@@ -1,0 +1,43 @@
+// CDC_DEST_ALIAS_DUP: CDC destination alias name conflicts with a prior CDC alias.
+
+@project CDC_DEST_ALIAS_DUP_conflict_with_alias
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        src_a [1] = 1'b0;
+        src_b [1] = 1'b0;
+    }
+
+    CDC {
+        BIT src_a (clk_a) => dup_alias (clk_b);
+        // Trigger: second CDC entry reuses dest alias 'dup_alias'
+        BIT src_b (clk_a) => dup_alias (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        data = dup_alias;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        src_a <= din;
+        src_b <= ~din;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // no-op
+    }
+@endmod
