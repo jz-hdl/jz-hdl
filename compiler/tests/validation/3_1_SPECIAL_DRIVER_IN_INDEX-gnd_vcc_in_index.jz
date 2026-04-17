@@ -1,25 +1,80 @@
 // SPECIAL_DRIVER_IN_INDEX: GND/VCC may not appear in slice/index expressions.
+// Tests GND and VCC as index values across ASYNC and SYNC contexts.
+// Valid signal-index MUX reads are included to verify no false positives.
 
 @project SPECIAL_DRIVER_IN_INDEX_gnd_vcc_in_index
     @top TopMod {
         IN  [1] clk = _;
+        IN  [1] sel = _;
+        IN  [1] a = _;
+        IN  [1] b = _;
         OUT [1] out_a = _;
+        OUT [1] out_b = _;
     }
 @endproj
+
+@module HelperIndex
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    MUX {
+        m = a, b;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // Valid: signal as bit-select index (no false positive)
+        out_a = m[sel] | r;
+        // Trigger 1: GND as bit-select index in ASYNCHRONOUS context
+        out_b = m[(GND)];
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: VCC as bit-select index in SYNCHRONOUS context
+        r <= m[(VCC)];
+    }
+@endmod
 
 @module TopMod
     PORT {
         IN  [1] clk;
+        IN  [1] sel;
+        IN  [1] a;
+        IN  [1] b;
         OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        h_out_a [1];
+        h_out_b [1];
+    }
+    MUX {
+        top_m = a, b;
     }
     REGISTER {
-        r [8] = 8'h00;
+        r [1] = 1'b0;
     }
+
+    @new inst_idx HelperIndex {
+        IN  [1] clk = clk;
+        IN  [1] sel = sel;
+        IN  [1] a = a;
+        IN  [1] b = b;
+        OUT [1] out_a = h_out_a;
+        OUT [1] out_b = h_out_b;
+    };
+
     ASYNCHRONOUS {
-        // Trigger 1: GND as bit-select index — parser rejects as PARSE000
-        out_a = r[GND];
+        // Valid: top-level signal index guard (no false positive)
+        out_a = top_m[sel] | r;
+        out_b = h_out_b | h_out_a;
     }
     SYNCHRONOUS(CLK=clk) {
-        r <= r;
+        r <= top_m[sel];
     }
 @endmod

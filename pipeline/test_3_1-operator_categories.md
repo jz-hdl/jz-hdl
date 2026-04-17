@@ -88,9 +88,20 @@ Verify that all operator categories are correctly recognized, parsed, and produc
 
 | Test File | Rule Tested |
 |-----------|-------------|
+| `3_1_CONCAT_EMPTY-empty_concatenation.jz` | CONCAT_EMPTY |
+| `3_1_DIV_CONST_ZERO-constant_zero_divisor.jz` | DIV_CONST_ZERO |
+| `3_1_DIV_UNGUARDED_RUNTIME_ZERO-unguarded_division.jz` | DIV_UNGUARDED_RUNTIME_ZERO |
 | `3_1_HAPPY_PATH-operator_categories_ok.jz` | -- (happy-path) |
 | `3_1_LOGICAL_WIDTH_NOT_1-logical_ops_multibit.jz` | LOGICAL_WIDTH_NOT_1 |
+| `3_1_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz` | SPECIAL_DRIVER_IN_CONCAT |
+| `3_1_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz` | SPECIAL_DRIVER_IN_EXPRESSION |
+| `3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz` | SPECIAL_DRIVER_IN_INDEX |
+| `3_1_SPECIAL_DRIVER_IN_INDEX-vcc_sync_index.jz` | SPECIAL_DRIVER_IN_INDEX |
+| `3_1_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz` | SPECIAL_DRIVER_SLICED |
+| `3_1_TERNARY_BRANCH_WIDTH_MISMATCH-branch_mismatch.jz` | TERNARY_BRANCH_WIDTH_MISMATCH |
+| `3_1_TERNARY_COND_WIDTH_NOT_1-multibit_condition.jz` | TERNARY_COND_WIDTH_NOT_1 |
 | `3_1_TYPE_BINOP_WIDTH_MISMATCH-width_mismatch.jz` | TYPE_BINOP_WIDTH_MISMATCH |
+| `3_1_UNARY_ARITH_MISSING_PARENS-unparenthesized_unary.jz` | UNARY_ARITH_MISSING_PARENS |
 
 ## 5. Rules Matrix
 
@@ -113,4 +124,3 @@ Verify that all operator categories are correctly recognized, parsed, and produc
 ### 5.2 Rules Not Tested Here (covered by other Section 3 or Section 2 tests)
 
 All rules for this section are tested.
-

@@ -1,20 +1,22 @@
 // SPECIAL_DRIVER_IN_CONCAT: GND/VCC may not appear in concatenations.
-// Tests GND and VCC inside concatenation expressions in async and sync blocks.
-// Valid standalone uses of GND/VCC included to verify no false positives.
+// Uses multi-element concatenations and nested expression contexts across
+// ASYNC and SYNC blocks. Standalone GND/VCC uses verify no false positives.
 
 @project SPECIAL_DRIVER_IN_CONCAT_gnd_vcc_in_concat
     @top TopMod {
         IN  [1] clk = _;
+        IN  [8] data = _;
         OUT [8] out_a = _;
         OUT [8] out_b = _;
         OUT [8] out_c = _;
     }
 @endproj
 
-// Helper: GND/VCC in concatenation in async and sync blocks
-@module HelperA
+// Helper: special drivers embedded among normal concat operands
+@module HelperConcat
     PORT {
         IN  [1] clk;
+        IN  [8] data;
         OUT [8] out_a;
         OUT [8] out_b;
         OUT [8] out_c;
@@ -23,46 +25,52 @@
         r [8] = 8'h00;
     }
     ASYNCHRONOUS {
-        // Trigger 1: GND in concatenation (async RHS)
-        out_a <= {4'b0000, GND};
-        // Trigger 2: VCC in concatenation (async RHS)
-        out_b <= {VCC, 4'b1111};
-        // Valid: register read (no false positive)
-        out_c = r;
+        // Trigger 1: VCC in the middle of a multi-element concatenation
+        out_a <= {data[7:4], VCC, data[2:0]};
+        // Trigger 2: GND in concatenation feeding a bitwise expression
+        out_b <= {GND, data[6:0]} ^ r;
+        // Valid: same width concat with sized literals (no false positive)
+        out_c <= {4'b0000, data[3:0]};
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 3: GND in concatenation (sync RHS)
-        r <= {4'b0000, GND};
+        // Trigger 3: GND in concatenation in SYNCHRONOUS context
+        r <= {data[7:4], GND, data[2:0]};
     }
 @endmod
 
 @module TopMod
     PORT {
         IN  [1] clk;
+        IN  [8] data;
         OUT [8] out_a;
         OUT [8] out_b;
         OUT [8] out_c;
+    }
+    WIRE {
+        h_out_a [8];
+        h_out_b [8];
+        h_out_c [8];
     }
     REGISTER {
         r [8] = 8'h00;
     }
 
-    @new inst_a HelperA {
+    @new inst_concat HelperConcat {
         IN  [1] clk = clk;
-        OUT [8] out_a = _;
-        OUT [8] out_b = _;
-        OUT [8] out_c = _;
+        IN  [8] data = data;
+        OUT [8] out_a = h_out_a;
+        OUT [8] out_b = h_out_b;
+        OUT [8] out_c = h_out_c;
     };
 
     ASYNCHRONOUS {
-        // Valid: GND as standalone RHS (no false positive)
-        out_a = r;
-        out_b = r;
-        // Trigger 4: VCC in concatenation (async, top module)
-        out_c <= {4'b0000, VCC};
+        out_a = h_out_a;
+        out_b = h_out_b | r;
+        // Trigger 4: VCC in top-level concatenation
+        out_c <= {data[7:1], VCC};
     }
     SYNCHRONOUS(CLK=clk) {
-        // Valid: GND as standalone register assignment (no false positive)
+        // Valid: standalone GND assignment (no false positive)
         r <= GND;
     }
 @endmod
