@@ -1462,17 +1462,116 @@ static int sem_tristate_check_bus_per_field(
             /* For non-INOUT fields (OUT/IN), at most one driver may produce
              * non-z values.  SOURCE and TARGET drive complementary OUT fields,
              * so this naturally passes for properly typed bus instances. */
-            size_t non_z = 0;
-            for (size_t di = 0; di < driver_count; ++di) {
-                if (drivers[di].can_produce_non_z) non_z++;
+            if (info.result == JZ_TRISTATE_PROVEN) {
+                field_safe = 1;
+            } else {
+                size_t non_z = 0;
+                for (size_t di = 0; di < driver_count; ++di) {
+                    if (drivers[di].can_produce_non_z) non_z++;
+                }
+                field_safe = (non_z <= 1);
             }
-            field_safe = (non_z <= 1);
         }
 
         jz_buf_free(&info.drivers);
         jz_buf_free(&info.sinks);
 
         if (!field_safe) return 0;
+    }
+
+    return 1;
+}
+
+static int sem_tristate_check_declared_bus_per_field(
+    const JZNet *net,
+    const char *net_name,
+    const JZModuleScope *scope,
+    const JZBuffer *module_scopes,
+    const JZBuffer *project_symbols)
+{
+    if (!net || !net_name || !module_scopes || !project_symbols) {
+        return 0;
+    }
+
+    JZASTNode **atoms = (JZASTNode **)net->atoms.data;
+    size_t atom_count = net->atoms.len / sizeof(JZASTNode *);
+
+    char bus_name[128] = {0};
+    for (size_t ai = 0; ai < atom_count; ++ai) {
+        const JZASTNode *atom = atoms[ai];
+        if (!atom || !atom->block_kind || strcmp(atom->block_kind, "BUS") != 0) {
+            continue;
+        }
+        if (atom->text && sscanf(atom->text, "%127s", bus_name) == 1) {
+            break;
+        }
+    }
+    if (bus_name[0] == '\0') {
+        return 0;
+    }
+
+    const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+    size_t sym_count = project_symbols->len / sizeof(JZSymbol);
+    const JZASTNode *bus_def = NULL;
+
+    for (size_t i = 0; i < sym_count; ++i) {
+        if (syms[i].kind == JZ_SYM_BUS && syms[i].name &&
+            strcmp(syms[i].name, bus_name) == 0 && syms[i].node) {
+            bus_def = syms[i].node;
+            break;
+        }
+    }
+    if (!bus_def) {
+        return 0;
+    }
+
+    for (size_t fi = 0; fi < bus_def->child_count; ++fi) {
+        const JZASTNode *field = bus_def->children[fi];
+        if (!field || field->type != JZ_AST_BUS_DECL ||
+            !field->name || !field->block_kind) {
+            continue;
+        }
+
+        int is_inout = (strcmp(field->block_kind, "INOUT") == 0);
+
+        JZTristateNetInfo info;
+        jz_tristate_analyze_net(&info, net, net_name, field->name,
+                                scope, module_scopes);
+
+        size_t driver_count = info.drivers.len / sizeof(JZTristateDriver);
+        JZTristateDriver *drivers = (JZTristateDriver *)info.drivers.data;
+
+        int field_safe = 0;
+        if (is_inout) {
+            if (info.result == JZ_TRISTATE_PROVEN) {
+                field_safe = 1;
+            } else {
+                field_safe = 1;
+                for (size_t di = 0; di < driver_count; ++di) {
+                    if (drivers[di].can_produce_non_z && !drivers[di].can_produce_z) {
+                        field_safe = 0;
+                        break;
+                    }
+                }
+            }
+        } else {
+            if (info.result == JZ_TRISTATE_PROVEN) {
+                field_safe = 1;
+            } else {
+                size_t non_z = 0;
+                for (size_t di = 0; di < driver_count; ++di) {
+                    if (drivers[di].can_produce_non_z) non_z++;
+                }
+                field_safe = (non_z <= 1);
+            }
+        }
+
+        jz_buf_free(&info.drivers);
+        jz_buf_free(&info.sinks);
+
+        if (!field_safe) {
+            return 0;
+        }
     }
 
     return 1;
@@ -2141,7 +2240,12 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
                      * check fails even though no individual field has a conflict.
                      */
                     int bus_ok = 0;
-                    if (instance_driver_count > 1 && project_symbols) {
+                    if (project_symbols && jz_tristate_net_is_bus_port(net)) {
+                        bus_ok = sem_tristate_check_declared_bus_per_field(
+                            net, net_name, scope, module_scopes,
+                            project_symbols);
+                    }
+                    if (!bus_ok && instance_driver_count > 1 && project_symbols) {
                         bus_ok = sem_tristate_check_bus_per_field(
                             net, net_name, scope, module_scopes,
                             project_symbols, instance_drivers,

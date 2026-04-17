@@ -297,7 +297,7 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
         equiv_status -assert
       " 2>&1) || true
 
-      if echo "${equiv_out}" | grep -q "Equivalence successfully proven"; then
+      if [[ "${equiv_out}" == *"Equivalence successfully proven"* ]]; then
         echo "PASS ${rel_path} (equiv verilog<->rtlil)"
         ((equiv_pass++))
       else
