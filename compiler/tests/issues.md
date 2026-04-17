@@ -4,20 +4,6 @@
 * Plan section 4 : test-quality
   Lists only 3 of 13 existing `3_1_*` validation files. Missing 10 files: `3_1_UNARY_ARITH_MISSING_PARENS-*.jz`, `3_1_TERNARY_COND_WIDTH_NOT_1-*.jz`, `3_1_TERNARY_BRANCH_WIDTH_MISMATCH-*.jz`, `3_1_CONCAT_EMPTY-*.jz`, `3_1_DIV_CONST_ZERO-*.jz`, `3_1_DIV_UNGUARDED_RUNTIME_ZERO-*.jz`, `3_1_SPECIAL_DRIVER_IN_EXPRESSION-*.jz`, `3_1_SPECIAL_DRIVER_IN_CONCAT-*.jz`, `3_1_SPECIAL_DRIVER_SLICED-*.jz`, `3_1_SPECIAL_DRIVER_IN_INDEX-*.jz`. Fix: update plan to list all existing files.
 
-## test_3_4-operator_examples.md
-
-* Plan section 4 : test-quality
-  Lists `3_4_OPERATOR_EXAMPLES-spec_examples_ok.jz` but actual file is `3_4_HAPPY_PATH-operator_examples_ok.jz`. Fix: update plan to match actual filename.
-* 3_1_TERNARY_BRANCH_WIDTH_MISMATCH-branch_mismatch.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_2_TERNARY_BRANCH_WIDTH_MISMATCH-branch_width_mismatch.jz`.
-* 3_1_CONCAT_EMPTY-empty_concatenation.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_2_CONCAT_EMPTY-empty_concatenation.jz`.
-* 3_1_DIV_CONST_ZERO-constant_zero_divisor.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_2_DIV_CONST_ZERO-constant_zero_divisor.jz`.
-* 3_1_DIV_UNGUARDED_RUNTIME_ZERO-unguarded_division.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_2_DIV_UNGUARDED_RUNTIME_ZERO-unguarded_division.jz`.
-* 3_1_TERNARY_COND_WIDTH_NOT_1-multibit_condition.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_2_TERNARY_COND_WIDTH_NOT_1-multibit_condition.jz`.
 ## test_4_10-asynchronous_block.md
 
 * ASYNC_FLOATING_Z_READ : compiler-bug

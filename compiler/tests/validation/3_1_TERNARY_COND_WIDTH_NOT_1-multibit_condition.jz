@@ -1,8 +1,8 @@
 // TERNARY_COND_WIDTH_NOT_1: Ternary condition must be 1 bit wide.
-// Tests multi-bit condition in async and sync blocks across modules.
-// Valid 1-bit condition included to verify no false positives.
+// Focuses on multi-bit operator expressions used as ternary conditions.
+// Valid 1-bit conditions are included to verify no false positives.
 
-@project TERNARY_COND_WIDTH_NOT_1_multibit_condition
+@project TERNARY_COND_WIDTH_NOT_1_expr_condition
     @top TopMod {
         IN  [1] clk = _;
         IN  [1] bit_sel = _;
@@ -15,8 +15,8 @@
     }
 @endproj
 
-// Helper module with multi-bit ternary condition
-@module HelperMod
+// Helper module with multi-bit operator conditions
+@module HelperTernaryCond
     PORT {
         IN  [1] clk;
         IN  [1] bit_sel;
@@ -31,15 +31,15 @@
         r [8] = 8'd0;
     }
     ASYNCHRONOUS {
-        // Trigger 1: 8-bit condition in async
-        out_a = sel ? val_a : val_b;
+        // Trigger 1: 8-bit bitwise expression condition in async
+        out_a = (sel & val_a) ? val_a : val_b;
         // Valid: 1-bit condition (no false positive)
         out_b = bit_sel ? val_a : val_b;
         out_c = r;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 2: 8-bit condition in sync
-        r <= sel ? val_a : val_b;
+        // Trigger 2: 8-bit bitwise expression condition in sync
+        r <= (sel | val_b) ? val_a : val_b;
     }
 @endmod
 
@@ -63,7 +63,7 @@
         r [8] = 8'd0;
     }
 
-    @new inst_a HelperMod {
+    @new inst_ternary_cond HelperTernaryCond {
         IN  [1] clk = clk;
         IN  [1] bit_sel = bit_sel;
         IN  [8] sel = sel;
@@ -75,14 +75,14 @@
     };
 
     ASYNCHRONOUS {
-        // Trigger 3: 8-bit condition in top async
-        out_a = sel ? val_a : val_b;
+        // Trigger 3: 8-bit xor expression condition in top async
+        out_a = (sel ^ val_b) ? val_a : val_b;
         // Valid: 1-bit condition
         out_b = bit_sel ? ha_a : ha_b;
         out_c = r;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 4: 8-bit condition in top sync
-        r <= sel ? val_a : val_b;
+        // Trigger 4: 8-bit add expression condition in top sync
+        r <= (sel + val_a) ? val_a : val_b;
     }
 @endmod

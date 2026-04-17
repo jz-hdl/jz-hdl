@@ -52,7 +52,7 @@ Verify that the canonical operator examples from the specification compile corre
 
 | Test File | Rule Tested |
 |-----------|-------------|
-| `3_4_OPERATOR_EXAMPLES-spec_examples_ok.jz` | — (happy-path) |
+| `3_4_HAPPY_PATH-operator_examples_ok.jz` | — (happy-path) |
 | `3_4_TERNARY_BRANCH_WIDTH_MISMATCH-concat_width_mismatch.jz` | TERNARY_BRANCH_WIDTH_MISMATCH |
 | `3_4_UNARY_ARITH_MISSING_PARENS-negate_without_parens.jz` | UNARY_ARITH_MISSING_PARENS |
 
@@ -77,4 +77,3 @@ Verify that the canonical operator examples from the specification compile corre
 ### 5.2 Rules Not Tested Here (covered by S3.1/S3.2 tests)
 
 All rules for this section are tested.
-
