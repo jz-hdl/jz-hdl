@@ -1,7 +1,8 @@
-// FEATURE_NESTED: Nested @feature guard in REGISTER block.
-// Tests that nested @feature inside REGISTER declaration blocks is rejected.
+// FEATURE_NESTED: Nested @feature guard at bare module level.
+// Tests that nested @feature outside any block (REGISTER, WIRE, ASYNC, SYNC)
+// is detected and rejected.
 
-@project FEATURE_NESTED_nested_feature_in_register
+@project FEATURE_NESTED_nested_feature_at_module_level
     CONFIG {
         MODE = 1;
     }
@@ -25,14 +26,16 @@
 
     REGISTER {
         r [1] = 1'b0;
-
-        // Trigger 1: nested @feature inside REGISTER block @feature body
-        @feature FLAG == 1
-            @feature LEVEL == 0
-                r2 [1] = 1'b0;
-            @endfeat
-        @endfeat
     }
+
+    // Trigger: nested @feature at module level
+    @feature FLAG == 1
+        @feature LEVEL == 0
+            REGISTER {
+                r2 [1] = 1'b0;
+            }
+        @endfeat
+    @endfeat
 
     ASYNCHRONOUS {
         data = r ^ r2;

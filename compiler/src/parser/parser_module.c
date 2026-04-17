@@ -291,6 +291,9 @@ static int parse_module_scope_feature_body(Parser *p, JZASTNode *parent)
             JZASTNode *chk = parse_check(p);
             if (!chk) return -1;
             jz_ast_add_child(parent, chk);
+        } else if (t->type == JZ_TOK_KW_FEATURE) {
+            if (parse_feature_guard_in_block(p, parent, parse_module_scope_feature_body) != 0)
+                return -1;
         } else if (t->type == JZ_TOK_SEMICOLON) {
             advance(p);
         } else if (t->type == JZ_TOK_IDENTIFIER && t->lexeme && t->lexeme[0] == '@') {
