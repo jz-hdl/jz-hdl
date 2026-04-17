@@ -36,6 +36,7 @@
 - Never delete files without asking
 - Never force-push
 - Don't overwrite uncommitted work
+- Always run compiler/tests/run_validation.sh after working on the compiler
 
 # Information
 - specification/chip-info-specification.md : Chip data file format (compiler/data/*.json)
