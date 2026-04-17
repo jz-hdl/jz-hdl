@@ -59,7 +59,6 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        r <= data;
         // Trigger: VCC as LHS bit-select index (sync)
         r[VCC] <= 1'b0;
     }

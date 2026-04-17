@@ -1001,9 +1001,7 @@ _None._
 _None_
 
 ### Scaffolding or Compiler Bugs Found
-| Rule ID | File attempted | Category | Description |
-|---------|----------------|----------|-------------|
-| SPECIAL_DRIVER_IN_INDEX | 2_4_SPECIAL_DRIVER_IN_INDEX-vcc_sync_lhs.jz | compiler-bug | SPECIAL_DRIVER_IN_INDEX only emits once per file regardless of number of violations. Multiple triggers across modules are suppressed after the first diagnostic. The audit listed 4 missing contexts (VCC as index, SYNCHRONOUS context, MUX block context, LHS index context) but only one can be tested per file. This file covers VCC + SYNCHRONOUS + LHS in a single trigger. MUX block context and RHS-VCC-in-sync remain uncoverable without additional files. |
+_None_
 
 ### Parser Recovery Findings (for next audit to log)
 _None_
@@ -1082,7 +1080,6 @@ _None._
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
 | OBS_X_TO_OBSERVABLE_SINK | 3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz | compiler-bug | SYNC → MEM context does not fire: `sem_lhs_observable_classify` in `driver_assign.c` only classifies REGISTER/LATCH and OUT/INOUT as observable sinks, not MEM write ports. Rule message says "REGISTER, MEM, or output" but MEM is not checked. Test covers ASYNC → output only. |
-| SPECIAL_DRIVER_IN_INDEX | 3_2_SPECIAL_DRIVER_IN_INDEX-vcc_sync_range.jz | compiler-bug | Only one SPECIAL_DRIVER_IN_INDEX fires per compilation. When multiple VCC/GND-in-index violations exist across modules or statements, only the first is reported; subsequent violations are silently suppressed. Root cause unknown — diagnostic reporting has no dedup, and statement iteration has no early exit. Test uses a single trigger that covers all three missing contexts (VCC, SYNC, range) simultaneously. |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |

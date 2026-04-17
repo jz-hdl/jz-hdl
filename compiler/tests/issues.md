@@ -1,54 +1,15 @@
 
 ## test_3_1-operator_categories.md
 
-* 3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Thin test: single module, 1 trigger (GND only), ASYNC only, no false-positive guards. All other 3_1 tests use multi-module structure with ASYNC+SYNC and include false-positive coverage. Fix: rewrite to match quality of sibling tests (add VCC trigger, SYNC context, valid `r[signal]` guard).
-* 3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Stale comment: line 19 says "parser rejects as PARSE000" but compiler emits `SPECIAL_DRIVER_IN_INDEX` correctly. Fix: update comment.
-* 3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Duplicate: identical content to `2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz`.
-* 3_1_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz : test-quality
-  Duplicate: identical content to `2_4_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz`.
-* 3_1_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz : test-quality
-  Duplicate: identical content to `2_4_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz`.
-* 3_1_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz : test-quality
-  Duplicate: identical content to `1_3_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz`.
 * Plan section 4 : test-quality
   Lists only 3 of 13 existing `3_1_*` validation files. Missing 10 files: `3_1_UNARY_ARITH_MISSING_PARENS-*.jz`, `3_1_TERNARY_COND_WIDTH_NOT_1-*.jz`, `3_1_TERNARY_BRANCH_WIDTH_MISMATCH-*.jz`, `3_1_CONCAT_EMPTY-*.jz`, `3_1_DIV_CONST_ZERO-*.jz`, `3_1_DIV_UNGUARDED_RUNTIME_ZERO-*.jz`, `3_1_SPECIAL_DRIVER_IN_EXPRESSION-*.jz`, `3_1_SPECIAL_DRIVER_IN_CONCAT-*.jz`, `3_1_SPECIAL_DRIVER_SLICED-*.jz`, `3_1_SPECIAL_DRIVER_IN_INDEX-*.jz`. Fix: update plan to list all existing files.
-
-## test_2_4-special_semantic_drivers.md
-
-* SPECIAL_DRIVER_IN_INDEX : compiler-bug
-  SPECIAL_DRIVER_IN_INDEX only emits once per file regardless of number of violations. Multiple triggers across modules are suppressed after the first diagnostic. The audit listed 4 missing contexts (VCC as index, SYNCHRONOUS context, MUX block context, LHS index context) but only one can be tested per file. MUX block context and RHS-VCC-in-sync remain uncoverable without additional files. Observed during sweep for `2_4_SPECIAL_DRIVER_IN_INDEX-vcc_sync_lhs.jz`.
-* SPECIAL_DRIVER_IN_INDEX : missing-context
-  Covered: GND as bit-select index in ASYNC, VCC sync LHS; missing: MUX block context (cannot test due to single-emission bug). Recommended: `2_4_SPECIAL_DRIVER_IN_INDEX-vcc_sync_lhs.jz` (created, covers VCC + SYNC + LHS). MUX block context still missing.
-* 2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Stale comment: line 19 says "parser rejects as PARSE000" but compiler actually emits `SPECIAL_DRIVER_IN_INDEX` correctly. Fix: update comment to match actual behavior.
-* 3_1_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz : test-quality
-  Duplicate: identical `.jz` content to `2_4_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz`. Fix: remove duplicate or differentiate test scenarios.
-* 3_1_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz : test-quality
-  Duplicate: identical `.jz` content to `2_4_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz`. Fix: remove duplicate or differentiate test scenarios.
-* 3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Duplicate: identical `.jz` content to `2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz`. Fix: remove duplicate or differentiate test scenarios.
-* 1_3_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz and 3_1_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz : test-quality
-  Duplicate: identical `.jz` content to each other (different from `2_4_SPECIAL_DRIVER_SLICED-gnd_vcc_sliced.jz`). Fix: remove duplicates or differentiate test scenarios.
-* Plan section 4 : test-quality
-  Plan lists `2_4_SPECIAL_DRIVER_HAPPY_PATH-valid_gnd_vcc_ok.jz` but actual file is `2_4_HAPPY_PATH-special_drivers_ok.jz`. Fix: update plan to match actual filename.
 
 ## test_3_2-operator_definitions.md
 
 * OBS_X_TO_OBSERVABLE_SINK : compiler-bug
   SYNC to MEM context does not fire: `sem_lhs_observable_classify` in `driver_assign.c` only classifies REGISTER/LATCH and OUT/INOUT as observable sinks, not MEM write ports. Rule message says "REGISTER, MEM, or output" but MEM is not checked. Test covers ASYNC to output only. File attempted: `3_2_OBS_X_TO_OBSERVABLE_SINK-x_to_output_and_mem.jz`.
-* SPECIAL_DRIVER_IN_INDEX : compiler-bug
-  Only one SPECIAL_DRIVER_IN_INDEX fires per compilation. When multiple VCC/GND-in-index violations exist across modules or statements, only the first is reported; subsequent violations are silently suppressed. Root cause unknown — diagnostic reporting has no dedup, and statement iteration has no early exit. Test uses a single trigger that covers all three missing contexts (VCC, SYNC, range) simultaneously. File attempted: `3_2_SPECIAL_DRIVER_IN_INDEX-vcc_sync_range.jz`.
 * DIV_UNGUARDED_RUNTIME_ZERO : missing-context
   Covered: SYNC unguarded `/` and `%`, plus guard patterns `!=`, `>`, `==`, `>= N`, `!= N ELSE`, `< N ELSE`, literal-on-left; originally missing guard patterns were resolved by sweep file `3_2_DIV_UNGUARDED_RUNTIME_ZERO-additional_guard_patterns.jz`. Note: this entry is fully resolved.
-* 2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Stale comment: line 19 says "parser rejects as PARSE000" but compiler actually emits `SPECIAL_DRIVER_IN_INDEX` correctly. Fix: update comment. (Also flagged by test_2_4 audit.)
-* 3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Same stale comment as above, and identical duplicate of `2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz`.
-* Cross-section duplicates : test-quality
-  The following 3_1_ files are byte-for-byte identical to their 2_4_/1_3_ counterparts: `3_1_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz` = `2_4_...`, `3_1_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz` = `2_4_...`, `3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz` = `2_4_...`, `3_1_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz` = `1_3_...`. Fix: remove duplicates or differentiate scenarios. (Also flagged by test_2_4 audit.)
 * Plan section 4 : test-quality
   Plan lists `3_2_OPERATOR_SEMANTICS-operator_semantics_ok.jz` but actual file is `3_2_HAPPY_PATH-operator_semantics_ok.jz`. Fix: update plan to match actual filename.
 
@@ -66,15 +27,6 @@
   Cross-file duplicate: byte-for-byte identical to `3_2_DIV_UNGUARDED_RUNTIME_ZERO-unguarded_division.jz`.
 * 3_1_TERNARY_COND_WIDTH_NOT_1-multibit_condition.jz : test-quality
   Cross-file duplicate: byte-for-byte identical to `3_2_TERNARY_COND_WIDTH_NOT_1-multibit_condition.jz`.
-* 2_4_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_1_SPECIAL_DRIVER_IN_EXPRESSION-gnd_vcc_in_expr.jz`.
-* 2_4_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_1_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz`.
-* 1_3_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_1_SPECIAL_DRIVER_SLICED-vcc_gnd_sliced.jz`.
-* 2_4_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz : test-quality
-  Cross-file duplicate: byte-for-byte identical to `3_1_SPECIAL_DRIVER_IN_INDEX-gnd_vcc_in_index.jz`.
-
 ## test_4_10-asynchronous_block.md
 
 * ASYNC_FLOATING_Z_READ : compiler-bug

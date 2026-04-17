@@ -1066,16 +1066,14 @@ JZASTNode *parse_simple_index_expr(Parser *p) {
         t->type == JZ_TOK_OP_MINUS ||
         t->type == JZ_TOK_NUMBER ||
         t->type == JZ_TOK_SIZED_NUMBER ||
+        t->type == JZ_TOK_KW_GND ||
+        t->type == JZ_TOK_KW_VCC ||
         t->type == JZ_TOK_IDENTIFIER ||
         t->type == JZ_TOK_KW_CONFIG) {
         return parse_expression(p);
     }
 
-    if (t->type == JZ_TOK_KW_GND || t->type == JZ_TOK_KW_VCC) {
-        parser_error_rule(p, "SPECIAL_DRIVER_IN_INDEX");
-    } else {
-        parser_error(p, "expected expression in index");
-    }
+    parser_error(p, "expected expression in index");
     return NULL;
 }
 
