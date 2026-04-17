@@ -49,10 +49,30 @@ for file in "${validation_files[@]}"; do
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
   esac
 
-  # Run linter; capture both stdout and stderr. Many tests are expected to
-  # produce diagnostics and/or non-zero exit codes, so we do not treat a
-  # non-zero status as a test failure by itself.
-  "${JZ_HDL_BIN}" --info --lint ${extra_flags[@]+"${extra_flags[@]}"} "${file}" >"${tmp_out}" 2>&1 || true
+  # Run linter by default; serializer coverage needs backend emission because
+  # those diagnostics are produced while generating wrapper code.
+  cmd_flags=(--info --lint)
+  tmp_artifact=""
+  case "$(basename "${file}")" in
+    misc_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
+      cmd_flags=(--info --verilog)
+      tmp_artifact="$(mktemp)"
+      ;;
+    misc_SERIALIZER_WIDTH_EXCEEDS_RATIO-width_exceeds_ratio.jz)
+      cmd_flags=(--verilog)
+      tmp_artifact="$(mktemp)"
+      ;;
+  esac
+
+  # Capture both stdout and stderr. Many tests are expected to produce
+  # diagnostics and/or non-zero exit codes, so we do not treat a non-zero status
+  # as a test failure by itself.
+  if [[ -n "${tmp_artifact}" ]]; then
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_artifact}" "${file}" >"${tmp_out}" 2>&1 || true
+    rm -f "${tmp_artifact}"
+  else
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} "${file}" >"${tmp_out}" 2>&1 || true
+  fi
 
   if diff -u "${expected_out}" "${tmp_out}" > /dev/null; then
     echo "PASS ${rel_path}"

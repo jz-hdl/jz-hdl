@@ -195,20 +195,10 @@ _Last reconciled: 2026-04-15 by summary.md_
 
 ## test_misc-repeat_serializer_io.md
 
-* RPT_COUNT_INVALID : compiler-bug
-  (`misc_RPT_COUNT_INVALID-zero_count.jz`) — dead code path in `repeat_expand.c:224-229`. The `count <= 0` check should fire for `@repeat 0` producing `"RPT-001 @repeat count must be a positive integer"`, but the compiler actually emits `"RPT-001 @repeat requires a positive integer count"` (from the non-digit check at line 210-215). The `count <= 0` path appears unreachable since the only value that triggers it (0) is intercepted by the digit-parsing path which somehow produces the wrong message. Binary may be stale or logic error in digit parsing.
-* INFO_SERIALIZER_CASCADE : missing-coverage
-  (`info`, spec: serializer section) — no validation file exists. Recommended: `misc_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz`. Note: requires project-level analysis with a chip target, not reachable via `--lint` alone; may need `--info` or a project build.
-* SERIALIZER_WIDTH_EXCEEDS_RATIO : missing-coverage
-  (`error`, spec: serializer section) — no validation file exists. Recommended: `misc_SERIALIZER_WIDTH_EXCEEDS_RATIO-width_exceeds_ratio.jz`. Note: requires project-level analysis with a chip target; may not be reachable via `--lint` alone.
-* INFO_SERIALIZER_CASCADE : not-testable
-  Backend-only rule (emitted in `emit_wrapper.c` during Verilog-2005/RTLIL generation). Not reachable via `--info --lint`.
 * IO_BACKEND : not-testable
   Runtime I/O error (file write failure). Not reachable via `--info --lint`.
 * IO_IR : not-testable
   Runtime I/O error (file write failure). Not reachable via `--info --lint`.
-* SERIALIZER_WIDTH_EXCEEDS_RATIO : not-testable
-  Backend-only rule (emitted in `emit_wrapper.c` during Verilog-2005/RTLIL generation). Not reachable via `--info --lint`.
 
 ## test_11_3-tristate_net_identification.md
 

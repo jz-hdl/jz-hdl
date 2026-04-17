@@ -1,0 +1,54 @@
+// SERIALIZER_WIDTH_EXCEEDS_RATIO: backend emits an error when requested
+// differential output width exceeds the target chip's serializer ratio.
+
+@project(CHIP="ICE40UP-5K-SG48") SERIALIZER_WIDTH_EXCEEDS_RATIO_width_exceeds_ratio
+    CLOCKS {
+        clk = { period=10.0 };
+        serial_clk = { period=5.0 };
+        pixel_clk = { period=10.0 };
+        reset_n = { period=10.0 };
+    }
+
+    IN_PINS {
+        clk = { standard=LVCMOS33 };
+        serial_clk = { standard=LVCMOS33 };
+        pixel_clk = { standard=LVCMOS33 };
+        reset_n = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        tx = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=serial_clk, pclk=pixel_clk, reset=reset_n, width=3 };
+    }
+
+    MAP {
+        clk = 35;
+        serial_clk = 36;
+        pixel_clk = 37;
+        reset_n = 38;
+        tx = { P=47, N=48 };
+    }
+
+    @top TopMod {
+        IN  [1] clk_in = clk;
+        OUT [3] data   = tx;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk_in;
+        OUT [3] data;
+    }
+
+    REGISTER {
+        r [3] = 3'b0;
+    }
+
+    ASYNCHRONOUS {
+        data <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk_in) {
+        r <= r + 3'b1;
+    }
+@endmod

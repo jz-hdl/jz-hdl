@@ -245,7 +245,10 @@ static void print_line(const JZDiagnostic *d,
          * which intentionally have no table description, to surface their
          * dynamic message text (e.g., "CHECK FAILED: <msg>").
          */
-        if (rule->description) {
+        if (rule->id && strcmp(rule->id, "RPT_COUNT_INVALID") == 0 &&
+            d->message && d->message[0]) {
+            desc_text = d->message;
+        } else if (rule->description) {
             desc_text = rule->description;
         } else if (d->message) {
             desc_text = d->message;

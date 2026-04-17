@@ -4,8 +4,6 @@
 
 | Rule ID | Severity | Reason |
 |---------|----------|--------|
-| INFO_SERIALIZER_CASCADE | info | Backend-only rule (emitted in `emit_wrapper.c` during Verilog-2005/RTLIL generation). Not reachable via `--info --lint`. |
-| SERIALIZER_WIDTH_EXCEEDS_RATIO | error | Backend-only rule (emitted in `emit_wrapper.c` during Verilog-2005/RTLIL generation). Not reachable via `--info --lint`. |
 | IO_BACKEND | error | Runtime I/O error (file write failure). Not reachable via `--info --lint`. |
 | IO_IR | error | Runtime I/O error (file write failure). Not reachable via `--info --lint`. |
 
