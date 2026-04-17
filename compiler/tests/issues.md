@@ -1,33 +1,4 @@
 
-## test_4_4-port.md
-
-* ASYNC_ALIAS_IN_CONDITIONAL : missing-happy-path
-  No dedicated happy-path file; valid `<=` inside IF is tested inline in the error test but the general happy-path file doesn't exercise alias `=` at ASYNC root (valid context). Recommended: `4_4_ASYNC_ALIAS_IN_CONDITIONAL-valid_alias_ok.jz`.
-* 4_4_BUS_PORT_NOT_BUS-member_on_non_bus.jz : test-quality
-  Stale comment: line 3-4 says "NOTE: BUS_PORT_NOT_BUS is not emitted by the compiler" but the compiler DOES emit BUS_PORT_NOT_BUS correctly. Fix: remove the stale NOTE comment (lines 3-4).
-* 4_4_BUS_PORT_UNKNOWN_BUS-unknown_bus_name.jz : test-quality
-  Stale comment: line 3 says "NOTE: BUS_PORT_UNKNOWN_BUS is not emitted by the compiler" but the compiler DOES emit BUS_PORT_UNKNOWN_BUS correctly. Fix: remove the stale NOTE comment (line 3).
-* 4_4_BUS_PORT_ARRAY_COUNT_INVALID-bad_array_count.jz : test-quality
-  Scaffolding: WARN_UNUSED_PORT co-fires at line 25 for the zero-count BUS port. This is a legitimate cascading effect (zero-count port has no usable signals), not a scaffolding defect.
-
-## test_4_5-wire.md
-
-* 4_5_WIRE_MULTI_DIMENSIONAL-multi_dim_helper.jz : test-quality
-  Stale comment: lines 3-4 say "NOTE: Compiler emits PARSE000 instead of WIRE_MULTI_DIMENSIONAL because the parser cannot handle the second dimension bracket" but the compiler correctly emits WIRE_MULTI_DIMENSIONAL. Fix: remove the stale NOTE comment (lines 3-4).
-* 4_5_WIRE_MULTI_DIMENSIONAL-multi_dim_top.jz : test-quality
-  Stale comment: lines 3-4 say "NOTE: Compiler emits PARSE000 instead of WIRE_MULTI_DIMENSIONAL because the parser cannot handle the second dimension bracket" but the compiler correctly emits WIRE_MULTI_DIMENSIONAL. Fix: remove the stale NOTE comment (lines 3-4).
-
-## test_4_6-mux.md
-
-* MUX_AGG_SOURCE_INVALID : compiler-bug
-  Compiler does not fire MUX_AGG_SOURCE_INVALID when an output port is used as a MUX aggregation source. Output ports are apparently valid readable signals in module scope for MUX purposes (the module can read the value it is driving). No diagnostic emitted at all. File attempted: `4_6_MUX_AGG_SOURCE_INVALID-output_port_source.jz`.
-* MUX_NAME_DUPLICATE : compiler-bug
-  Compiler fires INSTANCE_NAME_CONFLICT instead of MUX_NAME_DUPLICATE when a MUX name collides with an instance name. Tested both declaration orders (MUX before instance and instance before MUX) — INSTANCE_NAME_CONFLICT always fires. The instance-name checker catches the collision before the MUX-name checker runs. File attempted: `4_6_MUX_NAME_DUPLICATE-dup_instance.jz`.
-* MUX_AGG_SOURCE_INVALID : missing-context
-  Covered: undefined identifier, const as source (resolved), instance name as source (resolved); missing: output port as source. Recommended new file: `4_6_MUX_AGG_SOURCE_INVALID-output_port_source.jz`. Note: sweep found rule-not-fired — output ports are valid MUX sources.
-* MUX_NAME_DUPLICATE : missing-context
-  Covered: port name, wire name, register name, const name (resolved), another MUX name (resolved); missing: instance name. Recommended new file: `4_6_MUX_NAME_DUPLICATE-dup_instance.jz`. Note: sweep found rule-not-fired — INSTANCE_NAME_CONFLICT preempts.
-
 ## test_4_7-register.md
 
 * REG_MISSING_INIT_LITERAL : compiler-bug

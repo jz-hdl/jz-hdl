@@ -62,6 +62,8 @@ Verify MUX aggregation/slicing, read-only semantics, dynamic indexing. Confirm t
 | 4_6_MUX_NAME_DUPLICATE-duplicate_name.jz | MUX_NAME_DUPLICATE | MUX identifier duplicates another identifier in module |
 | 4_6_MUX_SELECTOR_OUT_OF_RANGE_CONST-static_index_oob.jz | MUX_SELECTOR_OUT_OF_RANGE_CONST | Selector statically provable outside valid index range |
 | 4_6_MUX_SLICE_WIDTH_NOT_DIVISOR-non_divisible_width.jz | MUX_SLICE_WIDTH_NOT_DIVISOR | Auto-slicing form requires wide source width to be exact multiple of element width |
+| 4_6_MUX_AGG_SOURCE_INVALID-output_port_source.jz | -- | Output port as aggregation source is valid (no diagnostic expected) |
+| 4_6_MUX_NAME_DUPLICATE-dup_instance.jz | MUX_NAME_DUPLICATE | MUX identifier duplicates an instance name (both declaration orders) |
 
 ## 5. Rules Matrix
 

@@ -260,7 +260,8 @@ int module_scope_add_symbol_featured(JZModuleScope *scope,
             }
             return 0;
         }
-        if (existing->kind == JZ_SYM_INSTANCE || kind == JZ_SYM_INSTANCE) {
+        if ((existing->kind == JZ_SYM_INSTANCE || kind == JZ_SYM_INSTANCE) &&
+            existing->kind != JZ_SYM_MUX && kind != JZ_SYM_MUX) {
             if (diagnostics) {
                 char msg[512];
                 snprintf(msg, sizeof(msg),
@@ -279,8 +280,7 @@ int module_scope_add_symbol_featured(JZModuleScope *scope,
          * dedicated rule so that MUX namespace conflicts are reported with
          * MUX-specific context instead of the generic ID_DUP_IN_MODULE.
          */
-        if ((existing->kind == JZ_SYM_MUX && kind != JZ_SYM_INSTANCE) ||
-            (kind == JZ_SYM_MUX && existing->kind != JZ_SYM_INSTANCE)) {
+        if (existing->kind == JZ_SYM_MUX || kind == JZ_SYM_MUX) {
             if (diagnostics) {
                 char msg[512];
                 snprintf(msg, sizeof(msg),
