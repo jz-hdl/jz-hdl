@@ -3,8 +3,8 @@
 // individual bit slices of the same signal have different driver sets.
 // Contexts: helper module with per-bit tristate wire, top module with per-bit
 // tristate wire.
-// NOTE: Compiler does not emit TRISTATE_TRANSFORM_PER_BIT_FAIL — it transforms
-// the per-bit pattern without error. See issues.md.
+// Expected: compiler emits TRISTATE_TRANSFORM_PER_BIT_FAIL for the per-bit
+// pattern after identifying the tri-state transform candidates.
 
 @project TRISTATE_TRANSFORM_PER_BIT_FAIL_per_bit
     @top TopMod {
