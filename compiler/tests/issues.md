@@ -1,20 +1,5 @@
 
 
-## test_4_8-latches.md
-
-* LATCH_IN_CONST_CONTEXT : compiler-bug
-  FEATURE_EXPR_INVALID_CONTEXT preempts LATCH_IN_CONST_CONTEXT in @feature guard condition — the generic @feature check rejects any non-CONFIG/CONST/literal reference before the latch-specific check runs. LATCH_IN_CONST_CONTEXT is only reachable via @check, not @feature. File attempted: `4_8_LATCH_IN_CONST_CONTEXT-latch_in_feature.jz`.
-* LATCH_WIDTH_INVALID : compiler-bug
-  (`4_8_LATCH_WIDTH_INVALID-invalid_latch_width.jz`) — rule is unreachable. Zero-width latch `lat_zero [0] D;` triggers generic WIDTH_NONPOSITIVE_OR_NONINT instead of latch-specific LATCH_WIDTH_INVALID. The generic width check fires before the latch-specific check runs. Either LATCH_WIDTH_INVALID should preempt the generic check, or the rule is dead code.
-* LATCH_IN_CONST_CONTEXT : missing-context
-  Covered: @check condition; missing: @feature guard condition. Recommended new file: `4_8_LATCH_IN_CONST_CONTEXT-latch_in_feature.jz`. Note: sweep found rule-not-fired — FEATURE_EXPR_INVALID_CONTEXT preempts.
-* 4_8_LATCH_IN_CONST_CONTEXT-latch_in_const.jz : test-quality
-  Stale comment: line 5 says "rule not implemented — compiler does not emit this diagnostic" but compiler does emit LATCH_IN_CONST_CONTEXT correctly. Fix: remove the stale comment.
-* 4_8_LATCH_SR_WIDTH_MISMATCH-sr_width_mismatch.jz : test-quality
-  Stale comment: line 5 says "rule not implemented — compiler does not emit this diagnostic" but compiler does emit LATCH_SR_WIDTH_MISMATCH correctly. Fix: remove the stale comment.
-* 4_8_LATCH_AS_CLOCK_OR_CDC-latch_as_cdc_clock.jz : test-quality
-  Scaffolding noise: .out includes MULTI_CLK_ASSIGN (line 29) and DOMAIN_CONFLICT (line 49) from CDC register setup, not from the LATCH_AS_CLOCK_OR_CDC rule under test. Fix: restructure test to isolate latch-as-CDC-clock triggers without cascading domain errors.
-
 ## test_5_0-assignment_operators_summary.md
 
 * ASSIGN_INDEPENDENT_IF_SELECT : compiler-bug

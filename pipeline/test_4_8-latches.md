@@ -75,6 +75,7 @@ Verify LATCH declaration (D-type and SR-type), guarded assignment syntax (enable
 | 4_8_LATCH_CHIP_UNSUPPORTED-chip_no_latch.jz | LATCH_CHIP_UNSUPPORTED | Target chip does not support latches |
 | 4_8_LATCH_ENABLE_WIDTH_NOT_1-enable_not_1bit.jz | LATCH_ENABLE_WIDTH_NOT_1 | Latch enable signal must be width 1 |
 | 4_8_LATCH_IN_CONST_CONTEXT-latch_in_const.jz | LATCH_IN_CONST_CONTEXT | Latch value used in compile-time constant context |
+| 4_8_LATCH_IN_CONST_CONTEXT-latch_in_feature.jz | LATCH_IN_CONST_CONTEXT | Latch value used in @feature guard condition |
 | 4_8_LATCH_INVALID_TYPE-invalid_latch_type.jz | LATCH_INVALID_TYPE | Invalid latch type keyword (must be D or SR) |
 | 4_8_LATCH_SR_WIDTH_MISMATCH-sr_width_mismatch.jz | LATCH_SR_WIDTH_MISMATCH | SR latch set/reset signal width does not match latch width |
 | 4_8_LATCH_WIDTH_INVALID-invalid_latch_width.jz | LATCH_WIDTH_INVALID | Latch width value is not valid |
@@ -94,9 +95,8 @@ Verify LATCH declaration (D-type and SR-type), guarded assignment syntax (enable
 | LATCH_INVALID_TYPE | error | S4.8 Invalid latch type keyword (must be D or SR) | 4_8_LATCH_INVALID_TYPE-invalid_latch_type.jz |
 | LATCH_WIDTH_INVALID | error | S4.8 LATCH width must be a positive integer | 4_8_LATCH_WIDTH_INVALID-invalid_latch_width.jz |
 | LATCH_SR_WIDTH_MISMATCH | error | S4.8 SR latch set/reset expression width does not match latch width | 4_8_LATCH_SR_WIDTH_MISMATCH-sr_width_mismatch.jz |
-| LATCH_IN_CONST_CONTEXT | error | S4.8 LATCH identifier may not be used in compile-time constant contexts (@check/@feature conditions) | 4_8_LATCH_IN_CONST_CONTEXT-latch_in_const.jz |
+| LATCH_IN_CONST_CONTEXT | error | S4.8 LATCH identifier may not be used in compile-time constant contexts (@check/@feature conditions) | 4_8_LATCH_IN_CONST_CONTEXT-latch_in_const.jz; 4_8_LATCH_IN_CONST_CONTEXT-latch_in_feature.jz |
 
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
-

@@ -270,20 +270,31 @@ static void sem_check_feature_guard_cond(JZASTNode *feature,
                 break;
             }
             if (sym->kind != JZ_SYM_CONST) {
-                const char *kind_str = "identifier";
-                if (sym->kind == JZ_SYM_REGISTER) kind_str = "REGISTER";
-                else if (sym->kind == JZ_SYM_PORT) kind_str = "PORT";
-                else if (sym->kind == JZ_SYM_WIRE) kind_str = "WIRE";
-                else if (sym->kind == JZ_SYM_LATCH) kind_str = "LATCH";
-                char explain[256];
-                snprintf(explain, sizeof(explain),
-                         "'%s' is a %s, not a CONST. @feature conditions may only\n"
-                         "reference CONFIG.<name>, module CONST, and literals.",
-                         cur->name, kind_str);
-                sem_report_rule(diagnostics,
-                                cur->loc,
-                                "FEATURE_EXPR_INVALID_CONTEXT",
-                                explain);
+                if (sym->kind == JZ_SYM_LATCH) {
+                    char explain[256];
+                    snprintf(explain, sizeof(explain),
+                             "'%s' is a LATCH. LATCH identifiers may not be used in\n"
+                             "compile-time constant contexts (@check/@feature conditions).",
+                             cur->name);
+                    sem_report_rule(diagnostics,
+                                    cur->loc,
+                                    "LATCH_IN_CONST_CONTEXT",
+                                    explain);
+                } else {
+                    const char *kind_str = "identifier";
+                    if (sym->kind == JZ_SYM_REGISTER) kind_str = "REGISTER";
+                    else if (sym->kind == JZ_SYM_PORT) kind_str = "PORT";
+                    else if (sym->kind == JZ_SYM_WIRE) kind_str = "WIRE";
+                    char explain[256];
+                    snprintf(explain, sizeof(explain),
+                             "'%s' is a %s, not a CONST. @feature conditions may only\n"
+                             "reference CONFIG.<name>, module CONST, and literals.",
+                             cur->name, kind_str);
+                    sem_report_rule(diagnostics,
+                                    cur->loc,
+                                    "FEATURE_EXPR_INVALID_CONTEXT",
+                                    explain);
+                }
             }
             break;
         }
