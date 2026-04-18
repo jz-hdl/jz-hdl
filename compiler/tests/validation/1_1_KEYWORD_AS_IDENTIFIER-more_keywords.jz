@@ -1,0 +1,186 @@
+// KEYWORD_AS_IDENTIFIER: Sample of untested reserved keywords used as identifiers.
+// Previously tested: SELECT, CONFIG, WIRE, MUX, IDX, VCC, GND.
+// This file exercises the remaining keywords from sem_is_reserved_keyword():
+// IF, ELIF, ELSE, CASE, DEFAULT, PORT, IN, OUT, INOUT, REGISTER, LATCH,
+// MEM, ASYNCHRONOUS, SYNCHRONOUS, CDC, CONST, OVERRIDE, CLOCKS, MAP.
+// Tested as CONST names (universally accepted by the parser), plus a
+// representative subset as module and wire names.
+
+@project KEYWORD_AS_IDENTIFIER_more_keywords
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger 1: keyword IF as module name
+@module IF
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 2: keyword ELSE as module name
+@module ELSE
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Module testing keywords as wire names.
+// Wire declarations with keyword names trigger KEYWORD_AS_IDENTIFIER.
+// The wires are not referenced in ASYNC/SYNC because the parser would
+// interpret them as control-flow keywords in those contexts.
+@module HelperWire
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    WIRE {
+        // Trigger 3: keyword CASE as wire name
+        CASE [1];
+        // Trigger 4: keyword DEFAULT as wire name
+        DEFAULT [1];
+        // Trigger 5: keyword PORT as wire name
+        PORT [1];
+        // Trigger 6: keyword REGISTER as wire name
+        REGISTER [1];
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Module testing keywords as const names
+@module HelperConst
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    // Trigger 7: keyword IN as const name
+    CONST {
+        IN = 1;
+    }
+    // Trigger 8: keyword OUT as const name
+    CONST {
+        OUT = 2;
+    }
+    // Trigger 9: keyword INOUT as const name
+    CONST {
+        INOUT = 3;
+    }
+    // Trigger 10: keyword LATCH as const name
+    CONST {
+        LATCH = 4;
+    }
+    // Trigger 11: keyword MEM as const name
+    CONST {
+        MEM = 5;
+    }
+    // Trigger 12: keyword ASYNCHRONOUS as const name
+    CONST {
+        ASYNCHRONOUS = 6;
+    }
+    // Trigger 13: keyword SYNCHRONOUS as const name
+    CONST {
+        SYNCHRONOUS = 7;
+    }
+    // Trigger 14: keyword CDC as const name
+    CONST {
+        CDC = 8;
+    }
+    // Trigger 15: keyword CONST as const name
+    CONST {
+        CONST = 9;
+    }
+    // Trigger 16: keyword OVERRIDE as const name
+    CONST {
+        OVERRIDE = 10;
+    }
+    // Trigger 17: keyword CLOCKS as const name
+    CONST {
+        CLOCKS = 11;
+    }
+    // Trigger 18: keyword MAP as const name
+    CONST {
+        MAP = 12;
+    }
+    // Trigger 19: keyword ELIF as const name
+    CONST {
+        ELIF = 13;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_if IF {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    @new inst_else ELSE {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    @new inst_w HelperWire {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    @new inst_c HelperConst {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
