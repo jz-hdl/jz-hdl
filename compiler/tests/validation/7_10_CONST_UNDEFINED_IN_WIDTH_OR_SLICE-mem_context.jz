@@ -1,0 +1,71 @@
+// CONST_UNDEFINED_IN_WIDTH_OR_SLICE: Undefined CONST in MEM dimensions.
+// Target diagnostic: CONST_UNDEFINED_IN_WIDTH_OR_SLICE.
+// Tests undefined CONST in MEM word_width and MEM depth.
+
+@project CONST_UNDEFINED_IN_WIDTH_OR_SLICE_mem_context
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module WidthHelper
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_bad [UNDEF_WIDTH] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_bad.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_bad.wr[addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        VALID_WIDTH = 8;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_bad [VALID_WIDTH] [UNDEF_DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_w WidthHelper {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_bad.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_bad.wr[addr] <= wdata;
+    }
+@endmod

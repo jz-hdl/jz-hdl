@@ -1253,6 +1253,62 @@ static int sem_config_index_of(JZASTNode *config_block,
     return -1;
 }
 
+static int sem_config_expr_has_bare_ref(const char *expr,
+                                        const char *name)
+{
+    if (!expr || !name || !*name) return 0;
+
+    size_t name_len = strlen(name);
+    const char *p = expr;
+    while (*p) {
+        if (*p == '"') {
+            ++p;
+            while (*p && *p != '"') {
+                if (*p == '\\' && p[1]) ++p;
+                ++p;
+            }
+            if (*p == '"') ++p;
+            continue;
+        }
+
+        if (!((*p >= 'A' && *p <= 'Z') ||
+              (*p >= 'a' && *p <= 'z') ||
+              *p == '_')) {
+            ++p;
+            continue;
+        }
+
+        const char *start = p;
+        ++p;
+        while ((*p >= 'A' && *p <= 'Z') ||
+               (*p >= 'a' && *p <= 'z') ||
+               (*p >= '0' && *p <= '9') ||
+               *p == '_') {
+            ++p;
+        }
+
+        size_t len = (size_t)(p - start);
+        if (len != name_len || strncmp(start, name, len) != 0) {
+            continue;
+        }
+
+        const char *prev = start;
+        while (prev > expr) {
+            --prev;
+            if (!isspace((unsigned char)*prev)) {
+                break;
+            }
+        }
+        if (prev >= expr && *prev == '.') {
+            continue;
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
 void sem_check_project_config(JZASTNode *project,
                               JZDiagnosticList *diagnostics)
 {
@@ -1269,17 +1325,23 @@ void sem_check_project_config(JZASTNode *project,
     }
 
     unsigned char *edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
-    if (!edges) {
+    unsigned char *bare_edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
+    if (!edges || !bare_edges) {
+        free(edges);
+        free(bare_edges);
         return;
     }
 
     int *has_forward_ref = (int *)calloc(count, sizeof(int));
     int *has_cycle      = (int *)calloc(count, sizeof(int));
+    int *has_const_cycle = (int *)calloc(count, sizeof(int));
     int any_static_error = 0;
-    if (!has_forward_ref || !has_cycle) {
+    if (!has_forward_ref || !has_cycle || !has_const_cycle) {
         free(edges);
+        free(bare_edges);
         free(has_forward_ref);
         free(has_cycle);
+        free(has_const_cycle);
         return;
     }
 
@@ -1288,6 +1350,7 @@ void sem_check_project_config(JZASTNode *project,
         if (!decl || decl->type != JZ_AST_CONST_DECL) continue;
         const char *expr_text = decl->text;
         if (!expr_text) continue;
+        if (decl->block_kind && strcmp(decl->block_kind, "STRING") == 0) continue;
 
         if (sem_expr_has_lit_call(expr_text)) {
             sem_report_rule(diagnostics,
@@ -1356,6 +1419,36 @@ void sem_check_project_config(JZASTNode *project,
                 continue;
             }
         }
+
+        for (size_t j = 0; j < count; ++j) {
+            JZASTNode *dep = cfg->children[j];
+            if (!dep || dep->type != JZ_AST_CONST_DECL || !dep->name) continue;
+            if (sem_config_expr_has_bare_ref(expr_text, dep->name)) {
+                bare_edges[i * count + j] = 1u;
+            }
+        }
+    }
+
+    for (size_t k = 0; k < count; ++k) {
+        for (size_t i = 0; i < count; ++i) {
+            for (size_t j = 0; j < count; ++j) {
+                if (bare_edges[i * count + k] && bare_edges[k * count + j]) {
+                    bare_edges[i * count + j] = 1u;
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        if (!bare_edges[i * count + i]) continue;
+        JZASTNode *decl = cfg->children[i];
+        if (!decl || has_const_cycle[i]) continue;
+        sem_report_rule(diagnostics,
+                        decl->loc,
+                        "CONST_CIRCULAR_DEP",
+                        "circular dependency in CONST/CONFIG definitions");
+        has_const_cycle[i] = 1;
+        any_static_error = 1;
     }
 
     int *visit = (int *)calloc(count, sizeof(int));
@@ -1502,8 +1595,10 @@ void sem_check_project_config(JZASTNode *project,
     }
 
     free(edges);
+    free(bare_edges);
     free(has_forward_ref);
     free(has_cycle);
+    free(has_const_cycle);
 }
 
 JZASTNode *sem_find_project_top_new(JZASTNode *project)

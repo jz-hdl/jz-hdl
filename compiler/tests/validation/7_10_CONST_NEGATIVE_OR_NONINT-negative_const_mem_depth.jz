@@ -19,8 +19,16 @@
 
     PORT {
         IN  [1] clk;
+        IN  [4] addr;
         IN  [8] wdata;
         OUT [8] data;
+    }
+
+    MEM {
+        mem_bad [8] [NEG_DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
     }
 
     REGISTER {
@@ -28,11 +36,12 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = mem_bad.rd[addr] ^ r;
     }
 
     SYNCHRONOUS(CLK=clk) {
         r <= wdata;
+        mem_bad.wr[addr] <= wdata;
     }
 @endmod
 
@@ -44,8 +53,16 @@
 
     PORT {
         IN  [1] clk;
+        IN  [4] addr;
         IN  [8] wdata;
         OUT [8] data;
+    }
+
+    MEM {
+        mem_bad [NEG_WIDTH] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
     }
 
     REGISTER {
@@ -53,11 +70,12 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = mem_bad.rd[addr] ^ r;
     }
 
     SYNCHRONOUS(CLK=clk) {
         r <= wdata;
+        mem_bad.wr[addr] <= wdata;
     }
 @endmod
 
@@ -88,12 +106,14 @@
 
     @new inst_h HelperMod {
         IN  [1] clk = clk;
+        IN  [4] addr = addr;
         IN  [8] wdata = wdata;
         OUT [8] data = _;
     };
 
     @new inst_h2 HelperMod2 {
         IN  [1] clk = clk;
+        IN  [4] addr = addr;
         IN  [8] wdata = wdata;
         OUT [8] data = _;
     };

@@ -1,0 +1,26 @@
+// CONST_CIRCULAR_DEP: Circular dependency in project CONFIG definitions.
+// Target diagnostic: CONST_CIRCULAR_DEP.
+// Non-target diagnostics before the fix: CONFIG_INVALID_EXPR_TYPE.
+
+@project CONST_CIRCULAR_DEP_circular_config
+    CONFIG {
+        A = B;
+        B = A;
+    }
+
+    @top TopMod {
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod

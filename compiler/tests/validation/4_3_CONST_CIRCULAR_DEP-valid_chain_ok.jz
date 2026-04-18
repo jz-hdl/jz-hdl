@@ -1,0 +1,50 @@
+// CONST_CIRCULAR_DEP happy path: Non-circular CONST chains are valid.
+// No diagnostics expected.
+
+@project CONST_CIRCULAR_DEP_valid_chain_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        BASE = 4;
+        DOUBLE = BASE * 2;
+        DEPTH = DOUBLE * 2;
+        ADDR_W = clog2(DEPTH);
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [BASE] din;
+        OUT [DOUBLE] data;
+    }
+
+    WIRE {
+        low [BASE];
+    }
+
+    REGISTER {
+        r [DOUBLE] = 8'h00;
+    }
+
+    MEM {
+        mem_ok [DOUBLE] [DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        low = din;
+        data = mem_ok.rd[4'h0] ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= { low, din };
+        mem_ok.wr[4'h0] <= { low, din };
+    }
+@endmod
