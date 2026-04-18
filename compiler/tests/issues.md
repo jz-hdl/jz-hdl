@@ -1,14 +1,4 @@
 
-## test_8_4-global_value_semantics.md
-
-* ASSIGN_WIDTH_NO_MODIFIER : compiler-bug
-  Concatenation width mismatch fires ASSIGN_CONCAT_WIDTH_MISMATCH (higher priority per rules.c line 13) instead of ASSIGN_WIDTH_NO_MODIFIER. The intended rule cannot fire in concatenation context. File attempted: `8_4_ASSIGN_WIDTH_NO_MODIFIER-global_in_concat.jz`.
-* ASSIGN_WIDTH_NO_MODIFIER : missing-context
-  Covered: ASYNC `=` (narrow→wide), SYNC `<=` (wide→narrow, narrow→wide), ASYNC `<=` alias (wide→narrow), both helper and top modules, global in expression (resolved by sweep); missing: global in concatenation. Recommended new file: `8_4_ASSIGN_WIDTH_NO_MODIFIER-global_in_concat.jz`. Note: sweep found rule-not-fired — ASSIGN_CONCAT_WIDTH_MISMATCH preempts.
-* ASSIGN_WIDTH_NO_MODIFIER : missing-happy-path
-  Happy-path file exists (`8_4_HAPPY_PATH-global_value_semantics_ok.jz`) but only covers direct assignment contexts; missing: global in expression, concatenation, conditional (ternary) with matching widths. Recommended: `8_4_HAPPY_PATH-global_in_expressions_ok.jz`.
-
-
 ## test_9_3-check_placement_rules.md
 
 * DIRECTIVE_INVALID_CONTEXT : compiler-bug
