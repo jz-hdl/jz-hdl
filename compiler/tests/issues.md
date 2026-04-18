@@ -1,26 +1,4 @@
 
-## test_7_10-const_evaluation_in_mem.md
-
-* CONST_CIRCULAR_DEP : compiler-bug
-  Circular dependency in CONFIG block fires CONFIG_INVALID_EXPR_TYPE (S6.3) instead of CONST_CIRCULAR_DEP. CONFIG values are validated through a different path than module CONST blocks, so CONST_CIRCULAR_DEP never triggers in CONFIG context. File attempted: `7_10_CONST_CIRCULAR_DEP-circular_config.jz`.
-* CONST_UNDEFINED_IN_WIDTH_OR_SLICE : compiler-bug
-  Undefined CONST in MEM word_width/depth fires MEM_UNDEFINED_CONST_IN_WIDTH (S7.1/S7.7.1) instead of CONST_UNDEFINED_IN_WIDTH_OR_SLICE. MEM dimension validation uses a MEM-specific rule that takes precedence. File attempted: `7_10_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-mem_context.jz`.
-* CONST_CIRCULAR_DEP : missing-context
-  Covered: circular CONSTs in module CONST blocks (helper + top); missing: circular dependency in project CONFIG block. Recommended new file: `7_10_CONST_CIRCULAR_DEP-circular_config.jz`. Note: sweep found rule-not-fired — CONFIG block uses different validation path.
-* CONST_UNDEFINED_IN_WIDTH_OR_SLICE : missing-context
-  Covered: wire name in slice, register name in slice, port name in slice, undefined const in port width, wire width, register width; missing: undefined CONST in MEM word_width, undefined CONST in MEM depth. Recommended new file: `7_10_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-mem_context.jz`. Note: sweep found rule-not-fired — MEM_UNDEFINED_CONST_IN_WIDTH preempts.
-* CONST_CIRCULAR_DEP : missing-happy-path
-  No dedicated happy-path file for non-circular CONST chains (the 7_10_HAPPY_PATH file uses independent CONSTs, not chains). Recommended: `4_3_CONST_CIRCULAR_DEP-valid_chain_ok.jz`.
-* 7_10_CONST_NEGATIVE_OR_NONINT-negative_const_mem_depth.jz : test-quality
-  Misleading test: filename says "negative_const_mem_depth" but neither HelperMod (line 15-37) nor HelperMod2 (line 39-62) contains a MEM block. The negative CONSTs (NEG_DEPTH=-4, NEG_WIDTH=-2) are declared but never used in MEM dimensions. Rule fires at CONST declaration time so the test passes, but it does not exercise the plan's intended scenario (negative CONST used as MEM dimension). Fix: add MEM blocks that reference the negative CONSTs, or rename to reflect actual trigger.
-* 7_1_MEM_UNDEFINED_CONST_IN_WIDTH-undefined_const.jz : test-quality
-  Scaffolding: `.out` includes `WARN_UNUSED_PORT` at line 17 from HelperMod port `addr` which is declared but never read. Fix: use `addr` in an expression or remove it from HelperMod's PORT block.
-
-## test_8_3-global_semantics.md
-
-* GLOBAL_CONST_USE_UNDECLARED : missing-context
-  Covered: SYNCHRONOUS RHS (two modules), ASYNCHRONOUS RHS (resolved by sweep), operator expression (resolved by sweep). Note: this entry is fully resolved.
-
 ## test_8_4-global_value_semantics.md
 
 * ASSIGN_WIDTH_NO_MODIFIER : compiler-bug
