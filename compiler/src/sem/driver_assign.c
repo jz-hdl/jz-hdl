@@ -1896,13 +1896,24 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
                                ? lhs_qref.mem_decl->name : "mem";
         const char *port_name = lhs_qref.port->name ? lhs_qref.port->name : "port";
         char msg[512];
-        snprintf(msg, sizeof(msg),
-                 "%s.%s is an IN (write) port; use bracket syntax: %s.%s[addr] <= data",
-                 mem_name, port_name, mem_name, port_name);
-        sem_report_rule(diagnostics,
-                        lhs->loc,
-                        "MEM_IN_PORT_FIELD_ACCESS",
-                        msg);
+        if (lhs_qref.field == MEM_PORT_FIELD_NONE) {
+            snprintf(msg, sizeof(msg),
+                     "%s.%s cannot be used directly as a signal\n"
+                     "use bracket syntax: %s.%s[addr] <= data",
+                     mem_name, port_name, mem_name, port_name);
+            sem_report_rule(diagnostics,
+                            lhs->loc,
+                            "MEM_PORT_USED_AS_SIGNAL",
+                            msg);
+        } else {
+            snprintf(msg, sizeof(msg),
+                     "%s.%s is an IN (write) port; use bracket syntax: %s.%s[addr] <= data",
+                     mem_name, port_name, mem_name, port_name);
+            sem_report_rule(diagnostics,
+                            lhs->loc,
+                            "MEM_IN_PORT_FIELD_ACCESS",
+                            msg);
+        }
     }
 
     if (sem_match_mem_port_slice(lhs, mod_scope, diagnostics, &mem_ref) &&
@@ -1982,15 +1993,27 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
     if (rhs_is_mem_q && rhs_qref.port && rhs_qref.port->block_kind &&
         strcmp(rhs_qref.port->block_kind, "IN") == 0) {
         char msg[512];
-        snprintf(msg, sizeof(msg),
-                 "%s.%s is an IN (write) port and cannot be read\n"
-                 "use an OUT port for read access",
-                 rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                 rhs_qref.port->name ? rhs_qref.port->name : "port");
-        sem_report_rule(diagnostics,
-                        rhs->loc,
-                        "MEM_READ_FROM_WRITE_PORT",
-                        msg);
+        if (rhs_qref.field == MEM_PORT_FIELD_NONE) {
+            snprintf(msg, sizeof(msg),
+                     "%s.%s cannot be used directly as a signal\n"
+                     "use bracket syntax to write, or an OUT port to read",
+                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
+                     rhs_qref.port->name ? rhs_qref.port->name : "port");
+            sem_report_rule(diagnostics,
+                            rhs->loc,
+                            "MEM_PORT_USED_AS_SIGNAL",
+                            msg);
+        } else {
+            snprintf(msg, sizeof(msg),
+                     "%s.%s is an IN (write) port and cannot be read\n"
+                     "use an OUT port for read access",
+                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
+                     rhs_qref.port->name ? rhs_qref.port->name : "port");
+            sem_report_rule(diagnostics,
+                            rhs->loc,
+                            "MEM_READ_FROM_WRITE_PORT",
+                            msg);
+        }
     }
 
     if (rhs_is_mem_q && rhs_qref.port && rhs_qref.port->block_kind &&

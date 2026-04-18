@@ -1,0 +1,39 @@
+// MEM_CONST_ADDR_OUT_OF_RANGE: Constant INOUT .addr assignment >= depth.
+// mem [8] [4] has depth 4, so valid addresses are 0-3.
+
+@project MEM_CONST_ADDR_OUT_OF_RANGE_inout_const_overflow
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_a [8] [4] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        mem_a.rw.wdata <= wdata;
+        // Trigger: 3'd5 >= depth 4
+        mem_a.rw.addr <= 3'd5;
+    }
+@endmod

@@ -520,7 +520,7 @@ void sem_check_mem_access_expr(JZASTNode *expr,
      */
     if (msb_node->type == JZ_AST_EXPR_LITERAL && msb_node->text && depth > 0) {
         unsigned idx = 0;
-        if (parse_simple_nonnegative_int(msb_node->text, &idx) && idx >= depth) {
+        if (parse_literal_unsigned_value(msb_node->text, &idx) && idx >= depth) {
             sem_report_rule(diagnostics,
                             expr->loc,
                             "MEM_CONST_ADDR_OUT_OF_RANGE",
@@ -564,7 +564,7 @@ void sem_check_mem_addr_assign(const JZMemPortRef *ref,
 
     if (addr_expr->type == JZ_AST_EXPR_LITERAL && addr_expr->text && depth > 0) {
         unsigned idx = 0;
-        if (parse_simple_nonnegative_int(addr_expr->text, &idx) && idx >= depth) {
+        if (parse_literal_unsigned_value(addr_expr->text, &idx) && idx >= depth) {
             sem_report_rule(diagnostics,
                             addr_expr->loc,
                             "MEM_CONST_ADDR_OUT_OF_RANGE",
