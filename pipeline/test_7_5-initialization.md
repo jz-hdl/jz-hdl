@@ -29,7 +29,7 @@ Verify literal and file-based MEM initialization, including inline sized literal
 | 1 | Init literal overflow | Literal value exceeds word width | Error | MEM_INIT_LITERAL_OVERFLOW |
 | 2 | Missing initialization | MEM with no `= ...` clause | Error | MEM_MISSING_INIT |
 | 3 | Init file not found | `@file("nonexistent.hex")` | Error | MEM_INIT_FILE_NOT_FOUND |
-| 4 | Init literal contains x | `8'hxx` in init | Error | MEM_INIT_CONTAINS_X |
+| 4 | Init literal contains x | `8'bxxxx_xxxx` in init | Error | MEM_INIT_CONTAINS_X |
 | 5 | Init file contains x | File with x/z values | Error | MEM_INIT_FILE_CONTAINS_X |
 | 6 | File larger than depth | File has more entries than MEM depth | Error | MEM_INIT_FILE_TOO_LARGE |
 | 7 | Numeric CONST in @file path | `@file(DEPTH)` where DEPTH is numeric | Error | CONST_NUMERIC_IN_STRING_CONTEXT |
@@ -49,8 +49,8 @@ Verify literal and file-based MEM initialization, including inline sized literal
 |---|----------|---------------------|-----------------|----------|
 | 1 | Literal value exceeds word width | `m [4] [256] = 8'hFF { ... };` | MEM_INIT_LITERAL_OVERFLOW | error |
 | 2 | No initialization expression | `m [8] [256] { OUT rd SYNC; };` | MEM_MISSING_INIT | error |
-| 3 | Init file does not exist | `@file("nonexistent.hex")` | MEM_INIT_FILE_NOT_FOUND | error |
-| 4 | x in literal init values | `m [8] [256] = 8'hxx { ... };` | MEM_INIT_CONTAINS_X | error |
+| 3 | Init file does not exist | `@file("nonexistent.hex")`, `@file(ROM_FILE)`, `@file(CONFIG.BOOT_IMAGE)` | MEM_INIT_FILE_NOT_FOUND | error |
+| 4 | x in literal init values | `m [8] [256] = 8'bxxxx_xxxx { ... };` | MEM_INIT_CONTAINS_X | error |
 | 5 | x/z in file init values | File containing undefined bits | MEM_INIT_FILE_CONTAINS_X | error |
 | 6 | File has more entries than depth | 512-word file for 256-deep MEM | MEM_INIT_FILE_TOO_LARGE | error |
 | 7 | File has fewer entries than depth | 100-word file for 256-deep MEM | MEM_WARN_PARTIAL_INIT | warning |
@@ -61,12 +61,16 @@ Verify literal and file-based MEM initialization, including inline sized literal
 | Test File | Rule ID | Description |
 |-----------|---------|-------------|
 | 7_5_HAPPY_PATH-initialization_ok.jz | — | Happy path: valid literal and file-based initialization |
+| 7_5_HAPPY_PATH-replication_concat_ok.jz | — | Happy path: valid replication and concatenation initialization |
+| 7_5_HAPPY_PATH-const_config_file_ok.jz | — | Happy path: valid @file CONST/CONFIG string paths |
 | 7_5_MEM_INIT_CONTAINS_X-x_in_literal_init.jz | MEM_INIT_CONTAINS_X | x value in literal initialization |
 | 7_5_MEM_INIT_FILE_NOT_FOUND-nonexistent_file.jz | MEM_INIT_FILE_NOT_FOUND | Init file does not exist |
+| 7_5_MEM_INIT_FILE_NOT_FOUND-const_path.jz | MEM_INIT_FILE_NOT_FOUND | Init file from CONST path does not exist |
+| 7_5_MEM_INIT_FILE_NOT_FOUND-config_path.jz | MEM_INIT_FILE_NOT_FOUND | Init file from CONFIG path does not exist |
 | 7_5_MEM_INIT_FILE_TOO_LARGE-file_exceeds_depth.jz | MEM_INIT_FILE_TOO_LARGE | Init file has more entries than MEM depth |
 | 7_5_MEM_INIT_LITERAL_OVERFLOW-value_exceeds_width.jz | MEM_INIT_LITERAL_OVERFLOW | Literal init value exceeds word width |
 | 7_5_MEM_WARN_PARTIAL_INIT-file_smaller_than_depth.jz | MEM_WARN_PARTIAL_INIT | Init file smaller than MEM depth, zero-padded |
-| 7_5_MEM_INIT_FILE_CONTAINS_X-x_in_file_init.jz | MEM_INIT_FILE_CONTAINS_X | Init file contains x or z values |
+| 7_5_MEM_INIT_FILE_CONTAINS_X-xz_in_file.jz | MEM_INIT_FILE_CONTAINS_X | Init file contains x or z values |
 
 ## 5. Rules Matrix
 
@@ -76,13 +80,13 @@ Verify literal and file-based MEM initialization, including inline sized literal
 |---------|----------|-------------|--------------|
 | MEM_INIT_LITERAL_OVERFLOW | error | S7.5.1/S7.7.1 Literal init value exceeds word width | 7_5_MEM_INIT_LITERAL_OVERFLOW-value_exceeds_width.jz |
 | MEM_MISSING_INIT | error | S7.5.1/S7.7.1/S7.7.3 No initialization expression on MEM | 7_1_MEM_MISSING_INIT-missing_init.jz |
-| MEM_INIT_FILE_NOT_FOUND | error | S7.5.2/S7.7.1 Init file does not exist | 7_5_MEM_INIT_FILE_NOT_FOUND-nonexistent_file.jz |
+| MEM_INIT_FILE_NOT_FOUND | error | S7.5.2/S7.7.1 Init file does not exist | 7_5_MEM_INIT_FILE_NOT_FOUND-nonexistent_file.jz, 7_5_MEM_INIT_FILE_NOT_FOUND-const_path.jz, 7_5_MEM_INIT_FILE_NOT_FOUND-config_path.jz |
 | MEM_INIT_CONTAINS_X | error | S2.1/S7.5.1 x value in literal initialization | 7_5_MEM_INIT_CONTAINS_X-x_in_literal_init.jz |
 | MEM_INIT_FILE_TOO_LARGE | error | S7.5.2/S7.7.1 File has more entries than MEM depth | 7_5_MEM_INIT_FILE_TOO_LARGE-file_exceeds_depth.jz |
 | MEM_WARN_PARTIAL_INIT | warning | S7.5.2/S7.7.3 File smaller than depth, zero-padded | 7_5_MEM_WARN_PARTIAL_INIT-file_smaller_than_depth.jz |
 | MEM_INIT_FILE_CONTAINS_X | error | S7.5.2 Memory initialization file contains x or z values | 7_5_MEM_INIT_FILE_CONTAINS_X-xz_in_file.jz |
+| CONST_NUMERIC_IN_STRING_CONTEXT | error | S4.3/S6.3 Numeric CONST/CONFIG value used where a string @file path is expected | 4_3_CONST_NUMERIC_IN_STRING_CONTEXT-numeric_as_file_path.jz, 6_3_CONST_NUMERIC_IN_STRING_CONTEXT-numeric_as_string.jz |
 
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
-

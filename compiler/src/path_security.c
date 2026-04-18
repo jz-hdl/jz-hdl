@@ -19,10 +19,12 @@
 #ifdef _WIN32
 #include <direct.h>
 #define PATH_SEP '\\'
+#define JZ_GETCWD _getcwd
 #else
 #include <limits.h>
 #include <unistd.h>
 #define PATH_SEP '/'
+#define JZ_GETCWD getcwd
 #endif
 
 #define MAX_SANDBOX_ROOTS 32
@@ -160,6 +162,45 @@ static char *normalize_path_textual(const char *path)
 
     free(buf);
     return result;
+}
+
+/**
+ * @brief Convert an already-normalized relative path to an absolute textual path.
+ *
+ * realpath() cannot resolve paths that do not exist yet. For those paths we
+ * still need an absolute normalized string so sandbox comparisons use the same
+ * coordinate system as the sandbox roots.
+ */
+static char *make_textual_path_absolute(const char *path)
+{
+    if (!path || !*path) return NULL;
+
+    int is_absolute = (path[0] == '/');
+#ifdef _WIN32
+    is_absolute = is_absolute || (path[0] != '\0' && path[1] == ':');
+#endif
+    if (is_absolute) {
+        return jz_strdup(path);
+    }
+
+    char cwd_buf[4096];
+    if (!JZ_GETCWD(cwd_buf, sizeof(cwd_buf))) {
+        return NULL;
+    }
+
+    size_t cwd_len = strlen(cwd_buf);
+    size_t path_len = strlen(path);
+    int need_sep = (cwd_len > 0 && cwd_buf[cwd_len - 1] != PATH_SEP);
+    char *joined = (char *)malloc(cwd_len + need_sep + path_len + 1);
+    if (!joined) return NULL;
+
+    memcpy(joined, cwd_buf, cwd_len);
+    if (need_sep) joined[cwd_len] = PATH_SEP;
+    memcpy(joined + cwd_len + need_sep, path, path_len + 1);
+
+    char *normalized = normalize_path_textual(joined);
+    free(joined);
+    return normalized;
 }
 
 /**
@@ -326,7 +367,9 @@ char *jz_path_validate(const char *raw_path,
     /* Step 4+5: Canonicalize. Try realpath first, fall back to textual. */
     char *canonical = resolve_path(full_path);
     if (!canonical) {
-        canonical = normalize_path_textual(full_path);
+        char *normalized = normalize_path_textual(full_path);
+        canonical = make_textual_path_absolute(normalized);
+        free(normalized);
     }
     free(full_path);
     if (!canonical) return NULL;
