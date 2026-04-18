@@ -1,4 +1,4 @@
-// LIT_OVERFLOW: Literal overflow inside @global blocks.
+// GLOBAL_INVALID_EXPR_TYPE: Literal overflow inside @global blocks.
 // Tests that the compiler catches literal values whose intrinsic width exceeds
 // the declared width when used inside @global constant definitions.
 // Valid sized literals are included to verify no false positives.
@@ -19,7 +19,7 @@
     OVER_X  = 1'b11;
 @endglob
 
-@project LIT_OVERFLOW_global_literal_overflow
+@project GLOBAL_INVALID_EXPR_TYPE_literal_overflow
     @top TopMod {
         IN  [1] clk = _;
         OUT [8] data = _;

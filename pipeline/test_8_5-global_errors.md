@@ -43,7 +43,7 @@ Verify all error conditions enumerated in S8.5: forward references within a `@gl
 | `8_5_HAPPY_PATH-global_errors_ok.jz` | (none -- clean) | 0 diagnostics |
 | `8_5_GLOBAL_FORWARD_REF-forward_ref_in_global.jz` | GLOBAL_FORWARD_REF | 2 triggers |
 | `8_5_GLOBAL_CIRCULAR_DEP-circular_dependency.jz` | GLOBAL_CIRCULAR_DEP, GLOBAL_FORWARD_REF | 3 triggers (1 FORWARD_REF + 2 CIRCULAR_DEP) |
-| `8_5_LIT_OVERFLOW-global_literal_overflow.jz` | GLOBAL_INVALID_EXPR_TYPE | 3 triggers |
+| `8_5_GLOBAL_INVALID_EXPR_TYPE-literal_overflow.jz` | GLOBAL_INVALID_EXPR_TYPE | 3 triggers |
 
 ## 5. Rules Matrix
 
@@ -52,10 +52,9 @@ Verify all error conditions enumerated in S8.5: forward references within a `@gl
 |---------|----------|-------------|
 | GLOBAL_FORWARD_REF | error | `8_5_GLOBAL_FORWARD_REF-forward_ref_in_global.jz`, `8_5_GLOBAL_CIRCULAR_DEP-circular_dependency.jz` |
 | GLOBAL_CIRCULAR_DEP | error | `8_5_GLOBAL_CIRCULAR_DEP-circular_dependency.jz` |
-| GLOBAL_INVALID_EXPR_TYPE | error | `8_5_LIT_OVERFLOW-global_literal_overflow.jz` |
+| GLOBAL_INVALID_EXPR_TYPE | error | `8_5_GLOBAL_INVALID_EXPR_TYPE-literal_overflow.jz` |
 | GLOBAL_ASSIGN_FORBIDDEN | error | (covered by `8_1_GLOBAL_ASSIGN_FORBIDDEN-assign_to_global.jz` in test_8_1) |
 
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
-

@@ -23,6 +23,8 @@ Verify that `@check (<constant_expression>, <string_message>);` syntax is parsed
 3. Port signal in @check in top module (`clk == 1'b1`) produces CHECK_INVALID_EXPR_TYPE
 4. Register signal in @check (`r == 1'b0`) produces CHECK_INVALID_EXPR_TYPE
 5. Wire signal in @check (`w == 1'b0`) produces CHECK_INVALID_EXPR_TYPE
+6. MEM port signal in @check (`mem.wr`) produces CHECK_INVALID_EXPR_TYPE
+7. INOUT port signal in @check (`bus == 1'b0`) produces CHECK_INVALID_EXPR_TYPE
 
 ### 2.3 Edge Cases
 1. Deeply nested sub-expressions in @check (covered by complex expression in happy path)
@@ -36,21 +38,26 @@ Verify that `@check (<constant_expression>, <string_message>);` syntax is parsed
 | 3 | Port signal in top @check | `clk == 1'b1` | CHECK_INVALID_EXPR_TYPE | error |
 | 4 | Register signal in @check | `r == 1'b0` | CHECK_INVALID_EXPR_TYPE | error |
 | 5 | Wire signal in @check | `w == 1'b0` | CHECK_INVALID_EXPR_TYPE | error |
+| 6 | MEM port signal in @check | `mem.wr` | CHECK_INVALID_EXPR_TYPE | error |
+| 7 | INOUT port signal in @check | `bus == 1'b0` | CHECK_INVALID_EXPR_TYPE | error |
 
 ## 4. Existing Validation Tests
 | Test File | Rule Tested | Triggers |
 |-----------|-------------|----------|
 | `9_1_HAPPY_PATH-check_syntax_ok.jz` | (none -- clean) | 0 diagnostics |
 | `9_1_CHECK_INVALID_EXPR_TYPE-runtime_signal_in_check.jz` | CHECK_INVALID_EXPR_TYPE | 5 triggers |
+| `9_1_CHECK_INVALID_EXPR_TYPE-mem_signal.jz` | CHECK_INVALID_EXPR_TYPE | 1 trigger |
+| `9_1_CHECK_INVALID_EXPR_TYPE-inout_signal.jz` | CHECK_INVALID_EXPR_TYPE | 1 trigger |
 
 ## 5. Rules Matrix
 
 ### 5.1 Rules Tested
 | Rule ID | Severity | Test Case(s) |
 |---------|----------|-------------|
-| CHECK_INVALID_EXPR_TYPE | error | `9_1_CHECK_INVALID_EXPR_TYPE-runtime_signal_in_check.jz` |
+| CHECK_INVALID_EXPR_TYPE | error | `9_1_CHECK_INVALID_EXPR_TYPE-runtime_signal_in_check.jz`, `9_1_CHECK_INVALID_EXPR_TYPE-mem_signal.jz`, `9_1_CHECK_INVALID_EXPR_TYPE-inout_signal.jz` |
 
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
 
+Note: LATCH signals in `@check` are intentionally not listed as CHECK_INVALID_EXPR_TYPE coverage. The compiler emits the more specific `LATCH_IN_CONST_CONTEXT` (S4.8) for that context, so `CHECK_INVALID_EXPR_TYPE` is not reachable for LATCH signal references.

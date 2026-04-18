@@ -8,17 +8,6 @@
 * ASSIGN_WIDTH_NO_MODIFIER : missing-happy-path
   Happy-path file exists (`8_4_HAPPY_PATH-global_value_semantics_ok.jz`) but only covers direct assignment contexts; missing: global in expression, concatenation, conditional (ternary) with matching widths. Recommended: `8_4_HAPPY_PATH-global_in_expressions_ok.jz`.
 
-## test_8_5-global_errors.md
-
-* 8_5_LIT_OVERFLOW-global_literal_overflow.jz : test-quality
-  Naming: filename uses `LIT_OVERFLOW` instead of the rule ID `GLOBAL_INVALID_EXPR_TYPE`, making rule-based pattern matching miss this file. Fix: rename to `8_5_GLOBAL_INVALID_EXPR_TYPE-literal_overflow.jz`.
-
-## test_9_1-check_syntax.md
-
-* CHECK_INVALID_EXPR_TYPE : compiler-bug
-  LATCH signal in @check fires LATCH_IN_CONST_CONTEXT (S4.8) instead of CHECK_INVALID_EXPR_TYPE (S9.1). More specific rule handles this case; CHECK_INVALID_EXPR_TYPE is not reachable for LATCH signals. Audit finding may be invalid. File attempted: `9_1_CHECK_INVALID_EXPR_TYPE-latch_signal.jz`.
-* CHECK_INVALID_EXPR_TYPE : missing-context
-  Covered: undefined identifier (project scope), IN port signal (helper module), IN port signal (top module), register signal, wire signal, MEM port signal (resolved by sweep), INOUT port signal (resolved by sweep); missing: LATCH signal. Recommended new file: `9_1_CHECK_INVALID_EXPR_TYPE-latch_signal.jz`. Note: sweep found rule-not-fired — LATCH_IN_CONST_CONTEXT preempts.
 
 ## test_9_3-check_placement_rules.md
 
