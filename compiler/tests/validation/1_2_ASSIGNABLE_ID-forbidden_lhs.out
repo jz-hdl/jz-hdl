@@ -1,0 +1,4 @@
+File: 1_2_ASSIGNABLE_ID-forbidden_lhs.jz
+      41:9    error PORT_DIRECTION_MISMATCH_IN S4.4/S5.1 Cannot assign to IN port; IN ports are read-only inside the module
+      43:9    error ASYNC_INVALID_STATEMENT_TARGET S4.10/S5.1/S8.1 LHS in ASYNCHRONOUS assignment is not assignable
+      50:9    error WRITE_WIRE_IN_SYNC S4.5/S5.2 Cannot assign to WIRE in SYNCHRONOUS block; use a REGISTER, or move to ASYNCHRONOUS

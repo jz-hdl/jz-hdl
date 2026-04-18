@@ -1,0 +1,58 @@
+// OBS_X_TO_OBSERVABLE_SINK: x-valued literal bits driving a module-level
+// INOUT port (distinct from MEM INOUT, which is covered by x_to_mem.jz).
+// INOUT ports are observable sinks per §1.2.
+
+@project OBS_X_TO_OBSERVABLE_SINK_x_to_inout_port
+    @top TopMod {
+        IN    [1] clk      = _;
+        IN    [1] drive_en = _;
+        INOUT [8] bus      = _;
+        OUT   [8] monitor  = _;
+    }
+@endproj
+
+// Helper module: x bits driving INOUT port
+@module HelperA
+    PORT {
+        IN    [1] drive_en;
+        INOUT [8] bus;
+        OUT   [8] monitor;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: x literal driving INOUT port
+        bus <= drive_en ? 8'bxxxx_0000 : 8'bz;
+        // Valid: reading INOUT (no x)
+        monitor = bus;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] drive_en;
+        INOUT [8] bus;
+        OUT   [8] monitor;
+    }
+
+    @new inst_a HelperA {
+        IN    [1] drive_en = drive_en;
+        INOUT [8] bus      = _;
+        OUT   [8] monitor  = _;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 2: x literal driving INOUT port in top module
+        bus <= drive_en ? 8'b0000_xxxx : 8'bz;
+        // Valid: register driving output (no x)
+        monitor = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

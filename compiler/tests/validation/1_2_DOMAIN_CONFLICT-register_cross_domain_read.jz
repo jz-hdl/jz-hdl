@@ -1,0 +1,73 @@
+// DOMAIN_CONFLICT: Register read in SYNCHRONOUS block whose CLK does
+// not match its home domain. Existing register_wrong_domain.jz covers
+// cross-domain *write*; this test covers cross-domain *read*.
+
+@project DOMAIN_CONFLICT_register_cross_domain_read
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        OUT [1] data  = _;
+    }
+@endproj
+
+// Helper module: register read in wrong domain
+@module HelperA
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] data;
+    }
+    REGISTER {
+        // Home domain: clk_a (assigned in SYNCHRONOUS(CLK=clk_a))
+        r_a [1] = 1'b0;
+        // Home domain: clk_b
+        r_b [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r_a ^ r_b;
+    }
+
+    // Valid: r_a assigned and read in its home domain clk_a
+    SYNCHRONOUS(CLK=clk_a) {
+        r_a <= ~r_a;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // Trigger 1: r_a *read* in clk_b but home domain is clk_a
+        r_b <= r_a;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] data;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk_a = clk_a;
+        IN  [1] clk_b = clk_b;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r_top [1] = 1'b0;
+        r_other [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r_top ^ r_other;
+    }
+
+    // Valid: r_top in its home domain clk_a
+    SYNCHRONOUS(CLK=clk_a) {
+        r_top <= ~r_top;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // Trigger 2: r_top *read* in clk_b but home domain is clk_a
+        r_other <= r_top;
+    }
+@endmod

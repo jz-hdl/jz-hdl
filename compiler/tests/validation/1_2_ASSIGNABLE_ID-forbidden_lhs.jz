@@ -1,0 +1,78 @@
+// ASSIGNABLE_ID: §1.2 enumerates which identifiers may appear on the LHS
+// of an assignment. This test exercises forbidden LHS contexts:
+// - IN port assignment → PORT_DIRECTION_MISMATCH_IN
+// - WIRE in SYNCHRONOUS block → WRITE_WIRE_IN_SYNC
+// - CONST assignment → ASYNC_INVALID_STATEMENT_TARGET
+
+@project ASSIGNABLE_ID_forbidden_lhs
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: forbidden LHS cases
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST {
+        C_VAL = 170;
+    }
+
+    WIRE {
+        w [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: WIRE assigned in ASYNCHRONOUS (legal)
+        w = r;
+        // Valid: OUT port assigned in ASYNCHRONOUS (legal)
+        data = w;
+        // Trigger 1: assign to IN port (read-only inside module)
+        din <= 8'hFF;
+        // Trigger 2: assign to CONST (compile-time constant, read-only)
+        C_VAL <= 8'hBB;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: REGISTER assigned in SYNCHRONOUS (legal)
+        r <= ~r;
+        // Trigger 3: WIRE assigned in SYNCHRONOUS block
+        w <= 8'h00;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk  = clk;
+        IN  [8] din  = din;
+        OUT [8] data = _;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
