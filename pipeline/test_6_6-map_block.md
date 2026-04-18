@@ -56,10 +56,13 @@ Verify MAP block: pin-to-board-pin mapping, per-bit mapping for buses, different
 | Test File | Rule ID | Description |
 |-----------|---------|-------------|
 | 6_6_HAPPY_PATH-map_ok.jz | -- | Valid MAP block with scalar and bus mappings (clean compile) |
+| 6_6_HAPPY_PATH-map_with_chip_ok.jz | -- | Valid MAP block with CHIP set so board pin IDs are validated (clean compile) |
 | 6_6_MAP_DIFF_EXPECTED_PAIR-diff_scalar_map.jz | MAP_DIFF_EXPECTED_PAIR | Differential pin must use { P, N } MAP syntax |
 | 6_6_MAP_DIFF_MISSING_PN-missing_pn.jz | MAP_DIFF_MISSING_PN | Differential MAP entry missing P or N identifier |
 | 6_6_MAP_DIFF_SAME_PIN-same_pn.jz | MAP_DIFF_SAME_PIN | Differential MAP entry has same physical pin for P and N |
 | 6_6_MAP_DUP_PHYSICAL_LOCATION-duplicate_board_pin.jz | MAP_DUP_PHYSICAL_LOCATION | Two logical pins mapped to same physical board pin |
+| 6_6_MAP_DUP_PHYSICAL_LOCATION-diff_duplicate.jz | MAP_DUP_PHYSICAL_LOCATION | Differential P/N pins duplicate physical locations |
+| 6_6_MAP_INVALID_BOARD_PIN_ID-bad_pin_format.jz | MAP_INVALID_BOARD_PIN_ID | Board pin ID format invalid for target device |
 | 6_6_MAP_PIN_DECLARED_NOT_MAPPED-unmapped_pins.jz | MAP_PIN_DECLARED_NOT_MAPPED | Pin declared in PIN blocks but not mapped in MAP |
 | 6_6_MAP_PIN_MAPPED_NOT_DECLARED-undeclared_map_entry.jz | MAP_PIN_MAPPED_NOT_DECLARED | MAP entry references undeclared pin |
 | 6_6_MAP_SINGLE_UNEXPECTED_PAIR-single_pair_map.jz | MAP_SINGLE_UNEXPECTED_PAIR | Single-ended pin must not use { P, N } MAP syntax |
@@ -81,4 +84,3 @@ Verify MAP block: pin-to-board-pin mapping, per-bit mapping for buses, different
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
-

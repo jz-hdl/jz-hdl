@@ -53,7 +53,7 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = r ^ slow;
     }
 
     SYNCHRONOUS(CLK=fast) {

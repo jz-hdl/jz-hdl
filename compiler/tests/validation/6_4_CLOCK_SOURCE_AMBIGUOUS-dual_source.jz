@@ -1,6 +1,5 @@
 // CLOCK_SOURCE_AMBIGUOUS: Clock declared as both IN_PINS and CLOCK_GEN output.
-// Period in CLOCKS implies external source; CLOCK_GEN OUT implies generated source.
-// Tests clocks with period that are also CLOCK_GEN outputs.
+// Period in CLOCKS plus IN_PINS implies external source; CLOCK_GEN OUT implies generated source.
 // Valid clocks (external-only, gen-only) included to verify no false positives.
 
 @project(CHIP="gw2ar-18-qn88-c8-i7") CLOCK_SOURCE_AMBIGUOUS_dual_source
@@ -16,10 +15,14 @@
 
     IN_PINS {
         ref_clk = { standard=LVCMOS33 };
+        ambig_clk_a = { standard=LVCMOS33 };
+        ambig_clk_b = { standard=LVCMOS33 };
     }
 
     MAP {
         ref_clk = 1;
+        ambig_clk_a = 2;
+        ambig_clk_b = 3;
     }
 
     CLOCK_GEN {

@@ -19,6 +19,9 @@ static int sem_parse_nonnegative_simple(const char *s, unsigned *out)
     return parse_simple_nonnegative_int(s, out);
 }
 
+static int is_clock_gen_output(JZASTNode *project, const char *clock_name);
+static int is_clock_gen_input(JZASTNode *project, const char *clock_name);
+
 static int sem_clock_parse_attrs(const char *attrs,
                                  double *out_period,
                                  char *out_edge,
@@ -115,7 +118,13 @@ void sem_check_project_clocks(JZASTNode *project,
         }
 
         if (project_symbols && has_period) {
-            /* Clock with period: must be in IN_PINS (external clock) */
+            /* Clock with period: must be in IN_PINS unless it is a CLOCK_GEN
+             * output, which is reported by the more specific CLOCK_GEN rule.
+             */
+            if (is_clock_gen_output(project, decl->name)) {
+                continue;
+            }
+
             const JZSymbol *pin_sym = project_lookup(project_symbols, decl->name, JZ_SYM_PIN);
             JZASTNode *pin_decl = pin_sym ? pin_sym->node : NULL;
             const char *pin_block = (pin_decl && pin_decl->block_kind)
@@ -690,13 +699,25 @@ void sem_check_project_clock_gen(JZASTNode *project,
                             continue;
                         }
 
+                        const JZSymbol *pin_sym = project_lookup(project_symbols, out_clk, JZ_SYM_PIN);
+                        int output_is_input_pin =
+                            pin_sym && pin_sym->node && pin_sym->node->block_kind &&
+                            strcmp(pin_sym->node->block_kind, "IN_PINS") == 0;
+
                         /* Output clock must NOT have a period */
                         JZASTNode *clk_decl = clk_sym->node;
+                        int output_has_period = 0;
                         if (clk_decl) {
                             double period = 0.0;
                             char edge[32];
                             sem_clock_parse_attrs(clk_decl->text, &period, edge, sizeof(edge));
-                            if (period > 0.0) {
+                            output_has_period = (period > 0.0);
+                            if (output_has_period && output_is_input_pin) {
+                                sem_report_rule(diagnostics,
+                                                elem->loc,
+                                                "CLOCK_SOURCE_AMBIGUOUS",
+                                                "clock is declared as both an IN_PINS clock and a CLOCK_GEN output");
+                            } else if (output_has_period) {
                                 sem_report_rule(diagnostics,
                                                 elem->loc,
                                                 "CLOCK_GEN_OUTPUT_HAS_PERIOD",
@@ -705,14 +726,11 @@ void sem_check_project_clock_gen(JZASTNode *project,
                         }
 
                         /* Output clock must NOT be an IN_PINS */
-                        const JZSymbol *pin_sym = project_lookup(project_symbols, out_clk, JZ_SYM_PIN);
-                        if (pin_sym && pin_sym->node && pin_sym->node->block_kind) {
-                            if (strcmp(pin_sym->node->block_kind, "IN_PINS") == 0) {
-                                sem_report_rule(diagnostics,
-                                                elem->loc,
-                                                "CLOCK_GEN_OUTPUT_IS_INPUT_PIN",
-                                                "CLOCK_GEN output clock must not be declared as IN_PINS");
-                            }
+                        if (output_is_input_pin && !output_has_period) {
+                            sem_report_rule(diagnostics,
+                                            elem->loc,
+                                            "CLOCK_GEN_OUTPUT_IS_INPUT_PIN",
+                                            "CLOCK_GEN output clock must not be declared as IN_PINS");
                         }
                     }
 
@@ -915,14 +933,6 @@ void sem_check_project_clock_gen(JZASTNode *project,
                                         "CLOCK_PERIOD_NONPOSITIVE",
                                         "clock period must be positive or clock must be CLOCK_GEN output");
                     }
-                }
-            } else if (period > 0.0) {
-                /* Clock with period must NOT be a CLOCK_GEN output */
-                if (is_clock_gen_output(project, decl->name)) {
-                    sem_report_rule(diagnostics,
-                                    decl->loc,
-                                    "CLOCK_SOURCE_AMBIGUOUS",
-                                    "clock has period but is also a CLOCK_GEN output");
                 }
             }
         }
