@@ -1,0 +1,59 @@
+// ASYNC_UNDEFINED_PATH_NO_DRIVER: Signal undriven on some ASYNC paths.
+// Covers 5.1 assignment paths where IF lacks ELSE.
+// Valid complete IF/ELSE coverage is included for no false positives.
+
+@project ASYNC_UNDEFINED_PATH_NO_DRIVER_partial_coverage_5_1
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+    }
+@endproj
+
+// Helper module: IF without ELSE leaves output undriven on one path.
+@module HelperMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: dout is undriven when sel is false.
+        IF (sel) {
+            dout <= din;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] sel = sel;
+        IN  [8] din = din;
+        OUT [8] dout = dout_a;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: dout_b is undriven when sel is false.
+        IF (sel) {
+            dout_b <= din;
+        }
+
+        // Valid: complete path coverage.
+        IF (sel) {
+            dout_c <= din;
+        } ELSE {
+            dout_c <= 8'h00;
+        }
+    }
+@endmod
