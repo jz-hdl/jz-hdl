@@ -94,7 +94,7 @@ A signal location whose value is architecturally visible or externally observabl
 A statically distinct control-flow branch through a block, defined by mutually exclusive IF/ELIF/ELSE or SELECT/CASE structures. Execution paths are determined structurally, not by symbolic reasoning. Independent control-flow chains at the same nesting level are treated as potentially concurrent (see Section 1.5).
 
 **Assignable Identifier:**
-A signal that may legally appear on the left-hand side of an assignment. Includes REGISTER (in SYNCHRONOUS only), WIRE, OUT port, INOUT port, LATCH (guarded, in ASYNCHRONOUS only), and writable BUS signals.
+A signal that may legally appear on the left-hand side of an assignment. Includes REGISTER (in SYNCHRONOUS only), WIRE, OUT port, INOUT port, LATCH (guarded, in ASYNCHRONOUS only), and writable BUS signals (see Section 6.8).
 
 **Register:**
 A storage signal bound to a clock domain (flip-flops) that exposes:
