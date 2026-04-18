@@ -1200,6 +1200,10 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                     continue;
                 }
 
+                if (sem_check_clog2_expr_simple(decl->width, decl->loc, diagnostics)) {
+                    continue;
+                }
+
                 unsigned w = 0;
                 int rc = eval_simple_positive_decl_int(decl->width, &w);
                 if (rc == -1) {
