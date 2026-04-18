@@ -1,0 +1,3 @@
+File: 5_4_WARN_INCOMPLETE_SELECT_ASYNC-async_select_no_default.jz
+      24:9    warn  WARN_INCOMPLETE_SELECT_ASYNC S5.4/S8.3 Incomplete SELECT coverage without DEFAULT in ASYNCHRONOUS block
+      53:9    warn  WARN_INCOMPLETE_SELECT_ASYNC S5.4/S8.3 Incomplete SELECT coverage without DEFAULT in ASYNCHRONOUS block

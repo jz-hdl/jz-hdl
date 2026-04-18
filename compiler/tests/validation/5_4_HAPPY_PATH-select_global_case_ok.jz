@@ -1,0 +1,53 @@
+// HAPPY_PATH: @global constants are valid CASE values.
+// Exercises @global CASE values in ASYNC and SYNC SELECT statements.
+
+@global OPCODES
+    NOP = 4'h0;
+    ADD = 4'h1;
+    SUB = 4'h2;
+@endglob
+
+@project HAPPY_PATH_select_global_case_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] opcode = _;
+        OUT [1] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] opcode;
+        OUT [1] out_a;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        SELECT (opcode) {
+            CASE OPCODES.NOP {
+                out_a <= VCC;
+            }
+            CASE OPCODES.ADD {
+                out_a <= GND;
+            }
+            DEFAULT {
+                out_a <= r;
+            }
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        SELECT (opcode) {
+            CASE OPCODES.SUB {
+                r <= VCC;
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

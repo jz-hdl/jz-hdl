@@ -1,8 +1,8 @@
-// SELECT_DEFAULT_RECOMMENDED_ASYNC: ASYNC SELECT without DEFAULT may float.
-// Tests missing DEFAULT in ASYNC blocks across multiple modules.
+// WARN_INCOMPLETE_SELECT_ASYNC: Incomplete ASYNC SELECT without DEFAULT.
+// Tests incomplete coverage in ASYNC blocks across multiple modules.
 // ASYNC SELECT with DEFAULT included for no false positive.
 
-@project SELECT_DEFAULT_RECOMMENDED_ASYNC_async_no_default
+@project WARN_INCOMPLETE_SELECT_ASYNC_async_select_no_default
     @top TopMod {
         IN  [4] sel = _;
         OUT [1] out_a = _;
@@ -15,14 +15,18 @@
         IN  [4] sel;
         OUT [1] out_a;
     }
+    WIRE {
+        temp_a [1];
+    }
     ASYNCHRONOUS {
-        // Trigger 1: ASYNC SELECT without DEFAULT in helper module
+        // Trigger 1: incomplete ASYNC SELECT without DEFAULT in helper module
+        out_a <= GND;
         SELECT (sel) {
             CASE 0 {
-                out_a <= VCC;
+                temp_a <= VCC;
             }
             CASE 1 {
-                out_a <= GND;
+                temp_a <= GND;
             }
         }
     }
@@ -34,6 +38,9 @@
         OUT [1] out_a;
         OUT [1] out_b;
     }
+    WIRE {
+        temp_a [1];
+    }
 
     @new inst_a HelperA {
         IN  [4] sel = sel;
@@ -41,13 +48,14 @@
     };
 
     ASYNCHRONOUS {
-        // Trigger 2: ASYNC SELECT without DEFAULT in top module
+        // Trigger 2: incomplete ASYNC SELECT without DEFAULT in top module
+        out_a <= GND;
         SELECT (sel) {
             CASE 4'h0 {
-                out_a <= VCC;
+                temp_a <= VCC;
             }
             CASE 4'h1 {
-                out_a <= GND;
+                temp_a <= GND;
             }
         }
 

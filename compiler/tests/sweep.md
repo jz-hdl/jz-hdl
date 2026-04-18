@@ -480,9 +480,9 @@ _no work: no missing contexts for this plan_
 - Stale rule IDs (skipped):                   0
 - No spec basis (skipped):                    0
 - Not testable via --lint (skipped):          0
-- Successfully created:                       5
-- Scaffolding or bug failures (not created):  1
-- Total: 6 == 0 + 0 + 0 + 0 + 5 + 1
+- Successfully created:                       6
+- Scaffolding or bug failures (not created):  0
+- Total: 6 == 0 + 0 + 0 + 0 + 6 + 0
 
 ### Files Created
 | Rule ID | Context | File |
@@ -1820,6 +1820,7 @@ _no work: plan has no missing contexts (section exists but says "No issues flagg
 | SELECT_CASE_WIDTH_MISMATCH | x-wildcard CASE with width mismatch | 5_4_SELECT_CASE_WIDTH_MISMATCH-xwild_width_mismatch.jz |
 | SELECT_CASE_WIDTH_MISMATCH | @global constant CASE with width mismatch | 5_4_SELECT_CASE_WIDTH_MISMATCH-global_width_mismatch.jz |
 | SELECT_DUP_CASE_VALUE | fall-through CASE duplicate | 5_4_SELECT_DUP_CASE_VALUE-fallthrough_dup.jz |
+| SELECT_DUP_CASE_VALUE | @global constant CASE duplicate | 5_4_SELECT_DUP_CASE_VALUE-global_dup.jz |
 | SELECT_DUP_CASE_VALUE | x-wildcard overlapping patterns | 5_4_SELECT_DUP_CASE_VALUE-xwild_overlap.jz |
 | SELECT_NO_MATCH_SYNC_OK | nested SELECT in SYNC without DEFAULT | 5_4_SELECT_NO_MATCH_SYNC_OK-nested_sync_no_default.jz |
 
@@ -1831,7 +1832,7 @@ _no work: plan has no missing contexts (section exists but says "No issues flagg
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| SELECT_DUP_CASE_VALUE | 5_4_SELECT_DUP_CASE_VALUE-global_dup.jz | rule-not-fired | Compiler does not detect SELECT_DUP_CASE_VALUE when both CASE values are @global constants with the same numeric value (e.g., OPCODES.NOP=4'h0 and OPCODES.HALT=4'h0). Also not detected when @global constant duplicates a bare integer (e.g., OPCODES.SUB=4'h2 and CASE 2). The compiler likely does not resolve @global constants to their numeric values during duplicate CASE detection. |
+| (none) | | | |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |

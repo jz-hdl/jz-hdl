@@ -1,0 +1,52 @@
+// SELECT_DEFAULT_RECOMMENDED_ASYNC: Complete ASYNC SELECT coverage without DEFAULT.
+// Tests that complete CASE coverage avoids incomplete-path diagnostics but still
+// emits the readability recommendation.
+
+@project SELECT_DEFAULT_RECOMMENDED_ASYNC_complete_coverage_no_default
+    @top TopMod {
+        IN  [1] sel = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] sel;
+        OUT [1] out_a;
+    }
+    ASYNCHRONOUS {
+        // Trigger 1: complete ASYNC SELECT coverage without DEFAULT in helper module
+        SELECT (sel) {
+            CASE 0 {
+                out_a <= VCC;
+            }
+            CASE 1 {
+                out_a <= GND;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        OUT [1] out_b;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] sel = sel;
+        OUT [1] out_a = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: complete ASYNC SELECT coverage without DEFAULT in top module
+        SELECT (sel) {
+            CASE 1'b0 {
+                out_b <= VCC;
+            }
+            CASE 1'b1 {
+                out_b <= GND;
+            }
+        }
+    }
+@endmod

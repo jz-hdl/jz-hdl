@@ -85,6 +85,10 @@ typedef struct JZPathState {
     size_t   branch_base;
 } JZPathState;
 
+static int sem_dead_select_cases_exhaustive(JZASTNode *select_stmt,
+                                            const JZModuleScope *scope,
+                                            const JZBuffer *project_symbols);
+
 static int sem_flow_expr_contains_z_literal(const JZASTNode *expr)
 {
     if (!expr) return 0;
@@ -663,6 +667,8 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
             break;
         }
     }
+    int has_exhaustive_coverage = (!has_default &&
+        sem_dead_select_cases_exhaustive(select_stmt, scope, project_symbols));
 
     /* Count actual case branches (excluding empty ones) */
     size_t actual_branch_count = 0;
@@ -728,7 +734,7 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
             for (size_t ri = 0; ri < rec_count; ++ri) {
                 JZAssignRecord *rec = &recs[ri];
 
-                if (!has_default) {
+                if (!has_default && !has_exhaustive_coverage) {
                     rec->partial = 1;
                 } else {
                     int in_all = 1;
