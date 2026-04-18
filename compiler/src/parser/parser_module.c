@@ -310,13 +310,13 @@ static int parse_module_scope_feature_body(Parser *p, JZASTNode *parent)
 /**
  * @brief Parse the body of a @blackbox definition.
  *
- * A blackbox body is restricted to structural declarations only and may
- * contain:
+ * A blackbox body may contain:
  * - CONST blocks
  * - PORT blocks
  *
- * No executable logic or other block types are permitted. Parsing continues
- * until the closing '}' brace is encountered.
+ * Semantic analysis diagnoses forbidden internal blocks. Parsing accepts the
+ * S6.7-forbidden block kinds so they can receive rule-specific diagnostics
+ * instead of generic syntax errors.
  *
  * @param p  Active parser
  * @param bb Blackbox AST node
@@ -347,6 +347,56 @@ int parse_blackbox_body(Parser *p, JZASTNode *bb) {
         } else if (t->type == JZ_TOK_KW_PORT) {
             advance(p);
             JZASTNode *blk = parse_block(p, t, "PORT", JZ_AST_PORT_BLOCK);
+            if (!blk) {
+                return -1;
+            }
+            if (jz_ast_add_child(bb, blk) != 0) {
+                jz_ast_free(blk);
+                return -1;
+            }
+        } else if (t->type == JZ_TOK_KW_WIRE) {
+            advance(p);
+            JZASTNode *blk = parse_block(p, t, "WIRE", JZ_AST_WIRE_BLOCK);
+            if (!blk) {
+                return -1;
+            }
+            if (jz_ast_add_child(bb, blk) != 0) {
+                jz_ast_free(blk);
+                return -1;
+            }
+        } else if (t->type == JZ_TOK_KW_REGISTER) {
+            advance(p);
+            JZASTNode *blk = parse_block(p, t, "REGISTER", JZ_AST_REGISTER_BLOCK);
+            if (!blk) {
+                return -1;
+            }
+            if (jz_ast_add_child(bb, blk) != 0) {
+                jz_ast_free(blk);
+                return -1;
+            }
+        } else if (t->type == JZ_TOK_KW_MEM) {
+            advance(p);
+            JZASTNode *blk = parse_block(p, t, "MEM", JZ_AST_MEM_BLOCK);
+            if (!blk) {
+                return -1;
+            }
+            if (jz_ast_add_child(bb, blk) != 0) {
+                jz_ast_free(blk);
+                return -1;
+            }
+        } else if (t->type == JZ_TOK_KW_ASYNC) {
+            advance(p);
+            JZASTNode *blk = parse_block(p, t, "ASYNCHRONOUS", JZ_AST_BLOCK);
+            if (!blk) {
+                return -1;
+            }
+            if (jz_ast_add_child(bb, blk) != 0) {
+                jz_ast_free(blk);
+                return -1;
+            }
+        } else if (t->type == JZ_TOK_KW_SYNC) {
+            advance(p);
+            JZASTNode *blk = parse_block(p, t, "SYNCHRONOUS", JZ_AST_BLOCK);
             if (!blk) {
                 return -1;
             }

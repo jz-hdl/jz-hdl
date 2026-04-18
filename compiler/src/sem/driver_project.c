@@ -1626,13 +1626,22 @@ void sem_check_project_blackboxes(JZASTNode *project,
         for (size_t j = 0; j < bb->child_count; ++j) {
             JZASTNode *child = bb->children[j];
             if (!child) continue;
-            if (child->type == JZ_AST_PORT_BLOCK) {
+            if (child->type == JZ_AST_PORT_BLOCK ||
+                child->type == JZ_AST_CONST_BLOCK) {
                 continue;
             }
-            sem_report_rule(diagnostics,
-                            child->loc,
-                            "BLACKBOX_BODY_DISALLOWED",
-                            "blackbox contains forbidden internal blocks");
+            if (child->type == JZ_AST_WIRE_BLOCK ||
+                child->type == JZ_AST_REGISTER_BLOCK ||
+                child->type == JZ_AST_MEM_BLOCK ||
+                (child->type == JZ_AST_BLOCK &&
+                 child->block_kind &&
+                 (strcmp(child->block_kind, "ASYNCHRONOUS") == 0 ||
+                  strcmp(child->block_kind, "SYNCHRONOUS") == 0))) {
+                sem_report_rule(diagnostics,
+                                child->loc,
+                                "BLACKBOX_BODY_DISALLOWED",
+                                "blackbox contains forbidden internal blocks");
+            }
         }
     }
 }

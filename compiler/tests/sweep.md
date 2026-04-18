@@ -2187,25 +2187,27 @@ _None._
 - Stale rule IDs (skipped):                   0
 - No spec basis (skipped):                    0
 - Not testable via --lint (skipped):          0
-- Successfully created:                       0
-- Scaffolding or bug failures (not created):  3
-- Total: 3 == 0 + 0 + 0 + 0 + 0 + 3
+- Successfully created:                       5
+- Scaffolding or bug failures (not created):  0
+- Total: 5 == 5 + 0 + 0 + 0 + 0 + 0
 
 ### Files Created
-_None._
+| Rule ID | File | Category | Description |
+|---------|------|----------|-------------|
+| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-async_in_blackbox.jz | created | ASYNCHRONOUS block inside @blackbox emits BLACKBOX_BODY_DISALLOWED. |
+| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-sync_in_blackbox.jz | created | SYNCHRONOUS block inside @blackbox emits BLACKBOX_BODY_DISALLOWED. |
+| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-wire_in_blackbox.jz | created | WIRE block inside @blackbox emits BLACKBOX_BODY_DISALLOWED. |
+| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-register_in_blackbox.jz | created | REGISTER block inside @blackbox emits BLACKBOX_BODY_DISALLOWED. |
+| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-mem_in_blackbox.jz | created | MEM block inside @blackbox emits BLACKBOX_BODY_DISALLOWED. |
 
 ### Skipped Files
 _None._
 
 ### Scaffolding or Compiler Bugs Found
-| Rule ID | File attempted | Category | Description |
-|---------|----------------|----------|-------------|
-| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-async_in_blackbox.jz | rule-not-fired | Parser emits PARSE000 ("unexpected token in @blackbox body; expected CONST or PORT") before semantic rule BLACKBOX_BODY_DISALLOWED can fire. ASYNCHRONOUS block rejected at parse time. |
-| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-register_in_blackbox.jz | rule-not-fired | Parser emits PARSE000 ("unexpected token in @blackbox body; expected CONST or PORT") before semantic rule BLACKBOX_BODY_DISALLOWED can fire. REGISTER block rejected at parse time. |
-| BLACKBOX_BODY_DISALLOWED | 6_7_BLACKBOX_BODY_DISALLOWED-wire_in_blackbox.jz | rule-not-fired | Parser emits PARSE000 ("unexpected token in @blackbox body; expected CONST or PORT") before semantic rule BLACKBOX_BODY_DISALLOWED can fire. WIRE block rejected at parse time. |
+_None._
 
 ### Parser Recovery Findings (for next audit to log)
-_None — the parser correctly rejects all three block types with a clear PARSE000 diagnostic. No cascading errors observed. The semantic rule BLACKBOX_BODY_DISALLOWED is unreachable for ASYNCHRONOUS, SYNCHRONOUS, WIRE, REGISTER, and MEM block types; it only fires for CONST blocks (which the parser allows through)._
+_None — the parser accepts S6.7-forbidden blackbox body blocks far enough for semantic analysis to emit BLACKBOX_BODY_DISALLOWED. CONST remains valid in @blackbox._
 
 ### Validation Run
 - Command: `bash compiler/tests/run_validation.sh`

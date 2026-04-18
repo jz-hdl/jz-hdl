@@ -22,7 +22,7 @@ Verify @blackbox declaration within @project, PORT-only interface (no internal l
 
 | # | Test Case | Description |
 |---|-----------|-------------|
-| 1 | Blackbox with logic body | ASYNCHRONOUS/SYNCHRONOUS/WIRE/REGISTER/MEM/CONST inside @blackbox |
+| 1 | Blackbox with logic body | ASYNCHRONOUS/SYNCHRONOUS/WIRE/REGISTER/MEM inside @blackbox |
 | 2 | Blackbox name conflicts with module | @blackbox and @module share same name |
 | 3 | @new references undefined blackbox | Instantiation targets a blackbox name that does not exist |
 
@@ -38,7 +38,7 @@ Verify @blackbox declaration within @project, PORT-only interface (no internal l
 
 | # | Scenario | Triggering Construct | Expected Rule ID | Severity |
 |---|----------|---------------------|------------------|----------|
-| 1 | Blackbox with forbidden block | CONST/ASYNC/SYNC/WIRE/REGISTER/MEM inside @blackbox | BLACKBOX_BODY_DISALLOWED | error |
+| 1 | Blackbox with forbidden block | ASYNC/SYNC/WIRE/REGISTER/MEM inside @blackbox | BLACKBOX_BODY_DISALLOWED | error |
 | 2 | Blackbox name = module name | `@blackbox foo` and `@module foo` in same project | BLACKBOX_NAME_DUP_IN_PROJECT | error |
 | 3 | @new references undefined blackbox | `@new inst nonexistent { ... }` | BLACKBOX_UNDEFINED_IN_NEW | error |
 | 4 | OVERRIDE in blackbox @new | `@new inst bb { OVERRIDE { ... } ... }` | BLACKBOX_OVERRIDE_UNCHECKED | info |
@@ -48,7 +48,12 @@ Verify @blackbox declaration within @project, PORT-only interface (no internal l
 | Test File | Rule ID | Description |
 |-----------|---------|-------------|
 | 6_7_HAPPY_PATH-blackbox_ok.jz | -- | Valid blackbox declaration and instantiation (clean compile) |
-| 6_7_BLACKBOX_BODY_DISALLOWED-const_in_blackbox.jz | BLACKBOX_BODY_DISALLOWED | Blackbox contains forbidden blocks |
+| 6_7_BLACKBOX_BODY_DISALLOWED-const_in_blackbox.jz | -- | Valid CONST blocks inside @blackbox |
+| 6_7_BLACKBOX_BODY_DISALLOWED-async_in_blackbox.jz | BLACKBOX_BODY_DISALLOWED | ASYNCHRONOUS block inside @blackbox |
+| 6_7_BLACKBOX_BODY_DISALLOWED-sync_in_blackbox.jz | BLACKBOX_BODY_DISALLOWED | SYNCHRONOUS block inside @blackbox |
+| 6_7_BLACKBOX_BODY_DISALLOWED-wire_in_blackbox.jz | BLACKBOX_BODY_DISALLOWED | WIRE block inside @blackbox |
+| 6_7_BLACKBOX_BODY_DISALLOWED-register_in_blackbox.jz | BLACKBOX_BODY_DISALLOWED | REGISTER block inside @blackbox |
+| 6_7_BLACKBOX_BODY_DISALLOWED-mem_in_blackbox.jz | BLACKBOX_BODY_DISALLOWED | MEM block inside @blackbox |
 | 6_7_BLACKBOX_NAME_DUP_IN_PROJECT-blackbox_name_conflicts.jz | BLACKBOX_NAME_DUP_IN_PROJECT | @blackbox name conflicts with @module or another @blackbox |
 | 6_7_BLACKBOX_OVERRIDE_UNCHECKED-override_passthrough.jz | BLACKBOX_OVERRIDE_UNCHECKED | OVERRIDE in blackbox instantiation is passed through |
 | 6_7_BLACKBOX_UNDEFINED_IN_NEW-undefined_blackbox.jz | BLACKBOX_UNDEFINED_IN_NEW | @new instantiation targets a blackbox name that does not exist |
@@ -59,11 +64,10 @@ Verify @blackbox declaration within @project, PORT-only interface (no internal l
 
 | Rule ID | Severity | Description | Test Case(s) |
 |---------|----------|-------------|--------------|
-| BLACKBOX_BODY_DISALLOWED | error | S6.7 Blackbox contains forbidden blocks (ASYNCHRONOUS/SYNCHRONOUS/WIRE/REGISTER/MEM/CONST) | 6_7_BLACKBOX_BODY_DISALLOWED-const_in_blackbox.jz |
+| BLACKBOX_BODY_DISALLOWED | error | S6.7 Blackbox contains forbidden blocks (ASYNCHRONOUS/SYNCHRONOUS/WIRE/REGISTER/MEM) | 6_7_BLACKBOX_BODY_DISALLOWED-async_in_blackbox.jz, 6_7_BLACKBOX_BODY_DISALLOWED-sync_in_blackbox.jz, 6_7_BLACKBOX_BODY_DISALLOWED-wire_in_blackbox.jz, 6_7_BLACKBOX_BODY_DISALLOWED-register_in_blackbox.jz, 6_7_BLACKBOX_BODY_DISALLOWED-mem_in_blackbox.jz |
 | BLACKBOX_NAME_DUP_IN_PROJECT | error | S6.7/S6.10 @blackbox name conflicts with @module or another @blackbox | 6_7_BLACKBOX_NAME_DUP_IN_PROJECT-blackbox_name_conflicts.jz |
 | BLACKBOX_OVERRIDE_UNCHECKED | info | S6.7/S4.13 OVERRIDE in blackbox instantiation is not validated and is passed through to vendor IP | 6_7_BLACKBOX_OVERRIDE_UNCHECKED-override_passthrough.jz |
 | BLACKBOX_UNDEFINED_IN_NEW | error | S6.7/S6.9 @new references undefined blackbox name | 6_7_BLACKBOX_UNDEFINED_IN_NEW-undefined_blackbox.jz |
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.
-

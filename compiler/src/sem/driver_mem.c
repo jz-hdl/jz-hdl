@@ -659,6 +659,7 @@ void sem_check_module_mem_and_mux_decls(const JZModuleScope *scope,
 {
     if (!scope || !scope->node) return;
     JZASTNode *mod = scope->node;
+    if (mod->type == JZ_AST_BLACKBOX) return;
 
     for (size_t i = 0; i < mod->child_count; ++i) {
         JZASTNode *child = mod->children[i];
@@ -1414,6 +1415,7 @@ void sem_check_module_mem_chip_configs(const JZModuleScope *scope,
 {
     if (!scope || !scope->node || !chip || chip->mem_configs.len == 0) return;
     JZASTNode *mod = scope->node;
+    if (mod->type == JZ_AST_BLACKBOX) return;
 
     for (size_t i = 0; i < mod->child_count; ++i) {
         JZASTNode *child = mod->children[i];
@@ -1653,6 +1655,7 @@ void sem_check_module_mem_port_usage(const JZModuleScope *scope,
 {
     if (!scope || !scope->node) return;
     JZASTNode *mod = scope->node;
+    if (mod->type == JZ_AST_BLACKBOX) return;
 
     /* Collect all MEM ports declared in this module. */
     JZBuffer all_ports = (JZBuffer){0};
