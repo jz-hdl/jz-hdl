@@ -1665,6 +1665,15 @@ int sem_resolve_string_const(const char *name,
                 }
             }
         }
+        if (diagnostics) {
+            char msg[512];
+            snprintf(msg, sizeof(msg),
+                     "CONFIG.%s is not declared in the project CONFIG block",
+                     cfg_name);
+            sem_report_rule(diagnostics, loc,
+                            "CONFIG_USE_UNDECLARED",
+                            msg);
+        }
         return 0;
     }
 
@@ -1697,6 +1706,15 @@ int sem_resolve_string_const(const char *name,
         }
     }
 
+    if (diagnostics) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "'%s' is not declared in this module",
+                 name);
+        sem_report_rule(diagnostics, loc,
+                        "UNDECLARED_IDENTIFIER",
+                        msg);
+    }
     return 0;
 }
 

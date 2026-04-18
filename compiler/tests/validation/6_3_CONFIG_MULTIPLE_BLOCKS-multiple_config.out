@@ -1,3 +1,2 @@
 File: 6_3_CONFIG_MULTIPLE_BLOCKS-multiple_config.jz
       11:5    error CONFIG_MULTIPLE_BLOCKS S6.3 More than one CONFIG block defined in project
-      47:9    error WIDTH_ASSIGN_MISMATCH_NO_EXT S4.10/S5.0/S5.1 Width mismatch in assignment; add `=z` (zero-extend), `=s` (sign-extend), or use a slice

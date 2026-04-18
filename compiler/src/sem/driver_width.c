@@ -165,17 +165,18 @@ int sem_instance_width_expr_is_invalid(const char *expr,
  * project CONFIG symbol table.
  */
 
-void sem_check_undeclared_config_in_width(const char *expr,
-                                          JZLocation loc,
-                                          const JZBuffer *project_symbols,
-                                          JZDiagnosticList *diagnostics)
+int sem_check_undeclared_config_in_width(const char *expr,
+                                         JZLocation loc,
+                                         const JZBuffer *project_symbols,
+                                         JZDiagnosticList *diagnostics)
 {
     if (!expr || !project_symbols || !project_symbols->data || !diagnostics) {
-        return;
+        return 0;
     }
 
     const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
     size_t count = project_symbols->len / sizeof(JZSymbol);
+    int emitted = 0;
 
     const char *p = expr;
     int expecting_dot = 0;
@@ -219,11 +220,13 @@ void sem_check_undeclared_config_in_width(const char *expr,
                                     loc,
                                     "CONST_STRING_IN_NUMERIC_CONTEXT",
                                     "string CONFIG value used where a numeric expression is expected");
+                    emitted = 1;
                 } else if (!found) {
                     sem_report_rule(diagnostics,
                                     loc,
                                     "CONFIG_USE_UNDECLARED",
                                     "Use of CONFIG.<name> not declared in project CONFIG");
+                    emitted = 1;
                 }
             }
             continue;
@@ -241,6 +244,7 @@ void sem_check_undeclared_config_in_width(const char *expr,
                                 loc,
                                 "CONFIG_USE_UNDECLARED",
                                 "Use of CONFIG.<name> not declared in project CONFIG");
+                emitted = 1;
             }
             continue;
         }
@@ -250,6 +254,8 @@ void sem_check_undeclared_config_in_width(const char *expr,
             continue;
         }
     }
+
+    return emitted;
 }
 
 

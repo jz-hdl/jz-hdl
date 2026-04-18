@@ -2026,6 +2026,12 @@ void resolve_names_recursive(JZASTNode *node,
         return;
     }
 
+    if (node->type == JZ_AST_EXPR_IDENTIFIER &&
+        node->block_kind &&
+        strcmp(node->block_kind, "FILE_REF") == 0) {
+        return;
+    }
+
     if (node->type == JZ_AST_EXPR_IDENTIFIER) {
         resolve_identifier_node(node, current_scope, project_symbols, diagnostics);
     } else if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {

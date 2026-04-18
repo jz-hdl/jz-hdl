@@ -151,10 +151,10 @@ JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
                                              const JZASTNode *signal_decl);
 
 /* CONFIG usage helpers shared between module and project semantic checks. */
-void sem_check_undeclared_config_in_width(const char *expr,
-                                          JZLocation loc,
-                                          const JZBuffer *project_symbols,
-                                          JZDiagnosticList *diagnostics);
+int sem_check_undeclared_config_in_width(const char *expr,
+                                         JZLocation loc,
+                                         const JZBuffer *project_symbols,
+                                         JZDiagnosticList *diagnostics);
 
 /* GLOBAL usage helpers shared between module and project semantic checks. */
 int sem_expr_has_global_ref(const char *expr,

@@ -489,12 +489,20 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                         bind->loc,
                                         "INSTANCE_PORT_WIDTH_MISMATCH",
                                         "instantiated port width does not match child module effective port width");
-                    } else if (inst_rc == -1 ||
-                               sem_instance_width_expr_is_invalid(bind->width, scope, project_symbols)) {
-                        sem_report_rule(diagnostics,
-                                        bind->loc,
-                                        "INSTANCE_PORT_WIDTH_EXPR_INVALID",
-                                        "width expression in instance port list uses undefined CONST/CONFIG or invalid integer expression");
+                    } else {
+                        int config_diag =
+                            sem_check_undeclared_config_in_width(bind->width,
+                                                                 bind->loc,
+                                                                 project_symbols,
+                                                                 diagnostics);
+                        if (!config_diag &&
+                            (inst_rc == -1 ||
+                             sem_instance_width_expr_is_invalid(bind->width, scope, project_symbols))) {
+                            sem_report_rule(diagnostics,
+                                            bind->loc,
+                                            "INSTANCE_PORT_WIDTH_EXPR_INVALID",
+                                            "width expression in instance port list uses undefined CONST/CONFIG or invalid integer expression");
+                        }
                     }
                 }
 

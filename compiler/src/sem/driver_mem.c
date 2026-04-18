@@ -708,52 +708,59 @@ void sem_check_module_mem_and_mux_decls(const JZModuleScope *scope,
                 }
 
                 if (w_rc == 0 && mem->width && !width_has_lit) {
-                    /* If the width expression is a single identifier that
-                     * is not a declared CONST or CONFIG, emit the more
-                     * specific CONST_UNDEFINED_IN_WIDTH_OR_SLICE rule
-                     * instead of the generic MEM_UNDEFINED_CONST_IN_WIDTH.
-                     */
-                    int width_ident_handled = 0;
-                    char width_ident[64];
-                    if (sem_extract_identifier_like(mem->width, width_ident, sizeof(width_ident))) {
-                        const JZSymbol *wc_sym = module_scope_lookup_kind(scope, width_ident, JZ_SYM_CONST);
-                        const JZSymbol *wcfg_sym = NULL;
-                        if (project_symbols && project_symbols->data) {
-                            const JZSymbol *psyms = (const JZSymbol *)project_symbols->data;
-                            size_t pcount = project_symbols->len / sizeof(JZSymbol);
-                            for (size_t pi = 0; pi < pcount; ++pi) {
-                                if (psyms[pi].kind == JZ_SYM_CONFIG && psyms[pi].name &&
-                                    strcmp(psyms[pi].name, width_ident) == 0) {
-                                    wcfg_sym = &psyms[pi];
-                                    break;
+                    int width_config_handled =
+                        sem_check_undeclared_config_in_width(mem->width,
+                                                             mem->loc,
+                                                             project_symbols,
+                                                             diagnostics);
+                    if (!width_config_handled) {
+                        /* If the width expression is a single identifier that
+                         * is not a declared CONST or CONFIG, emit the more
+                         * specific CONST_UNDEFINED_IN_WIDTH_OR_SLICE rule
+                         * instead of the generic MEM_UNDEFINED_CONST_IN_WIDTH.
+                         */
+                        int width_ident_handled = 0;
+                        char width_ident[64];
+                        if (sem_extract_identifier_like(mem->width, width_ident, sizeof(width_ident))) {
+                            const JZSymbol *wc_sym = module_scope_lookup_kind(scope, width_ident, JZ_SYM_CONST);
+                            const JZSymbol *wcfg_sym = NULL;
+                            if (project_symbols && project_symbols->data) {
+                                const JZSymbol *psyms = (const JZSymbol *)project_symbols->data;
+                                size_t pcount = project_symbols->len / sizeof(JZSymbol);
+                                for (size_t pi = 0; pi < pcount; ++pi) {
+                                    if (psyms[pi].kind == JZ_SYM_CONFIG && psyms[pi].name &&
+                                        strcmp(psyms[pi].name, width_ident) == 0) {
+                                        wcfg_sym = &psyms[pi];
+                                        break;
+                                    }
                                 }
                             }
+                            if (!wc_sym && !wcfg_sym) {
+                                sem_report_rule(diagnostics,
+                                                mem->loc,
+                                                "CONST_UNDEFINED_IN_WIDTH_OR_SLICE",
+                                                "width expression uses undefined CONST/CONFIG name");
+                                width_ident_handled = 1;
+                            }
                         }
-                        if (!wc_sym && !wcfg_sym) {
-                            sem_report_rule(diagnostics,
-                                            mem->loc,
-                                            "CONST_UNDEFINED_IN_WIDTH_OR_SLICE",
-                                            "width expression uses undefined CONST/CONFIG name");
-                            width_ident_handled = 1;
-                        }
-                    }
 
-                    if (!width_ident_handled) {
-                        /* Try to evaluate as a CONST expression (S7.10 allows
-                         * CONST expressions in MEM widths).
-                         */
-                        long long wval = 0;
-                        if (sem_eval_const_expr_in_module(mem->width, scope,
-                                                          project_symbols, &wval) != 0) {
-                            sem_report_rule(diagnostics,
-                                            mem->loc,
-                                            "MEM_UNDEFINED_CONST_IN_WIDTH",
-                                            "MEM word width/depth uses undefined CONST name");
-                        } else if (wval <= 0) {
-                            sem_report_rule(diagnostics,
-                                            mem->loc,
-                                            "MEM_INVALID_WORD_WIDTH",
-                                            "MEM word width must be a positive integer");
+                        if (!width_ident_handled) {
+                            /* Try to evaluate as a CONST expression (S7.10 allows
+                             * CONST expressions in MEM widths).
+                             */
+                            long long wval = 0;
+                            if (sem_eval_const_expr_in_module(mem->width, scope,
+                                                              project_symbols, &wval) != 0) {
+                                sem_report_rule(diagnostics,
+                                                mem->loc,
+                                                "MEM_UNDEFINED_CONST_IN_WIDTH",
+                                                "MEM word width/depth uses undefined CONST name");
+                            } else if (wval <= 0) {
+                                sem_report_rule(diagnostics,
+                                                mem->loc,
+                                                "MEM_INVALID_WORD_WIDTH",
+                                                "MEM word width must be a positive integer");
+                            }
                         }
                     }
                 }
@@ -775,52 +782,59 @@ void sem_check_module_mem_and_mux_decls(const JZModuleScope *scope,
                 }
 
                 if (d_rc == 0 && mem->text && !depth_has_lit) {
-                    /* If the depth expression is a single identifier that
-                     * is not a declared CONST or CONFIG, emit the more
-                     * specific CONST_UNDEFINED_IN_WIDTH_OR_SLICE rule
-                     * instead of the generic MEM_UNDEFINED_CONST_IN_WIDTH.
-                     */
-                    int depth_ident_handled = 0;
-                    char depth_ident[64];
-                    if (sem_extract_identifier_like(mem->text, depth_ident, sizeof(depth_ident))) {
-                        const JZSymbol *dc_sym = module_scope_lookup_kind(scope, depth_ident, JZ_SYM_CONST);
-                        const JZSymbol *dcfg_sym = NULL;
-                        if (project_symbols && project_symbols->data) {
-                            const JZSymbol *psyms = (const JZSymbol *)project_symbols->data;
-                            size_t pcount = project_symbols->len / sizeof(JZSymbol);
-                            for (size_t pi = 0; pi < pcount; ++pi) {
-                                if (psyms[pi].kind == JZ_SYM_CONFIG && psyms[pi].name &&
-                                    strcmp(psyms[pi].name, depth_ident) == 0) {
-                                    dcfg_sym = &psyms[pi];
-                                    break;
+                    int depth_config_handled =
+                        sem_check_undeclared_config_in_width(mem->text,
+                                                             mem->loc,
+                                                             project_symbols,
+                                                             diagnostics);
+                    if (!depth_config_handled) {
+                        /* If the depth expression is a single identifier that
+                         * is not a declared CONST or CONFIG, emit the more
+                         * specific CONST_UNDEFINED_IN_WIDTH_OR_SLICE rule
+                         * instead of the generic MEM_UNDEFINED_CONST_IN_WIDTH.
+                         */
+                        int depth_ident_handled = 0;
+                        char depth_ident[64];
+                        if (sem_extract_identifier_like(mem->text, depth_ident, sizeof(depth_ident))) {
+                            const JZSymbol *dc_sym = module_scope_lookup_kind(scope, depth_ident, JZ_SYM_CONST);
+                            const JZSymbol *dcfg_sym = NULL;
+                            if (project_symbols && project_symbols->data) {
+                                const JZSymbol *psyms = (const JZSymbol *)project_symbols->data;
+                                size_t pcount = project_symbols->len / sizeof(JZSymbol);
+                                for (size_t pi = 0; pi < pcount; ++pi) {
+                                    if (psyms[pi].kind == JZ_SYM_CONFIG && psyms[pi].name &&
+                                        strcmp(psyms[pi].name, depth_ident) == 0) {
+                                        dcfg_sym = &psyms[pi];
+                                        break;
+                                    }
                                 }
                             }
+                            if (!dc_sym && !dcfg_sym) {
+                                sem_report_rule(diagnostics,
+                                                mem->loc,
+                                                "CONST_UNDEFINED_IN_WIDTH_OR_SLICE",
+                                                "width expression uses undefined CONST/CONFIG name");
+                                depth_ident_handled = 1;
+                            }
                         }
-                        if (!dc_sym && !dcfg_sym) {
-                            sem_report_rule(diagnostics,
-                                            mem->loc,
-                                            "CONST_UNDEFINED_IN_WIDTH_OR_SLICE",
-                                            "width expression uses undefined CONST/CONFIG name");
-                            depth_ident_handled = 1;
-                        }
-                    }
 
-                    if (!depth_ident_handled) {
-                        /* Try to evaluate as a CONST expression (S7.10 allows
-                         * CONST expressions in MEM depths).
-                         */
-                        long long dval = 0;
-                        if (sem_eval_const_expr_in_module(mem->text, scope,
-                                                          project_symbols, &dval) != 0) {
-                            sem_report_rule(diagnostics,
-                                            mem->loc,
-                                            "MEM_UNDEFINED_CONST_IN_WIDTH",
-                                            "MEM word width/depth uses undefined CONST name");
-                        } else if (dval <= 0) {
-                            sem_report_rule(diagnostics,
-                                            mem->loc,
-                                            "MEM_INVALID_DEPTH",
-                                            "MEM depth must be a positive integer");
+                        if (!depth_ident_handled) {
+                            /* Try to evaluate as a CONST expression (S7.10 allows
+                             * CONST expressions in MEM depths).
+                             */
+                            long long dval = 0;
+                            if (sem_eval_const_expr_in_module(mem->text, scope,
+                                                              project_symbols, &dval) != 0) {
+                                sem_report_rule(diagnostics,
+                                                mem->loc,
+                                                "MEM_UNDEFINED_CONST_IN_WIDTH",
+                                                "MEM word width/depth uses undefined CONST name");
+                            } else if (dval <= 0) {
+                                sem_report_rule(diagnostics,
+                                                mem->loc,
+                                                "MEM_INVALID_DEPTH",
+                                                "MEM depth must be a positive integer");
+                            }
                         }
                     }
                 }
