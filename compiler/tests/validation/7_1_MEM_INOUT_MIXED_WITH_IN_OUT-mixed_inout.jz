@@ -31,11 +31,14 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = r ^ {addr, addr};
     }
 
     SYNCHRONOUS(CLK=clk) {
-        r <= wdata;
+        mem_a.rw.addr <= addr;
+        mem_a.rd.addr <= addr;
+        r <= mem_a.rw.data ^ mem_a.rd.data;
+        mem_a.rw.wdata <= wdata;
     }
 @endmod
 
@@ -87,8 +90,15 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
+        mem_b.rw.addr <= addr;
+        mem_c.rw.addr <= addr;
+        mem_c.rd.addr <= addr;
         mem_ok.rw_ok.addr <= addr;
-        r <= mem_ok.rw_ok.data;
+        r <= mem_b.rw.data ^ mem_c.rw.data ^ mem_c.rd.data ^ mem_ok.rw_ok.data;
+        mem_b.rw.wdata <= wdata;
+        mem_b.wr[addr] <= wdata;
+        mem_c.rw.wdata <= wdata;
+        mem_c.wr[addr] <= wdata;
         mem_ok.rw_ok.wdata <= wdata;
     }
 @endmod

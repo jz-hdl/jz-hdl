@@ -28,7 +28,7 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = r ^ {addr, addr};
     }
 
     SYNCHRONOUS(CLK=clk) {

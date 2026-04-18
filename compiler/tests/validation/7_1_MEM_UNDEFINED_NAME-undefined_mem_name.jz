@@ -27,7 +27,7 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        r <= wdata;
+        r <= r ^ wdata;
     }
 @endmod
 
