@@ -393,14 +393,14 @@ static void sem_excl_record_assignment_in_path(JZPathState *path,
                     continue;
                 }
 
-                if (r->range.has_range && e->range.has_range) {
-                    rule_id = "ASSIGN_SLICE_OVERLAP";
-                } else if (is_sync && e->is_register) {
+                if (is_sync && e->is_register) {
                     int root_and_conditional = ((r->is_nested && !e->is_nested) ||
                                                 (!r->is_nested && e->is_nested));
                     rule_id = root_and_conditional
                         ? "SYNC_ROOT_AND_CONDITIONAL_ASSIGN"
                         : "SYNC_MULTI_ASSIGN_SAME_REG_BITS";
+                } else if (r->range.has_range && e->range.has_range) {
+                    rule_id = "ASSIGN_SLICE_OVERLAP";
                 } else if (!is_sync) {
                     int root_and_conditional = ((r->is_nested && !e->is_nested) ||
                                                 (!r->is_nested && e->is_nested));

@@ -1,15 +1,3 @@
-
-## test_5_2-synchronous_assignments.md
-
-* SYNC_MULTI_ASSIGN_SAME_REG_BITS : compiler-bug
-  Compiler fires ASSIGN_SLICE_OVERLAP instead of SYNC_MULTI_ASSIGN_SAME_REG_BITS for overlapping slice assignments. The more specific ASSIGN_SLICE_OVERLAP rule takes priority over the general double-assign rule when slices overlap. File attempted: `5_2_SYNC_MULTI_ASSIGN_SAME_REG_BITS-overlapping_slices.jz`.
-* SYNC_ROOT_AND_CONDITIONAL_ASSIGN : compiler-bug
-  Compiler fires ASSIGN_SLICE_OVERLAP instead of SYNC_ROOT_AND_CONDITIONAL_ASSIGN for root-level sliced assign + conditional sliced assign to overlapping bits. Same priority issue as above — ASSIGN_SLICE_OVERLAP takes precedence. File attempted: `5_2_SYNC_ROOT_AND_CONDITIONAL_ASSIGN-sliced_root_conflict.jz`.
-* SYNC_MULTI_ASSIGN_SAME_REG_BITS : missing-context
-  Covered: full-register double assign at root, inside IF branch; missing: overlapping slice assignments (e.g., `r[7:4] <= x; r[5:2] <= y;` where bits [5:4] are assigned twice via overlapping slices). Recommended new file: `5_2_SYNC_MULTI_ASSIGN_SAME_REG_BITS-overlapping_slices.jz`. Note: sweep found ASSIGN_SLICE_OVERLAP preempts.
-* SYNC_ROOT_AND_CONDITIONAL_ASSIGN : missing-context
-  Covered: root + IF, root + SELECT with CASE/DEFAULT; missing: root-level sliced assign + conditional sliced assign to overlapping bits. Recommended new file: `5_2_SYNC_ROOT_AND_CONDITIONAL_ASSIGN-sliced_root_conflict.jz`. Note: sweep found ASSIGN_SLICE_OVERLAP preempts.
-
 ## test_5_4-select_case_statements.md
 
 * SELECT_DUP_CASE_VALUE : compiler-bug

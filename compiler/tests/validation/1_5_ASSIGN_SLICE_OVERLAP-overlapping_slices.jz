@@ -1,7 +1,7 @@
 // ASSIGN_SLICE_OVERLAP: Overlapping part-select assignments to same identifier bits.
-// Tests overlapping slice assignments in ASYNCHRONOUS and SYNCHRONOUS blocks across modules.
+// Tests overlapping slice assignments in ASYNCHRONOUS blocks across modules.
 // Covers: port slices in ASYNC (helper), wire slices in ASYNC (top), port slices in ASYNC (top),
-// and register slices in SYNC (top). Valid non-overlapping slices included for no false positives.
+// and valid non-overlapping slices for no false positives.
 
 @project ASSIGN_SLICE_OVERLAP_overlapping_slices
     @top TopMod {
@@ -68,8 +68,8 @@
         out_b = r;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 4: overlapping slices on register (bits 4-5 overlap)
+        // Valid: non-overlapping register slices in SYNC (should NOT trigger)
         r[7:4] <= 4'hA;
-        r[5:2] <= 4'hB;
+        r[3:0] <= 4'hB;
     }
 @endmod
