@@ -1069,6 +1069,19 @@ static void sem_dead_scan_node_for_mem_access(JZASTNode *node,
                             "memory access appears only in unreachable code");
         }
     }
+    if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_qualified_ident(node, scope, NULL, &ref) &&
+            ref.port && (ref.field == MEM_PORT_FIELD_ADDR ||
+                         ref.field == MEM_PORT_FIELD_DATA ||
+                         ref.field == MEM_PORT_FIELD_WDATA)) {
+            sem_report_rule(diagnostics,
+                            node->loc,
+                            "MEM_WARN_DEAD_CODE_ACCESS",
+                            "memory access appears only in unreachable code");
+        }
+    }
 
     for (size_t i = 0; i < node->child_count; ++i) {
         sem_dead_scan_node_for_mem_access(node->children[i], scope, diagnostics);
