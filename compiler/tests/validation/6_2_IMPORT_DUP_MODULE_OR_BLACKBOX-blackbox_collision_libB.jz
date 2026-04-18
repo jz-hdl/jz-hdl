@@ -1,0 +1,8 @@
+// Library B for imported blackbox-blackbox collision.
+
+@blackbox SharedIp {
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+}

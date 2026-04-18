@@ -377,6 +377,7 @@ static JZASTNode *ast_deep_clone(const JZASTNode *src)
     if (src->block_kind) jz_ast_set_block_kind(dst, src->block_kind);
     if (src->text)       jz_ast_set_text(dst, src->text);
     if (src->width)      jz_ast_set_width(dst, src->width);
+    dst->is_imported = src->is_imported;
 
     for (size_t i = 0; i < src->child_count; i++) {
         JZASTNode *child_clone = ast_deep_clone(src->children[i]);

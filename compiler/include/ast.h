@@ -165,6 +165,7 @@ struct JZASTNode {
     char *block_kind;          /**< Block kind string (e.g., "CONST", "PORT"). */
     char *text;                /**< Optional text payload (imports, diagnostics). */
     char *width;               /**< Optional width expression string. */
+    int is_imported;           /**< Nonzero when this node came from an @import. */
 
     JZASTNode **children;      /**< Array of child node pointers. */
     size_t child_count;        /**< Number of children. */

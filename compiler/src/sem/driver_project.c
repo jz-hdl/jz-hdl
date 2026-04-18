@@ -451,6 +451,14 @@ static int project_add_module_like(JZBuffer *project_symbols,
     JZSymbol *syms = (JZSymbol *)project_symbols->data;
     for (size_t i = 0; i < count; ++i) {
         if (!syms[i].name || strcmp(syms[i].name, name) != 0) continue;
+        if (decl->is_imported ||
+            (syms[i].node && syms[i].node->is_imported)) {
+            sem_report_rule(diagnostics,
+                            decl->loc,
+                            "IMPORT_DUP_MODULE_OR_BLACKBOX",
+                            "imported module/blackbox name duplicates existing project definition");
+            return 0;
+        }
         if (syms[i].kind == JZ_SYM_MODULE && kind == JZ_SYM_MODULE) {
             sem_report_rule(diagnostics,
                             decl->loc,

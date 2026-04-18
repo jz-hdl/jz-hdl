@@ -4,7 +4,8 @@
  *
  * This file implements the logic required to load, lex, and parse external
  * source files referenced by @import directives inside a @project block.
- * Imported modules and global blocks are merged into the host project AST.
+ * Imported modules, blackboxes, and global blocks are merged into the host
+ * project AST.
  *
  * To ensure diagnostic stability, filename strings associated with imported
  * tokens are retained for the lifetime of parsing and freed only when parsing
@@ -59,12 +60,73 @@ static int remember_imported_filename(char *path)
     return 0;
 }
 
+static int imported_name_collides(const JZASTNode *proj, const char *name)
+{
+    if (!proj || !name) return 0;
+
+    for (size_t i = 0; i < proj->child_count; ++i) {
+        JZASTNode *existing = proj->children[i];
+        if (!existing || !existing->name) continue;
+        if (existing->type != JZ_AST_MODULE &&
+            existing->type != JZ_AST_BLACKBOX) {
+            continue;
+        }
+        if (strcmp(existing->name, name) == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void report_imported_name_collision(const Parser *parent,
+                                           const JZASTNode *decl)
+{
+    if (!parent || !parent->diagnostics || !decl) return;
+
+    JZToken fake;
+    memset(&fake, 0, sizeof(fake));
+    fake.loc = decl->loc;
+
+    char dup_msg[512];
+    snprintf(dup_msg, sizeof(dup_msg),
+             "imported module/blackbox `%s` has the same name as an existing\n"
+             "definition in the project; rename one to avoid the conflict",
+             decl->name ? decl->name : "?");
+    parser_report_rule(parent,
+                       &fake,
+                       "IMPORT_DUP_MODULE_OR_BLACKBOX",
+                       dup_msg);
+}
+
+static int add_imported_module_like(const Parser *parent,
+                                    JZASTNode *proj,
+                                    JZASTNode *decl)
+{
+    if (!proj || !decl) return -1;
+
+    decl->is_imported = 1;
+
+    if (imported_name_collides(proj, decl->name)) {
+        report_imported_name_collision(parent, decl);
+        jz_ast_free(decl);
+        return 0;
+    }
+
+    if (jz_ast_add_child(proj, decl) != 0) {
+        jz_ast_free(decl);
+        return -1;
+    }
+
+    return 0;
+}
+
 /**
  * @brief Import modules and globals from an external source file.
  *
  * This function resolves a relative or absolute path, loads the source file,
- * lexes it, and parses its top-level constructs. Imported modules and global
- * blocks are attached directly to the target project AST.
+ * lexes it, and parses its top-level constructs. Imported modules, blackboxes,
+ * and global blocks are attached directly to the target project AST.
  *
  * Rules enforced:
  * - Each resolved file path may only be imported once per project
@@ -215,46 +277,50 @@ int import_modules_from_path(const Parser *parent,
                 return -1;
             }
 
-            /* IMPORT_DUP_MODULE_OR_BLACKBOX: detect when an imported module
-             * name collides with an existing module/blackbox in the project.
-             */
-            int is_duplicate = 0;
-            if (mod->name) {
-                for (size_t i = 0; i < proj->child_count; ++i) {
-                    JZASTNode *existing = proj->children[i];
-                    if (!existing || !existing->name) continue;
-                    if (existing->type != JZ_AST_MODULE &&
-                        existing->type != JZ_AST_BLACKBOX) {
-                        continue;
-                    }
-                    if (strcmp(existing->name, mod->name) == 0) {
-                        is_duplicate = 1;
-                        break;
-                    }
-                }
+            if (add_imported_module_like(parent, proj, mod) != 0) {
+                jz_token_stream_free(&tokens);
+                free(source);
+                free(full_path);
+                return -1;
+            }
+        } else if (t->type == JZ_TOK_KW_BLACKBOX) {
+            advance(&ip);
+            const JZToken *name = peek(&ip);
+            if (!is_decl_identifier_token(name)) {
+                parser_error(&ip, "expected identifier after @blackbox");
+                jz_token_stream_free(&tokens);
+                free(source);
+                free(full_path);
+                return -1;
+            }
+            advance(&ip);
+
+            JZASTNode *bb = jz_ast_new(JZ_AST_BLACKBOX, t->loc);
+            if (!bb) {
+                jz_token_stream_free(&tokens);
+                free(source);
+                free(full_path);
+                return -1;
+            }
+            jz_ast_set_name(bb, name->lexeme);
+            if (!match(&ip, JZ_TOK_LBRACE)) {
+                parser_error(&ip, "expected '{' after @blackbox name");
+                jz_ast_free(bb);
+                jz_token_stream_free(&tokens);
+                free(source);
+                free(full_path);
+                return -1;
             }
 
-            if (is_duplicate && parent && parent->diagnostics) {
-                JZToken fake;
-                memset(&fake, 0, sizeof(fake));
-                fake.loc = mod->loc;
-                {
-                    char dup_msg[512];
-                    snprintf(dup_msg, sizeof(dup_msg),
-                             "imported module/blackbox `%s` has the same name as an existing\n"
-                             "definition in the project; rename one to avoid the conflict",
-                             mod->name ? mod->name : "?");
-                    parser_report_rule(parent,
-                                       &fake,
-                                       "IMPORT_DUP_MODULE_OR_BLACKBOX",
-                                       dup_msg);
-                }
-                jz_ast_free(mod);
-                continue;
+            if (parse_blackbox_body(&ip, bb) != 0) {
+                jz_ast_free(bb);
+                jz_token_stream_free(&tokens);
+                free(source);
+                free(full_path);
+                return -1;
             }
 
-            if (jz_ast_add_child(proj, mod) != 0) {
-                jz_ast_free(mod);
+            if (add_imported_module_like(parent, proj, bb) != 0) {
                 jz_token_stream_free(&tokens);
                 free(source);
                 free(full_path);

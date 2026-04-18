@@ -1,0 +1,11 @@
+// Module library for imported module-blackbox collision.
+
+@module SharedCross
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
