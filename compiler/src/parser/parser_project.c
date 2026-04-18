@@ -596,7 +596,8 @@ JZASTNode *parse_bus_definition(Parser *p, const JZToken *bus_kw) {
             return NULL;
         }
 
-        /* Direction: IN / OUT / INOUT */
+        /* Direction: IN / OUT / INOUT.  Identifier-like non-directions are
+         * preserved so semantic validation can report BUS_DEF_INVALID_DIR. */
         const char *dir_str = NULL;
         if (t->type == JZ_TOK_KW_IN) {
             dir_str = "IN";
@@ -604,6 +605,8 @@ JZASTNode *parse_bus_definition(Parser *p, const JZToken *bus_kw) {
             dir_str = "OUT";
         } else if (t->type == JZ_TOK_KW_INOUT) {
             dir_str = "INOUT";
+        } else if (is_decl_identifier_token(t)) {
+            dir_str = t->lexeme;
         } else {
             parser_error(p, "expected IN/OUT/INOUT in BUS block");
             jz_ast_free(bus);

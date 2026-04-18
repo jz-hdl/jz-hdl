@@ -2269,21 +2269,21 @@ _None._
 - Stale rule IDs (skipped):                   0
 - No spec basis (skipped):                    0
 - Not testable via --lint (skipped):          0
-- Successfully created:                       0
-- Scaffolding or bug failures (not created):  2
-- Total: 2 == 0 + 0 + 0 + 0 + 0 + 2
+- Successfully created:                       2
+- Scaffolding or bug failures (not created):  0
+- Total: 2 == 0 + 0 + 0 + 0 + 2 + 0
 
 ### Files Created
-_None._
+| Rule ID | Context | File |
+|---------|---------|------|
+| MEM_INOUT_ASYNC | INOUT port with ASYNC/SYNC keyword | 7_0_MEM_INOUT_ASYNC-inout_async.jz |
+| MEM_INVALID_WRITE_MODE | shorthand invalid WRITE_MODE value | 7_0_MEM_INVALID_WRITE_MODE-shorthand_invalid.jz |
 
 ### Skipped Files
 _None._
 
 ### Scaffolding or Compiler Bugs Found
-| Rule ID | File attempted | Category | Description |
-|---------|----------------|----------|-------------|
-| MEM_INVALID_PORT_TYPE | 7_0_MEM_INVALID_PORT_TYPE-inout_async.jz | rule-not-fired | Compiler fires dedicated `MEM_INOUT_ASYNC` rule (rules.c line 375) instead of `MEM_INVALID_PORT_TYPE` for INOUT+ASYNC context. Audit entry should reference `MEM_INOUT_ASYNC` and filename should be `7_0_MEM_INOUT_ASYNC-inout_async.jz`. |
-| MEM_INVALID_WRITE_MODE | 7_0_MEM_INVALID_WRITE_MODE-shorthand_invalid.jz | rule-not-fired | Shorthand form with unrecognized keyword (e.g. `IN wr BADVALUE;`) hits `PARSE000` at parser level instead of `MEM_INVALID_WRITE_MODE`. Parser expects a known token (ASYNC/SYNC/WRITE_FIRST/READ_FIRST/NO_CHANGE) after port name; unknown keywords are not recoverable to semantic validation. Audit warning was correct: shorthand invalid keywords do not reach the write-mode validator. |
+_None._
 
 ### Parser Recovery Findings (for next audit to log)
 _None._
@@ -2291,8 +2291,8 @@ _None._
 ### Validation Run
 - Command: `bash compiler/tests/run_validation.sh`
 - Result before sweep: 1127 / 1137 (10 skipped)
-- Result after sweep:  1127 / 1137 (10 skipped)
-- Newly passing:       0
+- Result after sweep:  1129 / 1139 (10 skipped)
+- Newly passing:       2
 - Newly broken:        0
 
 ## Context Sweep: test_7_1-mem_declaration.md — 2026-04-15

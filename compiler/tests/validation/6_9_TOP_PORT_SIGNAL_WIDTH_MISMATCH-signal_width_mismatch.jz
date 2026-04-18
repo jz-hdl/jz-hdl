@@ -1,7 +1,8 @@
 // TOP_PORT_SIGNAL_WIDTH_MISMATCH: binding width does not match pin width.
-// Verified
+// Target diagnostics: TOP_PORT_SIGNAL_WIDTH_MISMATCH on the IN and OUT top bindings.
+// Non-target diagnostics: none; clk is used and the module body assignment is width-matched.
 
-@project TOP_PORT_SIGNAL_WIDTH_MISMATCH_EXAMPLE
+@project TOP_PORT_SIGNAL_WIDTH_MISMATCH_signal_width_mismatch
   IN_PINS {
     btn[2] = { standard=LVCMOS33 };
   }
@@ -41,7 +42,15 @@
     OUT [6] leds;
   }
 
+  REGISTER {
+    phase [1] = 1'b0;
+  }
+
   ASYNCHRONOUS {
-    leds <= sw;
+    leds <= {phase, 1'b0, sw};
+  }
+
+  SYNCHRONOUS(CLK=clk) {
+    phase <= ~phase;
   }
 @endmod

@@ -54,6 +54,7 @@ Note: BUS port-level rules (BUS_PORT_UNKNOWN_BUS, BUS_PORT_NOT_BUS, BUS_PORT_ARR
 | Test File | Rule ID | Description |
 |-----------|---------|-------------|
 | 6_8_HAPPY_PATH-bus_ok.jz | -- | Valid BUS definition, SOURCE/TARGET ports, bulk assignment (clean compile) |
+| 6_8_BUS_DEF_INVALID_DIR-valid_directions_ok.jz | -- | Valid BUS definition directions (IN/OUT/INOUT) |
 | 6_8_BUS_BULK_BUS_MISMATCH-bus_mismatch.jz | BUS_BULK_BUS_MISMATCH | Bulk assignment between ports referencing different BUS types |
 | 6_8_BUS_BULK_ROLE_CONFLICT-role_conflict.jz | BUS_BULK_ROLE_CONFLICT | Bulk assignment between ports with same role |
 | 6_8_BUS_DEF_DUP_NAME-duplicate_bus_name.jz | BUS_DEF_DUP_NAME | Duplicate BUS definition name in project |
@@ -70,7 +71,7 @@ Note: BUS port-level rules (BUS_PORT_UNKNOWN_BUS, BUS_PORT_NOT_BUS, BUS_PORT_ARR
 | BUS_DEF_SIGNAL_DUP_NAME | error | S6.8 Duplicate signal name inside BUS definition | 6_8_BUS_DEF_SIGNAL_DUP_NAME-duplicate_signal_in_bus.jz |
 | BUS_BULK_BUS_MISMATCH | error | S6.8 Bulk BUS assignment requires both sides to reference the same BUS id | 6_8_BUS_BULK_BUS_MISMATCH-bus_mismatch.jz |
 | BUS_BULK_ROLE_CONFLICT | error | S6.8 Bulk BUS assignment between instances with the same BUS role is not allowed | 6_8_BUS_BULK_ROLE_CONFLICT-role_conflict.jz |
-| BUS_DEF_INVALID_DIR | error | S6.8 BUS signal direction must be IN, OUT, or INOUT | (planned) |
+| BUS_DEF_INVALID_DIR | error | S6.8 BUS signal direction must be IN, OUT, or INOUT | 6_8_BUS_DEF_INVALID_DIR-invalid_direction.jz |
 ### 5.2 Rules Not Tested
 
 All rules for this section are tested.

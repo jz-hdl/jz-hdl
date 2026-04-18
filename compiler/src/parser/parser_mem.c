@@ -348,10 +348,7 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                  *   IN <name> READ_FIRST;
                  *   IN <name> NO_CHANGE;
                  */
-                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme &&
-                    (!strcmp(next->lexeme, "WRITE_FIRST") ||
-                     !strcmp(next->lexeme, "READ_FIRST")  ||
-                     !strcmp(next->lexeme, "NO_CHANGE"))) {
+                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme) {
                     write_mode_value = next->lexeme;
                     advance(p); /* consume shorthand mode identifier */
                     next = peek(p);
@@ -487,10 +484,7 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                 }
 
                 /* Shorthand write mode form */
-                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme &&
-                    (!strcmp(next->lexeme, "WRITE_FIRST") ||
-                     !strcmp(next->lexeme, "READ_FIRST")  ||
-                     !strcmp(next->lexeme, "NO_CHANGE"))) {
+                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme) {
                     write_mode_value = next->lexeme;
                     advance(p);
                     next = peek(p);
