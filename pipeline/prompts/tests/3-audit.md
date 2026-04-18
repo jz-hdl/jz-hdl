@@ -41,7 +41,7 @@ For the given test plan:
   - `compiler/tests/summary.md`
   - `compiler/tests/summary-old.md`
 - **NEVER use git history** or read deleted git files.
-- **`compiler/tests/issues.md` is the persistent issue log.** Append every flagged finding here so issues survive across audit runs. Create the file if it does not exist. See "Writing to issues.md" below for the schema.
+- **`compiler/tests/issues.md` is the persistent current issue log.** Update this plan's section with every flagged finding from the current run. Create the file if it does not exist. See "Writing to issues.md" below for the schema.
 
 ---
 
@@ -57,12 +57,14 @@ For the given test plan:
 
 ## How to Find Tests for a Rule
 
-Validation files follow the convention `<section>_<RULE_ID>-<test_name>.jz` (and `<section>_GND_<sub>_<RULE_ID>-<test>.jz` / `<section>_VCC_<sub>_...` for `--tristate-default` tests). To locate every file for a rule, glob `compiler/tests/validation/` and substring-match the rule ID with these boundary rules:
+Validation files usually follow the convention `<section>_<RULE_ID>-<test_name>.jz` (and `<section>_GND_<sub>_<RULE_ID>-<test>.jz` / `<section>_VCC_<sub>_...` for `--tristate-default` tests). To locate every file for a rule, glob `compiler/tests/validation/` and substring-match the rule ID with these boundary rules:
 
 - The character immediately before `<RULE_ID>` must be `_` or the start of the filename.
 - The character immediately after `<RULE_ID>` must be `-` or the start of the file extension.
 
 Match the **longest** rule ID first to avoid prefix collisions (e.g. `TRISTATE_TRANSFORM_PER_BIT_FAIL` shadows any shorter `TRISTATE_TRANSFORM` substring).
+
+Then run a second discovery pass over `.out` contents: any `.out` file that contains an exact rule ID from the plan is also in scope, even if the filename is named for another rule. Read the paired `.jz` for every file found by either pass. Do not infer coverage from filenames alone.
 
 A rule may have **0, 1, or many** validation files. All counts are valid; the audit reports them.
 
@@ -77,8 +79,8 @@ A rule may have **0, 1, or many** validation files. All counts are valid; the au
 Run `compiler/build/jz-hdl --info --lint <file>.jz` and capture the actual output. Compare line-by-line to the existing `.out`.
 
 - **Exact match** → mark as `clean`.
-- **Drift** (different line/column numbers, message wording rephrased, diagnostics in different order) but the same set of rule IDs fired → **auto-fix**: overwrite the `.out` with the actual compiler output. Record the change.
-- **Different rule IDs fired**, missing diagnostics, or extra diagnostics that look like real behavior changes → **flag** as semantic issue (do NOT auto-fix). The compiler may have a regression or the test may be wrong.
+- **Drift** (different line/column numbers, message wording rephrased, diagnostics in different order) but the same counted multiset of `(severity, rule ID)` diagnostics fired → **auto-fix**: overwrite the `.out` with the actual compiler output. Record the change.
+- **Different diagnostic counts, severities, or rule IDs fired**, missing diagnostics, or extra diagnostics that look like real behavior changes → **flag** as semantic issue (do NOT auto-fix). The compiler may have a regression or the test may be wrong.
 
 **B. Realistic syntax**
 
@@ -103,7 +105,7 @@ Every rule ID in the `.out` file MUST exist in `compiler/src/rules.c`. If an `.o
 
 **E. Context completeness**
 
-For each rule, enumerate every syntactic context where it can fire. Categories to consider:
+For each rule, enumerate every syntactic context where it can fire. Use both the specification and the implemented emit sites: search `compiler/src/` for the rule ID and inspect the surrounding code so missing-context findings distinguish spec gaps from compiler implementation gaps. Categories to consider:
 
 - **Declaration contexts** — module name, port name, register name, wire name, const name, instance name, etc.
 - **Reference contexts** — instance target, port binding, CLK / RESET parameters, expression operands.
@@ -145,17 +147,17 @@ If multiple files test the same rule, do they consistently use realistic syntax,
 
 ## Writing to `compiler/tests/issues.md`
 
-Every flagged finding (anything that is NOT an auto-fix) MUST be appended to `compiler/tests/issues.md` so that future audit runs and authoring passes have a persistent record. The audit chat report and `issues.md` should contain the same information; the report is the human summary, `issues.md` is the durable log.
+Every flagged finding (anything that is NOT an auto-fix) MUST be recorded in this plan's section of `compiler/tests/issues.md` so future audit runs and authoring passes have a persistent current snapshot. The audit chat report and `issues.md` should contain the same information; the report is the human summary, `issues.md` is the durable log.
 
 **File structure:**
 
 ```markdown
 # JZ-HDL Validation Issues Log
 
-Persistent record of test/compiler issues discovered by audit runs. Each section
-is keyed by test plan filename. Within a section, issues are grouped by
-category. New audit runs APPEND or UPDATE entries; never delete prior entries
-without explicit instruction.
+Persistent current record of test/compiler issues discovered by audit runs. Each
+section is keyed by test plan filename. Within a section, issues are grouped by
+category. New audit runs replace only the audited plan's section with the
+current findings; do not touch other plans' sections.
 
 ## <plan filename, e.g. test_4_3-const.md>
 
@@ -176,6 +178,9 @@ _Last audited: <YYYY-MM-DD> by audit.md_
 ### Stale Rule IDs
 - **<RULE_ID>** in `<location>` — not present in `compiler/src/rules.c`. Likely renamed/removed; investigate.
 
+### Coverage Map Drift
+- **<RULE_ID>** — `pipeline/rule_coverage.md` says `<status>`, but this plan's 5.1 lists it as tested.
+
 ### Possible Compiler Bugs
 - **<RULE_ID>** (`<file>.jz`) — <symptom>. Minimal repro: <snippet or file reference>.
 
@@ -194,7 +199,7 @@ _Last audited: <YYYY-MM-DD> by audit.md_
 
 **Severity vocabulary** (use exactly these words to keep findings greppable):
 - `bug` — compiler does not behave as the spec/test expects
-- `test-gap` — coverage missing
+- `test-gap` — coverage missing (including `MISSING_COVERAGE` findings)
 - `test-quality` — test exists but is sloppy
 - `stale` — references something that no longer exists in `rules.c`
 - `parser-recovery` — cascading errors after a correct diagnostic
@@ -206,9 +211,9 @@ _Last audited: <YYYY-MM-DD> by audit.md_
 When you auto-fix a stale `.out`:
 
 1. Run `compiler/build/jz-hdl --info --lint <file>.jz` and capture stdout/stderr.
-2. Verify the new output is **structurally consistent** with the test's intent — the same rule IDs fire, just at different line/col or with reworded messages. If the rule IDs differ, this is NOT a mechanical fix — flag it instead.
+2. Verify the new output is **structurally consistent** with the test's intent — the same counted multiset of `(severity, rule ID)` diagnostics fires, just at different line/col or with reworded messages. If the diagnostic counts, severities, or rule IDs differ, this is NOT a mechanical fix — flag it instead.
 3. Overwrite the `.out` file with the actual output via the Write tool.
-4. Re-run `bash compiler/tests/run_validation.sh` and confirm the test now passes.
+4. Re-run the individual touched validation test if supported by the local runner; otherwise run `compiler/build/jz-hdl --info --lint <file>.jz` and diff against the touched `.out`.
 5. If validation still fails, revert your edit and flag the test instead.
 
 ---
@@ -218,16 +223,18 @@ When you auto-fix a stale `.out`:
 1. **Read the test plan** from the path at the top of this prompt. Extract the rule ID list from `### 5.1 Rules Tested`.
 2. **Read `compiler/src/rules.c`** and build a canonical map of `rule_id → (severity, message)`. Verify every rule ID in the plan is present (Criterion H).
 3. **Read `specification/jz-hdl-specification.md`** sections relevant to the plan, so you can enumerate contexts for Criterion E.
-4. **Glob `compiler/tests/validation/`** and build `rule_id → [files]` using the boundary-matching rules above. Apply Criterion G.
-5. **For each existing test file** mapped to a rule in this plan:
+4. **Read `pipeline/rule_coverage.md`** and verify the rules in this plan's 5.1 are classified as `Tested`; flag coverage-map drift if they are missing or classified otherwise.
+5. **Run `bash compiler/tests/run_validation.sh`** before making any auto-fixes and record the result for the report.
+6. **Glob `compiler/tests/validation/`** and build `rule_id → [files]` using both the filename and `.out` discovery passes above. Apply Criterion G.
+7. **For each existing test file** mapped to a rule in this plan:
    a. Read the `.jz` and `.out`.
    b. Run the compiler against the `.jz` and capture actual output.
    c. Apply Criteria A, B, C, D.
    d. Auto-fix any stale `.out` per the procedure above.
-6. **For each rule** in the plan, take the union of contexts covered by its files and apply Criteria E and F.
-7. **Run `bash compiler/tests/run_validation.sh`** once after all auto-fixes are applied. Confirm zero regressions in the touched tests; flag any remaining failures.
-8. **Update `compiler/tests/issues.md`** per the "Writing to issues.md" section above. This is mandatory — the chat report is for the human; `issues.md` is the durable log that the next audit run reads.
-9. **Produce the audit report** in the format below.
+8. **For each rule** in the plan, take the union of contexts covered by its files and apply Criteria E and F.
+9. **Run `bash compiler/tests/run_validation.sh`** once after all auto-fixes are applied. Confirm zero regressions in the touched tests; flag any remaining failures.
+10. **Update `compiler/tests/issues.md`** per the "Writing to issues.md" section above. This is mandatory — the chat report is for the human; `issues.md` is the durable log that the next audit run reads.
+11. **Produce the audit report** in the format below.
 
 ---
 
@@ -281,6 +288,11 @@ Output the report as a single Markdown block at the end of the run.
 |----------|---------|-------|
 | plan 5.1 | OLD_RULE_NAME | not in rules.c — likely renamed |
 | foo.out | OLD_RULE_NAME | obsolete reference |
+
+## Coverage Map Drift
+| Rule ID | rule_coverage.md status | Expected |
+|---------|-------------------------|----------|
+| RULE_Q | Not Tested | Tested in this plan |
 
 ## Possible Compiler Bugs
 | Rule ID | Test file | Symptom |
