@@ -20,7 +20,7 @@ Verify MEM access scoping across module hierarchy: MEM declared in a child modul
 
 | # | Test Case | Input | Expected | Rule ID |
 |---|-----------|-------|----------|---------|
-| 1 | Direct access to child MEM from parent | Parent references `child.mem_name` directly | Error | UNDECLARED_IDENTIFIER |
+| 1 | Direct access to child MEM from parent | Parent references `child.mem_name` directly | Error | MEM_UNDEFINED_NAME |
 
 ### 2.3 Edge Cases
 
@@ -33,14 +33,14 @@ Verify MEM access scoping across module hierarchy: MEM declared in a child modul
 
 | # | Scenario | Triggering Construct | Expected Rule ID | Severity |
 |---|----------|---------------------|-----------------|----------|
-| 1 | Parent accesses child MEM directly | `child_inst.mem_name.port[addr]` | UNDECLARED_IDENTIFIER | error |
+| 1 | Parent accesses child MEM directly | `child_inst.mem_name.port[addr]` | MEM_UNDEFINED_NAME | error |
 
 ## 4. Existing Validation Tests
 
 | Test File | Rule ID | Description |
 |-----------|---------|-------------|
 | 7_9_HAPPY_PATH-mem_in_module_ok.jz | — | Happy path: child module with MEM accessed via ports |
-| 7_9_UNDECLARED_IDENTIFIER-child_mem_access_from_parent.jz | UNDECLARED_IDENTIFIER | Parent attempts direct access to child module MEM |
+| 7_9_MEM_UNDEFINED_NAME-child_mem_access_from_parent.jz | MEM_UNDEFINED_NAME | Parent attempts direct access to child module MEM |
 
 ## 5. Rules Matrix
 
@@ -48,7 +48,7 @@ Verify MEM access scoping across module hierarchy: MEM declared in a child modul
 
 | Rule ID | Severity | Description | Test Case(s) |
 |---------|----------|-------------|--------------|
-| UNDECLARED_IDENTIFIER | error | S7.9 Direct access to child MEM from parent scope | 7_9_UNDECLARED_IDENTIFIER-child_mem_access_from_parent.jz |
+| MEM_UNDEFINED_NAME | error | S7.9 Direct access to child MEM from parent scope | 7_9_MEM_UNDEFINED_NAME-child_mem_access_from_parent.jz |
 
 ### 5.2 Rules Not Tested
 

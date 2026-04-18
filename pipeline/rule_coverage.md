@@ -65,7 +65,7 @@
 | BLACKBOX_NAME_DUP_IN_PROJECT | test_4_2-scope_and_uniqueness.md,test_6_10-project_scope_and_uniqueness.md,test_6_7-blackbox_modules.md | Tested |
 | INSTANCE_NAME_DUP_IN_MODULE | test_4_2-scope_and_uniqueness.md | Tested |
 | INSTANCE_NAME_CONFLICT | test_4_2-scope_and_uniqueness.md | Tested |
-| UNDECLARED_IDENTIFIER | test_4_2-scope_and_uniqueness.md,test_7_9-mem_in_module_instantiation.md | Tested |
+| UNDECLARED_IDENTIFIER | test_4_2-scope_and_uniqueness.md | Tested |
 | AMBIGUOUS_REFERENCE | test_4_2-scope_and_uniqueness.md | Tested |
 | CONST_NEGATIVE_OR_NONINT | test_4_3-const.md,test_7_10-const_evaluation_in_mem.md | Tested |
 | CONST_UNDEFINED_IN_WIDTH_OR_SLICE | test_1_3-bit_slicing_and_indexing.md,test_4_3-const.md,test_7_10-const_evaluation_in_mem.md | Tested |
@@ -293,7 +293,7 @@
 | TOP_OUT_LITERAL_BINDING | test_6_9-top_level_module.md | Tested |
 | TOP_NO_CONNECT_WITHOUT_WIDTH | test_6_9-top_level_module.md | Tested |
 | TOP_PORT_SIGNAL_WIDTH_MISMATCH | test_6_9-top_level_module.md | Tested |
-| MEM_UNDEFINED_NAME | test_7_1-mem_declaration.md | Tested |
+| MEM_UNDEFINED_NAME | test_7_1-mem_declaration.md,test_7_9-mem_in_module_instantiation.md | Tested |
 | MEM_DUP_NAME | test_7_1-mem_declaration.md | Tested |
 | MEM_INVALID_WORD_WIDTH | test_7_1-mem_declaration.md | Tested |
 | MEM_INVALID_DEPTH | test_7_1-mem_declaration.md | Tested |

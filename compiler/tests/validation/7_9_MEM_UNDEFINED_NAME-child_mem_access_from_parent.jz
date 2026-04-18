@@ -1,8 +1,8 @@
-// UNDECLARED_IDENTIFIER: Parent module attempts direct access to child instance's MEM.
+// MEM_UNDEFINED_NAME: Parent module attempts direct access to child instance's MEM.
 // Memories are internal to modules (S7.9) and cannot be accessed hierarchically.
 // Valid MEM access within own module included for no false positives.
 
-@project UNDECLARED_IDENTIFIER_child_mem_access_from_parent
+@project MEM_UNDEFINED_NAME_child_mem_access_from_parent
     @top TopMod {
         IN  [1] clk = _;
         IN  [4] addr = _;
