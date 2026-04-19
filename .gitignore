@@ -6,4 +6,4 @@ imgui.ini
 boards
 __pycache__/
 *.pyc
-audit/
+/audit/
