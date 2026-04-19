@@ -24,6 +24,11 @@ header-includes:
 - Maximum length: 255 characters
 - Case-sensitive
 - Single underscore (`_`) is invalid as a regular identifier; reserved as a "no-connect" placeholder in module instantiation port lists only
+- **Diagnostics:**
+  - Length violations (>255 characters) → `ID_SYNTAX_INVALID`
+  - Character-class violations (e.g. `.`, `$`, `#`, non-ASCII) and leading-digit violations → `PARSE000`. The lexer enforces the character set structurally: `is_identifier_start()` accepts only `[A-Za-z_]` and `is_identifier_char()` accepts only `[A-Za-z0-9_]`, so invalid characters are never part of an identifier token. They are emitted as separate tokens and rejected by the parser.
+  - Single underscore in non-no-connect context → `ID_SINGLE_UNDERSCORE`
+  - Reserved keywords and reserved identifiers used as declaration names → `KEYWORD_AS_IDENTIFIER` (covers both lists below)
 - Keywords (uppercase, reserved):
   - Project: CLOCKS, IN_PINS, OUT_PINS, INOUT_PINS, MAP, CLOCK_GEN, BUS
   - Flow Control: IF, ELIF, ELSE, SELECT, CASE, DEFAULT, MUX

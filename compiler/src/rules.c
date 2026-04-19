@@ -26,7 +26,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "PARSE", "LIT_INVALID_DIGIT_FOR_BASE",                        0, JZ_RULE_MODE_ERR, "S2.1 Literal contains digit not allowed for its base (b/d/h)" },
 
     /* [LEXICAL] (done) */
-    { "LEXICAL", "ID_SYNTAX_INVALID",                               1, JZ_RULE_MODE_ERR, "S1.1 Identifier does not match identifier regex or exceeds 255 chars" },
+    { "LEXICAL", "ID_SYNTAX_INVALID",                               1, JZ_RULE_MODE_ERR, "S1.1 Identifier exceeds 255 characters" },
     { "LEXICAL", "ID_SINGLE_UNDERSCORE",                            0, JZ_RULE_MODE_ERR, "S1.1 Single underscore `_` used as regular identifier outside no-connect context" },
 
     /* [LITERALS_AND_TYPES] */

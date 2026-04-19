@@ -58,10 +58,10 @@ The sections below list all diagnostic rules organized by category. Each entry s
 - Cause: Structural directives (@project, @module, @import, @new, @blackbox, @endproj, @endmod, etc.) placed where not allowed.
 - Fix: Place directives only in permitted locations per the spec (e.g., @import only immediately inside @project).
 
-### LEXICAL.ID_SYNTAX_INVALID — Identifier invalid
+### LEXICAL.ID_SYNTAX_INVALID — Identifier exceeds 255 characters
 - Severity: ERROR
-- Cause: Identifier violates regex (bad characters, starts with digit) or length > 255.
-- Fix: Rename to valid identifier per rules: [A‑Za‑z_][A‑Za‑z0‑9_]{0,254} and not a single underscore.
+- Cause: Identifier length exceeds the 255-character maximum. Character-class and leading-digit violations are caught earlier by the lexer/parser as PARSE000.
+- Fix: Shorten the identifier to 255 characters or fewer.
 
 ### LEXICAL.ID_SINGLE_UNDERSCORE — Illegal use of single underscore
 - Severity: ERROR
