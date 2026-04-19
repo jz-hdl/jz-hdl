@@ -1,0 +1,40 @@
+// KEYWORD_AS_IDENTIFIER: Reserved keywords used as CONFIG entry names.
+// Tests keywords SELECT, WIRE, MUX, PORT, REGISTER, LATCH, MEM in CONFIG
+// block declaration context inside @project.
+// Valid CONFIG entry with non-keyword name included to verify no false positives.
+
+@project KEYWORD_AS_IDENTIFIER_config_name
+    CONFIG {
+        // Valid: non-keyword CONFIG entry name (should NOT trigger)
+        valid_cfg = 8;
+        // Trigger 1: keyword SELECT as CONFIG entry name
+        SELECT = 1;
+        // Trigger 2: keyword WIRE as CONFIG entry name
+        WIRE = 2;
+        // Trigger 3: keyword MUX as CONFIG entry name
+        MUX = 3;
+        // Trigger 4: keyword PORT as CONFIG entry name
+        PORT = 4;
+        // Trigger 5: keyword REGISTER as CONFIG entry name
+        REGISTER = 5;
+        // Trigger 6: keyword LATCH as CONFIG entry name
+        LATCH = 6;
+        // Trigger 7: keyword MEM as CONFIG entry name
+        MEM = 7;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

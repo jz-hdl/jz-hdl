@@ -8,6 +8,11 @@
 // No diagnostics expected.
 
 @project KEYWORD_AS_IDENTIFIER_valid_identifiers_ok
+    CONFIG {
+        // Near-keyword CONFIG entry name (config-name context)
+        config_v = 8;
+    }
+
     @top TopMod {
         IN  [1] clk  = _;
         OUT [1] dout = _;
@@ -45,6 +50,26 @@
         case_w    [1];
         default_w [1];
         ifCond    [1];
+        mux_a     [8];
+        mux_b     [8];
+    }
+
+    // LATCH name: near-keyword identifier (latch-name context)
+    LATCH {
+        latch_d [1] D;
+    }
+
+    // MEM name: near-keyword identifier (mem-name context)
+    MEM {
+        mem_store [1] [4] = 1'b0 {
+            OUT mem_rd ASYNC;
+            IN  mem_wr;
+        };
+    }
+
+    // MUX name: near-keyword identifier (mux-name context)
+    MUX {
+        mux_sel = mux_a, mux_b;
     }
 
     ASYNCHRONOUS {
@@ -53,6 +78,9 @@
         case_w    = mem_r;
         default_w = selectOne;
         ifCond    = register_r;
+        mux_a     <= 8'b00000000;
+        mux_b     <= 8'b11111111;
+        latch_d   <= in_bit : mem_store.mem_rd[2'b00];
     }
 
     SYNCHRONOUS(CLK=clk) {
@@ -60,6 +88,7 @@
         latch_r    <= port_val;
         mem_r      <= ~mem_r;
         selectOne  <= ~selectOne;
+        mem_store.mem_wr[2'b00] <= in_bit;
     }
 @endmod
 

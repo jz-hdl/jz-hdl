@@ -103,9 +103,21 @@ static int sem_is_reserved_keyword(const char *name)
         !strcmp(name, "OVERRIDE") || !strcmp(name, "CONFIG") ||
         !strcmp(name, "CLOCKS") || !strcmp(name, "IN_PINS") ||
         !strcmp(name, "OUT_PINS") || !strcmp(name, "INOUT_PINS") ||
-        !strcmp(name, "MAP") ||
+        !strcmp(name, "MAP") || !strcmp(name, "CLOCK_GEN") ||
+        !strcmp(name, "BUS") || !strcmp(name, "SOURCE") || !strcmp(name, "TARGET") ||
         !strcmp(name, "IDX") ||
         !strcmp(name, "VCC") || !strcmp(name, "GND")) {
+        return 1;
+    }
+
+    /* Reserved identifiers from spec §1.1 — clock types, CDC types,
+     * memory types/ports, and template/array keywords. */
+    if (!strcmp(name, "PLL") || !strcmp(name, "DLL") || !strcmp(name, "CLKDIV") ||
+        !strcmp(name, "BIT") || !strcmp(name, "BUS") || !strcmp(name, "FIFO") ||
+        !strcmp(name, "HANDSHAKE") || !strcmp(name, "PULSE") || !strcmp(name, "MCP") ||
+        !strcmp(name, "RAW") || !strcmp(name, "BLOCK") || !strcmp(name, "DISTRIBUTED") ||
+        !strcmp(name, "ASYNC") || !strcmp(name, "SYNC") || !strcmp(name, "WRITE_FIRST") ||
+        !strcmp(name, "READ_FIRST") || !strcmp(name, "NO_CHANGE")) {
         return 1;
     }
 

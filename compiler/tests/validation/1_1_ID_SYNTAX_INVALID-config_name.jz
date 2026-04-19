@@ -1,0 +1,26 @@
+// ID_SYNTAX_INVALID: Identifier exceeds 255-char limit used as CONFIG entry name.
+// Tests 256-char identifier in CONFIG block declaration context.
+// Valid CONFIG entry with short name included to verify no false positives.
+
+@project ID_SYNTAX_INVALID_config_name
+    CONFIG {
+        valid_cfg = 8;
+        // Trigger: 256-char identifier as CONFIG entry name
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

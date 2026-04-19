@@ -1,0 +1,3 @@
+File: 1_1_ID_SINGLE_UNDERSCORE-latch_name.jz
+      24:9    warn  NET_DANGLING_UNUSED S5.1/S8.3 Signal is neither driven nor read; remove it or connect it
+      24:9    error ID_SINGLE_UNDERSCORE S1.1 Single underscore `_` used as regular identifier outside no-connect context

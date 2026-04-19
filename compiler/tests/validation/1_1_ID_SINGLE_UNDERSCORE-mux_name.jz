@@ -1,0 +1,30 @@
+// ID_SINGLE_UNDERSCORE: Single underscore `_` used as MUX name.
+// Tests _ in MUX declaration context (outside no-connect).
+// Valid MUX name included to verify no false positives.
+
+@project ID_SINGLE_UNDERSCORE_mux_name
+    @top TopMod {
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    MUX {
+        // Valid: multi-char MUX name (should NOT trigger)
+        valid_mux = a, b;
+        // Trigger: _ used as MUX name
+        _ = a, b;
+    }
+
+    ASYNCHRONOUS {
+        data = valid_mux[1'b0][0];
+    }
+@endmod

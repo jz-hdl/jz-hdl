@@ -29,20 +29,22 @@
  */
 static JZASTNode *parse_lvalue_primary(Parser *p) {
     const JZToken *t = peek(p);
-    if (t->type != JZ_TOK_IDENTIFIER && t->type != JZ_TOK_KW_CONFIG) {
+    if (!is_decl_identifier_token(t) && t->type != JZ_TOK_KW_CONFIG) {
         parser_error(p, "expected identifier in assignment left-hand side");
         return NULL;
     }
 
     /* Reuse the qualified-identifier logic from parse_primary_expr but
-     * restricted to identifier-like tokens (IDENTIFIER or CONFIG).
+     * restricted to identifier-like tokens (IDENTIFIER, CONFIG, or
+     * reserved keywords so semantic analysis can report
+     * KEYWORD_AS_IDENTIFIER precisely).
      */
     JZLocation loc = t->loc;
     char *buf = NULL;
     size_t buf_sz = 0;
     for (;;) {
         const JZToken *id = peek(p);
-        if ((id->type != JZ_TOK_IDENTIFIER && id->type != JZ_TOK_KW_CONFIG) ||
+        if ((!is_decl_identifier_token(id) && id->type != JZ_TOK_KW_CONFIG) ||
             !id->lexeme) {
             break;
         }

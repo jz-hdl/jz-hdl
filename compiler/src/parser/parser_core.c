@@ -184,7 +184,8 @@ int is_decl_identifier_token(const JZToken *tok) {
         !strcmp(name, "OVERRIDE") || !strcmp(name, "CONFIG") ||
         !strcmp(name, "CLOCKS") || !strcmp(name, "IN_PINS") ||
         !strcmp(name, "OUT_PINS") || !strcmp(name, "INOUT_PINS") ||
-        !strcmp(name, "MAP") ||
+        !strcmp(name, "MAP") || !strcmp(name, "CLOCK_GEN") ||
+        !strcmp(name, "BUS") || !strcmp(name, "SOURCE") || !strcmp(name, "TARGET") ||
         !strcmp(name, "IDX") ||
         !strcmp(name, "VCC") || !strcmp(name, "GND")) {
         return 1;

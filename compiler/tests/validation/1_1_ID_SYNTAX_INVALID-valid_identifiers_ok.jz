@@ -60,10 +60,11 @@
     }
 @endmod
 
-// Module testing 255-char identifier and directive-like word as wire name
+// Module testing 255-char identifier, directive-like word, latch, mem, mux
 @module HelperC
     PORT {
         IN  [1] clk;
+        IN  [1] enable;
         OUT [1] dout;
     }
 
@@ -74,17 +75,41 @@
     // Valid: directive-like lowercase word used as wire name
     WIRE {
         project [1];
+        sig_a [8];
+        sig_b [8];
+    }
+
+    // Valid: LATCH with normal-length name (latch-name context)
+    LATCH {
+        my_latch [1] D;
+    }
+
+    // Valid: MEM with normal-length name (mem-name context)
+    MEM {
+        my_mem [1] [4] = 1'b0 {
+            OUT mem_rd ASYNC;
+            IN  mem_wr;
+        };
+    }
+
+    // Valid: MUX with normal-length name (mux-name context)
+    MUX {
+        my_mux = sig_a, sig_b;
     }
 
     REGISTER {
         r [1] = 1'b0;
     }
     ASYNCHRONOUS {
-        project <= r;
-        dout = project;
+        project = r;
+        sig_a <= 8'b00000000;
+        sig_b <= 8'b11111111;
+        my_latch <= enable : my_mem.mem_rd[2'b00];
+        dout <= my_latch;
     }
     SYNCHRONOUS(CLK=clk) {
         r <= ~r;
+        my_mem.mem_wr[2'b00] <= r;
     }
 @endmod
 
@@ -93,6 +118,10 @@
     PORT {
         IN  [1] clk;
         OUT [1] data;
+    }
+
+    WIRE {
+        enable_w [1];
     }
 
     @new inst_a HelperA {
@@ -108,6 +137,7 @@
 
     @new inst_c HelperC {
         IN  [1] clk = clk;
+        IN  [1] enable = enable_w;
         OUT [1] dout = _;
     };
 
@@ -116,6 +146,7 @@
     }
 
     ASYNCHRONOUS {
+        enable_w = r;
         data = r;
     }
 
