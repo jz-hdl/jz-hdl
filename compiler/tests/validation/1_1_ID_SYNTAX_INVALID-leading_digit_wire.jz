@@ -1,0 +1,34 @@
+// ID_SYNTAX_INVALID: Leading-digit identifier in WIRE declaration context.
+// The lexer splits "3sig" into number "3" + identifier "sig", so the parser
+// rejects it as a syntax error.
+
+@project ID_SYNTAX_INVALID_leading_digit_wire
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Trigger: leading-digit wire name
+    WIRE {
+        3sig [1];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,0 +1,56 @@
+// KEYWORD_AS_IDENTIFIER: Reserved identifiers from spec §1.1 used as
+// user-declared CONST names. These identifiers are reserved for clock types,
+// CDC types, memory types/ports, and template/array usage.
+
+@project KEYWORD_AS_IDENTIFIER_reserved_types
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    CONST {
+        // Clock types
+        PLL = 1;
+        DLL = 2;
+        CLKDIV = 3;
+
+        // CDC types
+        BIT = 4;
+        BUS = 5;
+        FIFO = 6;
+        HANDSHAKE = 7;
+        PULSE = 8;
+        MCP = 9;
+        RAW = 10;
+
+        // Memory types
+        BLOCK = 11;
+        DISTRIBUTED = 12;
+
+        // Memory port types
+        ASYNC = 13;
+        SYNC = 14;
+        WRITE_FIRST = 15;
+        READ_FIRST = 16;
+        NO_CHANGE = 17;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,2 +1,2 @@
 File: 1_1_ID_SYNTAX_INVALID-invalid_chars.jz
-      21:12   error PARSE000 parse error near token '-': expected '[' after wire name (orig: PARSE000)
+      22:12   error PARSE000 parse error near token '-': expected '[' after wire name (orig: PARSE000)

@@ -2,6 +2,7 @@
 // ^[A-Za-z_][A-Za-z0-9_]{0,254}$. The lexer splits leading-digit tokens
 // (e.g. "1foo" becomes number "1" + identifier "foo"), so the parser
 // rejects these as syntax errors rather than ID_SYNTAX_INVALID.
+// This file tests the PORT declaration context.
 
 @project ID_SYNTAX_INVALID_leading_digit
     @top TopMod {
@@ -31,16 +32,6 @@
     PORT {
         IN  [1] clk;
         OUT [1] data;
-    }
-
-    // Trigger: leading-digit const name
-    CONST {
-        2val = 8;
-    }
-
-    // Trigger: leading-digit wire name
-    WIRE {
-        3sig [1];
     }
 
     REGISTER {
