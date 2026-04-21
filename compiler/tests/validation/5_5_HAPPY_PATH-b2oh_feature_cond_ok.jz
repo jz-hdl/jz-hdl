@@ -1,0 +1,58 @@
+// HAPPY_PATH: b2oh(index, width) used inside a @feature condition.
+// Exercises §5.5.13 b2oh syntax and semantics in the feature-cond context.
+// new-binding and check-expr applicability is verified separately in
+// audit/runner.log based on compiler behavior. No diagnostics expected.
+
+@project HAPPY_PATH_b2oh_feature_cond_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1: b2oh() of a constant index inside @feature condition.
+    @feature b2oh(3'd0, 8) == 8'b0000_0001
+        CONST { F_0 = 1; }
+    @else
+        CONST { F_0 = 0; }
+    @endfeat
+
+    // Trigger 2: b2oh() of a mid-range constant index.
+    @feature b2oh(3'd2, 8) == 8'b0000_0100
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 3: highest in-range bit set in @feature condition.
+    @feature b2oh(3'd7, 8) == 8'b1000_0000
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    // Trigger 4: out-of-range index yields all zeros.
+    @feature b2oh(4'd8, 8) == 8'b0000_0000
+        CONST { F_C = 1; }
+    @else
+        CONST { F_C = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'd0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

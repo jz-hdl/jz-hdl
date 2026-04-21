@@ -1,0 +1,62 @@
+// B2OH_WIDTH_INVALID: b2oh() width must be a positive constant >= 2.
+// Adds feature-cond coverage for §5.5.13 width validation.
+
+@project B2OH_WIDTH_INVALID_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1: b2oh() width 1 in @feature condition.
+    @feature b2oh(3'd0, 1) == 1'b1
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'd0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    WIRE {
+        h_data [8];
+    }
+
+    // Trigger 2: b2oh() width 0 in @feature condition.
+    @feature b2oh(3'd0, 0) == 1'b0
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        OUT [8] data = h_data;
+    };
+
+    ASYNCHRONOUS {
+        data = h_data;
+    }
+@endmod
