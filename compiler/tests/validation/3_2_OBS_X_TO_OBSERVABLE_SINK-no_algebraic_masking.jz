@@ -1,0 +1,48 @@
+// OBS_X_TO_OBSERVABLE_SINK: §3.2 Req #48 — masking is structural, not
+// algebraic. Even though `x & 8'b0` is logically guaranteed to evaluate
+// to zero, the compiler does not recognize that identity as masking and
+// must still report OBS_X_TO_OBSERVABLE_SINK when the result drives a
+// register, MEM, or output port.
+
+@project OBS_X_TO_OBSERVABLE_SINK_no_algebraic_masking
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8]  out_a = _;
+        OUT [8]  out_b = _;
+        OUT [16] out_c = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        OUT [8]  out_a;
+        OUT [8]  out_b;
+        OUT [16] out_c;
+    }
+
+    REGISTER {
+        r_and [8]  = 8'h00;
+        r_or  [8]  = 8'h00;
+        r_mul [16] = 16'h0000;
+    }
+
+    ASYNCHRONOUS {
+        out_a = r_and;
+        out_b = r_or;
+        out_c = r_mul;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: AND with all-zero literal — algebraically zero, but the
+        // x bits remain structurally in the expression and must still be
+        // reported as reaching the sink.
+        r_and <= 8'bxxxx_xxxx & 8'b0000_0000;
+        // Trigger 2: OR with all-ones literal — algebraically all-ones, but
+        // again the x bits remain in the expression and are not masked.
+        r_or <= 8'bxxxx_xxxx | 8'b1111_1111;
+        // Trigger 3: multiply by zero literal — same algebraic identity,
+        // same lack of structural masking. Result is 2N=16 bits.
+        r_mul <= 8'bxxxx_xxxx * 8'd0;
+    }
+@endmod

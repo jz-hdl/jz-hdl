@@ -1,0 +1,72 @@
+// INSTANCE_ARRAY_PARENT_BIT_OVERLAP: Happy path for the non-overlap rule (§4.13.1).
+// Each arrayed instance drives a disjoint bit-range of a shared parent OUT signal,
+// so the compiler must accept the mappings without diagnostic. Exercises:
+//   - IDX-indexed single-bit OUT mapping to distinct bits of a parent wire
+//   - IDX-indexed multi-bit slice OUT mapping to adjacent, non-overlapping slices
+
+@project INSTANCE_ARRAY_PARENT_BIT_OVERLAP_non_overlapping_out_bits_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module SmallChild
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module WideChild
+    PORT {
+        IN  [1] din;
+        OUT [2] data;
+    }
+    ASYNCHRONOUS {
+        data = {din, din};
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    WIRE {
+        single_bits [4];
+        adjacent_slices [8];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    // Valid: four instances drive distinct single bits single_bits[0..3]
+    @new inst_bit[4] SmallChild {
+        IN  [1] din = r;
+        OUT [1] data = single_bits[IDX];
+    };
+
+    // Valid: four instances drive adjacent 2-bit slices
+    //   inst_slice[0].data -> adjacent_slices[1:0]
+    //   inst_slice[1].data -> adjacent_slices[3:2]
+    //   inst_slice[2].data -> adjacent_slices[5:4]
+    //   inst_slice[3].data -> adjacent_slices[7:6]
+    @new inst_slice[4] WideChild {
+        IN  [1] din = r;
+        OUT [2] data = adjacent_slices[IDX*2+1:IDX*2];
+    };
+
+    ASYNCHRONOUS {
+        data = single_bits[0] ^ adjacent_slices[0];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

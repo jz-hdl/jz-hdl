@@ -1,0 +1,81 @@
+// HAPPY_PATH: Modules with only OUT ports (constant source) and only INOUT
+// ports (tri-state driver) are valid — no MODULE_PORT_IN_ONLY warning applies
+// and no MODULE_MISSING_PORT error should fire. No diagnostics expected.
+
+@project HAPPY_PATH_output_only_modules_ok
+    @top TopMod {
+        IN    [1] clk = _;
+        OUT   [1] data = _;
+        INOUT [1] bus = _;
+    }
+@endproj
+
+// Only-OUT helper: constant source (oscillator/constant-source pattern)
+@module ConstSource
+    PORT {
+        OUT [4] k;
+    }
+    ASYNCHRONOUS {
+        k <= 4'hA;
+    }
+@endmod
+
+// Only-OUT helper: multiple OUT ports, no inputs
+@module MultiConstSource
+    PORT {
+        OUT [1] a;
+        OUT [1] b;
+    }
+    ASYNCHRONOUS {
+        a <= 1'b0;
+        b <= 1'b1;
+    }
+@endmod
+
+// Only-INOUT helper: tri-state driver with no IN/OUT ports
+@module TriDriver
+    PORT {
+        INOUT [1] pad;
+    }
+    ASYNCHRONOUS {
+        pad <= 1'b1;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        OUT   [1] data;
+        INOUT [1] bus;
+    }
+
+    @new inst_k ConstSource {
+        OUT [4] k = _;
+    };
+
+    @new inst_m MultiConstSource {
+        OUT [1] a = _;
+        OUT [1] b = _;
+    };
+
+    @new inst_tri TriDriver {
+        INOUT [1] pad = bus;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        IF (r) {
+            bus <= 1'b1;
+        } ELSE {
+            bus <= 1'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

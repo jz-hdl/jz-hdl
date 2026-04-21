@@ -1,0 +1,73 @@
+// §1.6.5 Tri-State Ports (Req #1): OUT ports may assign `z` to release the port.
+// Exercises conditional z drive on OUT ports via the ternary form shown in
+// §1.6.8 ("out_port <= enable ? data : 8'bzzzz_zzzz;"). Two child modules
+// expose released OUT ports; the @top instantiates each via @new so the
+// released values propagate into the elaborated design.
+// This is a happy-path test: only the expected WARN_INTERNAL_TRISTATE
+// warnings appear (internal tri-state is legal but flagged as
+// not-FPGA-compatible without --tristate-default).
+
+@project TRISTATE_PORTS_out_port_z_release_ok
+    @top TopMod {
+        IN  [1] clk    = _;
+        IN  [1] en     = _;
+        IN  [8] din    = _;
+        OUT [8] q_full = _;
+        OUT [8] q_ext  = _;
+    }
+@endproj
+
+// Trigger 1: OUT port release via ternary with full-width z literal
+@module ReleaserFull
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] q;
+    }
+    ASYNCHRONOUS {
+        q <= en ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// Trigger 2: OUT port release via ternary with 1-bit z literal extended
+// to match port width (z-extension, §1.6.1)
+@module ReleaserExt
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] q;
+    }
+    ASYNCHRONOUS {
+        q <= en ? din : 8'bz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] q_full;
+        OUT [8] q_ext;
+    }
+
+    REGISTER {
+        tick [1] = 1'b0;
+    }
+
+    @new inst_full ReleaserFull {
+        IN  [1] en  = en;
+        IN  [8] din = din;
+        OUT [8] q   = q_full;
+    };
+
+    @new inst_ext ReleaserExt {
+        IN  [1] en  = en;
+        IN  [8] din = din;
+        OUT [8] q   = q_ext;
+    };
+
+    SYNCHRONOUS(CLK=clk) {
+        tick <= ~tick;
+    }
+@endmod

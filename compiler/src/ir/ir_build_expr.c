@@ -645,6 +645,24 @@ int ir_eval_slice_bound(const JZASTNode *node,
     return 0;
 }
 
+static const IR_BusSignalMapping *ir_find_signal_mapping(const IR_BusSignalMapping *map,
+                                                         int map_count,
+                                                         const char *port_name,
+                                                         const char *signal_name,
+                                                         int array_index)
+{
+    if (!map || map_count <= 0 || !port_name || !signal_name) return NULL;
+    for (int i = 0; i < map_count; ++i) {
+        const IR_BusSignalMapping *m = &map[i];
+        if (!m->bus_port_name || !m->signal_name) continue;
+        if (strcmp(m->bus_port_name, port_name) != 0) continue;
+        if (strcmp(m->signal_name, signal_name) != 0) continue;
+        if (m->array_index != array_index) continue;
+        return m;
+    }
+    return NULL;
+}
+
 /**
  * @brief Build an IR expression tree from an AST expression node.
  *
@@ -1016,6 +1034,53 @@ IR_Expr *ir_build_expr(JZArena *arena,
         ir->width = (int)t.width;
         ir->source_line = expr->loc.line;
         ir->u.signal_ref.signal_id = signal_id;
+        return ir;
+    }
+
+    case JZ_AST_EXPR_INSTANCE_PORT_ACCESS: {
+        if (!bus_map || bus_map_count <= 0) {
+            return NULL;
+        }
+
+        JZInstancePortAccessInfo info;
+        memset(&info, 0, sizeof(info));
+        if (sem_resolve_instance_port_access(expr, mod_scope, project_symbols,
+                                             &info, NULL) != 1) {
+            return NULL;
+        }
+
+        int array_index = (info.is_array && info.index_known)
+            ? (int)info.index_value
+            : -1;
+        const IR_BusSignalMapping *mapping = ir_find_signal_mapping(bus_map,
+                                                                    bus_map_count,
+                                                                    info.instance_name,
+                                                                    info.port_name,
+                                                                    array_index);
+        if (!mapping || mapping->ir_signal_id < 0) {
+            return NULL;
+        }
+
+        IR_Expr *ir = (IR_Expr *)jz_arena_alloc(arena, sizeof(IR_Expr));
+        if (!ir) return NULL;
+        memset(ir, 0, sizeof(*ir));
+        ir->source_line = expr->loc.line;
+
+        if (mapping->parent_msb >= 0 && mapping->parent_lsb >= 0) {
+            ir->kind = EXPR_SLICE;
+            ir->width = mapping->parent_msb - mapping->parent_lsb + 1;
+            ir->u.slice.signal_id = mapping->ir_signal_id;
+            ir->u.slice.base_expr = NULL;
+            ir->u.slice.msb = mapping->parent_msb;
+            ir->u.slice.lsb = mapping->parent_lsb;
+        } else {
+            ir->kind = EXPR_SIGNAL_REF;
+            ir->width = (int)t.width;
+            if (ir->width <= 0) {
+                ir->width = mapping->width;
+            }
+            ir->u.signal_ref.signal_id = mapping->ir_signal_id;
+        }
         return ir;
     }
 

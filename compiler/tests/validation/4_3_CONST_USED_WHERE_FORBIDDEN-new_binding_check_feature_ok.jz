@@ -1,0 +1,73 @@
+// CONST_USED_WHERE_FORBIDDEN: exercise CONST usage in new-binding, check-expr,
+// and feature-cond contexts. These are compile-time contexts where CONST is
+// permitted, so no diagnostics are expected — this test verifies the rule
+// does not fire for valid CONST uses in these contexts.
+
+@project CONST_USED_WHERE_FORBIDDEN_new_binding_check_feature_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        dout = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        MY_C = 42;
+        W = 8;
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [W] data;
+    }
+
+    // Valid (check-expr): CONST allowed in @check compile-time expression
+    @check (MY_C == 42, "my_c check");
+
+    // Valid (feature-cond): CONST allowed in @feature compile-time condition
+    @feature MY_C == 42
+        CONST { F_X = 1; }
+    @else
+        CONST { F_X = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [W];
+    }
+
+    // Valid (new-binding): CONST used as compile-time tie-off value for an IN port
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] din = MY_C;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [W] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

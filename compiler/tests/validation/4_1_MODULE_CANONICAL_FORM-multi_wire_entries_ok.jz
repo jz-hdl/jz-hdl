@@ -1,0 +1,67 @@
+// MODULE_CANONICAL_FORM: Happy path for §4.1 Req #14 — multiple WIRE entries.
+// The canonical form allows "..." inside the WIRE block, meaning a module
+// may declare multiple WIRE identifiers. This test exercises that.
+
+@project MODULE_CANONICAL_FORM_multi_wire_entries_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] a = _;
+        IN  [1] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Module with multiple WIRE entries of varying widths
+@module MultiWire
+    PORT {
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] data;
+    }
+
+    WIRE {
+        w1 [1];
+        w2 [1];
+        w3 [1];
+        w4 [1];
+    }
+
+    ASYNCHRONOUS {
+        w1 = a & b;
+        w2 = a | b;
+        w3 = a ^ b;
+        w4 = ~a;
+        data = w1 ^ w2 ^ w3 ^ w4;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] data;
+    }
+
+    @new inst_mw MultiWire {
+        IN  [1] a = a;
+        IN  [1] b = b;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod

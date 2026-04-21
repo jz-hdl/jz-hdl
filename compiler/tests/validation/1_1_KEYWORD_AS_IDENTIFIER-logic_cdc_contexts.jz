@@ -1,0 +1,212 @@
+// KEYWORD_AS_IDENTIFIER: Tests logic-type and clock-domain keywords in all
+// declaration contexts except const-name (already covered).
+// Row 16 (Logic Type): ASYNCHRONOUS, SYNCHRONOUS
+// Row 17 (Clock Domains): CDC
+// Keywords are declared but not referenced in expressions to avoid parser
+// interpreting them as block-start keywords.
+
+@project KEYWORD_AS_IDENTIFIER_logic_cdc_contexts
+    CONFIG {
+        // Trigger 1: ASYNCHRONOUS as config-name
+        ASYNCHRONOUS = 1;
+        // Trigger 2: SYNCHRONOUS as config-name
+        SYNCHRONOUS = 2;
+        // Trigger 3: CDC as config-name
+        CDC = 3;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger 4: ASYNCHRONOUS as module-name
+@module ASYNCHRONOUS
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 5: SYNCHRONOUS as module-name
+@module SYNCHRONOUS
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 6: CDC as module-name
+@module CDC
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Helper module with keyword port names
+@module HelperLogic
+    PORT {
+        IN  [1] clk;
+        // Trigger 7: ASYNCHRONOUS as port-name
+        IN  [1] ASYNCHRONOUS;
+        // Trigger 8: SYNCHRONOUS as port-name
+        IN  [1] SYNCHRONOUS;
+        // Trigger 9: CDC as port-name
+        IN  [1] CDC;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    // Trigger 10: ASYNCHRONOUS as wire-name
+    // Trigger 11: SYNCHRONOUS as wire-name
+    // Trigger 12: CDC as wire-name
+    WIRE {
+        ASYNCHRONOUS [1];
+        SYNCHRONOUS  [1];
+        CDC          [1];
+    }
+
+    // Trigger 13: ASYNCHRONOUS as register-name
+    // Trigger 14: SYNCHRONOUS as register-name
+    // Trigger 15: CDC as register-name
+    REGISTER {
+        ASYNCHRONOUS [1] = 1'b0;
+        SYNCHRONOUS  [1] = 1'b0;
+        CDC          [1] = 1'b0;
+        r            [1] = 1'b0;
+    }
+
+    // Trigger 16: ASYNCHRONOUS as latch-name
+    LATCH {
+        ASYNCHRONOUS [1] D;
+    }
+
+    // Trigger 17: SYNCHRONOUS as latch-name
+    LATCH {
+        SYNCHRONOUS [1] D;
+    }
+
+    // Trigger 18: CDC as latch-name
+    LATCH {
+        CDC [1] D;
+        valid_lat [1] D;
+    }
+
+    // Trigger 19: ASYNCHRONOUS as mem-name
+    MEM {
+        ASYNCHRONOUS [1] [4] = 1'b0 {
+            OUT rd1 ASYNC;
+            IN  wr1;
+        };
+    }
+
+    // Trigger 20: SYNCHRONOUS as mem-name
+    MEM {
+        SYNCHRONOUS [1] [4] = 1'b0 {
+            OUT rd2 ASYNC;
+            IN  wr2;
+        };
+    }
+
+    // Trigger 21: CDC as mem-name
+    MEM {
+        CDC [1] [4] = 1'b0 {
+            OUT rd3 ASYNC;
+            IN  wr3;
+        };
+    }
+
+    // Trigger 22: ASYNCHRONOUS as mux-name
+    MUX {
+        ASYNCHRONOUS = a, b;
+    }
+
+    // Trigger 23: SYNCHRONOUS as mux-name
+    MUX {
+        SYNCHRONOUS = a, b;
+    }
+
+    // Trigger 24: CDC as mux-name
+    MUX {
+        CDC = a, b;
+    }
+
+    // Trigger 25: ASYNCHRONOUS as instance-name
+    @new ASYNCHRONOUS ASYNCHRONOUS {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 26: SYNCHRONOUS as instance-name
+    @new SYNCHRONOUS SYNCHRONOUS {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 27: CDC as instance-name
+    @new CDC CDC {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        valid_lat <= enable : din;
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

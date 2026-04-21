@@ -1,5 +1,5 @@
 // WIDTHOF_INVALID_CONTEXT: widthof() used outside compile-time constant context.
-// Tests widthof() in ASYNCHRONOUS and SYNCHRONOUS blocks across modules.
+// Tests widthof() in ASYNCHRONOUS, SYNCHRONOUS, and @feature condition contexts.
 // Valid widthof() in CONST included to verify no false positives.
 
 @project WIDTHOF_INVALID_CONTEXT_runtime_expression
@@ -67,6 +67,9 @@
         // Trigger 3: widthof() in ASYNC block
         out_a <=z widthof(data_in);
         out_b = r;
+        // Trigger 5: widthof() in @feature condition (feature-cond context)
+        @feature widthof(data_in) == 8
+        @endfeat
     }
     SYNCHRONOUS(CLK=clk) {
         // Trigger 4: widthof() in SYNC block

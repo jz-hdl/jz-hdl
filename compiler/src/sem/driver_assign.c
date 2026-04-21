@@ -196,7 +196,8 @@ static int sem_expr_contains_literal_anywhere(const JZASTNode *expr)
     if (expr->type == JZ_AST_EXPR_SLICE && expr->child_count >= 1) {
         end = 1; /* only recurse into base expression */
     }
-    if (expr->type == JZ_AST_EXPR_BUS_ACCESS) {
+    if (expr->type == JZ_AST_EXPR_BUS_ACCESS ||
+        expr->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
         end = 0; /* children are array indices, not values */
     }
 

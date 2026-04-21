@@ -1,0 +1,70 @@
+// LIT_BARE_INTEGER: happy path — bare integers only appear in compile-time
+// positions (CONST/CONFIG values, literal width positions, @check and
+// @feature expressions). Runtime positions use sized literals.
+
+@project LIT_BARE_INTEGER_compile_time_uses
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Bare integer in CONST definition (compile-time only, OK)
+    CONST {
+        VAL = 8;
+        ONE = 1;
+    }
+
+    // Bare integer in @check expression (compile-time, OK)
+    @check (VAL == 8, "bare int in check ok");
+
+    // Bare integer in @feature condition (compile-time, OK)
+    @feature VAL == 8
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // New binding: sized literal only (no bare integer)
+    @new inst_a HelperA {
+        IN  [8] din = 8'hA5;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        // CONST used in width position (bare integer indirectly) — OK
+        r [VAL] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

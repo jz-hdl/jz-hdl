@@ -1,0 +1,71 @@
+// HAPPY_PATH (Reqs #21, #28): widths are shared across modules via project
+// CONFIG rather than by reaching into another module with widthof().
+// widthof() is used module-locally for refactor-resistant width expressions;
+// cross-module coherence is expressed through CONFIG.WIDTH.
+
+@project HAPPY_PATH_widthof_cross_module_config_ok
+    CONFIG {
+        DATA_W = 16;
+    }
+
+    @top TopMod {
+        IN  [1]              clk = _;
+        IN  [CONFIG.DATA_W]  din = _;
+        OUT [CONFIG.DATA_W]  dout = _;
+    }
+@endproj
+
+// Helper module sizes its ports from CONFIG.DATA_W (shared project-wide).
+@module HelperMod
+    CONST {
+        // Local widthof() for module-internal compile-time use.
+        LOCAL_W = widthof(din);
+    }
+    PORT {
+        IN  [1]             clk;
+        IN  [CONFIG.DATA_W] din;
+        OUT [CONFIG.DATA_W] dout;
+    }
+    REGISTER {
+        r [LOCAL_W] = LOCAL_W'd0;
+    }
+    ASYNCHRONOUS {
+        dout = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        // Local widthof() for module-internal compile-time use.
+        TOP_W = widthof(din);
+    }
+    PORT {
+        IN  [1]             clk;
+        IN  [CONFIG.DATA_W] din;
+        OUT [CONFIG.DATA_W] dout;
+    }
+    WIRE {
+        h_dout [CONFIG.DATA_W];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1]             clk  = clk;
+        IN  [CONFIG.DATA_W] din  = din;
+        OUT [CONFIG.DATA_W] dout = h_dout;
+    };
+
+    REGISTER {
+        r [TOP_W] = TOP_W'd0;
+    }
+
+    ASYNCHRONOUS {
+        dout = r ^ h_dout;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

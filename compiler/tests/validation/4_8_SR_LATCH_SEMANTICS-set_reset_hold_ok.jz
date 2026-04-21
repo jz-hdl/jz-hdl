@@ -1,0 +1,86 @@
+// SR_LATCH_SEMANTICS: Per-bit set/reset semantics for an SR-latch.
+// For each bit position in <set_expr> and <reset_expr>:
+//   set=1, reset=0 -> latch bit becomes 1
+//   set=0, reset=1 -> latch bit becomes 0
+//   set=0, reset=0 -> latch bit holds
+//   set=1, reset=1 -> metastable (allowed to compile; designer beware)
+// No edge, ordering, or sequencing is implied. Multiple guarded
+// assignments targeting non-overlapping bit ranges are permitted when
+// done via independent SR-latch declarations. No assignment in a given
+// execution path means "hold" by virtue of the storage not being
+// written. This test exercises all per-bit cases via distinct set/reset
+// drivers and confirms multi-bit SR operation.
+// No diagnostics expected.
+
+@project SR_LATCH_SEMANTICS_set_reset_hold_ok
+    @top TopMod {
+        IN  [8] set_bus = _;
+        IN  [8] reset_bus = _;
+        IN  [1] set_one = _;
+        IN  [1] reset_one = _;
+        IN  [1] arm = _;
+        OUT [8] q_bus = _;
+        OUT [1] q_mux = _;
+    }
+@endproj
+
+// Helper: SR latches demonstrating per-bit set/reset behavior.
+@module HelperMod
+    PORT {
+        IN  [8] set_bus;
+        IN  [8] reset_bus;
+        IN  [1] set_one;
+        IN  [1] reset_one;
+        IN  [1] arm;
+        OUT [8] q_bus;
+        OUT [1] q_mux;
+    }
+
+    LATCH {
+        // 8-bit SR-latch exercises per-bit set/reset combinations:
+        // each bit independently evaluates set/reset/hold/metastable.
+        sr_bus [8] SR;
+        // 1-bit SR latch driven through IF — mutually exclusive so
+        // "no assignment" on one branch means hold per spec.
+        sr_mux [1] SR;
+    }
+
+    ASYNCHRONOUS {
+        // Multi-bit SR-latch: all four per-bit cases occur by varying
+        // the input vector bits (set=1/reset=0, set=0/reset=1,
+        // set=0/reset=0 hold, set=1/reset=1 metastable). No edge,
+        // ordering, or sequencing implied.
+        sr_bus <= set_bus : reset_bus;
+
+        // Mutually exclusive by structure: only the arm=1 path writes
+        // sr_mux; arm=0 path performs no assignment and the latch holds.
+        IF (arm) {
+            sr_mux <= set_one : reset_one;
+        }
+
+        q_bus <= sr_bus;
+        q_mux <= sr_mux;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] set_bus;
+        IN  [8] reset_bus;
+        IN  [1] set_one;
+        IN  [1] reset_one;
+        IN  [1] arm;
+        OUT [8] q_bus;
+        OUT [1] q_mux;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] set_bus = set_bus;
+        IN  [8] reset_bus = reset_bus;
+        IN  [1] set_one = set_one;
+        IN  [1] reset_one = reset_one;
+        IN  [1] arm = arm;
+        OUT [8] q_bus = q_bus;
+        OUT [1] q_mux = q_mux;
+    };
+@endmod

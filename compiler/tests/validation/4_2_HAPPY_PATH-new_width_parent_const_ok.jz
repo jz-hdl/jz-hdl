@@ -1,0 +1,69 @@
+// HAPPY_PATH (§4.2 Req #11): CONST names used inside @new port width
+// expressions are resolved in the **parent module's** CONST scope — the
+// module containing the @new block. The child module's own CONSTs are not
+// visible in the parent's @new binding. Here the parent declares WIDE and
+// NARROW and uses them to size child ports whose declared widths match.
+// No diagnostics expected.
+
+@project HAPPY_PATH_new_width_parent_const_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Child module — has its own CONST named WIDE, which must be ignored by
+// the parent's @new binding. The child's port widths are literal sizes.
+@module Child
+    CONST {
+        // Same name as a parent CONST, different value — proves scoping
+        WIDE = 2;
+    }
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        WIDE   = 8;
+        NARROW = 4;
+    }
+    PORT {
+        IN  [1] clk;
+        OUT [WIDE] data;
+    }
+
+    WIRE {
+        src [WIDE];
+        lo  [NARROW];
+        hi  [NARROW];
+    }
+
+    REGISTER {
+        r [WIDE] = 8'h00;
+    }
+
+    // @new port widths use the PARENT module's CONSTs (WIDE = 8). If
+    // they were evaluated in the child's scope, WIDE would resolve to 2
+    // and the binding would be a width mismatch.
+    @new inst_c Child {
+        IN  [WIDE] din  = src;
+        OUT [WIDE] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        src = r;
+        lo  = src[NARROW - 1 : 0];
+        hi  = src[WIDE - 1 : NARROW];
+        data = { hi, lo };
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

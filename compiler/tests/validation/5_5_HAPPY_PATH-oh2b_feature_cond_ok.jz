@@ -1,0 +1,51 @@
+// HAPPY_PATH: oh2b(source) used inside a @feature condition.
+// Exercises §5.5.12 oh2b syntax and result width (Reqs #1, #2) in the
+// feature-cond declaration context with sized-literal operands. No
+// diagnostics expected.
+// new-binding and check-expr are inapplicable: @new instance bindings
+// reject function-call expressions (parser_instance.c restricts the RHS
+// to signal-like forms, PARSE000) and @check rejects oh2b with
+// CHECK_INVALID_EXPR_TYPE before §5.5.12 rules can fire.
+// See audit/runner.log.
+
+@project HAPPY_PATH_oh2b_feature_cond_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1: oh2b() of a 4-bit sized literal in @feature condition.
+    // Result width = clog2(4) = 2 bits. Compared to 2-bit sized literal.
+    @feature oh2b(4'b0100) == 2'd2
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2: oh2b() of an 8-bit sized literal in @feature condition.
+    // Result width = clog2(8) = 3 bits. Compared to 3-bit sized literal.
+    @feature oh2b(8'b0000_0001) == 3'd0
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'd0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

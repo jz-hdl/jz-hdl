@@ -1,0 +1,107 @@
+// §1.6.5 Tri-State Ports (Req #3): A released port participates in
+// tri-state resolution with external or peer drivers.
+// Exercises the instance-port-driver case from §1.6.4: three child
+// modules each bind their INOUT to a shared parent net. Each child
+// drives the shared net only when its unique 2-bit `sel` code matches;
+// otherwise it releases to z. The compiler must accept multi-driver
+// resolution across instances (per §1.5.4 and §1.6.4) because mutual
+// exclusion is structurally provable from the disjoint literal codes.
+// A fourth instance reads the resolved bus value into a register.
+// This is a happy-path test: no diagnostics expected.
+
+@project TRISTATE_PORTS_released_port_resolves_with_peers_ok
+    @top TopMod {
+        IN  [1] clk    = _;
+        IN  [2] sel    = _;
+        IN  [8] data_a = _;
+        IN  [8] data_b = _;
+        IN  [8] data_c = _;
+        OUT [8] dout   = _;
+    }
+@endproj
+
+// DriverA: drives when sel==2'b00, releases otherwise.
+@module PeerA
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 2'b00) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// DriverB: drives when sel==2'b01, releases otherwise.
+@module PeerB
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 2'b01) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// DriverC: drives when sel==2'b10, releases otherwise.
+@module PeerC
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 2'b10) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] sel;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        IN  [8] data_c;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        captured [8] = 8'h00;
+    }
+
+    WIRE {
+        // Shared net: three peer INOUT drivers bind to this wire.
+        // Each released port contributes z on paths where its owner
+        // does not drive; the compiler resolves the multi-driver tri
+        // state at the net level.
+        shared_bus [8];
+    }
+
+    @new inst_a PeerA {
+        IN    [2] sel = sel;
+        IN    [8] din = data_a;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_b PeerB {
+        IN    [2] sel = sel;
+        IN    [8] din = data_b;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_c PeerC {
+        IN    [2] sel = sel;
+        IN    [8] din = data_c;
+        INOUT [8] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        dout <= captured;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Read the resolved tri-state bus value.
+        captured <= shared_bus;
+    }
+@endmod

@@ -1,0 +1,56 @@
+// LATCH_AS_CLOCK_OR_CDC happy-path: a normal port wire (not a latch)
+// drives the CLK parameter of a SYNCHRONOUS block. Latches exist and
+// are read/written correctly, but none is used as a clock or CDC source.
+// No diagnostics expected.
+
+@project LATCH_AS_CLOCK_OR_CDC_normal_clock_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    LATCH {
+        lat_data [1] D;
+    }
+
+    REGISTER {
+        r_sample [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        lat_data <= enable : din;
+        data <= r_sample;
+    }
+
+    // Valid: clock driven by the port wire, not a latch.
+    SYNCHRONOUS(CLK=clk) {
+        r_sample <= lat_data;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] enable = enable;
+        IN  [1] din = din;
+        OUT [1] data = data;
+    };
+@endmod

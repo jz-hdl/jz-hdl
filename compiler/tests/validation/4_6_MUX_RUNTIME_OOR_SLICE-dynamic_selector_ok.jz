@@ -1,0 +1,50 @@
+// MUX §4.6 Req #38 happy-path:
+// "If <selector> may be out of range at runtime, the result is all zeros"
+// (auto-slicing form).
+// A dynamic selector whose range exceeds K is accepted at compile time since
+// the compiler cannot statically prove it is always out of range; runtime
+// OOR yields zero. This test verifies the construct compiles cleanly.
+// No diagnostics expected.
+
+@project MUX_RUNTIME_OOR_SLICE_dynamic_selector_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [16] wide = _;
+        IN  [3] sel = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [16] wide;
+        IN  [3] sel;
+        OUT [8] data;
+    }
+
+    // K = 16/8 = 2. Valid indices 0..1.
+    MUX {
+        slice_mux [8] = wide;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: 3-bit selector can carry values 0..7. Values 2..7 are
+        // runtime-out-of-range. Not statically provable as always OOR, so
+        // compilation succeeds; runtime OOR yields zero.
+        data = slice_mux[sel] | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: same runtime-OOR scenario in SYNC context.
+        r <= slice_mux[sel];
+    }
+@endmod

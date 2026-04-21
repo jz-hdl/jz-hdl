@@ -1,0 +1,79 @@
+// D_LATCH_SEMANTICS: When enable=1 the D-latch is transparent and
+// continuously tracks data. When enable=0 it holds its previous value.
+// There is no edge, ordering, or sequencing implied by the guarded
+// assignment — the compiler treats it as level-sensitive. A missing
+// assignment in an execution path means "hold" by virtue of the storage
+// not being written. The stored value is readable passively at all
+// times; its read value reflects transparent data when enable=1 and the
+// held value when enable=0.
+// No diagnostics expected.
+
+@project D_LATCH_SEMANTICS_transparent_and_hold_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [8] din = _;
+        OUT [8] out_transparent = _;
+        OUT [8] out_held = _;
+    }
+@endproj
+
+// Helper demonstrates D-latch transparent and hold semantics.
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [8] din;
+        OUT [8] out_transparent;
+        OUT [8] out_held;
+    }
+
+    LATCH {
+        // Drives continuously-updated output while enable=1 (transparent).
+        lat_track [8] D;
+        // Demonstrates hold when enable is low for some cycles.
+        lat_hold [8] D;
+    }
+
+    REGISTER {
+        r_sample [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // enable=1 -> transparent: lat_track tracks din directly.
+        // enable=0 -> lat_track holds its previous value.
+        // No edge, no ordering, no sequencing: statement is
+        // level-sensitive and may re-evaluate whenever inputs change.
+        lat_track <= enable : din;
+        // Same semantics for lat_hold; its enable will typically be 0
+        // so the latch predominantly demonstrates the hold behavior.
+        lat_hold  <= enable : din;
+        // Read is passive and reflects transparent or held value.
+        out_transparent <= lat_track ^ r_sample;
+        out_held        <= lat_hold;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Register samples latch output; demonstrates that read value
+        // reflects whatever the latch currently holds (transparent or held).
+        r_sample <= lat_track;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [8] din;
+        OUT [8] out_transparent;
+        OUT [8] out_held;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] enable = enable;
+        IN  [8] din = din;
+        OUT [8] out_transparent = out_transparent;
+        OUT [8] out_held = out_held;
+    };
+@endmod

@@ -1,0 +1,43 @@
+// PRECEDENCE: §3.3 Req #4 — Unary arithmetic (`-`, `+`) must be
+// parenthesized per §3.1 UNARY_ARITH_MISSING_PARENS. When parenthesized,
+// it has higher precedence than all binary operators and may appear as
+// a primary inside larger expressions.
+// No diagnostics expected.
+
+@project PRECEDENCE_parenthesized_unary_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [8] out_neg = _;
+        OUT [8] out_pos = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] out_neg;
+        OUT [8] out_pos;
+    }
+    REGISTER {
+        r_neg [8] = 8'h00;
+        r_pos [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // (-a) binds before + b : effectively b - a
+        out_neg = ((-a) + b) | r_neg;
+        // (+a) binds before | b
+        out_pos = (+a) | b | r_pos;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Parenthesized unary in sync-expr combined with binary ops
+        r_neg <= (-a) & b;
+        r_pos <= (+a) ^ b;
+    }
+@endmod

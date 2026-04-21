@@ -1,0 +1,89 @@
+// LIT_HAPPY_PATH: <width>'<base><value> literal syntax exercised in
+// new-binding, check-expr, and feature-cond contexts (gaps for Req #1).
+
+@project LIT_HAPPY_PATH_literal_syntax_contexts
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din_b;
+        IN  [8] din_d;
+        IN  [8] din_h;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din_b ^ din_d ^ din_h;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger (check-expr): sized literal in @check expression
+    @check (VAL == 8'd8, "check literal sizing");
+    @check (VAL == 8'h08, "check hex literal");
+    @check (VAL == 8'b0000_1000, "check binary literal");
+
+    // Trigger (feature-cond): sized literals in @feature conditions (all three bases)
+    @feature VAL == 8'd8
+        CONST { F_D = 1; }
+    @else
+        CONST { F_D = 0; }
+    @endfeat
+
+    @feature VAL == 8'h08
+        CONST { F_H = 1; }
+    @else
+        CONST { F_H = 0; }
+    @endfeat
+
+    @feature VAL == 8'b0000_1000
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // Trigger (new-binding): sized literals in @new instance port bindings.
+    // Covers all three bases and zero-extension (MSB 0, intrinsic < declared).
+    @new inst_a HelperA {
+        IN  [8] din_b = 8'b101;
+        IN  [8] din_d = 8'd5;
+        IN  [8] din_h = 8'hA;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // async-expr: decimal literal (Reqs #20-22, #26) and hex leading-zero
+        // intrinsic-width demonstration.
+        data <= r ^ ha_out ^ 8'd1 ^ 8'h001;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // sync-expr: hex leading-zero literal — extra zeros do not grow
+        // intrinsic width (Req #26).
+        r <= r + 8'h0001;
+    }
+@endmod

@@ -1,0 +1,60 @@
+// Req #17 happy path: MSB-z extend (8'bz extends to 8'bzzzz_zzzz) exercised
+// in check-expr, feature-cond, and new-binding (INOUT) contexts.
+
+@project LIT_Z_EXTEND_HAPPY_contexts
+    @top TopMod {
+        IN    [1] clk = _;
+        INOUT [8] bus = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN    [1] clk;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        IF (clk) {
+            bus <= 8'h00;
+        } ELSE {
+            // Drives z — tri-state path
+            bus <= 8'bz;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        INOUT [8] bus;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger (check-expr): z literal in @check expression (compile-time)
+    @check (VAL == 8'bz || 1 == 1, "z literal in check compile-time");
+
+    // Trigger (feature-cond): z literal in @feature condition (compile-time)
+    @feature VAL == 8'bz || VAL == 8
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger (new-binding): z-extending literal on an INOUT port binding.
+    @new inst_a HelperA {
+        IN    [1] clk = clk;
+        INOUT [8] bus = bus;
+    };
+
+    ASYNCHRONOUS {
+        IF (!clk) {
+            bus <= 8'h00;
+        } ELSE {
+            // MSB-z extension: intrinsic 1 bit extends to 8 with z
+            bus <= 8'bz;
+        }
+    }
+@endmod

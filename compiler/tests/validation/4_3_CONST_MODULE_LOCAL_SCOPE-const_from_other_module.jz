@@ -1,0 +1,68 @@
+// CONST module-local scope: CONST declared in one module is not visible in
+// another module. Attempting to reference another module's CONST yields
+// UNDECLARED_IDENTIFIER. Valid same-module uses are included to verify no
+// false positives.
+
+@project CONST_MODULE_LOCAL_SCOPE_const_from_other_module
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Module A declares its own CONST MY_WIDTH
+@module HelperA
+    CONST {
+        MY_WIDTH = 8;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [MY_WIDTH] din;
+        OUT [MY_WIDTH] dout;
+    }
+
+    REGISTER {
+        r [MY_WIDTH] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+// TopMod tries to reference HelperA's CONST — must fail (module-local scope)
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // Trigger 1: reference HelperA's CONST MY_WIDTH as if it were in scope.
+    // MY_WIDTH is not declared in TopMod, so this is undeclared.
+    REGISTER {
+        r [MY_WIDTH] = 8'h00;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] din = r;
+        OUT [8] dout = ha_out;
+    };
+
+    ASYNCHRONOUS {
+        data = ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

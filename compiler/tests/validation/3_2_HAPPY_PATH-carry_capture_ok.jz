@@ -1,0 +1,48 @@
+// HAPPY_PATH: §3.2 Req #9 — capture a carry bit by explicitly extending
+// operands before the addition. The addition is performed at the wider
+// width and the high bit is split off via concatenation on the LHS.
+// Both the unguarded "carry lost" form and the carry-capture form are
+// included to demonstrate the spec example pattern.
+
+@project HAPPY_PATH_carry_capture_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [8] sum = _;
+        OUT [1] carry = _;
+        OUT [8] sum_lossy = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] sum;
+        OUT [1] carry;
+        OUT [8] sum_lossy;
+    }
+
+    REGISTER {
+        r_sum   [8] = 8'h00;
+        r_carry [1] = 1'b0;
+        r_lossy [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        sum       = r_sum;
+        carry     = r_carry;
+        sum_lossy = r_lossy;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Carry-capture: 9-bit add with explicit extension, split via
+        // concatenation on the LHS into {carry, result}.
+        {r_carry, r_sum} <= {1'b0, a} + {1'b0, b};
+        // Same-width add — overflow is lost (illustrates the contrasting
+        // form from the spec example).
+        r_lossy <= a + b;
+    }
+@endmod

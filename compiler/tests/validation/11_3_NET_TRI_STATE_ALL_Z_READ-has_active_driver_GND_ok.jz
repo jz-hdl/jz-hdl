@@ -1,0 +1,93 @@
+// NET_TRI_STATE_ALL_Z_READ happy path: a tri-state net may be read when it
+// has at least one execution path in which a driver asserts a non-z value.
+// Exercises single-driver partial-z, multi-driver where every driver has at
+// least one active (non-z) path, and unconditional non-z assignments.
+
+@project NET_TRI_STATE_ALL_Z_READ_has_active_driver
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en  = _;
+        OUT [8] out_partial = _;
+        OUT [8] out_multi = _;
+        OUT [8] out_unconditional = _;
+    }
+@endproj
+
+@module ActiveDriver
+    PORT {
+        IN    [1] en;
+        INOUT [8] data;
+    }
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'hA5;
+        } ELSE {
+            data <= 8'bzzzz_zzzz;
+        }
+    }
+@endmod
+
+@module ActiveDriverB
+    PORT {
+        IN    [1] en;
+        INOUT [8] data;
+    }
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'bzzzz_zzzz;
+        } ELSE {
+            data <= 8'h5A;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        OUT [8] out_partial;
+        OUT [8] out_multi;
+        OUT [8] out_unconditional;
+    }
+    WIRE {
+        // Happy 1: single driver mixes z with a non-z value — reading is OK
+        w_partial [8];
+        // Happy 2: multi-driver where at least one asserts non-z — reading OK
+        w_multi [8];
+        // Happy 3: unconditional non-z assignment — reading is OK
+        w_uncond [8];
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_active_multi ActiveDriver {
+        IN    [1] en = en;
+        INOUT [8] data = w_multi;
+    };
+
+    @new inst_activeb_multi ActiveDriverB {
+        IN    [1] en = en;
+        INOUT [8] data = w_multi;
+    };
+
+    ASYNCHRONOUS {
+        // Happy 1: IF branch drives non-z; ELSE drives z — not all-z overall
+        IF (en) {
+            w_partial <= 8'hF0;
+        } ELSE {
+            w_partial <= 8'bzzzz_zzzz;
+        }
+        out_partial = w_partial;
+
+        // Happy 2: w_multi has one active driver plus a z-only driver
+        out_multi = w_multi;
+
+        // Happy 3: unconditional non-z drive
+        w_uncond <= 8'hC3;
+        out_unconditional = w_uncond;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

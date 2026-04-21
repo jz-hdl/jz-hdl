@@ -126,6 +126,19 @@ typedef struct JZBusAccessInfo {
     char signal_name[128];
 } JZBusAccessInfo;
 
+typedef struct JZInstancePortAccessInfo {
+    const JZASTNode *instance_decl;
+    const JZASTNode *binding_decl;
+    const JZASTNode *child_port_decl;
+    int has_index;
+    int index_known;
+    unsigned index_value;
+    unsigned count;
+    int is_array;
+    char instance_name[128];
+    char port_name[128];
+} JZInstancePortAccessInfo;
+
 /* Shared helpers implemented across driver*.c. */
 void sem_report_rule(JZDiagnosticList *diagnostics,
                      JZLocation loc,
@@ -143,6 +156,11 @@ int sem_resolve_bus_access(const JZASTNode *expr,
                            const JZBuffer *project_symbols,
                            JZBusAccessInfo *out,
                            JZDiagnosticList *diagnostics);
+int sem_resolve_instance_port_access(const JZASTNode *expr,
+                                     const JZModuleScope *mod_scope,
+                                     const JZBuffer *project_symbols,
+                                     JZInstancePortAccessInfo *out,
+                                     JZDiagnosticList *diagnostics);
 JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
                                              const char *bus_port_name,
                                              int has_index,

@@ -1,0 +1,58 @@
+// LIT_UNDEFINED_CONST_WIDTH happy path: literal widths use CONST names
+// that are defined in scope. No diagnostics expected. Covers async-expr,
+// sync-expr, new-binding, check-expr, and feature-cond.
+
+@project LIT_UNDEFINED_CONST_WIDTH_defined_const_width
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST { W = 8; }
+
+    @check (W == W'd8, "defined CONST width in check");
+
+    @feature W == W'h08
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE { ha_out [W]; }
+
+    @new inst_a HelperA {
+        IN  [8] din = W'hA5;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [W] = W'h00;
+    }
+    ASYNCHRONOUS {
+        data <= r ^ ha_out ^ W'hFF;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + W'h01;
+    }
+@endmod

@@ -1,0 +1,64 @@
+// HAPPY_PATH: §4.14 Note - semantic validation must pass with the feature
+// enabled and disabled. Always-false and always-true conditions both compile
+// cleanly because the contents of both branches are independently valid.
+
+@project HAPPY_PATH_semantic_both_states_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    CONST {
+        ON  = 1;
+        OFF = 0;
+    }
+
+    REGISTER {
+        r_a [8] = 8'h00;
+        r_b [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Enabled branch + disabled @else: both branches semantically valid.
+        @feature ON == 1
+            dout_a = r_a;
+        @else
+            dout_a = din;
+        @endfeat
+
+        // Disabled branch + enabled @else: both branches semantically valid.
+        @feature OFF == 1
+            dout_b = din;
+        @else
+            dout_b = r_b;
+        @endfeat
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Enabled body: valid assignment.
+        @feature ON == 1
+            r_a <= din;
+        @endfeat
+
+        // Disabled body: body must remain semantically valid even though
+        // it is not elaborated.
+        @feature OFF == 1
+            r_b <= din;
+        @endfeat
+    }
+@endmod

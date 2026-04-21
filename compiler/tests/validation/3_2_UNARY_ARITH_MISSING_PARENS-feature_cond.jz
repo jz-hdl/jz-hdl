@@ -1,0 +1,40 @@
+// UNARY_ARITH_MISSING_PARENS: unparenthesized unary arithmetic in a @feature
+// (feature-cond) compile-time condition. Closes the §3.2 missing-context for
+// feature-cond. new-binding and check-expr are inapplicable: @new RHS rejects
+// unary arithmetic syntactically (PARSE000), and @check evaluates conditions
+// through a constant-expression validator that does not route unary
+// arithmetic through the parenthesization rule (verified empirically; see
+// audit/runner.log).
+
+@project UNARY_ARITH_MISSING_PARENS_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+    CONST { K = 5; }
+
+    // Trigger 1 (feature-cond): unary minus on a literal without parentheses
+    @feature K == -5
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): unary plus on a literal without parentheses
+    @feature K == +5
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    REGISTER { r [8] = 8'h00; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= r; }
+@endmod

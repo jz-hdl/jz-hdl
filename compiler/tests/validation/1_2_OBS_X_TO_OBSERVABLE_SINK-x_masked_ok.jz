@@ -1,0 +1,80 @@
+// OBS_X_TO_OBSERVABLE_SINK happy-path: expressions that contain `x` bits
+// are legal when the x bits are provably masked (AND'd with 0) before
+// reaching any observable sink (REGISTER next-state, MEM init, OUT/INOUT
+// port, top-level project pin). The rule fires only if x can be observed.
+
+@project OBS_X_TO_OBSERVABLE_SINK_x_masked_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: x literal masked to 0 before driving OUT port and register.
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w_x [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // x-valued driver on internal wire
+        w_x <= 8'bxxxx_xxxx;
+        // x bits masked away (x & 0 = 0); result reaches observable OUT
+        data <= (w_x & 8'h00) | din | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // x bits masked away before driving REGISTER next-state
+        r <= (w_x & 8'h00) | din;
+    }
+@endmod
+
+// Top module: masks x bits prior to driving the top-level OUT pin.
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk  = clk;
+        IN  [8] din  = din;
+        OUT [8] data = _;
+    };
+
+    WIRE {
+        w_x_local [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Local x-valued driver
+        w_x_local <= 8'bxx00_xx00;
+        // Mask removes all x bits (upper x & 0, lower x & 0)
+        data <= (w_x_local & 8'h00) | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Masked x never reaches register
+        r <= (w_x_local & 8'h00) | din;
+    }
+@endmod

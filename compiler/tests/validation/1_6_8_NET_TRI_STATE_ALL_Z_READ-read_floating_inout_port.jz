@@ -1,0 +1,61 @@
+// §1.6.8 Req #5: Invalid use case (COMPILE ERROR) — reading a floating
+// INOUT net where every driver assigns only `z`:
+//   register <= inout_port; // ERROR: reading a floating net
+// Every driver of inout_port (in this module and any peers bound
+// through @new) releases the bus to z on every path, so the compiler
+// must reject the read.
+
+@project NET_TRI_STATE_ALL_Z_READ_read_floating_inout_port
+    @top TopMod {
+        IN    [1] clk        = _;
+        IN    [1] en         = _;
+        INOUT [8] inout_port = _;
+        OUT   [8] result     = _;
+    }
+@endproj
+
+// Trigger: reads its INOUT port into a register, while also driving
+// that same INOUT port with only z on every branch.
+@module BiDir
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        INOUT [8] inout_port;
+        OUT   [8] result;
+    }
+
+    REGISTER {
+        reg_a [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // All drivers assign z to inout_port on every path
+        IF (en) {
+            inout_port <= 8'bzzzz_zzzz;
+        } ELSE {
+            inout_port <= 8'bzzzz_zzzz;
+        }
+        result <= reg_a;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // register <= inout_port; // ERROR: reading a floating net
+        reg_a <= inout_port;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        INOUT [8] inout_port;
+        OUT   [8] result;
+    }
+
+    @new inst BiDir {
+        IN    [1] clk        = clk;
+        IN    [1] en         = en;
+        INOUT [8] inout_port = inout_port;
+        OUT   [8] result     = result;
+    };
+@endmod

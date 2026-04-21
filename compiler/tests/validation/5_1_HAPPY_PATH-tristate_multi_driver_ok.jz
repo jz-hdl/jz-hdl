@@ -1,0 +1,80 @@
+// §5.1 Req #21 HAPPY_PATH: Tri-state net driven by multiple ASYNCHRONOUS
+// drivers where all but one assign `z` for each bit (mutually exclusive
+// enables) — valid configuration per §5.1 net-validation rule 3.
+// See §1.6 for the underlying tri-state net semantics.
+
+@project HAPPY_PATH_tristate_multi_driver_ok
+    @top TopMod {
+        IN  [2] sel = _;
+        IN  [8] data_a = _;
+        IN  [8] data_b = _;
+        IN  [8] data_c = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+// Driver: conditionally drives `bus` with its data, otherwise releases
+// the bus with an all-z value. §5.1 net rule 3 accepts multiple such
+// drivers on a shared tri-state net.
+@module DriverMod
+    PORT {
+        IN    [2] sel;
+        IN    [2] my_code;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        // Exactly one driver is active for any value of sel because each
+        // instance is parameterized with a disjoint `my_code` literal.
+        bus <= (sel == my_code) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [2] sel;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        IN  [8] data_c;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        // Multi-driver tri-state net — each instance drives z except
+        // under its own mutually exclusive 2-bit code.
+        shared_bus [8];
+    }
+
+    @new inst_a DriverMod {
+        IN    [2] sel     = sel;
+        IN    [2] my_code = 2'b00;
+        IN    [8] din     = data_a;
+        INOUT [8] bus     = shared_bus;
+    };
+
+    @new inst_b DriverMod {
+        IN    [2] sel     = sel;
+        IN    [2] my_code = 2'b01;
+        IN    [8] din     = data_b;
+        INOUT [8] bus     = shared_bus;
+    };
+
+    @new inst_c DriverMod {
+        IN    [2] sel     = sel;
+        IN    [2] my_code = 2'b10;
+        IN    [8] din     = data_c;
+        INOUT [8] bus     = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        // Read the resolved tri-state net (exactly one non-z driver for
+        // sel in {00, 01, 10}; sel == 2'b11 resolves to all-z which is
+        // acceptable as long as no observable sink reads it under that
+        // condition — gated here with a conditional read).
+        IF (sel != 2'b11) {
+            observed <= shared_bus;
+        } ELSE {
+            observed <= 8'h00;
+        }
+    }
+@endmod

@@ -123,6 +123,10 @@ static void sem_check_runtime_const_config_expr(const JZASTNode *node,
         return;
     }
 
+    if (node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
+        return;
+    }
+
     for (size_t i = 0; i < node->child_count; ++i) {
         if (node->children[i]) {
             sem_check_runtime_const_config_expr(node->children[i], mod_scope, diagnostics);
@@ -152,7 +156,8 @@ static void sem_check_bare_integer_in_expr(const JZASTNode *node,
     }
 
     /* Bus array indices (link[2].tx) are compile-time; skip children. */
-    if (node->type == JZ_AST_EXPR_BUS_ACCESS) {
+    if (node->type == JZ_AST_EXPR_BUS_ACCESS ||
+        node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
         return;
     }
 

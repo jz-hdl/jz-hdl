@@ -1,0 +1,54 @@
+// LIT_DECIMAL_HAS_XZ happy path: decimal literals contain only 0-9 and
+// optional underscores — no x/z. Exercises async-expr, sync-expr,
+// new-binding, check-expr, and feature-cond contexts.
+
+@project LIT_DECIMAL_HAS_XZ_no_xz_in_decimal
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST { VAL = 8; }
+
+    @check (VAL == 8'd8, "decimal happy in check");
+
+    @feature VAL == 8'd8
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE { ha_out [8]; }
+
+    @new inst_a HelperA {
+        IN  [8] din = 8'd128;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        data <= r ^ ha_out ^ 8'd1;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'd1;
+    }
+@endmod

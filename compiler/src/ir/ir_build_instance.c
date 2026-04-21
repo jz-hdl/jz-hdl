@@ -9,6 +9,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "ir_internal.h"
 
@@ -876,6 +877,59 @@ static void collect_active_instances(JZASTNode *ast_mod,
     }
 }
 
+static int ir_eval_instance_idx_expr(const JZASTNode *expr,
+                                     unsigned elem,
+                                     unsigned *out)
+{
+    if (!expr || !out) return 0;
+
+    if (expr->type == JZ_AST_EXPR_LITERAL && expr->text) {
+        return parse_literal_unsigned_value(expr->text, out);
+    }
+
+    if ((expr->type == JZ_AST_EXPR_IDENTIFIER ||
+         expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
+        expr->name && strcmp(expr->name, "IDX") == 0) {
+        *out = elem;
+        return 1;
+    }
+
+    if (expr->type == JZ_AST_EXPR_BINARY && expr->block_kind &&
+        expr->child_count >= 2) {
+        unsigned a = 0;
+        unsigned b = 0;
+        if (!ir_eval_instance_idx_expr(expr->children[0], elem, &a) ||
+            !ir_eval_instance_idx_expr(expr->children[1], elem, &b)) {
+            return 0;
+        }
+        if (strcmp(expr->block_kind, "ADD") == 0) {
+            *out = a + b;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "SUB") == 0) {
+            if (a < b) return 0;
+            *out = a - b;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "MUL") == 0) {
+            *out = a * b;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "DIV") == 0) {
+            if (b == 0) return 0;
+            *out = a / b;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "MOD") == 0) {
+            if (b == 0) return 0;
+            *out = a % b;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 /**
  * @brief Build IR_Instance entries for a module.
  *
@@ -1640,9 +1694,18 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
         /* Determine array count. */
         unsigned array_count = 1;
         if (inst_node->width && *inst_node->width) {
-            unsigned tmp = 0;
-            if (eval_simple_positive_decl_int(inst_node->width, &tmp) == 1 && tmp > 0) {
-                array_count = tmp;
+            long long cval = 0;
+            if (sem_eval_const_expr_in_module(inst_node->width,
+                                              scope,
+                                              project_symbols,
+                                              &cval) == 0 &&
+                cval > 0 && cval <= INT_MAX) {
+                array_count = (unsigned)cval;
+            } else {
+                unsigned tmp = 0;
+                if (eval_simple_positive_decl_int(inst_node->width, &tmp) == 1 && tmp > 0) {
+                    array_count = tmp;
+                }
             }
         }
 
@@ -1718,9 +1781,18 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
         /* Determine array count. */
         unsigned array_count = 1;
         if (inst_node->width && *inst_node->width) {
-            unsigned tmp = 0;
-            if (eval_simple_positive_decl_int(inst_node->width, &tmp) == 1 && tmp > 0) {
-                array_count = tmp;
+            long long cval = 0;
+            if (sem_eval_const_expr_in_module(inst_node->width,
+                                              scope,
+                                              project_symbols,
+                                              &cval) == 0 &&
+                cval > 0 && cval <= INT_MAX) {
+                array_count = (unsigned)cval;
+            } else {
+                unsigned tmp = 0;
+                if (eval_simple_positive_decl_int(inst_node->width, &tmp) == 1 && tmp > 0) {
+                    array_count = tmp;
+                }
             }
         }
 
@@ -1766,19 +1838,25 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
                 if (map_idx >= new_map_count) break;
 
                 IR_BusSignalMapping *entry = &new_map[map_idx++];
-
-                if (array_count > 1) {
-                    /* Array instance: use "inst[N]" as the port name. */
-                    char name_buf[256];
-                    snprintf(name_buf, sizeof(name_buf), "%s[%u]", inst_name, elem);
-                    entry->bus_port_name = ir_strdup_arena(arena, name_buf);
-                } else {
-                    entry->bus_port_name = ir_strdup_arena(arena, inst_name);
+                int parent_msb = -1;
+                int parent_lsb = -1;
+                if (rhs->type == JZ_AST_EXPR_SLICE && rhs->child_count >= 3) {
+                    unsigned msb_val = 0;
+                    unsigned lsb_val = 0;
+                    if (ir_eval_instance_idx_expr(rhs->children[1], elem, &msb_val) &&
+                        ir_eval_instance_idx_expr(rhs->children[2], elem, &lsb_val)) {
+                        parent_msb = (int)msb_val;
+                        parent_lsb = (int)lsb_val;
+                    }
                 }
+
+                entry->bus_port_name = ir_strdup_arena(arena, inst_name);
                 entry->signal_name = ir_strdup_arena(arena, bind->name);
                 entry->array_index = (array_count > 1) ? (int)elem : -1;
                 entry->ir_signal_id = psym->id;
                 entry->width = (int)port_width;
+                entry->parent_msb = parent_msb;
+                entry->parent_lsb = parent_lsb;
             }
         }
     }

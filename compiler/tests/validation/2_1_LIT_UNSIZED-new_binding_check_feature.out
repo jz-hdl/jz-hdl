@@ -1,0 +1,4 @@
+File: 2_1_LIT_UNSIZED-new_binding_check_feature.jz
+      32:20   error LIT_UNSIZED S2.1 Unsized literal (e.g. 'hFF) is not permitted
+      35:21   error LIT_UNSIZED S2.1 Unsized literal (e.g. 'hFF) is not permitted
+      47:23   error LIT_UNSIZED S2.1 Unsized literal (e.g. 'hFF) is not permitted

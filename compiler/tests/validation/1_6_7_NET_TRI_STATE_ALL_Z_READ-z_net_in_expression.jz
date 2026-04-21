@@ -1,0 +1,44 @@
+// §1.6.7 Req #1: If a net that may carry z participates in an expression,
+// all execution paths must ensure that a determinate value (0 or 1) is
+// supplied. This negative test drives a wire exclusively with z in every
+// branch, then uses it in an expression feeding an OUT port — the compiler
+// must reject the read because no path yields a determinate value.
+
+@project OBS_Z_NET_IN_EXPRESSION
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en  = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        OUT [8] result;
+    }
+
+    WIRE {
+        // Trigger: wire that only ever carries z on every path
+        w_z [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_z <= 8'bzzzz_zzzz;
+        } ELSE {
+            w_z <= 8'bzzzz_zzzz;
+        }
+        // Trigger: z-carrying wire used in an expression that feeds OUT
+        result <= w_z ^ 8'h0F;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

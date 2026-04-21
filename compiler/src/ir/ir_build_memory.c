@@ -1247,6 +1247,8 @@ int ir_create_mem_addr_signals(JZArena *arena,
             bm->array_index = -1;
             bm->ir_signal_id = new_id;
             bm->width = sig->width;
+            bm->parent_msb = -1;
+            bm->parent_lsb = -1;
 
             /* Store the synthetic signal ID in the port. */
             mp->addr_reg_signal_id = new_id;

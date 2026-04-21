@@ -1,0 +1,69 @@
+// HAPPY_PATH: §4.14 Expression Rules for @feature guards.
+// Exercises the rules: width-1 boolean, references to CONFIG/CONST/literals,
+// and logical operators only. No runtime-signal references.
+
+@project HAPPY_PATH_expression_rules_ok
+    CONFIG {
+        DEBUG = 1;
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    CONST {
+        ENABLE = 1;
+        LEVEL  = 16;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: width-1 boolean result using CONST == literal
+        @feature ENABLE == 1
+            dout = r;
+        @else
+            dout = din;
+        @endfeat
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: literal-only boolean expression
+        @feature 1'b1
+            r <= din;
+        @endfeat
+
+        // Valid: CONFIG reference only
+        @feature CONFIG.DEBUG == 1
+            r <= din;
+        @endfeat
+
+        // Valid: CONST reference only
+        @feature ENABLE != 0
+            r <= din;
+        @endfeat
+
+        // Valid: combined CONFIG/CONST via logical operators (&&, ||, !)
+        @feature (CONFIG.DEBUG == 1 && ENABLE == 1) || !(LEVEL < 8)
+            r <= din;
+        @endfeat
+
+        // Valid: comparison operators (<, >, <=, >=)
+        @feature LEVEL > 8 && LEVEL < 32 && LEVEL >= 16 && LEVEL <= 16
+            r <= din;
+        @endfeat
+    }
+@endmod

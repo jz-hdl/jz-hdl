@@ -1,0 +1,72 @@
+// LATCH_IN_CONST_CONTEXT happy-path: latches are declared and written
+// normally, and only CONST/CONFIG values appear in compile-time constant
+// contexts (@check and @feature conditions). The latch identifier never
+// appears in a constant-context expression, so no diagnostic fires.
+// No diagnostics expected.
+
+@project LATCH_IN_CONST_CONTEXT_const_only_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST {
+        SIZE = 8;
+    }
+
+    LATCH {
+        lat_h [1] D;
+    }
+
+    // Valid: constant expression in @check (CONST compared to literal).
+    @check (SIZE > 0, "size ok");
+    // Valid: CONFIG in @check (compile-time constant context).
+    @check (CONFIG.WIDTH == 8, "width matches");
+
+    ASYNCHRONOUS {
+        lat_h <= enable : din;
+        data <= lat_h;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] enable = enable;
+        IN  [1] din = din;
+        OUT [1] data = data;
+    };
+
+    CONST {
+        TOP_SIZE = 8;
+    }
+
+    LATCH {
+        lat_top [1] D;
+    }
+
+    // Valid: constant expression in @check.
+    @check (TOP_SIZE > 0, "top size ok");
+
+    ASYNCHRONOUS {
+        lat_top <= enable : din;
+    }
+@endmod

@@ -1,0 +1,81 @@
+// WIRE_MULTI_DIMENSIONAL happy-path: WIRE declared with single-dimensional
+// syntax only. Exercises multiple wires of varying widths across two modules
+// to confirm the rule does not false-fire on valid `<name> [<width>];` forms.
+
+@project WIRE_MULTI_DIMENSIONAL_single_dim_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    WIRE {
+        // Valid: single-dimensional 1-bit wire
+        w_flag [1];
+        // Valid: single-dimensional 8-bit wire
+        w_byte [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        w_flag   <= 1'b1;
+        w_byte   <= data_in ^ 8'hFF;
+        data_out <= w_byte | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= w_byte;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    WIRE {
+        // Valid: single-dimensional wires of varying widths
+        w_small [1];
+        w_med   [8];
+        w_wide  [64];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk      = clk;
+        IN  [8] data_in  = din;
+        OUT [8] data_out = _;
+    };
+
+    ASYNCHRONOUS {
+        w_small      <= din[0];
+        w_med        <= din & 8'hF0;
+        w_wide[7:0]  <= din;
+        w_wide[63:8] <= 56'h0;
+        dout         <= w_med | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= w_med;
+    }
+@endmod

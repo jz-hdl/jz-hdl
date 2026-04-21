@@ -1,0 +1,38 @@
+// COMMENT_IN_TOKEN: Comment inside identifier within a @feature condition.
+// Valid @feature conditions included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_feature_cond
+    CONFIG {
+        DEBUG = 1;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [1] dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    CONST {
+        FLAG = 1;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: comment between tokens in condition
+        @feature FLAG /* ok */ == 1
+            dout = din;
+        @else
+            // Trigger: comment inside identifier in @feature condition
+            @feature FL/**/AG == 1
+                dout = din;
+            @endfeat
+        @endfeat
+    }
+@endmod

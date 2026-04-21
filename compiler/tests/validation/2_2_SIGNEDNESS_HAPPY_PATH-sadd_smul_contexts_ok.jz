@@ -1,0 +1,79 @@
+// SIGNEDNESS_HAPPY_PATH: Explicit signed intrinsics `sadd` and `smul` (§2.2 /
+// §5.5) in async-expr, new-binding, and feature-cond contexts. Intrinsics are
+// forbidden in @check constant expressions by §9.4, so check-expr is not an
+// applicable context for sadd/smul (see audit/runner.log).
+// No diagnostics expected.
+
+@project SIGNEDNESS_HAPPY_PATH_sadd_smul_contexts
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [9] sadd_out = _;
+        OUT [16] smul_out = _;
+    }
+@endproj
+
+@module HelperSigned
+    PORT {
+        IN  [9]  sadd_in;
+        IN  [16] smul_in;
+        OUT [9]  sadd_out;
+        OUT [16] smul_out;
+    }
+    ASYNCHRONOUS {
+        sadd_out = sadd_in;
+        smul_out = smul_in;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [9] sadd_out;
+        OUT [16] smul_out;
+    }
+
+    CONST {
+        K = 3;
+    }
+
+    // feature-cond: compile-time feature condition (K is a plain CONST)
+    @feature K > 0
+        CONST { F_SIGNED_EN = 1; }
+    @else
+        CONST { F_SIGNED_EN = 0; }
+    @endfeat
+
+    WIRE {
+        sadd_w [9];
+        smul_w [16];
+    }
+
+    // new-binding: pass the signed intrinsic result signals to an instance
+    @new inst_s HelperSigned {
+        IN  [9]  sadd_in  = sadd_w;
+        IN  [16] smul_in  = smul_w;
+        OUT [9]  sadd_out = sadd_out;
+        OUT [16] smul_out = smul_out;
+    };
+
+    REGISTER {
+        tick [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // async-expr: sadd/smul intrinsic operators — signed two's complement
+        sadd_w = sadd(a, b);
+        smul_w = smul(a, b);
+    }
+    SYNCHRONOUS(CLK=clk) {
+        tick <= ~tick;
+    }
+@endmod

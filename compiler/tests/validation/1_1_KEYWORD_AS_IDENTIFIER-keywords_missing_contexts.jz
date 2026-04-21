@@ -1,0 +1,205 @@
+// KEYWORD_AS_IDENTIFIER: Tests reserved keywords from rows 11-15 in
+// declaration contexts not previously covered.
+// Row 11 (Project): MAP as config-name
+// Row 12 (Flow Control): SELECT as port-name, CASE as register-name,
+//         IF as latch-name
+// Row 13 (Config/Parameters): CONST as module-name, OVERRIDE as
+//         config-name/mem-name/mux-name/instance-name
+// Row 14 (Connections): SOURCE as module-name/port-name/register-name/
+//         latch-name/mem-name/mux-name
+// Row 15 (Storage): REGISTER as module-name, LATCH as port-name/
+//         register-name/latch-name/mem-name/mux-name/instance-name
+// Note: keyword-named declarations are NOT referenced in expressions to
+// avoid the parser interpreting them as syntax elements.
+
+@project KEYWORD_AS_IDENTIFIER_keywords_missing_contexts
+    CONFIG {
+        // Trigger 1: Row 11 MAP as config-name
+        MAP = 1;
+        // Trigger 2: Row 13 OVERRIDE as config-name
+        OVERRIDE = 2;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger 3: Row 13 CONST as module-name
+@module CONST
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 4: Row 14 SOURCE as module-name
+@module SOURCE
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 5: Row 15 REGISTER as module-name
+@module REGISTER
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Helper module for port-name tests
+@module HelperPorts
+    PORT {
+        IN  [1] clk;
+        // Trigger 6: Row 12 SELECT as port-name
+        IN  [1] SELECT;
+        // Trigger 7: Row 14 SOURCE as port-name
+        IN  [1] SOURCE;
+        // Trigger 8: Row 15 LATCH as port-name
+        IN  [1] LATCH;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    // Trigger 9: Row 12 CASE as register-name
+    // Trigger 10: Row 14 SOURCE as register-name
+    // Trigger 11: Row 15 LATCH as register-name
+    REGISTER {
+        CASE   [1] = 1'b0;
+        SOURCE [1] = 1'b0;
+        LATCH  [1] = 1'b0;
+        r      [1] = 1'b0;
+    }
+
+    // Trigger 12: Row 12 IF as latch-name
+    // Trigger 13: Row 14 SOURCE as latch-name (different block)
+    LATCH {
+        IF     [1] D;
+        valid_lat [1] D;
+    }
+
+    LATCH {
+        SOURCE [1] D;
+    }
+
+    // Trigger 14: Row 15 LATCH as latch-name
+    LATCH {
+        LATCH [1] D;
+    }
+
+    // Trigger 15: Row 13 OVERRIDE as mem-name
+    MEM {
+        OVERRIDE [1] [4] = 1'b0 {
+            OUT rd1 ASYNC;
+            IN  wr1;
+        };
+    }
+
+    // Trigger 16: Row 14 SOURCE as mem-name (different block)
+    MEM {
+        SOURCE [1] [4] = 1'b0 {
+            OUT rd2 ASYNC;
+            IN  wr2;
+        };
+    }
+
+    // Trigger 17: Row 15 LATCH as mem-name
+    MEM {
+        LATCH [1] [4] = 1'b0 {
+            OUT rd3 ASYNC;
+            IN  wr3;
+        };
+    }
+
+    // Trigger 18: Row 13 OVERRIDE as mux-name
+    MUX {
+        OVERRIDE = a, b;
+    }
+
+    // Trigger 19: Row 14 SOURCE as mux-name
+    MUX {
+        SOURCE = a, b;
+    }
+
+    // Trigger 20: Row 15 LATCH as mux-name
+    MUX {
+        LATCH = a, b;
+    }
+
+    // Trigger 21: Row 13 OVERRIDE as instance-name
+    @new OVERRIDE CONST {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 22: Row 15 LATCH as instance-name
+    @new LATCH SOURCE {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        valid_lat <= enable : din;
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

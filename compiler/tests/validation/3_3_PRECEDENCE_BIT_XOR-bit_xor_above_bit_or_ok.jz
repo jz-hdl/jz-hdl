@@ -1,0 +1,36 @@
+// PRECEDENCE: §3.3 Req #11 — Bitwise XOR `^` binds tighter than bitwise
+// OR `|`. `a ^ b | c` parses as `(a ^ b) | c`, not `a ^ (b | c)`.
+// No diagnostics expected.
+
+@project PRECEDENCE_bit_xor_above_bit_or_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        OUT [8] out_or = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        OUT [8] out_or;
+    }
+    REGISTER {
+        r_or [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // ^ binds tighter than | : (a ^ b) | c
+        out_or = ((a ^ b) | c) | r_or;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_or <= (a ^ b) | c;
+    }
+@endmod

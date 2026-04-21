@@ -1,0 +1,75 @@
+// SLICE_MSB_LESS_THAN_LSB: Reversed slice indices inside an @new port-binding
+// expression. Triggers both a literal-index reversed slice and a CONST-index
+// reversed slice in the new-binding context. Valid slice binding included to
+// verify no false positives.
+
+@project SLICE_MSB_LESS_THAN_LSB_new_binding
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] out_a = _;
+        OUT [4] out_b = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [4] nib;
+        OUT [4] out_a;
+    }
+    REGISTER {
+        r [4] = 4'h0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= nib;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] out_a;
+        OUT [4] out_b;
+    }
+    CONST {
+        HI = 0;
+        LO = 3;
+    }
+    WIRE {
+        ha_out_a [4];
+        ha_out_b [4];
+    }
+    REGISTER {
+        r [16] = 16'h0000;
+    }
+
+    // Trigger 1: literal reversed slice in new-binding expression (MSB 0 < LSB 3)
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [4] nib = r[0:3];
+        OUT [4] out_a = ha_out_a;
+    };
+
+    // Trigger 2: CONST-driven reversed slice in new-binding expression (HI=0 < LO=3)
+    @new inst_b HelperA {
+        IN  [1] clk = clk;
+        IN  [4] nib = r[HI:LO];
+        OUT [4] out_a = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

@@ -1,0 +1,37 @@
+// PRECEDENCE: §3.3 Req #13 — Logical AND `&&` binds tighter than
+// logical OR `||`. `p || q && r` parses as `p || (q && r)`, not
+// `(p || q) && r`.
+// No diagnostics expected.
+
+@project PRECEDENCE_logical_and_above_logical_or_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] p = _;
+        IN  [1] q = _;
+        IN  [1] r = _;
+        OUT [1] out_or_and = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] p;
+        IN  [1] q;
+        IN  [1] r;
+        OUT [1] out_or_and;
+    }
+    REGISTER {
+        r_or_and [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // && binds tighter than || : p || (q && r)
+        out_or_and = (p || (q && r)) | r_or_and;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_or_and <= p || (q && r);
+    }
+@endmod

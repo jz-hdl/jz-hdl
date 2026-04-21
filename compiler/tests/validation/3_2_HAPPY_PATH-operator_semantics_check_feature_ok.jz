@@ -1,0 +1,195 @@
+// HAPPY_PATH: §3.2 operator semantics exercised in @check (check-expr) and
+// @feature (feature-cond) compile-time contexts. Each surviving operator is
+// invoked with valid CONST operands so no diagnostic is emitted.
+//
+// @check accepts: arithmetic (+,-,*,/,%), comparisons, logical (&&,||,!),
+//   shifts (<<,>>,>>>), unary arithmetic (parenthesized).
+// @feature additionally accepts: bitwise (&,|,^,~), ternary, concatenation.
+//
+// new-binding context is intentionally not exercised here: the @new RHS
+// grammar rejects every operator under test (verified empirically; PARSE000
+// "expected signal name or literal on right-hand side of @new instance
+// binding"). See audit/runner.log for the §3.2 entry.
+
+@project HAPPY_PATH_operator_semantics_check_feature_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+    CONST {
+        A = 8;
+        B = 3;
+        ZERO = 0;
+        ONE = 1;
+    }
+
+    // ---- @check (check-expr) coverage ----
+    // Unary arithmetic (parenthesized): Reqs #1, #2, #3, #4, #5
+    @check ((-A) + A == 0, "unary minus closes to zero");
+    @check ((+A) == A, "unary plus is no-op");
+    // Binary arithmetic: Reqs #6, #7, #8
+    @check (A + B == 11, "binary add");
+    @check (A - B == 5,  "binary sub");
+    // Multiplication: Reqs #11, #12
+    @check (A * B == 24, "binary mul");
+    // Division/Modulus: Reqs #15, #16, #17
+    @check (A / B == 2, "binary div");
+    @check (A % B == 2, "binary mod");
+    // Logical: Reqs #25, #26, #27 — `!` rejected by @check (CHECK_INVALID_EXPR_TYPE);
+    // covered in @feature below.
+    @check ((ONE && ONE) == 1, "logical and");
+    @check ((ONE || ZERO) == 1, "logical or");
+    // Comparison: Reqs #28, #29
+    @check (A == A, "eq");
+    @check (A != B, "ne");
+    @check (A > B, "gt");
+    @check (B < A, "lt");
+    @check (A >= A, "ge");
+    @check (B <= A, "le");
+    // Shift: Reqs #30, #31, #32, #33, #34, #35
+    @check ((A << B) > A, "shl");
+    @check ((A >> ONE) < A, "shr");
+    @check ((A >>> ONE) < A, "ashr");
+
+    // ---- @feature (feature-cond) coverage ----
+    // Unary arithmetic
+    @feature (-A) + A == 0
+        CONST { F_UN = 1; }
+    @else
+        CONST { F_UN = 0; }
+    @endfeat
+
+    @feature (+A) == A
+        CONST { F_UP = 1; }
+    @else
+        CONST { F_UP = 0; }
+    @endfeat
+
+    // Binary arithmetic
+    @feature A + B == 11
+        CONST { F_AD = 1; }
+    @else
+        CONST { F_AD = 0; }
+    @endfeat
+
+    @feature A - B == 5
+        CONST { F_SU = 1; }
+    @else
+        CONST { F_SU = 0; }
+    @endfeat
+
+    // Multiplication
+    @feature A * B == 24
+        CONST { F_MU = 1; }
+    @else
+        CONST { F_MU = 0; }
+    @endfeat
+
+    // Division / Modulus
+    @feature A / B == 2
+        CONST { F_DV = 1; }
+    @else
+        CONST { F_DV = 0; }
+    @endfeat
+
+    @feature A % B == 2
+        CONST { F_MO = 1; }
+    @else
+        CONST { F_MO = 0; }
+    @endfeat
+
+    // Bitwise (Reqs #22, #23, #24)
+    @feature (A & B) == 0
+        CONST { F_AN = 1; }
+    @else
+        CONST { F_AN = 0; }
+    @endfeat
+
+    @feature (A | B) == 11
+        CONST { F_OR = 1; }
+    @else
+        CONST { F_OR = 0; }
+    @endfeat
+
+    @feature (A ^ B) == 11
+        CONST { F_XO = 1; }
+    @else
+        CONST { F_XO = 0; }
+    @endfeat
+
+    @feature (~ZERO) != 0
+        CONST { F_NO = 1; }
+    @else
+        CONST { F_NO = 0; }
+    @endfeat
+
+    // Logical (Reqs #25, #26, #27)
+    @feature (ONE && ONE) == 1
+        CONST { F_LA = 1; }
+    @else
+        CONST { F_LA = 0; }
+    @endfeat
+
+    @feature (ONE || ZERO) == 1
+        CONST { F_LO = 1; }
+    @else
+        CONST { F_LO = 0; }
+    @endfeat
+
+    @feature (!ZERO) == 1
+        CONST { F_LN = 1; }
+    @else
+        CONST { F_LN = 0; }
+    @endfeat
+
+    // Comparison (Reqs #28, #29)
+    @feature A == A
+        CONST { F_EQ = 1; }
+    @else
+        CONST { F_EQ = 0; }
+    @endfeat
+
+    // Shift (Reqs #30-#35)
+    @feature (A << B) > A
+        CONST { F_SHL = 1; }
+    @else
+        CONST { F_SHL = 0; }
+    @endfeat
+
+    @feature (A >> ONE) < A
+        CONST { F_SHR = 1; }
+    @else
+        CONST { F_SHR = 0; }
+    @endfeat
+
+    @feature (A >>> ONE) < A
+        CONST { F_ASR = 1; }
+    @else
+        CONST { F_ASR = 0; }
+    @endfeat
+
+    // Ternary (Reqs #36, #37, #38, #39)
+    @feature (ONE ? A : B) == A
+        CONST { F_TN = 1; }
+    @else
+        CONST { F_TN = 0; }
+    @endfeat
+
+    // Concatenation (Reqs #40-#44): bit weights MSB→LSB
+    @feature {A, B} == ((A * 16) + B)
+        CONST { F_CT = 1; }
+    @else
+        CONST { F_CT = 0; }
+    @endfeat
+
+    REGISTER { r [8] = 8'h00; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= r; }
+@endmod

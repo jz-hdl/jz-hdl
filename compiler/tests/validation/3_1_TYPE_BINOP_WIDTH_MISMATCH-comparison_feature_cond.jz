@@ -1,0 +1,72 @@
+// TYPE_BINOP_WIDTH_MISMATCH: Comparison operators (==, !=, <, >, <=, >=)
+// with mismatched operand widths in the feature-cond context. Covers §3.1
+// Req #6. The new-binding and check-expr contexts are categorically
+// inapplicable for this rule (see audit/runner.log).
+
+@project TYPE_BINOP_WIDTH_MISMATCH_comparison_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): == with mismatched widths (8 vs 4)
+    @feature 8'd1 == 4'd1
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): != with mismatched widths (8 vs 4)
+    @feature 8'd1 != 4'd2
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    // Trigger 3 (feature-cond): < with mismatched widths (8 vs 4)
+    @feature 8'd1 < 4'd2
+        CONST { F_C = 1; }
+    @else
+        CONST { F_C = 0; }
+    @endfeat
+
+    // Trigger 4 (feature-cond): > with mismatched widths (8 vs 4)
+    @feature 8'd2 > 4'd1
+        CONST { F_D = 1; }
+    @else
+        CONST { F_D = 0; }
+    @endfeat
+
+    // Trigger 5 (feature-cond): <= with mismatched widths (8 vs 4)
+    @feature 8'd1 <= 4'd2
+        CONST { F_E = 1; }
+    @else
+        CONST { F_E = 0; }
+    @endfeat
+
+    // Trigger 6 (feature-cond): >= with mismatched widths (8 vs 4)
+    @feature 8'd2 >= 4'd1
+        CONST { F_F = 1; }
+    @else
+        CONST { F_F = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

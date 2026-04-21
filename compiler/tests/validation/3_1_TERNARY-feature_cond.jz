@@ -1,0 +1,44 @@
+// TERNARY_COND_WIDTH_NOT_1 / TERNARY_BRANCH_WIDTH_MISMATCH: Ternary with
+// multi-bit condition or mismatched branch widths in the feature-cond
+// context. Covers §3.1 Req #8. The new-binding and check-expr contexts
+// are categorically inapplicable for these rules (see audit/runner.log).
+
+@project TERNARY_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): ternary cond is multi-bit (8 bits)
+    @feature (8'b1010 ? 1'b1 : 1'b0) == 1'b1
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): ternary branch widths mismatched (4 vs 8)
+    @feature (1'b1 ? 4'b1 : 8'b1) == 4'b1
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

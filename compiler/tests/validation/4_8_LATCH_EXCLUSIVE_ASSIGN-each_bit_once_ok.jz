@@ -1,0 +1,73 @@
+// LATCH_EXCLUSIVE_ASSIGN: Each latch bit may be assigned at most once
+// per execution path (Exclusive Assignment Rule §1.5). Exclusivity can
+// be satisfied by disjoint bit-slice LHS targets or by mutually
+// exclusive control-flow branches (IF/ELSE, SELECT). This test shows
+// each bit of every latch is driven at most once along any path.
+// No diagnostics expected.
+
+@project LATCH_EXCLUSIVE_ASSIGN_each_bit_once_ok
+    @top TopMod {
+        IN  [1] en_lo = _;
+        IN  [1] en_hi = _;
+        IN  [1] sel = _;
+        IN  [8] din = _;
+        OUT [8] q_split = _;
+        OUT [8] q_branch = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] en_lo;
+        IN  [1] en_hi;
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] q_split;
+        OUT [8] q_branch;
+    }
+
+    LATCH {
+        // Disjoint slice assignments — each bit assigned once.
+        lat_split  [8] D;
+        // Mutually exclusive IF/ELSE — each bit assigned once per path.
+        lat_branch [8] D;
+    }
+
+    ASYNCHRONOUS {
+        // Bits [3:0] and [7:4] are disjoint; exclusive assignment
+        // holds bit-by-bit.
+        lat_split[3:0] <= en_lo : din[3:0];
+        lat_split[7:4] <= en_hi : din[7:4];
+
+        // IF/ELSE: only one branch fires per path so each bit is
+        // assigned exactly once along any execution path.
+        IF (sel) {
+            lat_branch <= en_lo : din;
+        } ELSE {
+            lat_branch <= en_hi : ~din;
+        }
+
+        q_split  <= lat_split;
+        q_branch <= lat_branch;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en_lo;
+        IN  [1] en_hi;
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] q_split;
+        OUT [8] q_branch;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en_lo = en_lo;
+        IN  [1] en_hi = en_hi;
+        IN  [1] sel = sel;
+        IN  [8] din = din;
+        OUT [8] q_split = q_split;
+        OUT [8] q_branch = q_branch;
+    };
+@endmod

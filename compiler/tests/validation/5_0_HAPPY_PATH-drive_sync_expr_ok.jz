@@ -1,0 +1,35 @@
+// HAPPY_PATH: Verify the `=>` drive operator works in the sync-expr context.
+// §5.2 permits directional operators (`<=`, `=>`) in SYNCHRONOUS blocks.
+
+@project HAPPY_PATH_drive_sync_expr_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid (sync-expr): `=>` drive with same-width source and register.
+        din => r;
+    }
+@endmod

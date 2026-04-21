@@ -1,0 +1,56 @@
+// SIGNEDNESS_HAPPY_PATH: There is no implicit signed type (§2.2).
+// Arithmetic and comparison operators on high-bit values behave as unsigned
+// (high bits are not sign-extended; 0xFF > 0x01 is true, not false).
+// @check assertions verify the unsigned-only semantics at compile time.
+// `signed` is demonstrated to be a plain identifier, not a reserved keyword.
+
+@project SIGNEDNESS_HAPPY_PATH_no_implicit_signed
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        OUT [8] result;
+    }
+
+    CONST {
+        HI = 255;
+        LO = 1;
+    }
+
+    // Under unsigned semantics: HI > LO is true.
+    // Under a hypothetical signed interpretation of 8-bit values,
+    // 255 (0xFF) would be -1 and would be less than 1. The language has
+    // no implicit signed type, so only the unsigned result applies.
+    @check (HI > LO, "unsigned: 255 > 1");
+    @check (HI >= LO, "unsigned: 255 >= 1");
+    @check (HI != LO, "unsigned: 255 != 1");
+
+    // Unsigned addition wraps without any sign extension.
+    @check ((HI + LO) % 256 == 0, "unsigned add wraps, no sign extension");
+
+    // Division and modulo are unsigned integer operations.
+    @check (HI / LO == 255, "unsigned div");
+    @check (HI % 2 == 1, "unsigned mod");
+
+    // `signed` is not a reserved keyword — it is a regular identifier.
+    REGISTER {
+        signed [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        result = signed ^ a;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        signed <= a;
+    }
+@endmod

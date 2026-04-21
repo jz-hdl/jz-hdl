@@ -1,0 +1,96 @@
+// ASSIGN_MULTIPLE_SAME_BITS: BUS signals are subject to the Exclusive
+// Assignment Rule (§1.5). Writing the same bits of a writable BUS signal
+// more than once on a single execution path is a compile error. Covers Req #33.
+
+@project ASSIGN_MULTIPLE_SAME_BITS_bus_exclusive_assignment
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+// Module with duplicate unconditional writes to the same scalar BUS signal
+@module ScalarDupMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // First write to sbus.tx
+        sbus.tx <= din;
+        // Trigger 1: second unconditional write to the same BUS signal bits
+        sbus.tx <= 8'hFF;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sbus.rx;
+    }
+@endmod
+
+// Module with duplicate writes to the same arrayed BUS element
+@module ArrayDupMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        BUS MY_BUS SOURCE [2] abus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        abus[0].tx <= din;
+        // Drive the other element so it isn't undriven
+        abus[1].tx <= 8'h00;
+        // Trigger 2: second unconditional write to abus[0].tx
+        abus[0].tx <= 8'hFF;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= abus[0].rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    @new inst_s ScalarDupMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_a;
+    };
+
+    @new inst_a ArrayDupMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        BUS MY_BUS SOURCE [2] abus = _;
+        OUT [8] data_out = dout_b;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

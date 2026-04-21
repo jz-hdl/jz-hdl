@@ -1,0 +1,63 @@
+// LIT_OVERFLOW happy path: literal intrinsic widths are all at or below
+// their declared widths — no overflow. Covers async-expr, sync-expr,
+// new-binding, check-expr, and feature-cond contexts.
+
+@project LIT_OVERFLOW_no_overflow
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST { VAL = 8; }
+
+    // check-expr: max value for 8-bit
+    @check (VAL == 8 && 8'd255 == 8'hFF, "no overflow in check");
+
+    // feature-cond: max value for 8-bit
+    @feature 8'hFF == 8'd255
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // new-binding: literal at exactly declared width
+    @new inst_a HelperA {
+        IN  [8] din = 8'hFF;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // async-expr: max value literal
+        data <= r ^ ha_out ^ 8'd255;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // sync-expr: max value literal
+        r <= r + 8'hFF;
+    }
+@endmod

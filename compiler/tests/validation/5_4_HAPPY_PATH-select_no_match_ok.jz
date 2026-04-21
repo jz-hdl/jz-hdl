@@ -1,0 +1,64 @@
+// HAPPY_PATH (Req #18): If no CASE matches and no DEFAULT exists, no
+// statements execute. In SYNC the register holds; in ASYNC with complete
+// coverage plus DEFAULT the unmatched path is never taken.
+// This test exercises SELECTs where the selector range exceeds listed CASE
+// values and DEFAULT catches the unmatched positions (valid, no diagnostics).
+
+@project HAPPY_PATH_select_no_match_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] sel = _;
+        OUT [1] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] sel;
+        OUT [1] out_a;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+        s [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Only 0,1,2 listed; DEFAULT catches 3..15 (no-match path handled).
+        SELECT (sel) {
+            CASE 4'h0 {
+                out_a <= VCC;
+            }
+            CASE 4'h1 {
+                out_a <= GND;
+            }
+            CASE 4'h2 {
+                out_a <= VCC;
+            }
+            DEFAULT {
+                out_a <= r;
+            }
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // DEFAULT present; unmatched selector values assign a defined hold.
+        SELECT (sel) {
+            CASE 4'h0 {
+                r <= VCC;
+            }
+            DEFAULT {
+                r <= r;
+            }
+        }
+        SELECT (sel) {
+            CASE 4'hF {
+                s <= VCC;
+            }
+            DEFAULT {
+                s <= s;
+            }
+        }
+    }
+@endmod

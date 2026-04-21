@@ -1,0 +1,125 @@
+// ASSIGN_WIDTH_NO_MODIFIER: Unmodified assignment/alias/drive operators
+// (`=`, `<=`, `=>`) require width(lhs) == width(rhs) exactly when applied to
+// BUS signals. Covers Req #29.
+
+@project ASSIGN_WIDTH_NO_MODIFIER_bus_width_strict
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din4 = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+    }
+@endproj
+
+// Module using `<=` (receive) unmodified with width mismatch
+@module RecvMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: 4-bit RHS assigned to 8-bit writable BUS signal with
+        // unmodified `<=` — exact-width rule violated.
+        sbus.tx <= din4;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sbus.rx;
+    }
+@endmod
+
+// Module using `=` (alias) unmodified with width mismatch
+@module AliasMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 2: alias `=` with mismatched widths
+        sbus.tx = din4;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sbus.rx;
+    }
+@endmod
+
+// Module using `=>` (drive) unmodified with width mismatch
+@module DriveMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 3: drive `=>` with mismatched widths
+        din4 => sbus.tx;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sbus.rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+    }
+
+    @new inst_r RecvMod {
+        IN  [1] clk = clk;
+        IN  [4] din4 = din4;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_a;
+    };
+
+    @new inst_a AliasMod {
+        IN  [1] clk = clk;
+        IN  [4] din4 = din4;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_b;
+    };
+
+    @new inst_d DriveMod {
+        IN  [1] clk = clk;
+        IN  [4] din4 = din4;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_c;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

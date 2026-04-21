@@ -1,0 +1,61 @@
+// MUX §4.6 Req #39 happy-path:
+// "A MUX does not introduce new storage or independent nets."
+// Verifies that declaring a MUX does NOT add an additional driver or net
+// for the underlying sources: each source retains its single driver and
+// can be driven exactly once, as normal. A MUX reference does not count as
+// a new net-driver on the source, and the mux_id itself is not a net.
+// No diagnostics expected.
+
+@project MUX_HAPPY_PATH_no_new_storage_or_nets_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [1] sel = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [1] sel;
+        OUT [8] data;
+    }
+
+    WIRE {
+        // Each wire has exactly one driver below; referencing via a MUX
+        // must NOT count as an additional driver (MUX introduces no net).
+        w0 [8];
+        w1 [8];
+    }
+
+    // A MUX over the two wires. This MUST NOT introduce new storage or
+    // nets: w0/w1 keep their single drivers, and `agg` is not itself a net.
+    MUX {
+        agg = w0, w1;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Single driver per wire (MUX reference below is NOT a driver).
+        w0 = a;
+        w1 = b;
+        // Trigger: MUX read yields a combinational value; no additional
+        // storage/net is created by the MUX declaration.
+        data = agg[sel] | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= agg[0];
+    }
+@endmod

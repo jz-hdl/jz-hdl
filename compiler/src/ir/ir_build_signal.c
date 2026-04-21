@@ -422,6 +422,8 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
                             m->array_index = (array_count > 1) ? (int)elem : -1;
                             m->ir_signal_id = sig->id;
                             m->width = sig->width;
+                            m->parent_msb = -1;
+                            m->parent_lsb = -1;
                         }
 
                         idx++;

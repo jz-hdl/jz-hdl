@@ -1931,6 +1931,16 @@ static void resolve_qualified_identifier_node(JZASTNode *node,
         return;
     }
 
+    if (head_sym->kind == JZ_SYM_INSTANCE) {
+        JZInstancePortAccessInfo info;
+        (void)sem_resolve_instance_port_access(node,
+                                               mod_scope,
+                                               project_symbols,
+                                               &info,
+                                               diagnostics);
+        return;
+    }
+
     char tail[256] = {0};
     if (rest && *rest) {
         size_t tail_len = second_dot ? (size_t)(second_dot - rest) : strlen(rest);
@@ -2140,6 +2150,32 @@ void resolve_names_recursive(JZASTNode *node,
         resolve_identifier_node(node, current_scope, project_symbols, diagnostics);
     } else if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
         resolve_qualified_identifier_node(node, current_scope, project_symbols, diagnostics);
+    } else if (node->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS) {
+        if (current_scope && node->name) {
+            const JZSymbol *head_sym = module_scope_lookup(current_scope, node->name);
+            if (head_sym && head_sym->kind == JZ_SYM_INSTANCE) {
+                node->type = JZ_AST_EXPR_INSTANCE_PORT_ACCESS;
+                if (project_symbols) {
+                    JZInstancePortAccessInfo info;
+                    (void)sem_resolve_instance_port_access(node, current_scope,
+                                                           project_symbols, &info,
+                                                           diagnostics);
+                }
+            } else {
+                node->type = JZ_AST_EXPR_BUS_ACCESS;
+                if (project_symbols) {
+                    JZBusAccessInfo info;
+                    (void)sem_resolve_bus_access(node, current_scope, project_symbols, &info, diagnostics);
+                }
+            }
+        }
+    } else if (node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
+        if (current_scope && project_symbols) {
+            JZInstancePortAccessInfo info;
+            (void)sem_resolve_instance_port_access(node, current_scope,
+                                                   project_symbols, &info,
+                                                   diagnostics);
+        }
     } else if (node->type == JZ_AST_EXPR_BUS_ACCESS) {
         if (current_scope && project_symbols) {
             JZBusAccessInfo info;

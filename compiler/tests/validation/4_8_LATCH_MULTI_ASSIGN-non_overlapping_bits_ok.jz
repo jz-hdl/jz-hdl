@@ -1,0 +1,73 @@
+// LATCH_MULTI_ASSIGN: Multiple guarded assignments to the same latch are
+// permitted when they target non-overlapping bit ranges (Exclusive
+// Assignment Rule). Multiple guarded assignments to the same latch in
+// the same ASYNCHRONOUS block are permitted when structurally
+// non-overlapping (disjoint bit-slices) or mutually exclusive by IF/SELECT.
+// No diagnostics expected.
+
+@project LATCH_MULTI_ASSIGN_non_overlapping_bits_ok
+    @top TopMod {
+        IN  [1] en_lo = _;
+        IN  [1] en_hi = _;
+        IN  [1] sel = _;
+        IN  [8] din = _;
+        OUT [8] d_out = _;
+        OUT [8] d_mux = _;
+    }
+@endproj
+
+// Helper: two guarded writes to disjoint halves of the same latch.
+@module HelperMod
+    PORT {
+        IN  [1] en_lo;
+        IN  [1] en_hi;
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] d_out;
+        OUT [8] d_mux;
+    }
+
+    LATCH {
+        // Split-bits latch: low nibble and high nibble written separately.
+        lat_split [8] D;
+        // Mutually-exclusive IF-guarded latch.
+        lat_mux [8] D;
+    }
+
+    ASYNCHRONOUS {
+        // Two guarded assignments targeting non-overlapping bit ranges.
+        lat_split[3:0] <= en_lo : din[3:0];
+        lat_split[7:4] <= en_hi : din[7:4];
+
+        // Mutually-exclusive IF branches: only one guarded assignment
+        // fires per path.
+        IF (sel) {
+            lat_mux <= en_lo : din;
+        } ELSE {
+            lat_mux <= en_hi : din;
+        }
+
+        d_out <= lat_split;
+        d_mux <= lat_mux;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en_lo;
+        IN  [1] en_hi;
+        IN  [1] sel;
+        IN  [8] din;
+        OUT [8] d_out;
+        OUT [8] d_mux;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en_lo = en_lo;
+        IN  [1] en_hi = en_hi;
+        IN  [1] sel = sel;
+        IN  [8] din = din;
+        OUT [8] d_out = d_out;
+        OUT [8] d_mux = d_mux;
+    };
+@endmod

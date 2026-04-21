@@ -1,0 +1,69 @@
+// SPECIAL_DRIVER_IN_INDEX: Happy-path - GND/VCC used as standalone drivers
+// only; index/slice expressions use ordinary signals or literals, never
+// GND/VCC tokens. Demonstrates legal uses do NOT trigger
+// SPECIAL_DRIVER_IN_INDEX. Covers async-expr and sync-expr contexts.
+
+@project SPECIAL_DRIVER_IN_INDEX_valid_standalone_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper: standalone GND/VCC + indices applied with plain signals/literals
+@module HelperA
+    CONST {
+        BIT_IDX = 3;
+    }
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    REGISTER {
+        r [8] = VCC;
+    }
+    ASYNCHRONOUS {
+        // Valid: index with CONST (not GND/VCC)
+        out_a <= din[BIT_IDX];
+        // Valid: index with literal (not GND/VCC)
+        out_b <= r[0];
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: VCC as atomic standalone sync assignment (sync-expr)
+        r <= VCC;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        ha_out_a [1];
+        ha_out_b [1];
+    }
+    REGISTER {
+        din [8] = GND;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [1] out_a = ha_out_a;
+        OUT [1] out_b = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: GND as atomic standalone sync assignment (sync-expr)
+        din <= GND;
+    }
+@endmod

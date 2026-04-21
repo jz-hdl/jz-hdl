@@ -1,0 +1,105 @@
+// LATCH_READ: Reading a LATCH is passive and unconditional. A latch
+// exposes its stored value at all times: there is no read enable, no
+// read timing, and no distinction between "current" and "next" state.
+// The value of a latch is always the value most recently captured.
+// Reading a latch does not affect its state and there is no notion of
+// sampling, edge, or cycle associated with a read. Reading a latch
+// does not create a driver. The <= operator in a latch-LHS context is
+// distinct from register assignment; the compiler disambiguates by the
+// LHS storage type. Latch output participates in net resolution exactly
+// like a REGISTER's current-value output. A latch may be read anywhere
+// a normal signal may be read: RHS of ASYNCHRONOUS, RHS of SYNCHRONOUS,
+// and in expressions, conditionals, and SELECT statements.
+// No diagnostics expected.
+
+@project LATCH_READ_passive_unconditional_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [2] sel = _;
+        IN  [8] din = _;
+        OUT [8] async_out = _;
+        OUT [8] sync_out = _;
+        OUT [8] select_out = _;
+    }
+@endproj
+
+// Helper: demonstrates all allowed read contexts and that read is
+// passive/side-effect-free.
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [2] sel;
+        IN  [8] din;
+        OUT [8] async_out;
+        OUT [8] sync_out;
+        OUT [8] select_out;
+    }
+
+    LATCH {
+        lat_data [8] D;
+    }
+
+    REGISTER {
+        r_sampled [8] = 8'h00;
+        r_select  [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // LHS is latch -> compiler disambiguates <= as guarded assign.
+        lat_data <= enable : din;
+
+        // RHS read of latch in ASYNCHRONOUS: passive, no driver created
+        // by the read itself. Latch participates in net resolution
+        // like a register's current-value output.
+        async_out <= lat_data ^ 8'h00;
+
+        // RHS read in an expression/conditional.
+        IF (lat_data[0]) {
+            select_out <= lat_data;
+        } ELSE {
+            select_out <= r_select;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // RHS read of latch in SYNCHRONOUS block. LHS here is a register
+        // so <= means "register schedule next state" — distinct from
+        // the latch-LHS case. Compiler disambiguates by LHS type.
+        r_sampled <= lat_data;
+
+        // SELECT statement reading latch value in the selector and body.
+        SELECT (sel) {
+            CASE 2'b00 { r_select <= lat_data; }
+            CASE 2'b01 { r_select <= ~lat_data; }
+            DEFAULT    { r_select <= r_select; }
+        }
+    }
+
+    ASYNCHRONOUS {
+        sync_out <= r_sampled;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [2] sel;
+        IN  [8] din;
+        OUT [8] async_out;
+        OUT [8] sync_out;
+        OUT [8] select_out;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] enable = enable;
+        IN  [2] sel = sel;
+        IN  [8] din = din;
+        OUT [8] async_out = async_out;
+        OUT [8] sync_out = sync_out;
+        OUT [8] select_out = select_out;
+    };
+@endmod

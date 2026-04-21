@@ -1,0 +1,50 @@
+// LIT_INVALID_CONTEXT: happy-path verifying lit() is accepted in all
+// allowed §5.5.11 contexts without false LIT_INVALID_CONTEXT positives.
+// Exercises @global block, REGISTER reset value, ASYNCHRONOUS RHS, and
+// SYNCHRONOUS RHS.
+
+@global CONSTS
+  BOOT = lit(8, 170);
+@endglob
+
+@project LIT_INVALID_CONTEXT_valid_contexts_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_async = _;
+        OUT [8] out_sync = _;
+        OUT [8] out_reset = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_async;
+        OUT [8] out_sync;
+        OUT [8] out_reset;
+    }
+    CONST {
+        W = 8;
+    }
+
+    REGISTER {
+        // Valid: lit() as REGISTER reset value
+        r_a [8] = lit(W, 85);
+        r_b [8] = lit(8, 5);
+    }
+
+    ASYNCHRONOUS {
+        // Valid: lit() on ASYNCHRONOUS RHS
+        out_async <= lit(8, 42);
+        out_reset = r_a;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: lit() on SYNCHRONOUS RHS
+        r_b <= lit(8, 100);
+    }
+
+    ASYNCHRONOUS {
+        out_sync = r_b;
+    }
+@endmod

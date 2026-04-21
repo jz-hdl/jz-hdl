@@ -38,7 +38,7 @@
         {"type": "Literal", "text": "8'h00", "loc": {"line": 47, "column": 17, "file": "test.jz"}}
       ]},
       {"type": "Assign", "block_kind": "RECEIVE", "loc": {"line": 50, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "VALID", "loc": {"line": 50, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "VALID", "loc": {"line": 50, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "0", "loc": {"line": 50, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Ternary", "loc": {"line": 50, "column": 26, "file": "test.jz"}, "children": [
@@ -51,19 +51,19 @@
         ]}
       ]},
       {"type": "Assign", "block_kind": "ALIAS", "loc": {"line": 51, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "ADDR", "loc": {"line": 51, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "ADDR", "loc": {"line": 51, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "0", "loc": {"line": 51, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Identifier", "name": "src_addr", "loc": {"line": 51, "column": 20, "file": "test.jz"}}
       ]},
       {"type": "Assign", "block_kind": "ALIAS", "loc": {"line": 52, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "DATA", "loc": {"line": 52, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "DATA", "loc": {"line": 52, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "0", "loc": {"line": 52, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Identifier", "name": "src_data", "loc": {"line": 52, "column": 20, "file": "test.jz"}}
       ]},
       {"type": "Assign", "block_kind": "RECEIVE", "loc": {"line": 55, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "VALID", "loc": {"line": 55, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "VALID", "loc": {"line": 55, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "1", "loc": {"line": 55, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Ternary", "loc": {"line": 55, "column": 26, "file": "test.jz"}, "children": [
@@ -76,31 +76,31 @@
         ]}
       ]},
       {"type": "Assign", "block_kind": "ALIAS", "loc": {"line": 56, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "ADDR", "loc": {"line": 56, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "ADDR", "loc": {"line": 56, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "1", "loc": {"line": 56, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Identifier", "name": "src_addr", "loc": {"line": 56, "column": 20, "file": "test.jz"}}
       ]},
       {"type": "Assign", "block_kind": "ALIAS", "loc": {"line": 57, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "DATA", "loc": {"line": 57, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "DATA", "loc": {"line": 57, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "1", "loc": {"line": 57, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Identifier", "name": "src_data", "loc": {"line": 57, "column": 20, "file": "test.jz"}}
       ]},
       {"type": "Assign", "block_kind": "RECEIVE", "loc": {"line": 60, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "VALID", "loc": {"line": 60, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "VALID", "loc": {"line": 60, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "2", "loc": {"line": 60, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Literal", "text": "1'b0", "loc": {"line": 60, "column": 21, "file": "test.jz"}}
       ]},
       {"type": "Assign", "block_kind": "ALIAS", "loc": {"line": 61, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "ADDR", "loc": {"line": 61, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "ADDR", "loc": {"line": 61, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "2", "loc": {"line": 61, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Identifier", "name": "src_addr", "loc": {"line": 61, "column": 20, "file": "test.jz"}}
       ]},
       {"type": "Assign", "block_kind": "ALIAS", "loc": {"line": 62, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "BusAccess", "name": "tgt", "text": "DATA", "loc": {"line": 62, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "IndexedMemberAccess", "name": "tgt", "text": "DATA", "loc": {"line": 62, "column": 5, "file": "test.jz"}, "children": [
           {"type": "Literal", "text": "2", "loc": {"line": 62, "column": 9, "file": "test.jz"}}
         ]},
         {"type": "Identifier", "name": "src_data", "loc": {"line": 62, "column": 20, "file": "test.jz"}}

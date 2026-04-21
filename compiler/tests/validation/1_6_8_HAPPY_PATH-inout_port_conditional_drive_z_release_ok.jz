@@ -1,0 +1,49 @@
+// §1.6.8 Req #2: Valid use case — conditional drive that releases the
+// INOUT port by assigning `z` when the write-enable is deasserted:
+//   inout_port <= wr_en ? data : 8'bzzzz_zzzz;
+// Happy-path test: only the expected WARN_INTERNAL_TRISTATE warning
+// appears.
+
+@project HAPPY_PATH_inout_port_conditional_drive_z_release_ok
+    @top TopMod {
+        IN    [1] clk        = _;
+        IN    [1] wr_en      = _;
+        IN    [8] data       = _;
+        INOUT [8] inout_port = _;
+    }
+@endproj
+
+// Trigger 1: conditional drive on INOUT port with z release via ternary
+@module Driver
+    PORT {
+        IN    [1] wr_en;
+        IN    [8] data;
+        INOUT [8] inout_port;
+    }
+    ASYNCHRONOUS {
+        inout_port <= wr_en ? data : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] wr_en;
+        IN    [8] data;
+        INOUT [8] inout_port;
+    }
+
+    REGISTER {
+        tick [1] = 1'b0;
+    }
+
+    @new inst Driver {
+        IN    [1] wr_en      = wr_en;
+        IN    [8] data       = data;
+        INOUT [8] inout_port = inout_port;
+    };
+
+    SYNCHRONOUS(CLK=clk) {
+        tick <= ~tick;
+    }
+@endmod

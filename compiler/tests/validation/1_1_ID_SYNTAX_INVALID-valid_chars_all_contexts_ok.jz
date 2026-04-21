@@ -1,0 +1,102 @@
+// ID_SYNTAX_INVALID: Happy-path test for valid character classes in all
+// declaration contexts. Identifiers use the full valid character set
+// (letters A-Z/a-z, digits 0-9, underscore _) without triggering PARSE000.
+// Covers all 10 contexts including module-name, config-name, latch-name,
+// mem-name, mux-name, and instance-name.
+
+@project ID_SYNTAX_INVALID_valid_chars_all_contexts_ok
+    // config-name context
+    CONFIG {
+        cfg_val_01 = 8;
+        _cfg2      = 4;
+    }
+
+    @top Top_01 {
+        IN  [1] clk  = _;
+        OUT [1] dout = _;
+    }
+@endproj
+
+// module-name context: mixed letters, digits, underscore
+@module Helper_01
+    PORT {
+        IN  [1] clk;
+        // port-name context
+        IN  [1] d_in_1;
+        OUT [1] q_out_2;
+    }
+
+    // const-name context
+    CONST {
+        K_val_3 = 7;
+    }
+
+    // wire-name context
+    WIRE {
+        w_sig_4 [1];
+        mux_a   [8];
+        mux_b   [8];
+    }
+
+    // register-name context
+    REGISTER {
+        r_cnt_5 [1] = 1'b0;
+    }
+
+    // latch-name context
+    LATCH {
+        l_dat_6 [1] D;
+    }
+
+    // mem-name context
+    MEM {
+        m_buf_7 [1] [4] = 1'b0 {
+            OUT rd_p ASYNC;
+            IN  wr_p;
+        };
+    }
+
+    // mux-name context
+    MUX {
+        x_sel_8 = mux_a, mux_b;
+    }
+
+    ASYNCHRONOUS {
+        w_sig_4  = d_in_1;
+        q_out_2  = r_cnt_5;
+        mux_a   <= 8'b00000000;
+        mux_b   <= 8'b11111111;
+        l_dat_6 <= d_in_1 : m_buf_7.rd_p[2'b00];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_cnt_5 <= ~r_cnt_5;
+        m_buf_7.wr_p[2'b00] <= d_in_1;
+    }
+@endmod
+
+@module Top_01
+    PORT {
+        IN  [1] clk;
+        OUT [1] dout;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    // instance-name context
+    @new i_hlp_9 Helper_01 {
+        IN  [1] clk    = clk;
+        IN  [1] d_in_1 = r;
+        OUT [1] q_out_2 = _;
+    };
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

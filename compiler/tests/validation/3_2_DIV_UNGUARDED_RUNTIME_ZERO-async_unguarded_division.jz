@@ -1,0 +1,38 @@
+// DIV_UNGUARDED_RUNTIME_ZERO: §3.2 — runtime divisor without a structural
+// nonzero guard, in the async-expr context. ASYNCHRONOUS IF would emit
+// ASYNC_ALIAS_IN_CONDITIONAL, so the unguarded division is written as a
+// straight alias assignment (no IF). The divisor is a runtime input,
+// which produces the warning.
+
+@project DIV_UNGUARDED_RUNTIME_ZERO_async_unguarded_division
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] num = _;
+        IN  [8] den = _;
+        OUT [8] out_div = _;
+        OUT [8] out_mod = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] num;
+        IN  [8] den;
+        OUT [8] out_div;
+        OUT [8] out_mod;
+    }
+
+    REGISTER { tick [1] = 1'b0; }
+
+    ASYNCHRONOUS {
+        // Trigger 1 (async-expr): unguarded division by runtime divisor
+        out_div = num / den;
+        // Trigger 2 (async-expr): unguarded modulus by runtime divisor
+        out_mod = num % den;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        tick <= tick;
+    }
+@endmod

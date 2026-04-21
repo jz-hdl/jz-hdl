@@ -13,6 +13,7 @@
  * literals consistent with the Observability Rule and literal semantics.
  */
 int sem_literal_has_x_bits(const char *lex);
+int sem_literal_has_z_bits(const char *lex);
 #include "rules.h"
 #include "driver_internal.h"
 
@@ -932,6 +933,20 @@ void sem_check_module_mem_and_mux_decls(const JZModuleScope *scope,
                                             init_expr->loc,
                                             "MEM_INIT_CONTAINS_X",
                                             "memory initialization literal must not contain x bits");
+                        }
+
+                        /* MEM_INIT_CONTAINS_Z: §1.6.7 forbids z bits in
+                         * memory initialization values. Structural masking
+                         * must eliminate all unknown bits before reaching
+                         * MEM init sinks.
+                         */
+                        if (init_expr->type == JZ_AST_EXPR_LITERAL &&
+                            init_expr->text &&
+                            sem_literal_has_z_bits(init_expr->text)) {
+                            sem_report_rule(diagnostics,
+                                            init_expr->loc,
+                                            "MEM_INIT_CONTAINS_Z",
+                                            "memory initialization literal must not contain z bits");
                         }
                     }
                 }

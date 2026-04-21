@@ -1,0 +1,63 @@
+// SYNC_HAPPY_PATH: Empty SYNCHRONOUS body is allowed; registers hold state.
+// Valid construct test: no diagnostics expected.
+
+@project SYNC_HAPPY_PATH_empty_body_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] rst = _;
+        OUT [8] dout = _;
+        OUT [8] dout_h = _;
+    }
+@endproj
+
+// Helper module: empty SYNCHRONOUS body with reset (registers hold state between resets)
+@module HelperHold
+    PORT {
+        IN  [1] clk;
+        IN  [1] rst;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h5A;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    // Valid: empty SYNCHRONOUS body — register r retains its current value each cycle.
+    SYNCHRONOUS(CLK=clk RESET=rst RESET_ACTIVE=High RESET_TYPE=Clocked) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] rst;
+        OUT [8] dout;
+        OUT [8] dout_h;
+    }
+
+    @new inst_hold HelperHold {
+        IN  [1] clk = clk;
+        IN  [1] rst = rst;
+        OUT [8] dout = dout_h;
+    };
+
+    REGISTER {
+        r_top [8] = 8'hA5;
+    }
+
+    ASYNCHRONOUS {
+        dout = r_top;
+    }
+
+    // Valid: empty SYNCHRONOUS body without reset — register r_top holds state indefinitely.
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod

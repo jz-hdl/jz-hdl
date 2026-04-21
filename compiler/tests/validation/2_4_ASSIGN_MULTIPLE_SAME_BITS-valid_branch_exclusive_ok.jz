@@ -1,0 +1,73 @@
+// ASSIGN_MULTIPLE_SAME_BITS / SYNC_MULTI_ASSIGN_SAME_REG_BITS: Happy-path -
+// GND/VCC participate in the Exclusive Assignment Rule like any other driver.
+// Demonstrates that GND and VCC may drive the same signal only on mutually
+// exclusive execution paths (IF/ELSE branches), not multiple times on the
+// same path. Covers async-expr and sync-expr contexts.
+
+@project ASSIGN_MULTIPLE_SAME_BITS_valid_branch_exclusive_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+// Helper: GND/VCC drive same target on exclusive IF/ELSE paths (async + sync)
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+    REGISTER {
+        r [8] = GND;
+    }
+    ASYNCHRONOUS {
+        // Valid: GND/VCC on mutually exclusive branches (not double-assigned)
+        IF (sel) {
+            out_a <= VCC;
+        } ELSE {
+            out_a <= GND;
+        }
+        out_b <= r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: GND/VCC on mutually exclusive branches in SYNCHRONOUS block
+        IF (sel) {
+            r <= VCC;
+        } ELSE {
+            r <= GND;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+    WIRE {
+        ha_out_a [8];
+        ha_out_b [8];
+    }
+    REGISTER {
+        sel [1] = VCC;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [1] sel = sel;
+        OUT [8] out_a = ha_out_a;
+        OUT [8] out_b = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        sel <= ~sel;
+    }
+@endmod

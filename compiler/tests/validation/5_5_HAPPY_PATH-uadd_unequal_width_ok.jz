@@ -1,0 +1,45 @@
+// HAPPY_PATH: uadd permits operands of differing widths (§5.5.1).
+// max_bits = MAX(width(a), width(b)); result_width = max_bits + 1.
+// Both operands are zero-extended to max_bits + 1 before addition.
+// No diagnostics expected.
+
+@project HAPPY_PATH_uadd_unequal_width_ok
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [4]  narrow = _;
+        IN  [8]  mid = _;
+        IN  [16] wide = _;
+        OUT [9]  out_4_8 = _;
+        OUT [17] out_8_16 = _;
+        OUT [17] out_16_4 = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [4]  narrow;
+        IN  [8]  mid;
+        IN  [16] wide;
+        OUT [9]  out_4_8;
+        OUT [17] out_8_16;
+        OUT [17] out_16_4;
+    }
+
+    REGISTER {
+        r_8_16 [17] = 17'd0;
+    }
+
+    ASYNCHRONOUS {
+        // 4 + 8 -> max_bits = 8 -> result is 9 bits
+        out_4_8  = uadd(narrow, mid);
+        // 16 + 4 -> max_bits = 16 -> result is 17 bits (operand order reversed)
+        out_16_4 = uadd(wide, narrow);
+        out_8_16 = r_8_16;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // 8 + 16 -> max_bits = 16 -> result is 17 bits
+        r_8_16 <= uadd(mid, wide);
+    }
+@endmod

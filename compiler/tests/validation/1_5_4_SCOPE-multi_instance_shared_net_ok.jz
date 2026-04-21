@@ -1,0 +1,71 @@
+// §1.5.4 SCOPE (Req #2): Two module instances each drive the same
+// physical net through their own INOUT port declarations. Each
+// instance's port is a separate identifier, so the §1.5 Exclusive
+// Assignment Rule does NOT fire. Each instance's block is checked
+// independently, and multi-driver legality is handled by §1.6
+// tri-state analysis (here satisfied via complementary ternary guards
+// on a shared `sel` signal so the compiler can structurally prove
+// mutual exclusion).
+
+@project SCOPE_multi_instance_shared_net_ok
+    @top TopMod {
+        IN  [1] sel      = _;
+        IN  [8] data_a   = _;
+        IN  [8] data_b   = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+// DriverA drives bus when sel==1, releases with z otherwise.
+@module DriverA
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b1) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// DriverB drives bus when sel==0, releases with z otherwise.
+@module DriverB
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b0) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        // Shared net connected to both instances via their INOUT ports.
+        shared_bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [1] sel = sel;
+        IN    [8] din = data_a;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [1] sel = sel;
+        IN    [8] din = data_b;
+        INOUT [8] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        observed <= shared_bus;
+    }
+@endmod

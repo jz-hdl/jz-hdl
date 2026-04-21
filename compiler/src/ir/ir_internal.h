@@ -30,6 +30,8 @@ typedef struct IR_BusSignalMapping {
     int         array_index;    /**< Array index for arrayed ports, -1 otherwise */
     int         ir_signal_id;   /**< Expanded IR signal's ID */
     int         width;          /**< Signal width in bits */
+    int         parent_msb;     /**< Parent slice MSB for instance-port mappings, -1 for full */
+    int         parent_lsb;     /**< Parent slice LSB for instance-port mappings, -1 for full */
 } IR_BusSignalMapping;
 
 /**

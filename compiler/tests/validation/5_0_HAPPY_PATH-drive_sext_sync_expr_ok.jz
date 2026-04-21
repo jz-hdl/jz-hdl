@@ -1,0 +1,35 @@
+// HAPPY_PATH: Verify `=>s` drive with sign-extend in the sync-expr context.
+// §5.2 permits directional extension operators (`=>s`, `<=s`) in SYNC blocks.
+
+@project HAPPY_PATH_drive_sext_sync_expr_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] narrow = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] narrow;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid (sync-expr): `=>s` drive with sign-extend (4 -> 8).
+        narrow =>s r;
+    }
+@endmod

@@ -1,0 +1,125 @@
+// HAPPY_PATH: Modifier operators on BUS signals — `=z`, `=s`, `<=z`, `<=s`,
+// `=>z`, `=>s` — extend the narrower side (zero or sign) when widths differ.
+// Covers Req #30 (modifiers extend narrower side to match wider).
+
+@project HAPPY_PATH_bus_modifier_width_extend_ok
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din4 = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+    }
+@endproj
+
+// Receive operators with width extension
+@module RecvExtMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // `<=z`: 4-bit RHS zero-extended to 8-bit writable BUS signal
+        sbus.tx <=z din4;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // `<=s` in SYNC: 4-bit RHS sign-extended to 8-bit register
+        r <=s sbus.rx[3:0];
+    }
+@endmod
+
+// Drive operators with width extension
+@module DriveExtMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // `=>z`: 4-bit LHS zero-extended to drive 8-bit writable BUS signal
+        din4 =>z sbus.tx;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sbus.rx;
+    }
+@endmod
+
+// Drive with sign-extension
+@module DriveSignMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // `=>s`: 4-bit LHS sign-extended to drive 8-bit writable BUS signal
+        din4 =>s sbus.tx;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sbus.rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+    }
+
+    @new inst_r RecvExtMod {
+        IN  [1] clk = clk;
+        IN  [4] din4 = din4;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_a;
+    };
+
+    @new inst_d DriveExtMod {
+        IN  [1] clk = clk;
+        IN  [4] din4 = din4;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_b;
+    };
+
+    @new inst_s DriveSignMod {
+        IN  [1] clk = clk;
+        IN  [4] din4 = din4;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_c;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

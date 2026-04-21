@@ -1,0 +1,30 @@
+// ID_SYNTAX_INVALID: Character-class violation in mux-name context.
+// Hyphen in a MUX name; the lexer splits it into separate tokens,
+// causing a PARSE000 parser error.
+
+@project ID_SYNTAX_INVALID_invalid_chars_mux
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    // Trigger: hyphen in mux-name
+    MUX {
+        my-mux = a, b;
+    }
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

@@ -1,0 +1,34 @@
+// COMMENT_IN_TOKEN: Comment inside identifier/token within @check expression.
+// Valid @check expressions included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_check_expr
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    // Valid: comment between tokens in @check
+    @check (CONFIG.WIDTH /* ok */ == 8, "width ok");
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    CONST {
+        WIDTH = 8;
+    }
+
+    // Trigger: comment splits identifier inside @check expression
+    @check (WID/**/TH == 8, "width");
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

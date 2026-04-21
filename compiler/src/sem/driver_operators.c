@@ -456,6 +456,24 @@ static void infer_qualified_identifier_type(JZASTNode *node,
                 return;
             }
         }
+
+        JZInstancePortAccessInfo inst_info;
+        if (sem_resolve_instance_port_access(node, mod_scope, project_symbols,
+                                             &inst_info, NULL)) {
+            const JZASTNode *width_source = inst_info.binding_decl
+                ? inst_info.binding_decl
+                : inst_info.child_port_decl;
+            if (width_source && width_source->width) {
+                unsigned w = 0;
+                if (sem_eval_width_expr(width_source->width,
+                                        mod_scope,
+                                        project_symbols,
+                                        &w) == 0) {
+                    jz_type_scalar(w, 0, out);
+                }
+            }
+            return;
+        }
     }
 
     const char *full = node->name;
@@ -582,6 +600,33 @@ static void infer_bus_access_type(JZASTNode *node,
     }
 }
 
+static void infer_instance_port_access_type(JZASTNode *node,
+                                            const JZModuleScope *mod_scope,
+                                            const JZBuffer *project_symbols,
+                                            JZBitvecType *out)
+{
+    if (!out) return;
+    out->width = 0;
+    out->is_signed = 0;
+    if (!node || !mod_scope || !project_symbols) return;
+
+    JZInstancePortAccessInfo info;
+    if (!sem_resolve_instance_port_access(node, mod_scope, project_symbols, &info, NULL)) {
+        return;
+    }
+
+    const JZASTNode *width_source = info.binding_decl ? info.binding_decl : info.child_port_decl;
+    if (!width_source || !width_source->width) return;
+
+    unsigned w = 0;
+    if (sem_eval_width_expr(width_source->width,
+                            mod_scope,
+                            project_symbols,
+                            &w) == 0) {
+        jz_type_scalar(w, 0, out);
+    }
+}
+
 void infer_expr_type(JZASTNode *expr,
                      const JZModuleScope *mod_scope,
                      const JZBuffer *project_symbols,
@@ -617,6 +662,10 @@ void infer_expr_type(JZASTNode *expr,
 
     case JZ_AST_EXPR_BUS_ACCESS:
         infer_bus_access_type(expr, mod_scope, project_symbols, out);
+        return;
+
+    case JZ_AST_EXPR_INSTANCE_PORT_ACCESS:
+        infer_instance_port_access_type(expr, mod_scope, project_symbols, out);
         return;
 
     case JZ_AST_EXPR_UNARY: {

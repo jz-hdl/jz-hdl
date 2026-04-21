@@ -1,0 +1,62 @@
+// LIT_UNDERSCORE_AT_EDGES: literal with underscore as first or last character
+// of value, across new-binding, check-expr, and feature-cond contexts.
+
+@project LIT_UNDERSCORE_AT_EDGES_new_binding_check_feature
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger 1 (check-expr): leading underscore in hex literal inside @check
+    @check (VAL == 8'h_FF, "underscore at edge in check");
+
+    // Trigger 2 (feature-cond): trailing underscore in decimal literal inside @feature
+    @feature VAL == 8'd255_
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // Trigger 3 (new-binding): leading underscore in binary literal in @new binding
+    @new inst_a HelperA {
+        IN  [8] din = 8'b_0000_0001;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

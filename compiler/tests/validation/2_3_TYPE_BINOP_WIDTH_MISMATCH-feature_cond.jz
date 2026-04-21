@@ -1,0 +1,44 @@
+// TYPE_BINOP_WIDTH_MISMATCH: Binary operator with mismatched operand widths
+// in the feature-cond context (@feature condition expression).
+// The check-expr and new-binding contexts are not applicable for this rule
+// (see audit/runner.log).
+
+@project TYPE_BINOP_WIDTH_MISMATCH_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): equality with mismatched widths (8 vs 4)
+    @feature 8'd1 == 4'd1
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): bitwise AND with mismatched widths (4 vs 2)
+    @feature (4'b1010 & 2'b11) == 4'd2
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

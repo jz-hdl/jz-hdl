@@ -1,0 +1,55 @@
+// HAPPY_PATH: gbit() behavioral requirements from §5.5.6.
+// Exercises:
+//   Req #6  - index narrower than clog2(W) is implicitly zero-extended.
+//   Req #9  - index that may be out of range at runtime compiles cleanly
+//             (returns 0 at runtime).
+//   Req #10 - gbit acts as a W-to-1 mux selecting source[index].
+//   Req #11 - gbit is purely combinational (no implicit storage); usable
+//             directly in ASYNCHRONOUS RHS without any register.
+
+@project HAPPY_PATH_gbit_semantics_ok
+    @top TopMod {
+        IN  [1] clk     = _;
+        IN  [8] src8    = _;
+        IN  [2] narrow  = _;
+        IN  [5] wide    = _;
+        OUT [1] out_narrow = _;
+        OUT [1] out_wide   = _;
+        OUT [1] out_combo  = _;
+        OUT [1] out_mux    = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src8;
+        IN  [2] narrow;
+        IN  [5] wide;
+        OUT [1] out_narrow;
+        OUT [1] out_wide;
+        OUT [1] out_combo;
+        OUT [1] out_mux;
+    }
+
+    REGISTER {
+        r_narrow [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Req #6: 2-bit index < clog2(8)=3, implicit zero-extend allowed.
+        out_narrow = gbit(src8, narrow);
+        // Req #9: 5-bit index > clog2(8)=3, high bits may encode values >= 8
+        //         at runtime; allowed, out-of-range yields 0 at runtime.
+        out_wide   = gbit(src8, wide);
+        // Req #10/#11: gbit used as a combinational W-to-1 mux directly in
+        //              ASYNCHRONOUS RHS with no register storage.
+        out_mux    = gbit(src8, wide[2:0]);
+        out_combo  = r_narrow;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Req #6: narrower index feeding a register path.
+        r_narrow <= gbit(src8, narrow);
+    }
+@endmod

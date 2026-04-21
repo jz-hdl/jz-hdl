@@ -1,0 +1,49 @@
+// MUX §4.6 Req #36 happy-path:
+// "Out-of-range indices follow the same rules as the aggregation form:"
+// Happy-path verifying that the auto-slicing form accepts all valid indices
+// 0..K-1, matching the aggregation-form in-range semantics.
+// No diagnostics expected.
+
+@project MUX_HAPPY_PATH_slice_in_range_index_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [16] wide = _;
+        IN  [1] sel = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [16] wide;
+        IN  [1] sel;
+        OUT [8] data;
+    }
+
+    // 16-bit source sliced into two 8-bit elements (K = 2). Valid indices 0..1.
+    MUX {
+        slice_mux [8] = wide;
+    }
+
+    REGISTER {
+        r0 [8] = 8'h00;
+        r1 [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: dynamic selector staying within 0..K-1 is always valid.
+        data = slice_mux[sel] | r0 | r1;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: constant index 0 (minimum valid).
+        r0 <= slice_mux[0];
+        // Trigger: constant index K-1 = 1 (maximum valid).
+        r1 <= slice_mux[1];
+    }
+@endmod

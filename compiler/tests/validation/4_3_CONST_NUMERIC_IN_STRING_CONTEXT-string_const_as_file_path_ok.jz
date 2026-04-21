@@ -1,0 +1,43 @@
+// CONST_NUMERIC_IN_STRING_CONTEXT happy path: a string CONST is a valid
+// argument to @file(). This is the canonical valid usage — the diagnostic
+// must NOT fire for a string CONST used as the @file path. No diagnostics
+// expected.
+
+@project CONST_NUMERIC_IN_STRING_CONTEXT_string_const_as_file_path_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        DEPTH = 4;
+        // Valid: string CONST used below as @file path
+        ROM_FILE = "mem_exact_4bytes.bin";
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Valid: string CONST used as @file() path argument (string context)
+    MEM {
+        rom [8] [DEPTH] = @file(ROM_FILE) {
+            OUT rd ASYNC;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= rom.rd[2'b00];
+    }
+@endmod

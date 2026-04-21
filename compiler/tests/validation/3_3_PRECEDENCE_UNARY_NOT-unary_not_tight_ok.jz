@@ -1,0 +1,47 @@
+// PRECEDENCE: §3.3 Req #3 — Unary NOT (`~` bitwise, `!` logical) binds
+// tighter than any binary operator. `~a | b` parses as `(~a) | b`,
+// not `~(a | b)`. `!p && q` parses as `(!p) && q`.
+// No diagnostics expected.
+
+@project PRECEDENCE_unary_not_tight_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [1] p = _;
+        IN  [1] q = _;
+        OUT [8] out_bit = _;
+        OUT [1] out_log = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [1] p;
+        IN  [1] q;
+        OUT [8] out_bit;
+        OUT [1] out_log;
+    }
+    REGISTER {
+        r_bit [8] = 8'h00;
+        r_log [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // ~a binds before | b : (~a) | b
+        out_bit = ~a | b | r_bit;
+        // !p binds before && q : (!p) && q
+        out_log = !p && q | r_log;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // ~ binds before binary ops in sync-expr
+        r_bit <= ~a & b;
+        // ! binds before || in sync-expr
+        r_log <= !p || q;
+    }
+@endmod

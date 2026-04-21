@@ -1,0 +1,56 @@
+// HAPPY_PATH: §5.5.4 smul(a, b) sign-extends operands by replicating the
+// MSB to fill max_bits before multiplication. Exercise constructs where
+// MSB replication is semantically required: narrow operands (including
+// 1-bit, whose only bit is the MSB) combined with wider operands.
+// Exercises Req #10 (MSB replication during sign-extension) and Req #8
+// (narrower operand sign-extended before multiplication). No diagnostics
+// expected.
+
+@project SMUL_MSB_REPLICATION_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1]  clk      = _;
+        IN  [1]  sign_bit = _;
+        IN  [8]  wide     = _;
+        IN  [2]  narrow2  = _;
+        IN  [6]  mid6     = _;
+        OUT [16] prod_1_8 = _;
+        OUT [12] prod_2_6 = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [1]  sign_bit;
+        IN  [8]  wide;
+        IN  [2]  narrow2;
+        IN  [6]  mid6;
+        OUT [16] prod_1_8;
+        OUT [12] prod_2_6;
+    }
+
+    REGISTER {
+        r1 [16] = 16'd0;
+        r2 [12] = 12'd0;
+    }
+
+    ASYNCHRONOUS {
+        prod_1_8 = r1;
+        prod_2_6 = r2;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // 1-bit operand: its only bit IS the MSB and must be replicated
+        // across the max_bits = 8 extended width before multiplication;
+        // result width = 2 * 8 = 16.
+        r1 <= smul(sign_bit, wide);
+        // 2-bit operand: MSB (bit 1) is replicated to fill the max_bits
+        // = 6 extended width alongside the 6-bit operand; result width
+        // = 2 * 6 = 12.
+        r2 <= smul(narrow2, mid6);
+    }
+@endmod

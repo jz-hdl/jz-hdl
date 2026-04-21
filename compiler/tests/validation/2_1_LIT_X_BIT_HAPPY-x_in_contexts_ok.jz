@@ -1,0 +1,66 @@
+// Req #12 happy path: `x` bit (intentionally unconstrained) exercised in
+// sync-expr (CASE pattern), check-expr, and feature-cond contexts without
+// triggering any diagnostic. (new-binding inapplicable: binding x bits to
+// a module IN port is itself an observable-sink violation per §1.2.)
+
+@project LIT_X_BIT_HAPPY_contexts
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger (check-expr): x literal in @check expression (compile-time)
+    @check (VAL == 8'bx || 1 == 1, "x literal in check compile-time");
+
+    // Trigger (feature-cond): x literal in @feature condition (compile-time)
+    @feature VAL == 8'bx || VAL == 8
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE {
+        w_xdep [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // x-dependent net stays internal
+        w_xdep <= 8'b0000_xxxx;
+        data <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger (sync-expr): x bits in CASE patterns.
+        // 8'b0000_xxxx: explicit MSB is 0 (no x-extension).
+        // 8'bx        : intrinsic 1 bit, MSB is x — extends to 8'bxxxx_xxxx
+        //               (exercises MSB-x extension rule Req #16).
+        SELECT (w_xdep) {
+            CASE 8'b0000_xxxx {
+                r <= din;
+            }
+            CASE 8'bx {
+                r <= din;
+            }
+            DEFAULT {
+                r <= 8'h00;
+            }
+        }
+    }
+@endmod

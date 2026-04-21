@@ -1,0 +1,102 @@
+// HAPPY_PATH: Drive operators on BUS signals — `=>`, `=>z`, `=>s` — LHS drives
+// RHS. Covers Req #28 (drive operators).
+
+@project HAPPY_PATH_bus_drive_operators_ok
+    BUS WIDE_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    BUS NARROW_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        IN  [4] din4 = _;
+        OUT [8] dout_a = _;
+    }
+@endproj
+
+@module DriveMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        IN  [4] din4;
+        BUS WIDE_BUS   SOURCE wsrc;
+        BUS NARROW_BUS SOURCE nsrc;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Drive `=>`: LHS drives RHS, equal widths.
+        din => wsrc.tx;
+        // Drive `=>z`: narrower LHS (4-bit din4) zero-extended to drive 8-bit
+        // writable nsrc.tx.
+        din4 =>z nsrc.tx;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= wsrc.rx;
+    }
+@endmod
+
+// Second module demonstrating drive with sign-extension.
+@module DriveSignMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din4;
+        BUS WIDE_BUS SOURCE wsrc;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Drive `=>s`: 4-bit LHS drives 8-bit writable wsrc.tx with sign-
+        // extension applied to the narrower (LHS) side.
+        din4 =>s wsrc.tx;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= wsrc.rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        IN  [4] din4;
+        OUT [8] dout_a;
+    }
+
+    @new inst_d DriveMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        IN  [4] din4 = din4;
+        BUS WIDE_BUS   SOURCE wsrc = _;
+        BUS NARROW_BUS SOURCE nsrc = _;
+        OUT [8] data_out = dout_a;
+    };
+
+    @new inst_s DriveSignMod {
+        IN  [1] clk = clk;
+        IN  [4] din4 = din4;
+        BUS WIDE_BUS SOURCE wsrc = _;
+        OUT [8] data_out = _;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

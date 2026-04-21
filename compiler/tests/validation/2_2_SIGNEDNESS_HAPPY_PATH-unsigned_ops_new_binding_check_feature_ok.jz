@@ -1,0 +1,117 @@
+// SIGNEDNESS_HAPPY_PATH: Arithmetic (+, -, *, /, %) and comparison (<, >,
+// <=, >=) operators operate on unsigned bit-vectors (§2.2). This test
+// exercises each operator in new-binding, check-expr, and feature-cond.
+// No diagnostics expected.
+
+@project SIGNEDNESS_HAPPY_PATH_unsigned_ops_new_binding_check_feature
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+@module HelperOps
+    PORT {
+        IN  [8] din0;
+        IN  [8] din1;
+        IN  [1] cmp;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = cmp ? din0 : din1;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] result;
+    }
+
+    CONST {
+        P = 20;
+        Q = 6;
+    }
+
+    // check-expr: each arithmetic and comparison operator as unsigned
+    @check (P + Q == 26, "unsigned + in check");
+    @check (P - Q == 14, "unsigned - in check");
+    @check (P * Q == 120, "unsigned * in check");
+    @check (P / Q == 3, "unsigned / in check");
+    @check (P % Q == 2, "unsigned % in check");
+    @check (P < 100, "unsigned < in check");
+    @check (Q > 0, "unsigned > in check");
+    @check (P <= 20, "unsigned <= in check");
+    @check (Q >= 6, "unsigned >= in check");
+
+    // feature-cond: arithmetic and comparison operators as unsigned
+    @feature P - Q == 14
+        CONST { F_SUB = 1; }
+    @else
+        CONST { F_SUB = 0; }
+    @endfeat
+
+    @feature P * Q > 100
+        CONST { F_MUL = 1; }
+    @else
+        CONST { F_MUL = 0; }
+    @endfeat
+
+    @feature P / Q >= 3
+        CONST { F_DIV = 1; }
+    @else
+        CONST { F_DIV = 0; }
+    @endfeat
+
+    @feature P % Q <= 5
+        CONST { F_MOD = 1; }
+    @else
+        CONST { F_MOD = 0; }
+    @endfeat
+
+    WIRE {
+        add_w   [8];
+        sub_w   [8];
+        mul_w   [16];
+        lt_w    [1];
+        gt_w    [1];
+        le_w    [1];
+        ge_w    [1];
+        ops_out [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // new-binding: signals holding unsigned arithmetic and comparison results
+    @new inst_ops HelperOps {
+        IN  [8] din0 = add_w;
+        IN  [8] din1 = sub_w;
+        IN  [1] cmp  = lt_w;
+        OUT [8] dout = ops_out;
+    };
+
+    ASYNCHRONOUS {
+        // Unsigned arithmetic and comparison operators feeding new-binding signals
+        add_w = a + b;
+        sub_w = a - b;
+        mul_w = a * b;
+        lt_w  = (a < b);
+        gt_w  = (a > b);
+        le_w  = (a <= b);
+        ge_w  = (a >= b);
+        result = ops_out ^ mul_w[7:0] ^ r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

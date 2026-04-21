@@ -1,0 +1,108 @@
+// §1.6.5 Tri-State Ports (Req #2): INOUT ports may assign `z` to release the
+// port, and may be read when released. Exercises both aspects:
+//   (a) Conditional z drive on INOUT via ternary and IF/ELSE (release).
+//   (b) Reading the INOUT into a register on the path that releases the port
+//       (read when released), matching §1.6.8's valid example
+//       `IF (!wr_en) { register <= inout_port; }`.
+// This is a happy-path test: only the expected WARN_INTERNAL_TRISTATE
+// warnings appear.
+
+@project TRISTATE_PORTS_inout_port_z_release_and_read_ok
+    @top TopMod {
+        IN    [1] clk    = _;
+        IN    [1] wr_en  = _;
+        IN    [8] din    = _;
+        INOUT [8] bus_t  = _;
+        INOUT [8] bus_if = _;
+        OUT   [8] rdata  = _;
+    }
+@endproj
+
+// Trigger 1: INOUT release via ternary AND read when released.
+// The register path `captured <= bus` is gated on `!wr_en`, i.e.
+// only when this module has released its INOUT driver to z.
+@module BiDirTern
+    PORT {
+        IN    [1] clk;
+        IN    [1] wr_en;
+        IN    [8] din;
+        INOUT [8] bus;
+        OUT   [8] rdata;
+    }
+
+    REGISTER {
+        captured [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Release when !wr_en; drive `din` otherwise.
+        bus <= wr_en ? din : 8'bzzzz_zzzz;
+        rdata = captured;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (!wr_en) {
+            // Read INOUT on the path that releases it.
+            captured <= bus;
+        } ELSE {
+            captured <= captured;
+        }
+    }
+@endmod
+
+// Trigger 2: INOUT release via IF/ELSE with a 1-bit z literal extended
+// to the port width. Also reads the INOUT when released.
+@module BiDirIf
+    PORT {
+        IN    [1] clk;
+        IN    [1] wr_en;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    REGISTER {
+        sampled [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        IF (wr_en) {
+            bus <= din;
+        } ELSE {
+            bus <= 8'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (!wr_en) {
+            sampled <= bus;
+        } ELSE {
+            sampled <= sampled;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] wr_en;
+        IN    [8] din;
+        INOUT [8] bus_t;
+        INOUT [8] bus_if;
+        OUT   [8] rdata;
+    }
+
+    @new inst_t BiDirTern {
+        IN    [1] clk   = clk;
+        IN    [1] wr_en = wr_en;
+        IN    [8] din   = din;
+        INOUT [8] bus   = bus_t;
+        OUT   [8] rdata = rdata;
+    };
+
+    @new inst_if BiDirIf {
+        IN    [1] clk   = clk;
+        IN    [1] wr_en = wr_en;
+        IN    [8] din   = din;
+        INOUT [8] bus   = bus_if;
+    };
+@endmod

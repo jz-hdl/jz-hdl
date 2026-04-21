@@ -1,0 +1,58 @@
+// PRECEDENCE: §3.3 Req #5 — Multiplicative ops `*`, `/`, `%` bind tighter
+// than additive ops. `a + b * c` parses as `a + (b * c)`, and
+// `a - b / c` parses as `a - (b / c)` (division guarded against 0).
+// No diagnostics expected.
+
+@project PRECEDENCE_mul_div_mod_tight_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        OUT [8] out_mul = _;
+        OUT [8] out_div = _;
+        OUT [8] out_mod = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        OUT [8] out_mul;
+        OUT [8] out_div;
+        OUT [8] out_mod;
+    }
+    REGISTER {
+        r_mul [8] = 8'd0;
+        r_div [8] = 8'd0;
+        r_mod [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        // `*` binds tighter than `+` : (b * c) computed first then added to a
+        out_mul = (a + (b * c)[7:0])[7:0] | r_mul;
+        // Division output from guarded sync divide
+        out_div = r_div;
+        // Modulus output from guarded sync divide
+        out_mod = r_mod;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Guard division by c != 0
+        IF (c != 8'd0) {
+            // `/` binds tighter than `-` : a - (b / c)
+            r_div <= a - (b / c);
+            // `%` binds tighter than `+` : a + (b % c)
+            r_mod <= a + (b % c);
+        } ELSE {
+            r_div <= 8'd0;
+            r_mod <= 8'd0;
+        }
+        // `*` binds tighter than `-` : a - (b * c)
+        r_mul <= a - (b * c)[7:0];
+    }
+@endmod

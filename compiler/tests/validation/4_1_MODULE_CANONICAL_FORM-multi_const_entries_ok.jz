@@ -1,0 +1,59 @@
+// MODULE_CANONICAL_FORM: Happy path for §4.1 Req #4 — multiple CONST entries.
+// The canonical form allows "..." inside the CONST block, meaning a module
+// may declare multiple CONST identifiers. This test exercises that.
+
+@project MODULE_CANONICAL_FORM_multi_const_entries_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Module with multiple CONST entries (exercises the "..." ellipsis in CONST)
+@module MultiConst
+    CONST {
+        A = 1;
+        B = 2;
+        C = 4;
+        D = 16;
+    }
+
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    @new inst_mc MultiConst {
+        IN  [1] din = din;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

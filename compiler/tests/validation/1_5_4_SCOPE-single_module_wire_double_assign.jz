@@ -1,0 +1,38 @@
+// §1.5.4 SCOPE (Req #1): The Exclusive Assignment Rule operates on
+// identifiers within a single module's block. Two assignments to the
+// same WIRE in the same module's ASYNCHRONOUS block fire
+// ASSIGN_MULTIPLE_SAME_BITS. PORT and WIRE cases are both exercised
+// to demonstrate the rule applies to any declared identifier in scope.
+
+@project SCOPE_single_module_wire_double_assign
+    @top TopMod {
+        IN  [1] a   = _;
+        IN  [1] b   = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        w [1];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: WIRE assigned twice within the same block (same scope).
+        w     = a;
+        w     = b;
+        // Trigger 2: PORT assigned twice within the same block (same scope).
+        out_a = a;
+        out_a = b;
+        // Valid assignment to a different identifier (no false positive).
+        out_b = a;
+    }
+@endmod

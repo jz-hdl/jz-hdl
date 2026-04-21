@@ -1,0 +1,60 @@
+// LIT_UNSIZED: happy path — every literal has an explicit width prefix,
+// so LIT_UNSIZED never fires. Exercises sized literals in async-expr,
+// sync-expr, new-binding, check-expr, and feature-cond contexts.
+
+@project LIT_UNSIZED_sized_literals
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    @check (VAL == 8'd8, "sized literal in check");
+
+    @feature VAL == 8'h08
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    @new inst_a HelperA {
+        IN  [8] din = 8'hA5;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data <= r ^ ha_out ^ 8'hFF;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

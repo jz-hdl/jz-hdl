@@ -670,11 +670,14 @@ static void substitute_in_node(JZASTNode *node,
                                            scratch_names, scratch_count,
                                            scratch_suffixes);
                     }
-                } else if (arg->type == JZ_AST_EXPR_BUS_ACCESS && arg->name) {
-                    /* Case 3: arg is already a BUS_ACCESS (e.g., "src[0]")
-                     * -> transform to BUS_ACCESS(name=arg.name, text=suffix,
+                } else if ((arg->type == JZ_AST_EXPR_BUS_ACCESS ||
+                            arg->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS ||
+                            arg->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) &&
+                           arg->name) {
+                    /* Case 3: arg is already an indexed member access (e.g., "src[0]")
+                     * -> transform to the same access kind with text=suffix,
                      *    children=[cloned arg children]) */
-                    node->type = JZ_AST_EXPR_BUS_ACCESS;
+                    node->type = arg->type;
                     jz_ast_set_name(node, arg->name);
                     jz_ast_set_text(node, suffix);
                     /* Clear existing children */
@@ -707,7 +710,10 @@ static void substitute_in_node(JZASTNode *node,
     }
 
     /* For bus access, check if the base name matches a param */
-    if (node->type == JZ_AST_EXPR_BUS_ACCESS && node->name) {
+    if ((node->type == JZ_AST_EXPR_BUS_ACCESS ||
+         node->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS ||
+         node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) &&
+        node->name) {
         for (size_t i = 0; i < param_count; i++) {
             if (strcmp(node->name, param_names[i]) == 0 && arg_exprs[i]->name) {
                 jz_ast_set_name(node, arg_exprs[i]->name);
@@ -720,7 +726,9 @@ static void substitute_in_node(JZASTNode *node,
      * scratch wire names in them (e.g., lvalue identifiers used in assignments) */
     if (node->name && node->type != JZ_AST_EXPR_IDENTIFIER &&
         node->type != JZ_AST_EXPR_QUALIFIED_IDENTIFIER &&
-        node->type != JZ_AST_EXPR_BUS_ACCESS) {
+        node->type != JZ_AST_EXPR_BUS_ACCESS &&
+        node->type != JZ_AST_EXPR_INDEXED_MEMBER_ACCESS &&
+        node->type != JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
         for (size_t i = 0; i < scratch_count; i++) {
             if (strcmp(node->name, scratch_names[i]) == 0) {
                 char mangled[512];
@@ -969,7 +977,10 @@ static void validate_template_body_refs(ExpandContext *ctx,
     }
 
     /* Check bus access base names (e.g., `some_signal.FIELD`) */
-    if (node->type == JZ_AST_EXPR_BUS_ACCESS && node->name) {
+    if ((node->type == JZ_AST_EXPR_BUS_ACCESS ||
+         node->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS ||
+         node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) &&
+        node->name) {
         if (!is_allowed_template_ident(ctx, node->name, param_names,
                                         param_count, scratch_names,
                                         scratch_count, has_idx)) {

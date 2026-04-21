@@ -1,0 +1,87 @@
+// SIGNEDNESS_HAPPY_PATH: All signals, literals, and operators are unsigned by
+// default (§2.2). This test exercises unsigned operators in new-binding,
+// check-expr, and feature-cond contexts. No diagnostics expected.
+
+@project SIGNEDNESS_HAPPY_PATH_unsigned_new_binding_check_feature
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] result;
+    }
+
+    CONST {
+        X = 8;
+        Y = 3;
+    }
+
+    // check-expr: unsigned arithmetic and comparison operators on CONSTs
+    @check (X + Y == 11, "unsigned add in check");
+    @check (X - Y == 5, "unsigned sub in check");
+    @check (X * Y == 24, "unsigned mul in check");
+    @check (X / Y == 2, "unsigned div in check");
+    @check (X % Y == 2, "unsigned mod in check");
+    @check (X > Y, "unsigned gt in check");
+    @check (Y < X, "unsigned lt in check");
+    @check (X >= Y, "unsigned ge in check");
+    @check (Y <= X, "unsigned le in check");
+
+    // feature-cond: unsigned arithmetic/comparison operators in feature condition
+    @feature X + Y == 11
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    @feature X > Y
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+        sum [8];
+    }
+
+    // new-binding: unsigned bit-width literal and signal binding (unsigned by default)
+    @new inst_a HelperA {
+        IN  [8] din = sum;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // unsigned add result passed into the instance via a wire
+        sum = a + b;
+        result = ha_out | r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

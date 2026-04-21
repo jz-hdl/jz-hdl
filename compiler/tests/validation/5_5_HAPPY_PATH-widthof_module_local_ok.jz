@@ -1,0 +1,40 @@
+// HAPPY_PATH (Req #27): prefer widthof() for module-local, statically-known
+// widths so a single PORT declaration drives all derived width expressions
+// without duplicating numeric literals.
+
+@project HAPPY_PATH_widthof_module_local_ok
+    @top TopMod {
+        IN  [1]  clk  = _;
+        IN  [24] din  = _;
+        OUT [24] dout = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        // Single source of truth for this module's working width.
+        W = widthof(din);
+    }
+    PORT {
+        IN  [1]  clk;
+        IN  [24] din;
+        OUT [24] dout;
+    }
+    WIRE {
+        // Derived from widthof(din) via W — no duplicated literal.
+        stage_a [W];
+        stage_b [W];
+    }
+    REGISTER {
+        // Same — W is the single numeric declaration.
+        r [W] = W'd0;
+    }
+    ASYNCHRONOUS {
+        stage_a = din;
+        stage_b = r;
+        dout    = stage_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= stage_a;
+    }
+@endmod

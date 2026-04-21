@@ -1,0 +1,82 @@
+// CLOG2_INVALID_CONTEXT: clog2() used inside an @feature conditional
+// expression is not permitted. Feature conditions accept only CONFIG/CONST
+// identifiers, literals, and logical operators (see §4.14), so clog2() must
+// trigger CLOG2_INVALID_CONTEXT in that context.
+// Valid clog2() in CONST included to verify no false positives.
+
+@project CLOG2_INVALID_CONTEXT_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+// Helper module: clog2() inside @feature condition
+@module HelperMod
+    CONST {
+        DEPTH = 32;
+        // Valid: clog2() in CONST initializer (no false positive)
+        AW = clog2(DEPTH);
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    // Trigger 1: clog2() in @feature condition (helper module)
+    @feature clog2(DEPTH) == 5
+        CONST { FA = 1; }
+    @else
+        CONST { FA = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        TOTAL = 64;
+        // Valid: clog2() in CONST initializer (no false positive)
+        AW = clog2(TOTAL);
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    // Trigger 2: clog2() in @feature condition (top module)
+    @feature clog2(TOTAL) == 6
+        CONST { FB = 1; }
+    @else
+        CONST { FB = 0; }
+    @endfeat
+
+    WIRE {
+        h_dout [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [8] dout = h_dout;
+    };
+
+    ASYNCHRONOUS {
+        dout = h_dout;
+    }
+@endmod

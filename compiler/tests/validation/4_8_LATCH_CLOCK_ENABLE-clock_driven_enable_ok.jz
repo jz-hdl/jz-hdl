@@ -1,0 +1,62 @@
+// LATCH_CLOCK_ENABLE: The enable of a D-latch may be driven by any
+// wire, including a clock. Using a clock or derived clock as a latch
+// enable is legal (but discouraged — clock-driven latches defeat FPGA
+// clock networks; prefer registers with clock enable). This test
+// confirms the compiler accepts such usage without diagnostic.
+// No diagnostics expected.
+
+@project LATCH_CLOCK_ENABLE_clock_driven_enable_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] gated_clk = _;
+        IN  [8] din = _;
+        OUT [8] d_direct = _;
+        OUT [8] d_derived = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] gated_clk;
+        IN  [8] din;
+        OUT [8] d_direct;
+        OUT [8] d_derived;
+    }
+
+    LATCH {
+        // Enable driven by a clock wire — legal, though not recommended.
+        lat_clk_en [8] D;
+        // Enable driven by a derived clock expression.
+        lat_derived_en [8] D;
+    }
+
+    ASYNCHRONOUS {
+        // Level-sensitive latch with a clock as enable: legal usage
+        // per spec §4.8 Execution Model. The compiler emits no error.
+        lat_clk_en    <= clk       : din;
+        // Derived clock (AND-gated clock) used as enable: also legal.
+        lat_derived_en <= (clk & gated_clk) : din;
+
+        d_direct  <= lat_clk_en;
+        d_derived <= lat_derived_en;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] gated_clk;
+        IN  [8] din;
+        OUT [8] d_direct;
+        OUT [8] d_derived;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] gated_clk = gated_clk;
+        IN  [8] din = din;
+        OUT [8] d_direct = d_direct;
+        OUT [8] d_derived = d_derived;
+    };
+@endmod

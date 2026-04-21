@@ -1,0 +1,82 @@
+// HAPPY_PATH: z binary literals appearing in sync-expr, @new binding,
+// @check expression, and @feature condition contexts.
+// S1.6.1: z is permitted in binary literals. Covers contexts not exercised
+// by the existing async-expr happy-path test.
+
+@project HAPPY_PATH_z_binary_literal_contexts_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en = _;
+        IN    [8] din = _;
+        INOUT [8] bus = _;
+        OUT   [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] bus;
+        OUT   [8] data;
+    }
+
+    // Trigger (check-expr): binary z literal appears in @check expression
+    @check (8'bzzzz_zzzz == 8'bzzzz_zzzz, "z binary literal valid in check");
+
+    // Trigger (feature-cond): binary z literal appears in @feature condition.
+    // Both branches define F_TAG so the module validates with the feature
+    // enabled or disabled.
+    @feature 8'bzzzz_zzzz == 8'bzzzz_zzzz
+        CONST { F_TAG = 1; }
+    @else
+        CONST { F_TAG = 0; }
+    @endfeat
+
+    @check (F_TAG <= 1, "feature tag in range");
+
+    REGISTER {
+        captured [8] = 8'h00;
+    }
+
+    // Trigger (new-binding): binary z literal (intrinsic width 1, extended
+    // to 8 with z-padding per S1.6.1) used as tie-off for an IN port.
+    @new inst_a HelperA {
+        IN  [8] din = 8'bz;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        IF (en) {
+            bus <= din;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+        }
+        data = captured;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger (sync-expr): binary z literal used in a comparison expression
+        // within a SYNCHRONOUS block. The literal compares against INOUT bus.
+        IF (bus == 8'bzzzz_zzzz) {
+            captured <= captured;
+        } ELSE {
+            captured <= bus;
+        }
+    }
+@endmod

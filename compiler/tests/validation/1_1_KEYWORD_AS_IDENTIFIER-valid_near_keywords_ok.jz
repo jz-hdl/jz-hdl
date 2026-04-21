@@ -1,0 +1,481 @@
+// KEYWORD_AS_IDENTIFIER: Happy-path test for near-keyword identifiers from
+// every reserved keyword group (rows 11-24). The reserved keyword list is
+// case-sensitive and applies only to exact UPPERCASE forms. Near-keyword
+// variations (lowercase, suffixed, prefixed, mixed-case) are valid.
+// No diagnostics expected.
+
+@project KEYWORD_AS_IDENTIFIER_valid_near_keywords_ok
+    CONFIG {
+        // config-name: near-keywords from each group
+        clocks_v       = 1;   // Row 11
+        if_v           = 2;   // Row 12
+        const_v        = 3;   // Row 13
+        port_v         = 4;   // Row 14
+        register_v     = 5;   // Row 15
+        asynchronous_v = 6;   // Row 16
+        cdc_v          = 7;   // Row 17
+        pll_v          = 8;   // Row 19
+        fifo_v         = 9;   // Row 20
+        block_v        = 10;  // Row 21
+        sync_v         = 11;  // Row 22
+        idx_v          = 12;  // Row 23
+        vcc_v          = 13;  // Row 24
+        gnd_v          = 14;  // Row 24
+    }
+
+    @top top_near {
+        IN  [1] clk    = _;
+        IN  [1] enable = _;
+        IN  [1] din    = _;
+        IN  [8] bus_a  = _;
+        IN  [8] bus_b  = _;
+        OUT [1] dout   = _;
+    }
+@endproj
+
+// module-name: near-keywords from rows 11-14
+@module clocks_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] map_p;       // port-name: Row 11 near MAP
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= map_p; }
+@endmod
+
+@module select_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] case_p;      // port-name: Row 12 near CASE
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= case_p; }
+@endmod
+
+@module override_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] config_p;    // port-name: Row 13 near CONFIG
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= config_p; }
+@endmod
+
+@module source_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] wire_p;      // port-name: Row 14 near WIRE
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= wire_p; }
+@endmod
+
+// module-name: near-keywords from rows 15-17, 19-24
+@module latch_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] register_p;  // port-name: Row 15 near REGISTER
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= register_p; }
+@endmod
+
+@module synchronous_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] async_p;     // port-name: Row 16 near ASYNCHRONOUS
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= async_p; }
+@endmod
+
+@module cdc_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] cdc_p;       // port-name: Row 17 near CDC
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= cdc_p; }
+@endmod
+
+@module pll_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] dll_p;       // port-name: Row 19 near DLL
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= dll_p; }
+@endmod
+
+@module fifo_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] handshake_p; // port-name: Row 20 near HANDSHAKE
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= handshake_p; }
+@endmod
+
+@module block_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] distributed_p; // port-name: Row 21 near DISTRIBUTED
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= distributed_p; }
+@endmod
+
+@module sync_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] write_first_p; // port-name: Row 22 near WRITE_FIRST
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= write_first_p; }
+@endmod
+
+@module idx_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] idx_p;       // port-name: Row 23 near IDX
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= idx_p; }
+@endmod
+
+@module vcc_mod
+    PORT {
+        IN  [1] clk;
+        IN  [1] gnd_p;       // port-name: Row 24 near GND
+        OUT [1] data;
+    }
+    REGISTER { r [1] = 1'b0; }
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= gnd_p; }
+@endmod
+
+@module top_near
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        IN  [8] bus_a;
+        IN  [8] bus_b;
+        OUT [1] dout;
+    }
+
+    // const-name: near-keywords
+    CONST {
+        clocks_c  = 1;   // Row 11
+        select_c  = 2;   // Row 12
+        config_c  = 3;   // Row 13
+        in_c      = 4;   // Row 14
+        mem_c     = 5;   // Row 15
+        async_c   = 6;   // Row 16
+        cdc_c     = 7;   // Row 17
+        clkdiv_c  = 8;   // Row 19
+        bit_c     = 9;   // Row 20
+        block_c   = 10;  // Row 21
+        sync_c    = 11;  // Row 22
+        idx_c     = 12;  // Row 23
+        vcc_c     = 13;  // Row 24
+    }
+
+    // wire-name: near-keywords
+    WIRE {
+        clocks_w       [1];  // Row 11
+        if_w           [1];  // Row 12
+        const_w        [1];  // Row 13
+        port_w         [1];  // Row 14
+        register_w     [1];  // Row 15
+        asynchronous_w [1];  // Row 16
+        cdc_w          [1];  // Row 17
+        pll_w          [1];  // Row 19
+        fifo_w         [1];  // Row 20
+        block_w        [1];  // Row 21
+        sync_w         [1];  // Row 22
+        idx_w          [1];  // Row 23
+        vcc_w          [1];  // Row 24
+        gnd_w          [1];  // Row 24
+    }
+
+    // register-name: near-keywords
+    REGISTER {
+        clocks_r       [1] = 1'b0;  // Row 11
+        if_r           [1] = 1'b0;  // Row 12
+        const_r        [1] = 1'b0;  // Row 13
+        port_r         [1] = 1'b0;  // Row 14
+        register_r     [1] = 1'b0;  // Row 15
+        asynchronous_r [1] = 1'b0;  // Row 16
+        cdc_r          [1] = 1'b0;  // Row 17
+        pll_r          [1] = 1'b0;  // Row 19
+        fifo_r         [1] = 1'b0;  // Row 20
+        block_r        [1] = 1'b0;  // Row 21
+        sync_r         [1] = 1'b0;  // Row 22
+        idx_r          [1] = 1'b0;  // Row 23
+        vcc_r          [1] = 1'b0;  // Row 24
+        gnd_r          [1] = 1'b0;  // Row 24
+    }
+
+    // latch-name: near-keywords
+    LATCH {
+        clocks_l       [1] D;  // Row 11
+        if_l           [1] D;  // Row 12
+        const_l        [1] D;  // Row 13
+        port_l         [1] D;  // Row 14
+        register_l     [1] D;  // Row 15
+        asynchronous_l [1] D;  // Row 16
+        cdc_l          [1] D;  // Row 17
+        pll_l          [1] D;  // Row 19
+        fifo_l         [1] D;  // Row 20
+        block_l        [1] D;  // Row 21
+        sync_l         [1] D;  // Row 22
+        idx_l          [1] D;  // Row 23
+        vcc_l          [1] D;  // Row 24
+        gnd_l          [1] D;  // Row 24
+    }
+
+    // mem-name: near-keywords (one per group)
+    MEM {
+        clocks_m [1] [4] = 1'b0 {
+            OUT clocks_rd ASYNC;
+            IN  clocks_wr;
+        };
+        if_m [1] [4] = 1'b0 {
+            OUT if_rd ASYNC;
+            IN  if_wr;
+        };
+        const_m [1] [4] = 1'b0 {
+            OUT const_rd ASYNC;
+            IN  const_wr;
+        };
+        port_m [1] [4] = 1'b0 {
+            OUT port_rd ASYNC;
+            IN  port_wr;
+        };
+        register_m [1] [4] = 1'b0 {
+            OUT register_rd ASYNC;
+            IN  register_wr;
+        };
+        async_m [1] [4] = 1'b0 {
+            OUT async_rd ASYNC;
+            IN  async_wr;
+        };
+        cdc_m [1] [4] = 1'b0 {
+            OUT cdc_rd ASYNC;
+            IN  cdc_wr;
+        };
+        pll_m [1] [4] = 1'b0 {
+            OUT pll_rd ASYNC;
+            IN  pll_wr;
+        };
+        fifo_m [1] [4] = 1'b0 {
+            OUT fifo_rd ASYNC;
+            IN  fifo_wr;
+        };
+        block_m [1] [4] = 1'b0 {
+            OUT block_rd ASYNC;
+            IN  block_wr;
+        };
+        sync_m [1] [4] = 1'b0 {
+            OUT sync_rd ASYNC;
+            IN  sync_wr;
+        };
+        idx_m [1] [4] = 1'b0 {
+            OUT idx_rd ASYNC;
+            IN  idx_wr;
+        };
+        vcc_m [1] [4] = 1'b0 {
+            OUT vcc_rd ASYNC;
+            IN  vcc_wr;
+        };
+        gnd_m [1] [4] = 1'b0 {
+            OUT gnd_rd ASYNC;
+            IN  gnd_wr;
+        };
+    }
+
+    // mux-name: near-keywords
+    MUX {
+        clocks_x       = bus_a, bus_b;  // Row 11
+        if_x           = bus_a, bus_b;  // Row 12
+        const_x        = bus_a, bus_b;  // Row 13
+        port_x         = bus_a, bus_b;  // Row 14
+        register_x     = bus_a, bus_b;  // Row 15
+        asynchronous_x = bus_a, bus_b;  // Row 16
+        cdc_x          = bus_a, bus_b;  // Row 17
+        pll_x          = bus_a, bus_b;  // Row 19
+        fifo_x         = bus_a, bus_b;  // Row 20
+        block_x        = bus_a, bus_b;  // Row 21
+        sync_x         = bus_a, bus_b;  // Row 22
+        idx_x          = bus_a, bus_b;  // Row 23
+        vcc_x          = bus_a, bus_b;  // Row 24
+        gnd_x          = bus_a, bus_b;  // Row 24
+    }
+
+    // instance-name: near-keywords
+    @new clocks_i clocks_mod {
+        IN  [1] clk   = clk;
+        IN  [1] map_p = clocks_r;
+        OUT [1] data  = _;
+    };
+
+    @new select_i select_mod {
+        IN  [1] clk    = clk;
+        IN  [1] case_p = if_r;
+        OUT [1] data   = _;
+    };
+
+    @new override_i override_mod {
+        IN  [1] clk      = clk;
+        IN  [1] config_p = const_r;
+        OUT [1] data     = _;
+    };
+
+    @new source_i source_mod {
+        IN  [1] clk    = clk;
+        IN  [1] wire_p = port_r;
+        OUT [1] data   = _;
+    };
+
+    @new latch_i latch_mod {
+        IN  [1] clk        = clk;
+        IN  [1] register_p = register_r;
+        OUT [1] data       = _;
+    };
+
+    @new synchronous_i synchronous_mod {
+        IN  [1] clk     = clk;
+        IN  [1] async_p = asynchronous_r;
+        OUT [1] data    = _;
+    };
+
+    @new cdc_i cdc_mod {
+        IN  [1] clk   = clk;
+        IN  [1] cdc_p = cdc_r;
+        OUT [1] data  = _;
+    };
+
+    @new pll_i pll_mod {
+        IN  [1] clk   = clk;
+        IN  [1] dll_p = pll_r;
+        OUT [1] data  = _;
+    };
+
+    @new fifo_i fifo_mod {
+        IN  [1] clk          = clk;
+        IN  [1] handshake_p  = fifo_r;
+        OUT [1] data         = _;
+    };
+
+    @new block_i block_mod {
+        IN  [1] clk           = clk;
+        IN  [1] distributed_p = block_r;
+        OUT [1] data          = _;
+    };
+
+    @new sync_i sync_mod {
+        IN  [1] clk            = clk;
+        IN  [1] write_first_p  = sync_r;
+        OUT [1] data           = _;
+    };
+
+    @new idx_i idx_mod {
+        IN  [1] clk   = clk;
+        IN  [1] idx_p = idx_r;
+        OUT [1] data  = _;
+    };
+
+    @new vcc_i vcc_mod {
+        IN  [1] clk   = clk;
+        IN  [1] gnd_p = gnd_r;
+        OUT [1] data  = _;
+    };
+
+    ASYNCHRONOUS {
+        clocks_w       = clocks_r;
+        if_w           = if_r;
+        const_w        = const_r;
+        port_w         = port_r;
+        register_w     = register_r;
+        asynchronous_w = asynchronous_r;
+        cdc_w          = cdc_r;
+        pll_w          = pll_r;
+        fifo_w         = fifo_r;
+        block_w        = block_r;
+        sync_w         = sync_r;
+        idx_w          = idx_r;
+        vcc_w          = vcc_r;
+        gnd_w          = gnd_r;
+        clocks_l       <= enable : clocks_m.clocks_rd[2'b00];
+        if_l           <= enable : if_m.if_rd[2'b00];
+        const_l        <= enable : const_m.const_rd[2'b00];
+        port_l         <= enable : port_m.port_rd[2'b00];
+        register_l     <= enable : register_m.register_rd[2'b00];
+        asynchronous_l <= enable : async_m.async_rd[2'b00];
+        cdc_l          <= enable : cdc_m.cdc_rd[2'b00];
+        pll_l          <= enable : pll_m.pll_rd[2'b00];
+        fifo_l         <= enable : fifo_m.fifo_rd[2'b00];
+        block_l        <= enable : block_m.block_rd[2'b00];
+        sync_l         <= enable : sync_m.sync_rd[2'b00];
+        idx_l          <= enable : idx_m.idx_rd[2'b00];
+        vcc_l          <= enable : vcc_m.vcc_rd[2'b00];
+        gnd_l          <= enable : gnd_m.gnd_rd[2'b00];
+        dout = clocks_r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        clocks_r       <= ~clocks_r;
+        if_r           <= ~if_r;
+        const_r        <= ~const_r;
+        port_r         <= ~port_r;
+        register_r     <= ~register_r;
+        asynchronous_r <= ~asynchronous_r;
+        cdc_r          <= ~cdc_r;
+        pll_r          <= ~pll_r;
+        fifo_r         <= ~fifo_r;
+        block_r        <= ~block_r;
+        sync_r         <= ~sync_r;
+        idx_r          <= ~idx_r;
+        vcc_r          <= ~vcc_r;
+        gnd_r          <= ~gnd_r;
+        clocks_m.clocks_wr[2'b00]     <= din;
+        if_m.if_wr[2'b00]             <= din;
+        const_m.const_wr[2'b00]       <= din;
+        port_m.port_wr[2'b00]         <= din;
+        register_m.register_wr[2'b00] <= din;
+        async_m.async_wr[2'b00]       <= din;
+        cdc_m.cdc_wr[2'b00]           <= din;
+        pll_m.pll_wr[2'b00]           <= din;
+        fifo_m.fifo_wr[2'b00]         <= din;
+        block_m.block_wr[2'b00]       <= din;
+        sync_m.sync_wr[2'b00]         <= din;
+        idx_m.idx_wr[2'b00]           <= din;
+        vcc_m.vcc_wr[2'b00]           <= din;
+        gnd_m.gnd_wr[2'b00]           <= din;
+    }
+@endmod

@@ -1,0 +1,56 @@
+// ID_DUP_IN_MODULE: <bus_port_name> must be unique within the module.
+// Tests duplicate BUS port name in PORT block, and BUS port name colliding
+// with a regular port name. The modules under test are instantiated by TopMod
+// to exercise resolution, but the duplicate names make their @new bindings
+// inherently ambiguous and are left un-instantiated below.
+
+@project ID_DUP_IN_MODULE_duplicate_bus_port_name
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] dout_a = _;
+    }
+@endproj
+
+// Trigger 1: two BUS ports sharing the same name in PORT block
+@module DupBusMod
+    PORT {
+        IN  [1] clk;
+        BUS MY_BUS SOURCE sbus;
+        BUS MY_BUS TARGET sbus;
+        OUT [8] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out <= 8'h00;
+    }
+@endmod
+
+// Trigger 2: BUS port name duplicates a regular port name
+@module BusVsPortDupMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] sbus;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out <= 8'h00;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] dout_a;
+    }
+
+    ASYNCHRONOUS {
+        dout_a <= 8'h00;
+    }
+@endmod

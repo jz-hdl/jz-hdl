@@ -1,0 +1,93 @@
+// HAPPY_PATH (§1.2 Req #7): A driver whose value contains `x` is active
+// but produces an x-dependent net. This is valid as long as the x bits
+// do not reach an observable sink (REGISTER next-state, MEM init,
+// OUT/INOUT port, or top-level project pin).
+// This test exercises x-valued drivers whose x-dependent nets stay internal.
+
+@project HAPPY_PATH_x_driver_internal_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: x-valued literal drives an internal WIRE; the wire
+// then feeds a SELECT whose DEFAULT path yields a determinate result.
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w_xdep [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Driver whose value contains `x` (x-dependent net, internal only)
+        w_xdep <= 8'bxxxx_0000;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // The x-dependent net is used as a CASE selector; x bits in
+        // CASE patterns are legal wildcards (no x reaches observable).
+        SELECT (w_xdep) {
+            CASE 8'bxxxx_0000 {
+                r <= din;
+            }
+            DEFAULT {
+                r <= 8'h00;
+            }
+        }
+    }
+
+    ASYNCHRONOUS {
+        data <= r;
+    }
+@endmod
+
+// Top module: instantiates helper; x bits are strictly internal.
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk  = clk;
+        IN  [8] din  = din;
+        OUT [8] data = _;
+    };
+
+    WIRE {
+        w_internal_x [8];
+        w_ored [8];
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Driver producing x bits (internal)
+        w_internal_x <= 8'b0000_xxxx;
+        // Mask-and-OR keeps the x bits from reaching the output
+        w_ored <= (w_internal_x & 8'hF0) | din;
+        data <= w_ored;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

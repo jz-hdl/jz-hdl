@@ -107,6 +107,8 @@ typedef enum JZASTNodeType {
     JZ_AST_EXPR_IDENTIFIER,         /**< Simple identifier reference. */
     JZ_AST_EXPR_QUALIFIED_IDENTIFIER, /**< Qualified identifier (a.b). */
     JZ_AST_EXPR_BUS_ACCESS,         /**< Bus access expression. */
+    JZ_AST_EXPR_INDEXED_MEMBER_ACCESS, /**< Parser-level x[i].member before symbol resolution. */
+    JZ_AST_EXPR_INSTANCE_PORT_ACCESS, /**< Instance port access expression. */
     JZ_AST_EXPR_UNARY,              /**< Unary operator expression. */
     JZ_AST_EXPR_BINARY,             /**< Binary operator expression. */
     JZ_AST_EXPR_TERNARY,            /**< Ternary (? :) expression. */

@@ -750,6 +750,263 @@ JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
     return node;
 }
 
+static int sem_eval_instance_array_count(const JZASTNode *inst,
+                                         const JZModuleScope *mod_scope,
+                                         const JZBuffer *project_symbols,
+                                         unsigned *out)
+{
+    if (!inst || !out) return 0;
+    *out = 1;
+    if (!inst->width || !*inst->width) return 1;
+
+    long long v = 0;
+    if (sem_eval_const_expr_in_module(inst->width, mod_scope, project_symbols, &v) == 0 &&
+        v > 0 && (unsigned long long)v <= (unsigned long long)UINT_MAX) {
+        *out = (unsigned)v;
+        return 1;
+    }
+
+    unsigned simple = 0;
+    if (eval_simple_positive_decl_int(inst->width, &simple) == 1) {
+        *out = simple;
+        return 1;
+    }
+
+    return 0;
+}
+
+static int sem_eval_instance_access_index(const JZASTNode *idx,
+                                          const JZModuleScope *mod_scope,
+                                          const JZBuffer *project_symbols,
+                                          unsigned *out)
+{
+    if (!idx || !out) return 0;
+
+    if (idx->type == JZ_AST_EXPR_LITERAL && idx->text) {
+        return parse_literal_unsigned_value(idx->text, out);
+    }
+
+    long v = 0;
+    if (sem_try_const_eval_ast_expr(idx, &v) && v >= 0 &&
+        (unsigned long)v <= (unsigned long)UINT_MAX) {
+        *out = (unsigned)v;
+        return 1;
+    }
+
+    if ((idx->type == JZ_AST_EXPR_IDENTIFIER ||
+         idx->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
+        idx->name) {
+        long long cval = 0;
+        if (sem_eval_const_expr_in_module(idx->name, mod_scope, project_symbols, &cval) == 0 &&
+            cval >= 0 && (unsigned long long)cval <= (unsigned long long)UINT_MAX) {
+            *out = (unsigned)cval;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static const JZASTNode *sem_find_child_port_decl(const JZASTNode *child_mod,
+                                                 const char *port_name)
+{
+    if (!child_mod || !port_name) return NULL;
+    for (size_t i = 0; i < child_mod->child_count; ++i) {
+        JZASTNode *blk = child_mod->children[i];
+        if (!blk || blk->type != JZ_AST_PORT_BLOCK) continue;
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *pd = blk->children[j];
+            if (pd && pd->type == JZ_AST_PORT_DECL && pd->name &&
+                strcmp(pd->name, port_name) == 0) {
+                return pd;
+            }
+        }
+    }
+    return NULL;
+}
+
+static int sem_child_has_internal_decl(const JZASTNode *child_mod,
+                                       const char *name)
+{
+    if (!child_mod || !name) return 0;
+    for (size_t i = 0; i < child_mod->child_count; ++i) {
+        JZASTNode *blk = child_mod->children[i];
+        if (!blk) continue;
+        if (blk->type != JZ_AST_WIRE_BLOCK &&
+            blk->type != JZ_AST_REGISTER_BLOCK &&
+            blk->type != JZ_AST_LATCH_BLOCK) {
+            continue;
+        }
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *decl = blk->children[j];
+            if (decl && decl->name && strcmp(decl->name, name) == 0) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+int sem_resolve_instance_port_access(const JZASTNode *expr,
+                                     const JZModuleScope *mod_scope,
+                                     const JZBuffer *project_symbols,
+                                     JZInstancePortAccessInfo *out,
+                                     JZDiagnosticList *diagnostics)
+{
+    if (!expr || !mod_scope || !out) return 0;
+    memset(out, 0, sizeof(*out));
+
+    const char *inst_name = NULL;
+    const char *port_name = NULL;
+    const JZASTNode *index_expr = NULL;
+
+    if (expr->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS ||
+        expr->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS) {
+        inst_name = expr->name;
+        port_name = expr->text;
+        if (expr->child_count > 0) index_expr = expr->children[0];
+    } else if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER && expr->name) {
+        const char *dot = strchr(expr->name, '.');
+        if (!dot || dot == expr->name || !*(dot + 1) ||
+            strchr(dot + 1, '.') != NULL) {
+            return 0;
+        }
+        size_t inst_len = (size_t)(dot - expr->name);
+        if (inst_len >= sizeof(out->instance_name)) inst_len = sizeof(out->instance_name) - 1;
+        memcpy(out->instance_name, expr->name, inst_len);
+        out->instance_name[inst_len] = '\0';
+        inst_name = out->instance_name;
+        port_name = dot + 1;
+    } else {
+        return 0;
+    }
+
+    if (!inst_name || !*inst_name || !port_name || !*port_name) return 0;
+
+    const JZSymbol *inst_sym = module_scope_lookup_kind(mod_scope, inst_name, JZ_SYM_INSTANCE);
+    if (!inst_sym || !inst_sym->node || inst_sym->node->type != JZ_AST_MODULE_INSTANCE) {
+        return 0;
+    }
+
+    out->instance_decl = inst_sym->node;
+    if (inst_name != out->instance_name) {
+        strncpy(out->instance_name, inst_name, sizeof(out->instance_name) - 1u);
+        out->instance_name[sizeof(out->instance_name) - 1u] = '\0';
+    }
+    strncpy(out->port_name, port_name, sizeof(out->port_name) - 1u);
+    out->port_name[sizeof(out->port_name) - 1u] = '\0';
+
+    unsigned count = 1;
+    (void)sem_eval_instance_array_count(inst_sym->node, mod_scope, project_symbols, &count);
+    out->count = count;
+    out->is_array = (count > 1);
+    out->has_index = (index_expr != NULL);
+
+    if (expr->block_kind && strcmp(expr->block_kind, "WILDCARD") == 0) {
+        if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_ARRAY_INDEX_INVALID",
+                            "wildcard indexing is valid for BUS ports only, not instance arrays");
+        }
+        return 1;
+    }
+
+    if (out->is_array && !out->has_index && diagnostics) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "instance '%s' is an array of %u elements; use %s[index].%s",
+                 inst_name, count, inst_name, port_name);
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "INSTANCE_ARRAY_INDEX_REQUIRED",
+                        msg);
+    }
+
+    if (!out->is_array && out->has_index && diagnostics) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "instance '%s' is not an array; use %s.%s",
+                 inst_name, inst_name, port_name);
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "INSTANCE_ARRAY_INDEX_NOT_ARRAY",
+                        msg);
+    }
+
+    if (index_expr) {
+        unsigned idx = 0;
+        if (sem_eval_instance_access_index(index_expr, mod_scope, project_symbols, &idx)) {
+            out->index_known = 1;
+            out->index_value = idx;
+            if (out->is_array && idx >= count && diagnostics) {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "%s[%u] is out of range; '%s' has %u elements (valid indices: 0..%u)",
+                         inst_name, idx, inst_name, count, count - 1);
+                sem_report_rule(diagnostics,
+                                expr->loc,
+                                "INSTANCE_ARRAY_INDEX_OUT_OF_RANGE",
+                                msg);
+            }
+        } else if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_ARRAY_INDEX_INVALID",
+                            "instance array port index must be a nonnegative constant expression");
+        }
+    }
+
+    const char *child_mod_name = inst_sym->node->text;
+    const JZSymbol *child_sym = project_lookup_module_or_blackbox(project_symbols, child_mod_name);
+    if (!child_sym || !child_sym->node) {
+        if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_UNDEFINED_MODULE",
+                            "instance references undefined module/blackbox");
+        }
+        return 1;
+    }
+
+    const JZASTNode *child_port = sem_find_child_port_decl(child_sym->node, port_name);
+    if (child_port) {
+        out->child_port_decl = child_port;
+        const char *dir = child_port->block_kind ? child_port->block_kind : "";
+        if (strcmp(dir, "IN") == 0 && diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "UNDECLARED_IDENTIFIER",
+                            "instance input port is not readable from parent module");
+        }
+    } else if (sem_child_has_internal_decl(child_sym->node, port_name)) {
+        if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_INTERNAL_ACCESS",
+                            "cannot access internal signal of instance; "
+                            "only PORT members are accessible via inst.name "
+                            "(internal access is allowed in simulation only)");
+        }
+    } else if (diagnostics) {
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "UNDECLARED_IDENTIFIER",
+                        "reference to undefined instance port");
+    }
+
+    for (size_t i = 0; i < inst_sym->node->child_count; ++i) {
+        JZASTNode *bind = inst_sym->node->children[i];
+        if (bind && bind->type == JZ_AST_PORT_DECL && bind->name &&
+            strcmp(bind->name, port_name) == 0) {
+            out->binding_decl = bind;
+            break;
+        }
+    }
+
+    return 1;
+}
+
 
 
 

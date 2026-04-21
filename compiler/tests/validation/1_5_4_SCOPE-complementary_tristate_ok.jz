@@ -1,0 +1,95 @@
+// §1.5.4 SCOPE (Req #5): §1.5 and §1.6 are complementary rules enforced
+// by separate passes. A tri-state design with multiple instance drivers
+// on the same net does NOT violate §1.5 (each driver assigns only to
+// its own port in its own block); the §1.6 tri-state proof engine
+// instead verifies correctness at the net level. Here three instances
+// share a bus, each releasing with z except under their own
+// structurally-exclusive 2-bit select code — §1.5 is silent and §1.6
+// accepts the multi-driver situation.
+
+@project SCOPE_complementary_tristate_ok
+    @top TopMod {
+        IN  [2] sel      = _;
+        IN  [8] data_a   = _;
+        IN  [8] data_b   = _;
+        IN  [8] data_c   = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+// DriverA: drives bus when sel==2'b00, releases with z otherwise.
+// Only one assignment to `bus` here — passes §1.5 locally.
+@module DriverA
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 2'b00) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// DriverB: drives bus when sel==2'b01, releases with z otherwise.
+@module DriverB
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 2'b01) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// DriverC: drives bus when sel==2'b10, releases with z otherwise.
+@module DriverC
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+    ASYNCHRONOUS {
+        bus <= (sel == 2'b10) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [2] sel;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        IN  [8] data_c;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        // Multi-driver shared net — §1.5 does not inspect it across
+        // instance boundaries; §1.6 proves mutual exclusion by matching
+        // the common `sel` against disjoint literal codes.
+        shared_bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [2] sel = sel;
+        IN    [8] din = data_a;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [2] sel = sel;
+        IN    [8] din = data_b;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_c DriverC {
+        IN    [2] sel = sel;
+        IN    [8] din = data_c;
+        INOUT [8] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        // Each identifier is assigned at most once here — §1.5 is clean.
+        observed <= shared_bus;
+    }
+@endmod

@@ -1,0 +1,85 @@
+// CLOG2_NONPOSITIVE_ARG: happy-path — clog2() with strictly positive
+// arguments (literals, CONST, CONFIG, nested clog2) must produce no
+// CLOG2_NONPOSITIVE_ARG diagnostic.
+
+@project CLOG2_NONPOSITIVE_ARG_positive_args_ok
+    CONFIG {
+        ENTRIES = 128;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+// Helper: positive args sourced from CONST
+@module HelperMod
+    CONST {
+        DEPTH   = 64;
+        AW      = clog2(DEPTH);
+        AW_LIT  = clog2(4);
+        AW_NEST = clog2(clog2(512));
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        // Valid: positive literal argument
+        W_LIT    = clog2(256);
+        // Valid: positive CONST argument
+        VAL      = 32;
+        W_CONST  = clog2(VAL);
+        // Valid: positive CONFIG.<name> argument
+        W_CFG    = clog2(CONFIG.ENTRIES);
+        // Valid: nested clog2 with positive result
+        W_NEST   = clog2(clog2(1024) + 1);
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    WIRE {
+        h_dout [8];
+    }
+
+    REGISTER {
+        r [W_LIT] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [8] dout = h_dout;
+    };
+
+    ASYNCHRONOUS {
+        dout = h_dout ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

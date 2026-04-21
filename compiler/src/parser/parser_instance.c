@@ -219,19 +219,19 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
             return NULL;
         }
 
-        JZASTNode *bus = jz_ast_new(JZ_AST_EXPR_BUS_ACCESS, base->loc);
-        if (!bus) {
+        JZASTNode *member = jz_ast_new(JZ_AST_EXPR_INDEXED_MEMBER_ACCESS, base->loc);
+        if (!member) {
             jz_ast_free(base);
             if (msb) jz_ast_free(msb);
             return NULL;
         }
-        jz_ast_set_name(bus, base->name);
-        jz_ast_set_text(bus, member_tok->lexeme);
+        jz_ast_set_name(member, base->name);
+        jz_ast_set_text(member, member_tok->lexeme);
         if (is_wildcard) {
-            jz_ast_set_block_kind(bus, "WILDCARD");
+            jz_ast_set_block_kind(member, "WILDCARD");
         } else if (msb) {
-            if (jz_ast_add_child(bus, msb) != 0) {
-                jz_ast_free(bus);
+            if (jz_ast_add_child(member, msb) != 0) {
+                jz_ast_free(member);
                 jz_ast_free(msb);
                 jz_ast_free(base);
                 return NULL;
@@ -239,7 +239,7 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
         }
         advance(p); /* consume member identifier */
         jz_ast_free(base);
-        base = bus;
+        base = member;
 
         /* Optional slice after BUS member access. */
         if (!match(p, JZ_TOK_LBRACKET)) {

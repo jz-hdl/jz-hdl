@@ -1,0 +1,139 @@
+// ID_SYNTAX_INVALID: Happy-path test for case-sensitivity of identifiers.
+// Demonstrates that identifiers differing only in case are treated as
+// distinct names across all declaration contexts. No diagnostics expected.
+
+@project ID_SYNTAX_INVALID_case_sensitivity_ok
+    CONFIG {
+        // config-name: case-differing entries
+        Width = 8;
+        width = 4;
+    }
+
+    @top Top_Mod {
+        IN  [1] clk  = _;
+        OUT [1] dout = _;
+    }
+@endproj
+
+// module-name: Mod_A vs mod_a
+@module Mod_A
+    PORT {
+        IN  [1] clk;
+        // port-name: case-differing ports
+        IN  [1] Data;
+        IN  [1] data;
+        OUT [1] dout;
+    }
+
+    // const-name: case-differing constants
+    CONST {
+        Limit = 1;
+        limit = 2;
+    }
+
+    // wire-name: case-differing wires
+    WIRE {
+        Sig [1];
+        sig [1];
+    }
+
+    // register-name: case-differing registers
+    REGISTER {
+        Cnt [1] = 1'b0;
+        cnt [1] = 1'b0;
+    }
+
+    // latch-name: case-differing latches
+    LATCH {
+        Lat [1] D;
+        lat [1] D;
+    }
+
+    // mem-name: case-differing memories
+    MEM {
+        Mem_a [1] [4] = 1'b0 {
+            OUT rd_a ASYNC;
+            IN  wr_a;
+        };
+        mem_a [1] [4] = 1'b0 {
+            OUT rd_b ASYNC;
+            IN  wr_b;
+        };
+    }
+
+    // mux-name: case-differing muxes
+    WIRE {
+        bus_a [8];
+        bus_b [8];
+    }
+
+    MUX {
+        Sel = bus_a, bus_b;
+        sel = bus_a, bus_b;
+    }
+
+    ASYNCHRONOUS {
+        Sig  = Data;
+        sig  = data;
+        bus_a <= 8'b00000000;
+        bus_b <= 8'b11111111;
+        Lat  <= Data : Mem_a.rd_a[2'b00];
+        lat  <= data : mem_a.rd_b[2'b00];
+        dout = Cnt;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        Cnt <= ~Cnt;
+        cnt <= ~cnt;
+        Mem_a.wr_a[2'b00] <= Data;
+        mem_a.wr_b[2'b00] <= data;
+    }
+@endmod
+
+@module mod_a
+    PORT {
+        IN  [1] clk;
+        OUT [1] dout;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        dout = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module Top_Mod
+    PORT {
+        IN  [1] clk;
+        OUT [1] dout;
+    }
+
+    // instance-name: case-differing instances
+    @new Inst Mod_A {
+        IN  [1] clk  = clk;
+        IN  [1] Data = r;
+        IN  [1] data = r;
+        OUT [1] dout = _;
+    };
+
+    @new inst mod_a {
+        IN  [1] clk  = clk;
+        OUT [1] dout = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

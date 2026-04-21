@@ -1,0 +1,79 @@
+// HAPPY_PATH: Constant indices on arrayed BUS ports resolve at compile time;
+// non-constant (runtime) indices elaborate to multiplexer logic. Both are
+// valid and compile without diagnostics. Covers Req #19.
+
+@project HAPPY_PATH_bus_index_constant_and_runtime_ok
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] sel = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+@module IndexMod
+    CONST {
+        MY_IDX = 2;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [2] sel;
+        BUS MY_BUS SOURCE [4] abus;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        sel_copy [2] = 2'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: integer literal constant index (compile-time resolved)
+        abus[0].tx <= 8'h00;
+        // Valid: CONST constant index (compile-time resolved)
+        abus[MY_IDX].tx <= {6'b0, sel_copy};
+        // Valid: fill remaining elements to satisfy exclusive-assignment
+        abus[1].tx <= 8'h22;
+        abus[3].tx <= 8'h33;
+        // Valid: non-constant (runtime) index -> elaborates to multiplexer
+        data_out <= abus[sel].rx;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Keep sel observable to the driver tracker via a SYNC sink
+        sel_copy <= sel;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] sel;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    REGISTER {
+        scratch [8] = 8'h00;
+    }
+
+    @new inst_i IndexMod {
+        IN  [1] clk = clk;
+        IN  [2] sel = sel;
+        BUS MY_BUS SOURCE [4] abus = _;
+        OUT [8] data_out = dout_a;
+    };
+
+    ASYNCHRONOUS {
+        dout_b <= scratch;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        scratch <= scratch + 8'h1;
+    }
+@endmod

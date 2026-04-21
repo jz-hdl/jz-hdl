@@ -1,0 +1,51 @@
+// LOGICAL_WIDTH_NOT_1: Logical &&, ||, ! require 1-bit operands. This test
+// covers the feature-cond context (@feature condition expression). Covers
+// §3.1 Req #5. The new-binding and check-expr contexts are categorically
+// inapplicable for this rule (see audit/runner.log).
+
+@project LOGICAL_WIDTH_NOT_1_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): logical && with multi-bit operands
+    @feature (8'b1010 && 8'b0101) == 1'b0
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): logical || with multi-bit operands
+    @feature (4'b1010 || 4'b0000) == 1'b1
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    // Trigger 3 (feature-cond): logical ! with multi-bit operand
+    @feature (!8'b1010) == 1'b0
+        CONST { F_C = 1; }
+    @else
+        CONST { F_C = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

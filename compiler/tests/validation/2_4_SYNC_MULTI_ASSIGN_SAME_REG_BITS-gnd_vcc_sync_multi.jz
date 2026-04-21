@@ -1,0 +1,68 @@
+// SYNC_MULTI_ASSIGN_SAME_REG_BITS: GND/VCC drivers participate fully in the
+// Exclusive Assignment Rule — illegal to assign the same register bits
+// multiple times on the same execution path in a SYNCHRONOUS block.
+// Covers sync-expr context for §2.4 Req #11.
+// Valid exclusive branches included to verify no false positives.
+
+@project SYNC_MULTI_ASSIGN_SAME_REG_BITS_gnd_vcc_sync_multi
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+// Helper: GND then VCC on same register at root of SYNC block (illegal)
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+    }
+    REGISTER {
+        r [8] = GND;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: same register assigned GND then VCC on same sync path
+        r <= GND;
+        r <= VCC;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+    WIRE {
+        ha_out_a [8];
+    }
+    REGISTER {
+        s [8] = 8'h00;
+        t [1] = 1'b0;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        OUT [8] out_a = ha_out_a;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = s;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: same register assigned VCC then GND on same sync path
+        s <= VCC;
+        s <= GND;
+        // Valid: exclusive IF/ELSE branches (no false positive)
+        IF (t) {
+            t <= VCC;
+        } ELSE {
+            t <= GND;
+        }
+    }
+@endmod
