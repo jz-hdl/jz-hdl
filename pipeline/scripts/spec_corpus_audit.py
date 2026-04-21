@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Spec-corpus audit runner: drive 7-spec-corpus-audit.md per spec section.
+"""Spec-corpus audit runner: extract requirements then map rule IDs.
 
-The audit prompt at `pipeline/prompts/tests/7-spec-corpus-audit.md` compares
-the validation corpus directly against the specification. It intentionally does
-not read test plans. This runner shards the work by numbered spec section so
-rate-limit interruptions can be resumed with `--start N` or `--start-at TEXT`.
+Runs five audit prompts back-to-back per spec section:
+  1. pipeline/prompts/audit/1-extract-rules.md — extract requirements from spec
+  2. pipeline/prompts/audit/2-map-rule-ids.md  — map requirements to rules.c IDs
+  3. pipeline/prompts/audit/3-map-tests.md     — map tests and compute coverage
+  4. pipeline/prompts/audit/4-generate-issues.md — generate issues from coverage gaps
+  5. pipeline/prompts/audit/5-fix.md           — fix issues one at a time, verify each
+
+This runner shards the work by numbered spec section so rate-limit
+interruptions can be resumed with `--start N` or `--start-at TEXT`.
 
 By default, targets are numbered leaf sections from `specification/*.md`: a
 numbered heading is skipped when it has numbered child headings underneath it.
@@ -26,6 +31,7 @@ import argparse
 import glob
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -33,9 +39,19 @@ from dataclasses import dataclass
 PIPELINE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 REPO_DIR = os.path.normpath(os.path.join(PIPELINE_DIR, ".."))
 SPEC_DIR = os.path.join(REPO_DIR, "specification")
-PROMPT_FILE = os.path.join(
-    PIPELINE_DIR, "prompts", "tests", "7-spec-corpus-audit.md"
-)
+
+PROMPT_STEPS = [
+    (os.path.join(PIPELINE_DIR, "prompts", "audit", "1-extract-rules.md"), "medium"),
+    (os.path.join(PIPELINE_DIR, "prompts", "audit", "2-map-rule-ids.md"), "medium"),
+    (os.path.join(PIPELINE_DIR, "prompts", "audit", "3-map-tests.md"), "high"),
+    (os.path.join(PIPELINE_DIR, "prompts", "audit", "4-generate-issues.md"), "low"),
+]
+
+FIX_PROMPT = os.path.join(PIPELINE_DIR, "prompts", "audit", "5-fix.md")
+FIX_EFFORT = "high"
+
+AUDIT_DIR = os.path.join(REPO_DIR, "audit")
+TMP_FILE = "/tmp/spec_rules.md"
 PLACEHOLDER = "<SPEC_SECTION_TARGET>"
 
 HEADING_RE = re.compile(r"^(#{2,4})\s+(.+?)\s*$")
@@ -65,6 +81,11 @@ class SpecTarget:
             f"{self.relpath}:{self.lineno}: "
             f"{'#' * self.level} {self.raw_heading}"
         )
+
+    def audit_filename(self) -> str:
+        """Return the output filename: e.g. '1.1_Identifiers.md'."""
+        safe_title = re.sub(r"[^\w]+", "_", self.title).strip("_")
+        return f"{self.section}_{safe_title}.md"
 
 
 def parse_spec_file(path: str) -> list[SpecTarget]:
@@ -194,14 +215,14 @@ def get_spec_targets(
     return targets, start_offset, total_matched
 
 
-def load_prompt(target: SpecTarget) -> str:
-    """Load the audit prompt and substitute the spec section target."""
-    with open(PROMPT_FILE, "r") as f:
+def load_prompt(target: SpecTarget, prompt_file: str) -> str:
+    """Load a prompt template and substitute the spec section target."""
+    with open(prompt_file, "r") as f:
         prompt = f.read()
 
     if PLACEHOLDER not in prompt:
         print(
-            f"Warning: prompt template at {PROMPT_FILE} has no "
+            f"Warning: prompt template at {prompt_file} has no "
             f"{PLACEHOLDER} placeholder; running it unchanged.",
             file=sys.stderr,
         )
@@ -209,12 +230,24 @@ def load_prompt(target: SpecTarget) -> str:
     return prompt.replace(PLACEHOLDER, target.prompt_target())
 
 
-def run_claude(prompt: str, dry_run: bool = False) -> int:
+PIPELINE_PREAMBLE = (
+    "This is a non-interactive pipeline run. "
+    "Do not greet. Do not present options. Do not ask questions. "
+    "Do not follow CLAUDE.md greeting or interaction rules. "
+    "Execute the task in this prompt immediately.\n\n"
+)
+
+
+def run_claude(
+    prompt: str, dry_run: bool = False, effort: str = "high"
+) -> int:
     """Invoke `claude -p` with the given prompt and return its exit code."""
     cmd = [
         "claude",
         "-p",
-        prompt,
+        PIPELINE_PREAMBLE + prompt,
+        "--effort",
+        effort,
         "--allowedTools",
         "Read,Edit,Write,Glob,Grep,Bash",
     ]
@@ -227,11 +260,103 @@ def run_claude(prompt: str, dry_run: bool = False) -> int:
     return result.returncode
 
 
+def run_codex(prompt: str, dry_run: bool = False) -> int:
+    """Invoke `codex exec` with the given prompt and return its exit code."""
+    cmd = [
+        "codex",
+        "exec",
+        PIPELINE_PREAMBLE + prompt,
+    ]
+
+    if dry_run:
+        print("  [dry-run] would run: codex exec <prompt>")
+        return 0
+
+    result = subprocess.run(cmd, capture_output=False)
+    return result.returncode
+
+
+def run_agent(
+    prompt: str,
+    cli: str,
+    dry_run: bool = False,
+    effort: str = "high",
+) -> int:
+    """Invoke the selected agent CLI with the given prompt."""
+    if cli == "claude":
+        return run_claude(prompt, dry_run=dry_run, effort=effort)
+    if cli == "codex":
+        return run_codex(prompt, dry_run=dry_run)
+    raise ValueError(f"unsupported cli: {cli}")
+
+
+def save_audit(target: SpecTarget, dry_run: bool = False) -> str | None:
+    """Move /tmp/spec_rules.md to audit/<section>_<title>.md.
+
+    Returns the destination path on success, None otherwise.
+    """
+    os.makedirs(AUDIT_DIR, exist_ok=True)
+    dest = os.path.join(AUDIT_DIR, target.audit_filename())
+    if dry_run:
+        print(f"  [dry-run] would move {TMP_FILE} → {dest}")
+        return dest
+    if not os.path.exists(TMP_FILE):
+        print(f"  warning: {TMP_FILE} not found, skipping save")
+        return None
+    shutil.copy2(TMP_FILE, dest)
+    os.remove(TMP_FILE)
+    print(f"  saved → {os.path.relpath(dest, REPO_DIR)}")
+    return dest
+
+
+def run_fix(audit_path: str, cli: str, dry_run: bool = False) -> bool:
+    """Run the 5-fix prompt against a saved audit file.
+
+    Returns True if the fix step passed, False otherwise.
+    """
+    print(f"  step 5/5: 5-fix.md")
+    with open(FIX_PROMPT, "r") as f:
+        prompt = f.read()
+    prompt += f"\n\nAudit file: `{audit_path}`\n"
+
+    rc = run_agent(prompt, cli=cli, dry_run=dry_run, effort=FIX_EFFORT)
+    if rc != 0:
+        print(f"  step 5 FAILED (exit code {rc})")
+        return False
+    print(f"  step 5 OK")
+    return True
+
+
+def run_steps(
+    target: SpecTarget,
+    prompt_steps: list[tuple[str, str]],
+    cli: str,
+    dry_run: bool = False,
+) -> bool:
+    """Run each prompt step in sequence for a single spec section.
+
+    Returns True if all steps passed, False if any step failed.
+    """
+    for step_idx, (prompt_file, effort) in enumerate(prompt_steps, start=1):
+        step_name = os.path.basename(prompt_file)
+        print(f"  step {step_idx}/{len(prompt_steps)}: {step_name}")
+
+        prompt = load_prompt(target, prompt_file)
+        rc = run_agent(prompt, cli=cli, dry_run=dry_run, effort=effort)
+
+        if rc != 0:
+            print(f"  step {step_idx} FAILED (exit code {rc})")
+            return False
+        print(f"  step {step_idx} OK")
+
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Run pipeline/prompts/tests/7-spec-corpus-audit.md against "
-            "numbered spec sections, one claude invocation per section."
+            "Run spec audit prompts (extract requirements, then map rule IDs) "
+            "against numbered spec sections, one section at a time."
         ),
     )
     parser.add_argument(
@@ -272,13 +397,30 @@ def main() -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print the planned invocations without running claude.",
+        help="Print the planned invocations without running the selected CLI.",
     )
     parser.add_argument(
         "--list",
         action="store_true",
         help="List the matched spec sections and exit.",
     )
+    cli_group = parser.add_mutually_exclusive_group()
+    cli_group.add_argument(
+        "--codex",
+        dest="cli",
+        action="store_const",
+        const="codex",
+        help="Run prompts with Codex CLI (default).",
+    )
+    cli_group.add_argument(
+        "--claude",
+        "--cluade",
+        dest="cli",
+        action="store_const",
+        const="claude",
+        help="Run prompts with Claude CLI.",
+    )
+    parser.set_defaults(cli="codex")
     args = parser.parse_args()
 
     if args.start is not None and args.start_at is not None:
@@ -288,8 +430,14 @@ def main() -> int:
         )
         return 2
 
-    if not os.path.exists(PROMPT_FILE):
-        print(f"error: audit prompt not found: {PROMPT_FILE}", file=sys.stderr)
+    for prompt_file, _ in PROMPT_STEPS:
+        if not os.path.exists(prompt_file):
+            print(
+                f"error: prompt not found: {prompt_file}", file=sys.stderr
+            )
+            return 2
+    if not os.path.exists(FIX_PROMPT):
+        print(f"error: prompt not found: {FIX_PROMPT}", file=sys.stderr)
         return 2
 
     targets, start_offset, total_matched = get_spec_targets(
@@ -309,6 +457,12 @@ def main() -> int:
         print(f"\n{len(targets)} section(s) (of {total_matched} matched)")
         return 0
 
+    step_names = [os.path.basename(p) for p, _ in PROMPT_STEPS] + [
+        os.path.basename(FIX_PROMPT)
+    ]
+    print(f"CLI: {args.cli}")
+    print(f"Audit steps: {' → '.join(step_names)}")
+
     if start_offset > 0:
         print(
             f"Found {len(targets)} spec section(s) to audit "
@@ -324,19 +478,42 @@ def main() -> int:
         label = target.label()
         print(f"[{i}/{total_matched}] {label}")
 
-        prompt = load_prompt(target)
-        rc = run_claude(prompt, dry_run=args.dry_run)
+        # Ensure a clean slate — remove any leftover tmp file from a
+        # previous run or a step that wrote unexpected content.
+        if not args.dry_run and os.path.exists(TMP_FILE):
+            os.remove(TMP_FILE)
 
-        if rc == 0:
-            results["pass"].append(label)
-            print("  -> OK\n")
+        passed = run_steps(
+            target,
+            PROMPT_STEPS,
+            cli=args.cli,
+            dry_run=args.dry_run,
+        )
+
+        if passed:
+            audit_path = save_audit(target, dry_run=args.dry_run)
+            if audit_path:
+                fix_passed = run_fix(
+                    audit_path,
+                    cli=args.cli,
+                    dry_run=args.dry_run,
+                )
+                if fix_passed:
+                    results["pass"].append(label)
+                    print(f"  -> ALL STEPS OK\n")
+                else:
+                    results["fail"].append(label)
+                    print(f"  -> FAILED (fix step)\n")
+            else:
+                results["fail"].append(label)
+                print(f"  -> FAILED (save)\n")
         else:
             results["fail"].append(label)
-            print(f"  -> FAILED (exit code {rc})\n")
+            print(f"  -> FAILED\n")
 
     print("=" * 60)
     print(
-        f"Done. {len(results['pass'])} audited, "
+        f"Done. {len(results['pass'])} passed, "
         f"{len(results['fail'])} failed."
     )
     if results["fail"]:

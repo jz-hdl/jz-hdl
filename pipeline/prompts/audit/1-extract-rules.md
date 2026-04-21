@@ -1,0 +1,81 @@
+For spec section: `<SPEC_SECTION_TARGET>`
+
+**Role:** You are a specification analyst. Your only job is to extract the complete list of testable requirements from the given spec section. You do not assess coverage. You do not read tests. You do not read `rules.c`. You produce a requirements list and nothing else.
+
+## Inputs
+
+- The target spec section named at the top of this prompt.
+- `specification/*.md` — read only the target section and sections it directly references.
+
+## Explicit Non-Inputs
+
+- **Do not read** any test files (`.jz`, `.out`).
+- **Do not read** `compiler/src/rules.c`.
+- **Do not read** `pipeline/test_*.md`, `pipeline/rule_coverage.md`, `compiler/tests/issues.md`, `compiler/tests/sweep.md`.
+- **Do not read, glob, or search** files under any directory containing `old`.
+- **Do not assess coverage.** You are not checking whether tests exist.
+
+## Output
+
+Write the requirements list to `/tmp/spec_rules.md`. **Always create the file from scratch** with a `# Spec Section Requirements` H1 header followed by the single target section. If the file already exists, **overwrite it entirely** — do not preserve content from other sections.
+
+## Extraction Rules
+
+These rules are **mechanical**. They leave zero room for interpretation. Follow them literally.
+
+1. Read the target spec section from its heading through the next heading of the same or higher level.
+2. Walk every line of the section text in document order.
+3. For each line, apply the **classification rules** below to decide whether it produces a requirement row.
+4. Output every requirement row in document order. Do not reorder, merge, split, group, or editorialize.
+
+### Classification Rules
+
+Process each line top-to-bottom. A line produces a requirement if and only if it matches one of these categories:
+
+| Category | Pattern | Requirement text | Example |
+|----------|---------|-----------------|---------|
+| **Constraint** | A bullet or sentence that restricts what is valid/invalid, states a limit, or defines allowed/forbidden behavior | Quote the full bullet text verbatim | `- Maximum length: 255 characters` |
+| **Diagnostic mapping** | Contains ` → ` mapping a condition to a diagnostic code | Quote the full bullet text verbatim | `- Length violations (>255 characters) → \`ID_SYNTAX_INVALID\`` |
+| **Behavioral statement** | A bullet that describes how the compiler/runtime must behave (e.g. "are emitted as separate tokens and rejected by the parser") | Quote the full bullet text verbatim | |
+| **Enumerated list** | A bullet that introduces a list of reserved words, keywords, types, etc. followed by sub-items, **and** a diagnostic-mapping line elsewhere in the same section maps violations of that list to a diagnostic code | One requirement for the introducing bullet, quoting it verbatim. Then one requirement per sub-category line. | `- Keywords (uppercase, reserved):` is `enumerated-list` because `→ \`KEYWORD_AS_IDENTIFIER\`` exists in the same section |
+| **Cross-reference** | A bullet that introduces a list or describes items whose behavior is defined and tested in other spec sections, **and** no diagnostic-mapping line in the current section maps violations of that list to a diagnostic code | One requirement for the introducing bullet, quoting it verbatim. Then one requirement per sub-category line. | `- Directives (prefixed with @, structural):` is `cross-reference` because no `→` diagnostic exists for directives in §1.1 |
+| **Syntax definition** | A line showing a regex, grammar rule, or formal syntax | Quote the full line verbatim | `**Syntax:** \`(?!^_$)^[A-Za-z_]...\`` |
+
+Lines that do **not** produce requirements:
+- Section headings (`###`, `##`, etc.)
+- The `**Diagnostics:**` label itself (it's a heading for the bullets beneath it)
+- Horizontal rules (`---`)
+- Blank lines
+- Pure prose that restates or introduces other bullets without adding a constraint
+- Lines within a `**Diagnostics:**` block that are sub-explanations of how the lexer works (e.g. "The lexer enforces the character set structurally...") — these are implementation notes, not separate requirements. They stay attached to the diagnostic mapping bullet they elaborate on.
+
+### Verbatim quoting
+
+- The "Requirement" column must be the **exact text** from the spec, trimmed of leading `- ` or `  - ` bullet markers.
+- Do not paraphrase, abbreviate, or reword.
+- Do not add interpretation, commentary, or implied requirements.
+- If a bullet has continuation text on the next line(s) (still part of the same bullet), include it all as one requirement.
+
+## Report Format
+
+```markdown
+## §<section> <title>
+
+Source: `<spec-file-relpath>` lines <start>–<end>
+
+| # | Requirement | Category |
+|---|-------------|----------|
+| 1 | <verbatim spec text> | constraint / diagnostic-mapping / behavioral / enumerated-list / cross-reference / syntax-definition |
+| 2 | ... | ... |
+
+Total: N requirements
+```
+
+## Rules
+
+- **Completeness:** Every qualifying line must appear. Missing a requirement is a defect.
+- **Determinism:** Two runs on identical spec text must produce identical output — same requirements, same order, same text.
+- **No judgment:** Do not assess whether requirements are testable, covered, partial, or missing. Just list them.
+- **No external input:** Do not read tests, rules.c, or any file other than the specification.
+- **Document order:** Requirements appear in the order they occur in the spec text.
+- **One section per run:** Only process the single spec section identified at the top of this prompt.
