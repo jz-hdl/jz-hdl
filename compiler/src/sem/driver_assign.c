@@ -1567,8 +1567,15 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
         }
     }
 
+        int allow_concat_lhs_extension =
+            (lhs->type == JZ_AST_EXPR_CONCAT &&
+             !is_alias &&
+             has_ext &&
+             rhs_w <= lhs_w);
+
         if ((lhs->type == JZ_AST_EXPR_CONCAT || rhs->type == JZ_AST_EXPR_CONCAT) &&
-            lhs_w != rhs_w) {
+            lhs_w != rhs_w &&
+            !allow_concat_lhs_extension) {
             char msg[512];
             snprintf(msg, sizeof(msg),
                      "concatenation total width is %u bits but paired expression is %u bits",

@@ -140,6 +140,40 @@ static int sem_eval_idx_expr(JZASTNode *expr, unsigned idx_value, unsigned *out)
     return -1;
 }
 
+static void sem_check_instance_binding_rhs_bus_reads(JZASTNode *expr,
+                                                     const JZModuleScope *scope,
+                                                     const JZBuffer *project_symbols,
+                                                     JZDiagnosticList *diagnostics)
+{
+    if (!expr || !scope || !project_symbols || !diagnostics) return;
+
+    if ((expr->type == JZ_AST_EXPR_BUS_ACCESS ||
+         expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
+        expr->name) {
+        JZBusAccessInfo info;
+        memset(&info, 0, sizeof(info));
+        if (sem_resolve_bus_access(expr, scope, project_symbols, &info, NULL) &&
+            info.signal_decl && !info.readable) {
+            char explain[256];
+            snprintf(explain, sizeof(explain),
+                     "BUS signal '%s' is write-only (SOURCE direction) and\n"
+                     "cannot be read. Only TARGET or INOUT signals are readable.",
+                     info.signal_name[0] ? info.signal_name : expr->name);
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "BUS_SIGNAL_READ_FROM_WRITABLE",
+                            explain);
+        }
+    }
+
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        sem_check_instance_binding_rhs_bus_reads(expr->children[i],
+                                                 scope,
+                                                 project_symbols,
+                                                 diagnostics);
+    }
+}
+
 void sem_check_module_instantiations(const JZModuleScope *scope,
                                             JZBuffer *module_scopes,
                                             const JZBuffer *project_symbols,
@@ -529,6 +563,11 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                         "INSTANCE_ARRAY_IDX_INVALID_CONTEXT",
                                         "IDX may only appear in parent-signal bindings of instance arrays");
                     }
+
+                    sem_check_instance_binding_rhs_bus_reads(rhs,
+                                                             scope,
+                                                             project_symbols,
+                                                             diagnostics);
 
                     /* Simple Non-Overlap check for instance arrays:
                      * if this binding is for an OUT port of an arrayed instance and

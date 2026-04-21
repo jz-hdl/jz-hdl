@@ -1,7 +1,6 @@
 // BUS_SIGNAL_READ_FROM_WRITABLE: Reading a writable BUS signal on the RHS in
-// a SYNCHRONOUS block expression. Extends ASYNC-only coverage for Reqs #10, #36.
-// (A @new binding trigger is not included: the compiler currently does not
-// apply this check in new-binding expression context — logged separately.)
+// a SYNCHRONOUS block expression and in an @new binding expression. Extends
+// ASYNC-only coverage for Reqs #10, #36.
 
 @project BUS_SIGNAL_READ_FROM_WRITABLE_sync_and_binding_contexts
     BUS MY_BUS {
@@ -13,6 +12,7 @@
         IN  [1] clk = _;
         OUT [8] dout_a = _;
         OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
     }
 @endproj
 
@@ -39,11 +39,51 @@
     }
 @endmod
 
+// Module reading a writable BUS signal from an @new binding RHS
+@module BindingReadMod
+    PORT {
+        IN  [1] clk;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_out;
+    }
+
+    @new inst_c ConsumerMod {
+        IN  [1] clk = clk;
+        // Trigger 2: @new RHS reads sbus.tx (writable from SOURCE) — forbidden
+        IN  [8] din = sbus.tx;
+        OUT [8] data_out = data_out;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod
+
+@module ConsumerMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
 @module TopMod
     PORT {
         IN  [1] clk;
         OUT [8] dout_a;
         OUT [8] dout_b;
+        OUT [8] dout_c;
     }
 
     REGISTER {
@@ -56,8 +96,14 @@
         OUT [8] data_out = dout_a;
     };
 
+    @new inst_b BindingReadMod {
+        IN  [1] clk = clk;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_out = dout_b;
+    };
+
     ASYNCHRONOUS {
-        dout_b <= scratch;
+        dout_c <= scratch;
     }
 
     SYNCHRONOUS(CLK=clk) {
