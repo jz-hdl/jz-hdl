@@ -1,0 +1,21 @@
+// Library for imported-file diagnostic path preservation.
+
+@module ImportedBad
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        // Trigger: the diagnostic should report the exact import spelling.
+        r [1] = 4'b0001;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

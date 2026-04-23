@@ -1,7 +1,7 @@
-// HAPPY_PATH: template argument substitution must avoid capturing @scratch names.
-// The callsite passes a signal named `tmp` into a template that also declares
-// `@scratch tmp`, so the expansion only succeeds if the scratch is renamed
-// independently of the substituted arguments.
+// HAPPY_PATH: template argument substitution must avoid accidental capture when
+// a callsite identifier contains the scratch name as a substring.
+// The template declares `@scratch tmp`, while the caller passes `tmp_src`;
+// scratch renaming must not rewrite the argument identifier itself.
 
 @project CAPTURE_AVOIDING_SUBSTITUTION_capture_avoiding_ok
     @top TopMod {
@@ -42,7 +42,7 @@
     }
 
     WIRE {
-        tmp [8];
+        tmp_src [8];
         copied [8];
     }
 
@@ -52,9 +52,10 @@
     };
 
     ASYNCHRONOUS {
-        // Req #20: argument `tmp` must not be captured by template-local @scratch tmp.
-        @apply copy_with_scratch(inst_src.data, tmp);
-        @apply copy_with_scratch(tmp, copied);
+        // Req #20: argument `tmp_src` must remain intact while template-local
+        // `@scratch tmp` is renamed per expansion.
+        @apply copy_with_scratch(inst_src.data, tmp_src);
+        @apply copy_with_scratch(tmp_src, copied);
         data = copied;
     }
 @endmod

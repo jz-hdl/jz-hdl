@@ -1,0 +1,31 @@
+// TEMPLATE_SCRATCH_SHADOW: @scratch names may not shadow identifiers
+// already declared in the enclosing module scope.
+
+@project TEMPLATE_SCRATCH_SHADOW_shadow_module_identifier
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@template bad_shadow(src, dst)
+    @scratch din [8];
+    din <= src;
+    dst <= din;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        stage [8];
+    }
+
+    ASYNCHRONOUS {
+        @apply bad_shadow(din, stage);
+        data = stage;
+    }
+@endmod

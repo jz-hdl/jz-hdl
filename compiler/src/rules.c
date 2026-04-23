@@ -334,6 +334,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "CLOCK_GEN_RULES", "CLOCK_GEN_OUTPUT_IS_INPUT_PIN",          0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN output clock must not be declared as IN_PINS" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_MULTIPLE_DRIVERS",             0, JZ_RULE_MODE_ERR, "S6.4.1 Clock is driven by multiple CLOCK_GEN outputs" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_IS_SELF_OUTPUT",         0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input clock is an output of the same CLOCK_GEN block" },
+    { "CLOCK_GEN_RULES", "CLOCK_GEN_CHAINING_UNSUPPORTED",         0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN chaining is only allowed when the target chip explicitly supports it" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT",      0, JZ_RULE_MODE_ERR, "S6.4.1 PLL reference clock pin cannot also be used as a logic signal in @top on pad_exclusive chips" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INVALID_TYPE",                 0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN generator must be PLL, DLL, CLKDIV, OSC, or BUF (with optional numeric suffix)" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_MISSING_INPUT",                0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN unit must have an IN clock declaration" },
@@ -448,8 +449,10 @@ const JZRuleInfo jz_rule_table[] = {
     { "TEMPLATE", "TEMPLATE_APPLY_OUTSIDE_BLOCK",    0, JZ_RULE_MODE_ERR, "S10.5 @apply may only appear inside ASYNCHRONOUS or SYNCHRONOUS blocks" },
     { "TEMPLATE", "TEMPLATE_DUP_NAME",               0, JZ_RULE_MODE_ERR, "S10.2 Duplicate template name in the same scope" },
     { "TEMPLATE", "TEMPLATE_DUP_PARAM",              0, JZ_RULE_MODE_ERR, "S10.2 Duplicate parameter name in template definition" },
+    { "TEMPLATE", "TEMPLATE_SCRATCH_SHADOW",         0, JZ_RULE_MODE_ERR, "S10.3 @scratch name may not shadow a template parameter, another @scratch, or an existing identifier in the enclosing module scope" },
     { "TEMPLATE", "TEMPLATE_SCRATCH_WIDTH_INVALID",  0, JZ_RULE_MODE_ERR, "S10.3 @scratch width must be a positive integer constant expression" },
     { "TEMPLATE", "TEMPLATE_EXTERNAL_REF",           0, JZ_RULE_MODE_ERR, "S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments" },
+    { "TEMPLATE", "TEMPLATE_RESET_LOGIC_FORBIDDEN",  0, JZ_RULE_MODE_ERR, "S10.4 Reset-style conditional logic is not allowed inside templates; keep reset handling at the callsite or enclosing SYNCHRONOUS block" },
 
     /* [TESTBENCH] */
     { "TESTBENCH", "TB_WRONG_TOOL",               0, JZ_RULE_MODE_ERR, "File contains @testbench blocks; use --test to run testbenches" },

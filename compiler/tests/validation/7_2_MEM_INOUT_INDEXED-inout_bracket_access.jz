@@ -44,6 +44,17 @@
     }
 @endmod
 
+@module ReadProbe
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
 @module TopMod
     PORT {
         IN  [1] clk;
@@ -67,6 +78,12 @@
         IN  [4] addr = addr;
         IN  [8] wdata = wdata;
         OUT [8] data = _;
+    };
+
+    @new inst_probe ReadProbe {
+        // Trigger 3: bracket index on INOUT port in @new binding
+        IN  [8] din = mem_b.rw[addr];
+        OUT [8] dout = _;
     };
 
     ASYNCHRONOUS {

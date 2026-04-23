@@ -32,6 +32,39 @@ static int sem_expr_contains_idx(JZASTNode *expr)
     return 0;
 }
 
+static const char *sem_instance_binding_op_kind(const JZASTNode *bind)
+{
+    if (!bind || bind->type != JZ_AST_PORT_DECL) {
+        return "ALIAS";
+    }
+
+    if (bind->block_kind && strcmp(bind->block_kind, "BUS") == 0) {
+        if (bind->text && bind->text[0] != '\0') {
+            char bus_id[128] = {0};
+            char role[128] = {0};
+            char op[128] = {0};
+            if (sscanf(bind->text, "%127s %127s %127s", bus_id, role, op) == 3 &&
+                op[0] != '\0') {
+                return strcmp(op, "ALIAS_S") == 0 ? "ALIAS_S"
+                     : strcmp(op, "ALIAS_Z") == 0 ? "ALIAS_Z"
+                     : "ALIAS";
+            }
+        }
+        return "ALIAS";
+    }
+
+    if (!bind->text || bind->text[0] == '\0') {
+        return "ALIAS";
+    }
+    if (strcmp(bind->text, "ALIAS_Z") == 0) {
+        return "ALIAS_Z";
+    }
+    if (strcmp(bind->text, "ALIAS_S") == 0) {
+        return "ALIAS_S";
+    }
+    return "ALIAS";
+}
+
 /* Evaluate a simple index node (literal or identifier) as a nonnegative integer.
  * This is intentionally conservative: we only support cases where the index is a
  * simple number-like token that eval_simple_positive_decl_int can handle.
@@ -171,6 +204,55 @@ static void sem_check_instance_binding_rhs_bus_reads(JZASTNode *expr,
                                                  scope,
                                                  project_symbols,
                                                  diagnostics);
+    }
+}
+
+static void sem_check_instance_binding_rhs_mem_accesses(JZASTNode *expr,
+                                                        const JZModuleScope *scope,
+                                                        JZDiagnosticList *diagnostics)
+{
+    if (!expr || !scope || !diagnostics) return;
+
+    if (expr->type == JZ_AST_EXPR_SLICE) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_slice(expr, scope, NULL, &ref) &&
+            ref.port && ref.port->block_kind &&
+            strcmp(ref.port->block_kind, "INOUT") == 0) {
+            char explain[512];
+            snprintf(explain, sizeof(explain),
+                     "%s.%s is an INOUT port and may not be indexed directly\n"
+                     "use .addr, .data, or .wdata pseudo-fields instead",
+                     ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
+                     ref.port->name ? ref.port->name : "port");
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "MEM_INOUT_INDEXED",
+                            explain);
+        }
+    } else if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_qualified_ident(expr, scope, NULL, &ref) &&
+            ref.port && ref.port->block_kind &&
+            strcmp(ref.port->block_kind, "INOUT") == 0 &&
+            ref.field == MEM_PORT_FIELD_ADDR) {
+            char explain[512];
+            snprintf(explain, sizeof(explain),
+                     "%s.%s.addr may only be assigned in SYNCHRONOUS blocks",
+                     ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
+                     ref.port->name ? ref.port->name : "port");
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "MEM_INOUT_ADDR_IN_ASYNC",
+                            explain);
+        }
+    }
+
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        sem_check_instance_binding_rhs_mem_accesses(expr->children[i],
+                                                    scope,
+                                                    diagnostics);
     }
 }
 
@@ -568,6 +650,9 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                                              scope,
                                                              project_symbols,
                                                              diagnostics);
+                    sem_check_instance_binding_rhs_mem_accesses(rhs,
+                                                                scope,
+                                                                diagnostics);
 
                     /* Simple Non-Overlap check for instance arrays:
                      * if this binding is for an OUT port of an arrayed instance and
@@ -651,6 +736,10 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                  */
                 if (bind->child_count > 0 && bind->width) {
                     JZASTNode *rhs = bind->children[0];
+                    const char *bind_op = sem_instance_binding_op_kind(bind);
+                    int bind_has_ext =
+                        (strcmp(bind_op, "ALIAS_Z") == 0 ||
+                         strcmp(bind_op, "ALIAS_S") == 0);
                     if (rhs && rhs->type == JZ_AST_EXPR_IDENTIFIER &&
                         rhs->name && strcmp(rhs->name, "_") == 0) {
                         /* Explicit no-connect: skip parent-signal width checks. */
@@ -666,10 +755,19 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                 int parent_rc = eval_simple_positive_decl_int(pdecl->width, &parent_w);
                                 int inst_rc2  = eval_simple_positive_decl_int(bind->width, &inst_w2);
                                 if (parent_rc == 1 && inst_rc2 == 1 && parent_w != inst_w2) {
-                                    sem_report_rule(diagnostics,
-                                                    bind->loc,
-                                                    "INSTANCE_PARENT_SIGNAL_WIDTH_MISMATCH",
-                                                    "bound parent signal width does not match instantiation port width");
+                                    if (bind_has_ext) {
+                                        if (parent_w > inst_w2) {
+                                            sem_report_rule(diagnostics,
+                                                            bind->loc,
+                                                            "ASSIGN_TRUNCATES",
+                                                            "bound parent signal is wider than the instantiated port and will be truncated");
+                                        }
+                                    } else {
+                                        sem_report_rule(diagnostics,
+                                                        bind->loc,
+                                                        "INSTANCE_PARENT_SIGNAL_WIDTH_MISMATCH",
+                                                        "bound parent signal width does not match instantiation port width");
+                                    }
                                 }
                             }
                         }

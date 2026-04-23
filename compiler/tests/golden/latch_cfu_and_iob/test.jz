@@ -44,6 +44,7 @@
   }
 
   @top latch_module {
+    IN  [1] clk     = sys_clk;
     IN  [1] enable  = enable;
     IN  [8] data_in = data_in;
     OUT [8] iob_out = iob_out;
@@ -53,6 +54,7 @@
 
 @module latch_module
   PORT {
+    IN  [1] clk;
     IN  [1] enable;
     IN  [8] data_in;
     OUT [8] iob_out;

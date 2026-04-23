@@ -1,5 +1,6 @@
 // HAPPY_PATH: Verify the `=` alias operator works in the new-binding context.
-// @new port bindings use `=` to alias a parent signal to a child port.
+// @new port bindings use `=`, `=z`, and `=s` to alias a parent signal to a
+// child port.
 
 @project HAPPY_PATH_alias_new_binding_ok
     CONFIG {
@@ -9,7 +10,11 @@
     @top TopMod {
         IN  [1] clk = _;
         IN  [8] din = _;
+        IN  [4] narrow_z = _;
+        IN  [4] narrow_s = _;
         OUT [8] dout = _;
+        OUT [8] dout_z = _;
+        OUT [8] dout_s = _;
     }
 @endproj
 
@@ -37,7 +42,11 @@
     PORT {
         IN  [1] clk;
         IN  [8] din;
+        IN  [4] narrow_z;
+        IN  [4] narrow_s;
         OUT [8] dout;
+        OUT [8] dout_z;
+        OUT [8] dout_s;
     }
 
     // Valid (new-binding): bare `=` aliases parent signal to child IN/OUT ports.
@@ -45,5 +54,17 @@
         IN  [1] clk = clk;
         IN  [8] din = din;
         OUT [8] dout = dout;
+    };
+
+    @new inst_z HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din =z narrow_z;
+        OUT [8] dout = dout_z;
+    };
+
+    @new inst_s HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din =s narrow_s;
+        OUT [8] dout = dout_s;
     };
 @endmod

@@ -542,20 +542,22 @@ void sem_check_project_clock_gen(JZASTNode *project,
                     has_input = 1;
                     const char *in_selector = elem->block_kind; /* e.g. "REF_CLK", "CE" */
                     const char *in_clk = elem->name;            /* signal name */
+                    char unit_type_lower[32] = {0};
                     if (!in_clk) continue;
+
+                    if (unit->name) {
+                        size_t tlen = strlen(unit->name);
+                        if (tlen >= sizeof(unit_type_lower)) tlen = sizeof(unit_type_lower) - 1;
+                        for (size_t t = 0; t < tlen; ++t) {
+                            unit_type_lower[t] = (char)tolower((unsigned char)unit->name[t]);
+                        }
+                        unit_type_lower[tlen] = '\0';
+                    }
 
                     /* Look up chip data input definition for this selector */
                     const JZChipClockGenInput *chip_input = NULL;
                     if (chip && unit->name && in_selector) {
-                        char tl[32];
-                        {
-                            size_t tlen = strlen(unit->name);
-                            if (tlen >= sizeof(tl)) tlen = sizeof(tl) - 1;
-                            for (size_t t = 0; t < tlen; ++t)
-                                tl[t] = (char)tolower((unsigned char)unit->name[t]);
-                            tl[tlen] = '\0';
-                        }
-                        chip_input = jz_chip_clock_gen_input(chip, tl, in_selector);
+                        chip_input = jz_chip_clock_gen_input(chip, unit_type_lower, in_selector);
                     }
 
                     /* Validate input clock exists in CLOCKS */
@@ -568,8 +570,16 @@ void sem_check_project_clock_gen(JZASTNode *project,
                         continue;
                     }
 
-                    /* Check if input is an output of a prior unit (cross-unit chaining is OK) */
+                    /* Check if input is an output of a prior unit. Chained inputs
+                     * are exempt from period-on-input checks.
+                     *
+                     * The chip-data `chaining` capability is defined for PLLs:
+                     * it governs feeding one PLL from an earlier PLL output.
+                     * Other common derived-clock topologies such as PLL -> CLKDIV
+                     * are valid and documented.
+                     */
                     int is_chained = 0;
+                    int chained_from_prior_pll = 0;
                     {
                         size_t prior_count = prior_unit_outputs.len / sizeof(char *);
                         char **priors = (char **)prior_unit_outputs.data;
@@ -578,6 +588,54 @@ void sem_check_project_clock_gen(JZASTNode *project,
                                 is_chained = 1;
                                 break;
                             }
+                        }
+                    }
+
+                    if (is_chained) {
+                        for (size_t pu = 0; pu < u && !chained_from_prior_pll; ++pu) {
+                            JZASTNode *prior_unit = cgen->children[pu];
+                            if (!prior_unit || prior_unit->type != JZ_AST_CLOCK_GEN_UNIT ||
+                                !prior_unit->name) {
+                                continue;
+                            }
+
+                            if (strncasecmp(prior_unit->name, "PLL", 3) != 0) {
+                                continue;
+                            }
+
+                            for (size_t pc = 0; pc < prior_unit->child_count; ++pc) {
+                                JZASTNode *prior_elem = prior_unit->children[pc];
+                                if (!prior_elem || !prior_elem->name) continue;
+                                if (prior_elem->type != JZ_AST_CLOCK_GEN_OUT &&
+                                    prior_elem->type != JZ_AST_CLOCK_GEN_WIRE) {
+                                    continue;
+                                }
+                                if (strcmp(prior_elem->name, in_clk) == 0) {
+                                    chained_from_prior_pll = 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (is_chained &&
+                        chained_from_prior_pll &&
+                        chip &&
+                        unit_type_lower[0] != '\0' &&
+                        strncmp(unit_type_lower, "pll", 3) == 0) {
+                        int chaining_supported = 0;
+                        int has_chaining =
+                            jz_chip_clock_gen_chaining(chip, unit_type_lower,
+                                                       &chaining_supported);
+                        if (!has_chaining || !chaining_supported) {
+                            char msg[256];
+                            snprintf(msg, sizeof(msg),
+                                     "CLOCK_GEN input '%s' is driven by an earlier "
+                                     "%s unit, but %s chaining is not supported on "
+                                     "this chip",
+                                     in_clk, unit->name, unit->name);
+                            sem_report_rule(diagnostics, elem->loc,
+                                            "CLOCK_GEN_CHAINING_UNSUPPORTED", msg);
                         }
                     }
 
@@ -612,16 +670,8 @@ void sem_check_project_clock_gen(JZASTNode *project,
                             } else if (chip && unit->name) {
                                 /* Fallback: use legacy refclk_range */
                                 double freq_mhz = 1000.0 / period;
-                                char tl[32];
-                                {
-                                    size_t tlen = strlen(unit->name);
-                                    if (tlen >= sizeof(tl)) tlen = sizeof(tl) - 1;
-                                    for (size_t t = 0; t < tlen; ++t)
-                                        tl[t] = (char)tolower((unsigned char)unit->name[t]);
-                                    tl[tlen] = '\0';
-                                }
                                 double rmin = 0.0, rmax = 0.0;
-                                if (jz_chip_clock_gen_refclk_range(chip, tl, &rmin, &rmax)) {
+                                if (jz_chip_clock_gen_refclk_range(chip, unit_type_lower, &rmin, &rmax)) {
                                     if (freq_mhz < rmin || freq_mhz > rmax) {
                                         char msg[512];
                                         snprintf(msg, sizeof(msg),
@@ -642,16 +692,8 @@ void sem_check_project_clock_gen(JZASTNode *project,
                      * (which would require an SB_IO on the same pin).
                      * Users should bind to the PLL's BASE output instead. */
                     if (chip && unit->name) {
-                        char tl_pe[32];
-                        {
-                            size_t tlen = strlen(unit->name);
-                            if (tlen >= sizeof(tl_pe)) tlen = sizeof(tl_pe) - 1;
-                            for (size_t t = 0; t < tlen; ++t)
-                                tl_pe[t] = (char)tolower((unsigned char)unit->name[t]);
-                            tl_pe[tlen] = '\0';
-                        }
                         int pe = 0;
-                        if (jz_chip_clock_gen_pad_exclusive(chip, tl_pe, &pe) && pe) {
+                        if (jz_chip_clock_gen_pad_exclusive(chip, unit_type_lower, &pe) && pe) {
                             const JZSymbol *pin_sym_pe = project_lookup(
                                 project_symbols, in_clk, JZ_SYM_PIN);
                             if (pin_sym_pe) {

@@ -69,6 +69,20 @@ typedef struct ExpandContext {
     int apply_counter;  /* unique callsite id */
 } ExpandContext;
 
+static void validate_template_reset_logic(ExpandContext *ctx,
+                                          JZASTNode *node,
+                                          const char **param_names,
+                                          size_t param_count,
+                                          const char **scratch_names,
+                                          size_t scratch_count);
+static int is_allowed_template_ident(ExpandContext *ctx,
+                                     const char *name,
+                                     const char **param_names,
+                                     size_t param_count,
+                                     const char **scratch_names,
+                                     size_t scratch_count,
+                                     int has_idx);
+
 static void report_rule(ExpandContext *ctx, JZLocation loc,
                          const char *rule_id, const char *fallback)
 {
@@ -805,11 +819,54 @@ static void register_template(ExpandContext *ctx, JZASTNode *def, JZASTNode *sco
 
     /* Collect parameter names for scratch width validation */
     const char *reg_param_names[64];
+    const char *reg_scratch_names[64];
     size_t reg_param_count = 0;
+    size_t reg_scratch_count = 0;
+    size_t body_start = 0;
     for (size_t i = 0; i < def->child_count; i++) {
         if (def->children[i]->type == JZ_AST_TEMPLATE_PARAM &&
             def->children[i]->name && reg_param_count < 64) {
             reg_param_names[reg_param_count++] = def->children[i]->name;
+            body_start = i + 1;
+        }
+    }
+
+    for (size_t i = body_start; i < def->child_count; i++) {
+        if (def->children[i]->type != JZ_AST_SCRATCH_DECL ||
+            !def->children[i]->name) {
+            continue;
+        }
+
+        JZASTNode *sd = def->children[i];
+        if (reg_scratch_count < 64) {
+            reg_scratch_names[reg_scratch_count++] = sd->name;
+        }
+        for (size_t pi = 0; pi < reg_param_count; pi++) {
+            if (strcmp(sd->name, reg_param_names[pi]) == 0) {
+                char shadow_msg[512];
+                snprintf(shadow_msg, sizeof(shadow_msg),
+                         "@scratch `%s` shadows template parameter `%s`;\n"
+                         "rename the scratch wire so template-local names stay distinct",
+                         sd->name, reg_param_names[pi]);
+                report_rule(ctx, sd->loc, "TEMPLATE_SCRATCH_SHADOW", shadow_msg);
+                break;
+            }
+        }
+
+        for (size_t j = body_start; j < i; j++) {
+            if (def->children[j]->type != JZ_AST_SCRATCH_DECL ||
+                !def->children[j]->name) {
+                continue;
+            }
+            if (strcmp(sd->name, def->children[j]->name) == 0) {
+                char shadow_msg[512];
+                snprintf(shadow_msg, sizeof(shadow_msg),
+                         "@scratch `%s` duplicates an earlier @scratch in the same template;\n"
+                         "scratch wire names must be unique within the template body",
+                         sd->name);
+                report_rule(ctx, sd->loc, "TEMPLATE_SCRATCH_SHADOW", shadow_msg);
+                break;
+            }
         }
     }
 
@@ -851,6 +908,10 @@ static void register_template(ExpandContext *ctx, JZASTNode *def, JZASTNode *sco
             }
         }
     }
+
+    validate_template_reset_logic(ctx, def,
+                                  reg_param_names, reg_param_count,
+                                  reg_scratch_names, reg_scratch_count);
 
     ctx->templates[ctx->template_count].name = def->name;
     ctx->templates[ctx->template_count].def_node = def;
@@ -909,6 +970,260 @@ static void add_scratch_wire(ExpandContext *ctx, JZASTNode *wire_decl)
 }
 
 /* ── Template body identifier validation ─────────────────────────── */
+
+static int is_module_scope_identifier_decl(const JZASTNode *node)
+{
+    if (!node) return 0;
+
+    switch (node->type) {
+    case JZ_AST_CONST_DECL:
+    case JZ_AST_PORT_DECL:
+    case JZ_AST_WIRE_DECL:
+    case JZ_AST_REGISTER_DECL:
+    case JZ_AST_LATCH_DECL:
+    case JZ_AST_MEM_DECL:
+    case JZ_AST_MUX_DECL:
+    case JZ_AST_BUS_DECL:
+    case JZ_AST_CDC_DECL:
+    case JZ_AST_INSTANTIATION:
+    case JZ_AST_MODULE_INSTANCE:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int module_scope_has_identifier_named(const JZASTNode *node,
+                                             const char *name)
+{
+    if (!node || !name) return 0;
+
+    if (is_module_scope_identifier_decl(node) && node->name &&
+        strcmp(node->name, name) == 0) {
+        return 1;
+    }
+
+    for (size_t i = 0; i < node->child_count; i++) {
+        if (module_scope_has_identifier_named(node->children[i], name)) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int nullable_streq(const char *a, const char *b)
+{
+    if (!a || !b) return a == b;
+    return strcmp(a, b) == 0;
+}
+
+static int ast_nodes_equal(const JZASTNode *a, const JZASTNode *b)
+{
+    if (a == b) return 1;
+    if (!a || !b) return 0;
+    if (a->type != b->type) return 0;
+    if (!nullable_streq(a->name, b->name)) return 0;
+    if (!nullable_streq(a->block_kind, b->block_kind)) return 0;
+    if (!nullable_streq(a->text, b->text)) return 0;
+    if (!nullable_streq(a->width, b->width)) return 0;
+    if (a->child_count != b->child_count) return 0;
+
+    for (size_t i = 0; i < a->child_count; i++) {
+        if (!ast_nodes_equal(a->children[i], b->children[i])) return 0;
+    }
+
+    return 1;
+}
+
+static int expr_is_literal_like(const JZASTNode *expr)
+{
+    if (!expr) return 0;
+
+    switch (expr->type) {
+    case JZ_AST_EXPR_LITERAL:
+    case JZ_AST_EXPR_SPECIAL_DRIVER:
+        return 1;
+    case JZ_AST_EXPR_CONCAT:
+        if (expr->child_count == 0) return 0;
+        for (size_t i = 0; i < expr->child_count; i++) {
+            if (!expr_is_literal_like(expr->children[i])) return 0;
+        }
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int assignment_rhs_is_literal_like(const JZASTNode *stmt)
+{
+    if (!stmt || stmt->type != JZ_AST_STMT_ASSIGN || stmt->child_count < 2) {
+        return 0;
+    }
+    return expr_is_literal_like(stmt->children[1]);
+}
+
+static size_t conditional_branch_stmt_start(const JZASTNode *branch)
+{
+    if (!branch) return 0;
+    if (branch->type == JZ_AST_STMT_IF || branch->type == JZ_AST_STMT_ELIF) {
+        return (branch->child_count > 0) ? 1 : 0;
+    }
+    return 0;
+}
+
+static int expr_refs_only_allowed_template_idents(ExpandContext *ctx,
+                                                  const JZASTNode *node,
+                                                  const char **param_names,
+                                                  size_t param_count,
+                                                  const char **scratch_names,
+                                                  size_t scratch_count)
+{
+    if (!node) return 1;
+
+    if (node->type == JZ_AST_EXPR_IDENTIFIER && node->name) {
+        if (!is_allowed_template_ident(ctx, node->name, param_names,
+                                       param_count, scratch_names,
+                                       scratch_count, 1)) {
+            return 0;
+        }
+    }
+
+    if ((node->type == JZ_AST_EXPR_BUS_ACCESS ||
+         node->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS ||
+         node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) &&
+        node->name) {
+        if (!is_allowed_template_ident(ctx, node->name, param_names,
+                                       param_count, scratch_names,
+                                       scratch_count, 1)) {
+            return 0;
+        }
+    }
+
+    for (size_t i = 0; i < node->child_count; i++) {
+        if (!expr_refs_only_allowed_template_idents(ctx, node->children[i],
+                                                    param_names, param_count,
+                                                    scratch_names,
+                                                    scratch_count)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int if_chain_has_reset_style_logic(const JZASTNode *parent,
+                                          size_t start_idx,
+                                          size_t *out_end_idx,
+                                          ExpandContext *ctx,
+                                          const char **param_names,
+                                          size_t param_count,
+                                          const char **scratch_names,
+                                          size_t scratch_count)
+{
+    if (!parent || start_idx >= parent->child_count ||
+        parent->children[start_idx]->type != JZ_AST_STMT_IF) {
+        if (out_end_idx) *out_end_idx = start_idx + 1;
+        return 0;
+    }
+
+    size_t end_idx = start_idx + 1;
+    while (end_idx < parent->child_count) {
+        JZASTNodeType t = parent->children[end_idx]->type;
+        if (t != JZ_AST_STMT_ELIF && t != JZ_AST_STMT_ELSE) break;
+        end_idx++;
+    }
+    if (out_end_idx) *out_end_idx = end_idx;
+
+    for (size_t bi = start_idx; bi < end_idx; bi++) {
+        const JZASTNode *branch = parent->children[bi];
+        if ((branch->type == JZ_AST_STMT_IF || branch->type == JZ_AST_STMT_ELIF) &&
+            branch->child_count > 0 &&
+            !expr_refs_only_allowed_template_idents(ctx, branch->children[0],
+                                                    param_names, param_count,
+                                                    scratch_names,
+                                                    scratch_count)) {
+            return 0;
+        }
+    }
+
+    for (size_t bi = start_idx; bi < end_idx; bi++) {
+        const JZASTNode *branch_a = parent->children[bi];
+        size_t a_start = conditional_branch_stmt_start(branch_a);
+        for (size_t ai = a_start; ai < branch_a->child_count; ai++) {
+            const JZASTNode *stmt_a = branch_a->children[ai];
+            if (!stmt_a || stmt_a->type != JZ_AST_STMT_ASSIGN ||
+                stmt_a->child_count < 2) {
+                continue;
+            }
+
+            int a_is_literal = assignment_rhs_is_literal_like(stmt_a);
+            const JZASTNode *lhs_a = stmt_a->children[0];
+            if (!lhs_a) continue;
+
+            for (size_t bj = bi + 1; bj < end_idx; bj++) {
+                const JZASTNode *branch_b = parent->children[bj];
+                size_t b_start = conditional_branch_stmt_start(branch_b);
+                for (size_t aj = b_start; aj < branch_b->child_count; aj++) {
+                    const JZASTNode *stmt_b = branch_b->children[aj];
+                    if (!stmt_b || stmt_b->type != JZ_AST_STMT_ASSIGN ||
+                        stmt_b->child_count < 2) {
+                        continue;
+                    }
+
+                    const JZASTNode *lhs_b = stmt_b->children[0];
+                    if (!lhs_b || !ast_nodes_equal(lhs_a, lhs_b)) continue;
+
+                    if (a_is_literal != assignment_rhs_is_literal_like(stmt_b)) {
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+static void validate_template_reset_logic(ExpandContext *ctx,
+                                          JZASTNode *node,
+                                          const char **param_names,
+                                          size_t param_count,
+                                          const char **scratch_names,
+                                          size_t scratch_count)
+{
+    if (!ctx || !node) return;
+
+    for (size_t i = 0; i < node->child_count; i++) {
+        JZASTNode *child = node->children[i];
+        if (!child) continue;
+
+        if (child->type == JZ_AST_STMT_IF) {
+            size_t chain_end = i + 1;
+            if (if_chain_has_reset_style_logic(node, i, &chain_end,
+                                               ctx, param_names, param_count,
+                                               scratch_names, scratch_count)) {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "templates may not encode reset-style conditionals that force a literal\n"
+                         "value on one branch and non-literal updates on another; keep reset\n"
+                         "handling at the callsite or enclosing SYNCHRONOUS block");
+                report_rule(ctx, child->loc, "TEMPLATE_RESET_LOGIC_FORBIDDEN", msg);
+            }
+            for (size_t j = i; j < chain_end; j++) {
+                validate_template_reset_logic(ctx, node->children[j],
+                                             param_names, param_count,
+                                             scratch_names, scratch_count);
+            }
+            i = chain_end - 1;
+            continue;
+        }
+
+        validate_template_reset_logic(ctx, child,
+                                      param_names, param_count,
+                                      scratch_names, scratch_count);
+    }
+}
 
 /**
  * Check whether `name` is allowed inside a template body.
@@ -1050,6 +1365,25 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
         if (def->children[i]->type == JZ_AST_SCRATCH_DECL && def->children[i]->name) {
             if (scratch_count < 64) {
                 scratch_names[scratch_count++] = def->children[i]->name;
+            }
+        }
+    }
+
+    if (scope_module) {
+        for (size_t i = body_start; i < def->child_count; i++) {
+            JZASTNode *scratch = def->children[i];
+            if (!scratch || scratch->type != JZ_AST_SCRATCH_DECL || !scratch->name) {
+                continue;
+            }
+            if (module_scope_has_identifier_named(scope_module, scratch->name)) {
+                char shadow_msg[512];
+                snprintf(shadow_msg, sizeof(shadow_msg),
+                         "@scratch `%s` in template `%s` shadows an existing identifier in module `%s`;\n"
+                         "rename the scratch wire so template expansion cannot hide module names",
+                         scratch->name,
+                         def->name ? def->name : "?",
+                         scope_module->name ? scope_module->name : "?");
+                report_rule(ctx, apply->loc, "TEMPLATE_SCRATCH_SHADOW", shadow_msg);
             }
         }
     }

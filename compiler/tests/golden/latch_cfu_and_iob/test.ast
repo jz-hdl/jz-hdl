@@ -40,42 +40,44 @@
     {"type": "ConstDecl", "name": "comb_out [ 7 ]", "text": "40", "loc": {"line": 43, "column": 5, "file": "test.jz"}}
   ]},
   {"type": "ProjectTopInstance", "name": "latch_module", "loc": {"line": 46, "column": 3, "file": "test.jz"}, "children": [
-    {"type": "PortDecl", "name": "enable", "block_kind": "IN", "text": "enable", "width": "1", "loc": {"line": 47, "column": 13, "file": "test.jz"}},
-    {"type": "PortDecl", "name": "data_in", "block_kind": "IN", "text": "data_in", "width": "8", "loc": {"line": 48, "column": 13, "file": "test.jz"}},
-    {"type": "PortDecl", "name": "iob_out", "block_kind": "OUT", "text": "iob_out", "width": "8", "loc": {"line": 49, "column": 13, "file": "test.jz"}},
-    {"type": "PortDecl", "name": "comb_out", "block_kind": "OUT", "text": "comb_out", "width": "8", "loc": {"line": 50, "column": 13, "file": "test.jz"}}
+    {"type": "PortDecl", "name": "clk", "block_kind": "IN", "text": "sys_clk", "width": "1", "loc": {"line": 47, "column": 13, "file": "test.jz"}},
+    {"type": "PortDecl", "name": "enable", "block_kind": "IN", "text": "enable", "width": "1", "loc": {"line": 48, "column": 13, "file": "test.jz"}},
+    {"type": "PortDecl", "name": "data_in", "block_kind": "IN", "text": "data_in", "width": "8", "loc": {"line": 49, "column": 13, "file": "test.jz"}},
+    {"type": "PortDecl", "name": "iob_out", "block_kind": "OUT", "text": "iob_out", "width": "8", "loc": {"line": 50, "column": 13, "file": "test.jz"}},
+    {"type": "PortDecl", "name": "comb_out", "block_kind": "OUT", "text": "comb_out", "width": "8", "loc": {"line": 51, "column": 13, "file": "test.jz"}}
   ]},
-  {"type": "Module", "name": "latch_module", "loc": {"line": 54, "column": 1, "file": "test.jz"}, "children": [
-    {"type": "PortBlock", "block_kind": "PORT", "loc": {"line": 55, "column": 3, "file": "test.jz"}, "children": [
-      {"type": "PortDecl", "name": "enable", "block_kind": "IN", "width": "1", "loc": {"line": 56, "column": 13, "file": "test.jz"}},
-      {"type": "PortDecl", "name": "data_in", "block_kind": "IN", "width": "8", "loc": {"line": 57, "column": 13, "file": "test.jz"}},
-      {"type": "PortDecl", "name": "iob_out", "block_kind": "OUT", "width": "8", "loc": {"line": 58, "column": 13, "file": "test.jz"}},
-      {"type": "PortDecl", "name": "comb_out", "block_kind": "OUT", "width": "8", "loc": {"line": 59, "column": 13, "file": "test.jz"}}
+  {"type": "Module", "name": "latch_module", "loc": {"line": 55, "column": 1, "file": "test.jz"}, "children": [
+    {"type": "PortBlock", "block_kind": "PORT", "loc": {"line": 56, "column": 3, "file": "test.jz"}, "children": [
+      {"type": "PortDecl", "name": "clk", "block_kind": "IN", "width": "1", "loc": {"line": 57, "column": 13, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "enable", "block_kind": "IN", "width": "1", "loc": {"line": 58, "column": 13, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "data_in", "block_kind": "IN", "width": "8", "loc": {"line": 59, "column": 13, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "iob_out", "block_kind": "OUT", "width": "8", "loc": {"line": 60, "column": 13, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "comb_out", "block_kind": "OUT", "width": "8", "loc": {"line": 61, "column": 13, "file": "test.jz"}}
     ]},
-    {"type": "LatchBlock", "block_kind": "LATCH", "loc": {"line": 62, "column": 3, "file": "test.jz"}, "children": [
-      {"type": "LatchDecl", "name": "iob_latch", "block_kind": "D", "width": "8", "loc": {"line": 64, "column": 5, "file": "test.jz"}},
-      {"type": "LatchDecl", "name": "cfu_latch", "block_kind": "D", "width": "8", "loc": {"line": 66, "column": 5, "file": "test.jz"}}
+    {"type": "LatchBlock", "block_kind": "LATCH", "loc": {"line": 64, "column": 3, "file": "test.jz"}, "children": [
+      {"type": "LatchDecl", "name": "iob_latch", "block_kind": "D", "width": "8", "loc": {"line": 66, "column": 5, "file": "test.jz"}},
+      {"type": "LatchDecl", "name": "cfu_latch", "block_kind": "D", "width": "8", "loc": {"line": 68, "column": 5, "file": "test.jz"}}
     ]},
-    {"type": "Block", "block_kind": "ASYNCHRONOUS", "loc": {"line": 69, "column": 3, "file": "test.jz"}, "children": [
-      {"type": "Assign", "block_kind": "RECEIVE_LATCH", "loc": {"line": 71, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "Identifier", "name": "iob_latch", "loc": {"line": 71, "column": 5, "file": "test.jz"}},
-        {"type": "Identifier", "name": "data_in", "loc": {"line": 71, "column": 27, "file": "test.jz"}},
-        {"type": "Identifier", "name": "enable", "loc": {"line": 71, "column": 18, "file": "test.jz"}}
+    {"type": "Block", "block_kind": "ASYNCHRONOUS", "loc": {"line": 71, "column": 3, "file": "test.jz"}, "children": [
+      {"type": "Assign", "block_kind": "RECEIVE_LATCH", "loc": {"line": 73, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "Identifier", "name": "iob_latch", "loc": {"line": 73, "column": 5, "file": "test.jz"}},
+        {"type": "Identifier", "name": "data_in", "loc": {"line": 73, "column": 27, "file": "test.jz"}},
+        {"type": "Identifier", "name": "enable", "loc": {"line": 73, "column": 18, "file": "test.jz"}}
       ]},
-      {"type": "Assign", "block_kind": "RECEIVE_LATCH", "loc": {"line": 72, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "Identifier", "name": "cfu_latch", "loc": {"line": 72, "column": 5, "file": "test.jz"}},
-        {"type": "Identifier", "name": "data_in", "loc": {"line": 72, "column": 27, "file": "test.jz"}},
-        {"type": "Identifier", "name": "enable", "loc": {"line": 72, "column": 18, "file": "test.jz"}}
+      {"type": "Assign", "block_kind": "RECEIVE_LATCH", "loc": {"line": 74, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "Identifier", "name": "cfu_latch", "loc": {"line": 74, "column": 5, "file": "test.jz"}},
+        {"type": "Identifier", "name": "data_in", "loc": {"line": 74, "column": 27, "file": "test.jz"}},
+        {"type": "Identifier", "name": "enable", "loc": {"line": 74, "column": 18, "file": "test.jz"}}
       ]},
-      {"type": "Assign", "block_kind": "RECEIVE", "loc": {"line": 75, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "Identifier", "name": "iob_out", "loc": {"line": 75, "column": 5, "file": "test.jz"}},
-        {"type": "Identifier", "name": "iob_latch", "loc": {"line": 75, "column": 16, "file": "test.jz"}}
+      {"type": "Assign", "block_kind": "RECEIVE", "loc": {"line": 77, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "Identifier", "name": "iob_out", "loc": {"line": 77, "column": 5, "file": "test.jz"}},
+        {"type": "Identifier", "name": "iob_latch", "loc": {"line": 77, "column": 16, "file": "test.jz"}}
       ]},
-      {"type": "Assign", "block_kind": "RECEIVE", "loc": {"line": 78, "column": 5, "file": "test.jz"}, "children": [
-        {"type": "Identifier", "name": "comb_out", "loc": {"line": 78, "column": 5, "file": "test.jz"}},
-        {"type": "Binary", "block_kind": "BIT_XOR", "loc": {"line": 78, "column": 27, "file": "test.jz"}, "children": [
-          {"type": "Identifier", "name": "cfu_latch", "loc": {"line": 78, "column": 17, "file": "test.jz"}},
-          {"type": "Literal", "text": "8'hFF", "loc": {"line": 78, "column": 29, "file": "test.jz"}}
+      {"type": "Assign", "block_kind": "RECEIVE", "loc": {"line": 80, "column": 5, "file": "test.jz"}, "children": [
+        {"type": "Identifier", "name": "comb_out", "loc": {"line": 80, "column": 5, "file": "test.jz"}},
+        {"type": "Binary", "block_kind": "BIT_XOR", "loc": {"line": 80, "column": 27, "file": "test.jz"}, "children": [
+          {"type": "Identifier", "name": "cfu_latch", "loc": {"line": 80, "column": 17, "file": "test.jz"}},
+          {"type": "Literal", "text": "8'hFF", "loc": {"line": 80, "column": 29, "file": "test.jz"}}
         ]}
       ]}
     ]}

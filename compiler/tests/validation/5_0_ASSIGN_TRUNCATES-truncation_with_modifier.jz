@@ -52,6 +52,18 @@
     }
 @endmod
 
+// Helper module: truncation in @new binding with explicit alias modifier.
+@module NarrowInMod
+    PORT {
+        IN  [4] din;
+        OUT [1] tap;
+    }
+
+    ASYNCHRONOUS {
+        tap = din[0];
+    }
+@endmod
+
 @module TopMod
     PORT {
         IN  [1] clk;
@@ -75,6 +87,11 @@
         OUT [4] out_a = _;
         OUT [4] out_b = _;
         OUT [8] out_c = _;
+    };
+
+    @new inst_trunc NarrowInMod {
+        IN  [4] din =z wide;
+        OUT [1] tap = _;
     };
 
     ASYNCHRONOUS {

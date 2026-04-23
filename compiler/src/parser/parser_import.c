@@ -7,9 +7,10 @@
  * Imported modules, blackboxes, and global blocks are merged into the host
  * project AST.
  *
- * To ensure diagnostic stability, filename strings associated with imported
- * tokens are retained for the lifetime of parsing and freed only when parsing
- * is fully complete.
+ * To ensure diagnostic stability, both the original import spelling used for
+ * diagnostics and the resolved filesystem path used for nested resolution are
+ * retained for the lifetime of parsing and freed only when parsing is fully
+ * complete.
  */
 
 #include <stdio.h>
@@ -23,10 +24,13 @@
 #include "parser_internal.h"
 #include "path_security.h"
 
-/* Global storage for imported filename lifetime management. */
+/* Global storage for imported path lifetime management. */
 char  **g_imported_filenames      = NULL;
 size_t  g_imported_filenames_len  = 0;
 size_t  g_imported_filenames_cap  = 0;
+char  **g_imported_resolved_paths      = NULL;
+size_t  g_imported_resolved_paths_len  = 0;
+size_t  g_imported_resolved_paths_cap  = 0;
 
 /**
  * @brief Record an imported filename for lifetime management.
@@ -41,23 +45,42 @@ size_t  g_imported_filenames_cap  = 0;
  * @param path Allocated filename string to retain
  * @return 0 on success, -1 on allocation failure
  */
-static int remember_imported_filename(char *path)
+static int remember_imported_path(char ***paths,
+                                  size_t *len,
+                                  size_t *cap,
+                                  char *path)
 {
     if (!path) return 0;
-    if (g_imported_filenames_len == g_imported_filenames_cap) {
-        size_t new_cap = g_imported_filenames_cap ? g_imported_filenames_cap * 2 : 8;
-        char **new_arr = (char **)realloc(g_imported_filenames, new_cap * sizeof(char *));
+    if (*len == *cap) {
+        size_t new_cap = *cap ? *cap * 2 : 8;
+        char **new_arr = (char **)realloc(*paths, new_cap * sizeof(char *));
         if (!new_arr) {
             /* If we fail here, we must not drop the pointer, otherwise it would
              * leak without being tracked. Just fall back to leaking this one
              * path; callers can still free previously remembered ones. */
             return -1;
         }
-        g_imported_filenames = new_arr;
-        g_imported_filenames_cap = new_cap;
+        *paths = new_arr;
+        *cap = new_cap;
     }
-    g_imported_filenames[g_imported_filenames_len++] = path;
+    (*paths)[(*len)++] = path;
     return 0;
+}
+
+static int remember_imported_filename(char *path)
+{
+    return remember_imported_path(&g_imported_filenames,
+                                  &g_imported_filenames_len,
+                                  &g_imported_filenames_cap,
+                                  path);
+}
+
+static int remember_imported_resolved_path(char *path)
+{
+    return remember_imported_path(&g_imported_resolved_paths,
+                                  &g_imported_resolved_paths_len,
+                                  &g_imported_resolved_paths_cap,
+                                  path);
 }
 
 static int imported_name_collides(const JZASTNode *proj, const char *name)
@@ -148,12 +171,15 @@ int import_modules_from_path(const Parser *parent,
     /* Validate the import path against security policy. */
     char base_dir[512];
     base_dir[0] = '\0';
-    if (parent->filename) {
-        const char *slash = strrchr(parent->filename, '/');
+    const char *base_filename =
+        (parent && parent->resolved_filename) ? parent->resolved_filename :
+        (parent ? parent->filename : NULL);
+    if (base_filename) {
+        const char *slash = strrchr(base_filename, '/');
         if (slash) {
-            size_t dir_len = (size_t)(slash - parent->filename);
+            size_t dir_len = (size_t)(slash - base_filename);
             if (dir_len >= sizeof(base_dir)) dir_len = sizeof(base_dir) - 1;
-            memcpy(base_dir, parent->filename, dir_len);
+            memcpy(base_dir, base_filename, dir_len);
             base_dir[dir_len] = '\0';
         }
     }
@@ -204,11 +230,10 @@ int import_modules_from_path(const Parser *parent,
 
     /* IMPORT_FILE_MULTIPLE_TIMES: disallow importing the same resolved path more
      * than once into a single project (duplicate @import or nested re-import).
-     * We compare against the global list of previously imported filenames that
-     * is also used to keep JZLocation.filename pointers alive.
+     * We compare against the global list of previously imported resolved paths.
      */
-    for (size_t i = 0; i < g_imported_filenames_len; ++i) {
-        const char *seen = g_imported_filenames[i];
+    for (size_t i = 0; i < g_imported_resolved_paths_len; ++i) {
+        const char *seen = g_imported_resolved_paths[i];
         if (seen && strcmp(seen, full_path) == 0) {
             if (parent && parent->diagnostics && import_token) {
                 parser_report_rule(parent,
@@ -232,6 +257,22 @@ int import_modules_from_path(const Parser *parent,
         }
     }
 
+    char *display_path = jz_strdup(rel_path);
+    if (!display_path) {
+        free(full_path);
+        return -1;
+    }
+
+    if (remember_imported_filename(display_path) != 0) {
+        free(display_path);
+        free(full_path);
+        return -1;
+    }
+    if (remember_imported_resolved_path(full_path) != 0) {
+        free(full_path);
+        return -1;
+    }
+
     size_t size = 0;
     char *source = jz_read_entire_file(full_path, &size);
     if (!source) {
@@ -240,20 +281,19 @@ int import_modules_from_path(const Parser *parent,
          */
         fprintf(stderr, "%s:1:1: import error: failed to read imported file '%s'\n",
                 full_path, rel_path);
-        free(full_path);
         return -1;
     }
 
     JZTokenStream tokens;
-    if (jz_lex_source(full_path, source, &tokens, NULL) != 0) {
-        fprintf(stderr, "%s:1:1: import error: lexing failed for imported file\n", full_path);
+    if (jz_lex_source(display_path, source, &tokens, NULL) != 0) {
+        fprintf(stderr, "%s:1:1: import error: lexing failed for imported file\n", display_path);
         free(source);
-        free(full_path);
         return -1;
     }
 
     Parser ip;
-    ip.filename = full_path;
+    ip.filename = display_path;
+    ip.resolved_filename = full_path;
     ip.tokens = tokens.tokens;
     ip.count = tokens.count;
     ip.pos = 0;
@@ -273,14 +313,12 @@ int import_modules_from_path(const Parser *parent,
             if (!mod) {
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
 
             if (add_imported_module_like(parent, proj, mod) != 0) {
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
         } else if (t->type == JZ_TOK_KW_BLACKBOX) {
@@ -290,7 +328,6 @@ int import_modules_from_path(const Parser *parent,
                 parser_error(&ip, "expected identifier after @blackbox");
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
             advance(&ip);
@@ -299,7 +336,6 @@ int import_modules_from_path(const Parser *parent,
             if (!bb) {
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
             jz_ast_set_name(bb, name->lexeme);
@@ -308,7 +344,6 @@ int import_modules_from_path(const Parser *parent,
                 jz_ast_free(bb);
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
 
@@ -316,14 +351,12 @@ int import_modules_from_path(const Parser *parent,
                 jz_ast_free(bb);
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
 
             if (add_imported_module_like(parent, proj, bb) != 0) {
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
         } else if (t->type == JZ_TOK_KW_GLOBAL) {
@@ -337,7 +370,6 @@ int import_modules_from_path(const Parser *parent,
             if (!glob) {
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
 
@@ -345,9 +377,25 @@ int import_modules_from_path(const Parser *parent,
                 jz_ast_free(glob);
                 jz_token_stream_free(&tokens);
                 free(source);
-                free(full_path);
                 return -1;
             }
+        } else if (t->type == JZ_TOK_KW_IMPORT) {
+            advance(&ip);
+            const JZToken *path_tok = peek(&ip);
+            if (path_tok->type != JZ_TOK_STRING || !path_tok->lexeme) {
+                parser_error(&ip, "expected string after @import");
+                jz_token_stream_free(&tokens);
+                free(source);
+                return -1;
+            }
+            const char *path = path_tok->lexeme;
+            advance(&ip);
+            if (import_modules_from_path(&ip, proj, path, t) != 0) {
+                jz_token_stream_free(&tokens);
+                free(source);
+                return -1;
+            }
+            match(&ip, JZ_TOK_SEMICOLON); /* optional */
         } else if (t->type == JZ_TOK_KW_PROJECT) {
             if (!saw_project) {
                 saw_project = 1;
@@ -370,10 +418,6 @@ int import_modules_from_path(const Parser *parent,
             if (bad_proj) jz_ast_free(bad_proj);
             jz_token_stream_free(&tokens);
             free(source);
-            /* Keep full_path alive so the diagnostic's loc.filename pointer
-             * (set by the lexer) remains valid for later printing.
-             */
-            remember_imported_filename(full_path);
             return -1;
         } else {
             /* Skip other top-level constructs in imported files for now. */
@@ -384,13 +428,6 @@ int import_modules_from_path(const Parser *parent,
     jz_token_stream_free(&tokens);
     free(source);
 
-    /*
-     * Keep the allocated filename string alive so that all JZLocation.filename
-     * pointers in the imported AST remain valid. The caller is responsible
-     * for eventually calling jz_parser_free_imported_filenames() once the AST
-     * and any diagnostics that reference these locations are no longer used.
-     */
-    remember_imported_filename(full_path);
     return 0;
 }
 
@@ -402,9 +439,6 @@ int import_modules_from_path(const Parser *parent,
  */
 void jz_parser_free_imported_filenames(void)
 {
-    if (!g_imported_filenames) {
-        return;
-    }
     for (size_t i = 0; i < g_imported_filenames_len; ++i) {
         free(g_imported_filenames[i]);
     }
@@ -412,4 +446,12 @@ void jz_parser_free_imported_filenames(void)
     g_imported_filenames = NULL;
     g_imported_filenames_len = 0;
     g_imported_filenames_cap = 0;
+
+    for (size_t i = 0; i < g_imported_resolved_paths_len; ++i) {
+        free(g_imported_resolved_paths[i]);
+    }
+    free(g_imported_resolved_paths);
+    g_imported_resolved_paths = NULL;
+    g_imported_resolved_paths_len = 0;
+    g_imported_resolved_paths_cap = 0;
 }

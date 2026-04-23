@@ -40,27 +40,30 @@
  * parsing routines and is not exposed publicly.
  */
 typedef struct Parser {
-    const char     *filename;     /**< Source filename for diagnostics */
-    const JZToken  *tokens;       /**< Token array produced by the lexer */
-    size_t          count;        /**< Total number of tokens */
-    size_t          pos;          /**< Current parsing position */
-    JZDiagnosticList *diagnostics; /**< Diagnostic sink for rule-based errors */
+    const char       *filename;          /**< Source filename for diagnostics */
+    const char       *resolved_filename; /**< Filesystem path used for relative resolution */
+    const JZToken    *tokens;            /**< Token array produced by the lexer */
+    size_t            count;             /**< Total number of tokens */
+    size_t            pos;               /**< Current parsing position */
+    JZDiagnosticList *diagnostics;       /**< Diagnostic sink for rule-based errors */
 } Parser;
 
 /**
- * @brief Global list of imported filename strings.
+ * @brief Global lists of imported path strings.
  *
- * Imported files are lexed with a filename string allocated in
- * import_modules_from_path(). The lexer copies that filename pointer into
- * each token's JZLocation, and the parser copies it into AST nodes.
+ * Imported files retain two different path spellings:
+ * - the original user-written import path for token/AST locations
+ * - the resolved filesystem path for duplicate-import detection and nested
+ *   relative import resolution
  *
- * To avoid dangling pointers (and corrupted JSON or diagnostics output),
- * these filename strings are kept alive here and freed only when parsing
- * is fully complete.
+ * Both pointer sets are kept alive until parsing is fully complete.
  */
 extern char  **g_imported_filenames;
 extern size_t  g_imported_filenames_len;
 extern size_t  g_imported_filenames_cap;
+extern char  **g_imported_resolved_paths;
+extern size_t  g_imported_resolved_paths_len;
+extern size_t  g_imported_resolved_paths_cap;
 
 /**
  * @brief Conditionally consume the next token if it matches a given type.

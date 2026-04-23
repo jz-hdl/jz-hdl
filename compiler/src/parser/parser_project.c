@@ -848,6 +848,7 @@ JZASTNode *jz_parse_file(const char *filename,
 
     Parser p;
     p.filename = filename;
+    p.resolved_filename = filename;
     p.tokens = stream->tokens;
     p.count = stream->count;
     p.pos = 0;
