@@ -219,6 +219,240 @@ static void sem_check_bare_integer_in_expr(const JZASTNode *node,
     }
 }
 
+static void sem_check_expr_read_rules_recursive(JZASTNode *expr,
+                                                const JZModuleScope *mod_scope,
+                                                const JZBuffer *project_symbols,
+                                                const JZExprReadRulesContext *ctx,
+                                                JZDiagnosticList *diagnostics)
+{
+    if (!expr || !mod_scope || !ctx || !diagnostics) return;
+    int matched_mem_slice = 0;
+
+    if (ctx->check_bus_rules &&
+        (expr->type == JZ_AST_EXPR_BUS_ACCESS ||
+         expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
+        project_symbols) {
+        JZBusAccessInfo info;
+        memset(&info, 0, sizeof(info));
+        if (sem_resolve_bus_access(expr, mod_scope, project_symbols, &info, NULL) &&
+            info.signal_decl && !info.readable) {
+            char explain[256];
+            snprintf(explain, sizeof(explain),
+                     "BUS signal '%s' is write-only (SOURCE direction) and\n"
+                     "cannot be read. Only TARGET or INOUT signals are readable.",
+                     info.signal_name[0] ? info.signal_name
+                                         : (expr->name ? expr->name : "?"));
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "BUS_SIGNAL_READ_FROM_WRITABLE",
+                            explain);
+        }
+    }
+
+    if (expr->type == JZ_AST_EXPR_SLICE) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_slice(expr, mod_scope, NULL, &ref) &&
+            ref.port && ref.port->block_kind) {
+            matched_mem_slice = 1;
+            if (!ctx->is_instance_binding &&
+                strcmp(ref.port->block_kind, "IN") == 0) {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "%s.%s is an IN (write) port and cannot be read\n"
+                         "use an OUT port for read access",
+                         ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
+                         ref.port->name ? ref.port->name : "port");
+                sem_report_rule(diagnostics,
+                                expr->loc,
+                                "MEM_READ_FROM_WRITE_PORT",
+                                msg);
+            } else if (strcmp(ref.port->block_kind, "INOUT") == 0) {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "%s.%s is an INOUT port and may not be indexed directly\n"
+                         "use .addr, .data, or .wdata pseudo-fields instead",
+                         ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
+                         ref.port->name ? ref.port->name : "port");
+                sem_report_rule(diagnostics,
+                                expr->loc,
+                                "MEM_INOUT_INDEXED",
+                                msg);
+            }
+        }
+    } else if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_qualified_ident(expr, mod_scope, NULL, &ref) &&
+            ref.port && ref.port->block_kind) {
+            const char *mem_name = ref.mem_decl && ref.mem_decl->name
+                                   ? ref.mem_decl->name : "mem";
+            const char *port_name = ref.port->name ? ref.port->name : "port";
+            char msg[512];
+
+            if (strcmp(ref.port->block_kind, "IN") == 0) {
+                if (ctx->is_instance_binding) {
+                    goto recurse_children;
+                }
+                if (ref.field == MEM_PORT_FIELD_NONE) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s cannot be used directly as a signal\n"
+                             "use bracket syntax to write, or an OUT port to read",
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_USED_AS_SIGNAL",
+                                    msg);
+                } else {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s is an IN (write) port and cannot be read\n"
+                             "use an OUT port for read access",
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_READ_FROM_WRITE_PORT",
+                                    msg);
+                }
+            } else if (strcmp(ref.port->block_kind, "OUT") == 0) {
+                if (ctx->is_instance_binding) {
+                    goto recurse_children;
+                }
+                if (ref.field == MEM_PORT_FIELD_NONE) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s cannot be used directly as a signal\n"
+                             "use %s.%s.data to read or %s.%s.addr to set address",
+                             mem_name, port_name,
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_USED_AS_SIGNAL",
+                                    msg);
+                } else if (ref.field == MEM_PORT_FIELD_ADDR) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s.addr is a write-only input and cannot be read\n"
+                             "use %s.%s.data to read memory output",
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_ADDR_READ",
+                                    msg);
+                } else if (ref.field == MEM_PORT_FIELD_DATA &&
+                           ref.port->text && strcmp(ref.port->text, "ASYNC") == 0) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s is an ASYNC read port; use %s.%s[addr] indexed syntax instead of .data",
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_ASYNC_PORT_FIELD_DATA",
+                                    msg);
+                } else if (ref.field == MEM_PORT_FIELD_DATA &&
+                           ref.port->text && strcmp(ref.port->text, "SYNC") == 0 &&
+                           !ctx->is_sync_context) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s.data is a SYNC read output and may not be read in ASYNCHRONOUS blocks\n"
+                             "move the read into a SYNCHRONOUS block",
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_SYNC_DATA_IN_ASYNC_BLOCK",
+                                    msg);
+                }
+            } else if (strcmp(ref.port->block_kind, "INOUT") == 0) {
+                if (ctx->is_instance_binding) {
+                    if (ref.field == MEM_PORT_FIELD_ADDR) {
+                        snprintf(msg, sizeof(msg),
+                                 "%s.%s.addr may only be assigned in SYNCHRONOUS blocks",
+                                 mem_name, port_name);
+                        sem_report_rule(diagnostics,
+                                        expr->loc,
+                                        "MEM_INOUT_ADDR_IN_ASYNC",
+                                        msg);
+                    }
+                    goto recurse_children;
+                }
+                if (ref.field == MEM_PORT_FIELD_NONE) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s cannot be used directly as a signal\n"
+                             "use %s.%s.data to read or %s.%s.addr/.wdata to write",
+                             mem_name, port_name,
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_USED_AS_SIGNAL",
+                                    msg);
+                } else if (ref.field == MEM_PORT_FIELD_ADDR) {
+                    if (ctx->is_instance_binding) {
+                        snprintf(msg, sizeof(msg),
+                                 "%s.%s.addr may only be assigned in SYNCHRONOUS blocks",
+                                 mem_name, port_name);
+                        sem_report_rule(diagnostics,
+                                        expr->loc,
+                                        "MEM_INOUT_ADDR_IN_ASYNC",
+                                        msg);
+                    } else {
+                        snprintf(msg, sizeof(msg),
+                                 "%s.%s.addr is a write-only input and cannot be read\n"
+                                 "use %s.%s.data to read memory output",
+                                 mem_name, port_name,
+                                 mem_name, port_name);
+                        sem_report_rule(diagnostics,
+                                        expr->loc,
+                                        "MEM_PORT_ADDR_READ",
+                                        msg);
+                    }
+                } else if (ref.field == MEM_PORT_FIELD_WDATA) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s.wdata is a write-only input and cannot be read\n"
+                             "use %s.%s.data to read memory output",
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_ADDR_READ",
+                                    msg);
+                }
+            }
+        }
+    }
+
+recurse_children:
+    if (matched_mem_slice) {
+        for (size_t i = 1; i < expr->child_count; ++i) {
+            sem_check_expr_read_rules_recursive(expr->children[i],
+                                                mod_scope,
+                                                project_symbols,
+                                                ctx,
+                                                diagnostics);
+        }
+        return;
+    }
+
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        sem_check_expr_read_rules_recursive(expr->children[i],
+                                            mod_scope,
+                                            project_symbols,
+                                            ctx,
+                                            diagnostics);
+    }
+}
+
+void sem_check_expr_read_rules(JZASTNode *expr,
+                               const JZModuleScope *mod_scope,
+                               const JZBuffer *project_symbols,
+                               const JZExprReadRulesContext *ctx,
+                               JZDiagnosticList *diagnostics)
+{
+    sem_check_expr_read_rules_recursive(expr,
+                                        mod_scope,
+                                        project_symbols,
+                                        ctx,
+                                        diagnostics);
+}
+
 /*
  * Feature Guard helpers: validate @feature condition expressions and recursively
  * analyze their guarded bodies.

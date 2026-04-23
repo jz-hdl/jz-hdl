@@ -273,10 +273,21 @@ int sem_match_mem_port_qualified_ident(JZASTNode *expr,
                                        JZDiagnosticList *diagnostics,
                                        JZMemPortRef *out);
 
+typedef struct JZExprReadRulesContext {
+    int is_sync_context;
+    int is_instance_binding;
+    int check_bus_rules;
+} JZExprReadRulesContext;
+
 /* MEM declaration/access/usage helpers implemented in driver_mem.c. */
 void sem_check_mem_access_expr(JZASTNode *expr,
                                const JZModuleScope *mod_scope,
                                const JZBuffer *project_symbols,
+                               JZDiagnosticList *diagnostics);
+void sem_check_expr_read_rules(JZASTNode *expr,
+                               const JZModuleScope *mod_scope,
+                               const JZBuffer *project_symbols,
+                               const JZExprReadRulesContext *ctx,
                                JZDiagnosticList *diagnostics);
 void sem_check_mem_addr_assign(const JZMemPortRef *ref,
                                JZASTNode *addr_expr,

@@ -173,89 +173,6 @@ static int sem_eval_idx_expr(JZASTNode *expr, unsigned idx_value, unsigned *out)
     return -1;
 }
 
-static void sem_check_instance_binding_rhs_bus_reads(JZASTNode *expr,
-                                                     const JZModuleScope *scope,
-                                                     const JZBuffer *project_symbols,
-                                                     JZDiagnosticList *diagnostics)
-{
-    if (!expr || !scope || !project_symbols || !diagnostics) return;
-
-    if ((expr->type == JZ_AST_EXPR_BUS_ACCESS ||
-         expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
-        expr->name) {
-        JZBusAccessInfo info;
-        memset(&info, 0, sizeof(info));
-        if (sem_resolve_bus_access(expr, scope, project_symbols, &info, NULL) &&
-            info.signal_decl && !info.readable) {
-            char explain[256];
-            snprintf(explain, sizeof(explain),
-                     "BUS signal '%s' is write-only (SOURCE direction) and\n"
-                     "cannot be read. Only TARGET or INOUT signals are readable.",
-                     info.signal_name[0] ? info.signal_name : expr->name);
-            sem_report_rule(diagnostics,
-                            expr->loc,
-                            "BUS_SIGNAL_READ_FROM_WRITABLE",
-                            explain);
-        }
-    }
-
-    for (size_t i = 0; i < expr->child_count; ++i) {
-        sem_check_instance_binding_rhs_bus_reads(expr->children[i],
-                                                 scope,
-                                                 project_symbols,
-                                                 diagnostics);
-    }
-}
-
-static void sem_check_instance_binding_rhs_mem_accesses(JZASTNode *expr,
-                                                        const JZModuleScope *scope,
-                                                        JZDiagnosticList *diagnostics)
-{
-    if (!expr || !scope || !diagnostics) return;
-
-    if (expr->type == JZ_AST_EXPR_SLICE) {
-        JZMemPortRef ref;
-        memset(&ref, 0, sizeof(ref));
-        if (sem_match_mem_port_slice(expr, scope, NULL, &ref) &&
-            ref.port && ref.port->block_kind &&
-            strcmp(ref.port->block_kind, "INOUT") == 0) {
-            char explain[512];
-            snprintf(explain, sizeof(explain),
-                     "%s.%s is an INOUT port and may not be indexed directly\n"
-                     "use .addr, .data, or .wdata pseudo-fields instead",
-                     ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
-                     ref.port->name ? ref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            expr->loc,
-                            "MEM_INOUT_INDEXED",
-                            explain);
-        }
-    } else if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
-        JZMemPortRef ref;
-        memset(&ref, 0, sizeof(ref));
-        if (sem_match_mem_port_qualified_ident(expr, scope, NULL, &ref) &&
-            ref.port && ref.port->block_kind &&
-            strcmp(ref.port->block_kind, "INOUT") == 0 &&
-            ref.field == MEM_PORT_FIELD_ADDR) {
-            char explain[512];
-            snprintf(explain, sizeof(explain),
-                     "%s.%s.addr may only be assigned in SYNCHRONOUS blocks",
-                     ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
-                     ref.port->name ? ref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            expr->loc,
-                            "MEM_INOUT_ADDR_IN_ASYNC",
-                            explain);
-        }
-    }
-
-    for (size_t i = 0; i < expr->child_count; ++i) {
-        sem_check_instance_binding_rhs_mem_accesses(expr->children[i],
-                                                    scope,
-                                                    diagnostics);
-    }
-}
-
 void sem_check_module_instantiations(const JZModuleScope *scope,
                                             JZBuffer *module_scopes,
                                             const JZBuffer *project_symbols,
@@ -646,13 +563,17 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                         "IDX may only appear in parent-signal bindings of instance arrays");
                     }
 
-                    sem_check_instance_binding_rhs_bus_reads(rhs,
-                                                             scope,
-                                                             project_symbols,
-                                                             diagnostics);
-                    sem_check_instance_binding_rhs_mem_accesses(rhs,
-                                                                scope,
-                                                                diagnostics);
+                    {
+                        JZExprReadRulesContext read_ctx;
+                        memset(&read_ctx, 0, sizeof(read_ctx));
+                        read_ctx.is_instance_binding = 1;
+                        read_ctx.check_bus_rules = 1;
+                        sem_check_expr_read_rules(rhs,
+                                                  scope,
+                                                  project_symbols,
+                                                  &read_ctx,
+                                                  diagnostics);
+                    }
 
                     /* Simple Non-Overlap check for instance arrays:
                      * if this binding is for an OUT port of an arrayed instance and
