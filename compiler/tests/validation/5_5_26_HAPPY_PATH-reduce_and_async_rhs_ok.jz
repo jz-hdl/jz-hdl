@@ -1,0 +1,53 @@
+// HAPPY_PATH: §5.5.26 reduce_and(source) on an ASYNCHRONOUS RHS.
+// Exercises Req #2 with plain and expression sources in an ASYNCHRONOUS block.
+
+@project HAPPY_PATH_reduce_and_async_rhs_ok
+    @top TopMod {
+        IN  [8] src8 = _;
+        IN  [8] mask8 = _;
+        OUT [1] out_plain = _;
+        OUT [1] out_expr = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [8] src8;
+        IN  [8] mask8;
+        OUT [1] out_plain;
+        OUT [1] out_expr;
+    }
+
+    ASYNCHRONOUS {
+        // Req #2: reduce_and() is allowed directly on an ASYNCHRONOUS RHS.
+        out_plain = reduce_and(src8);
+        // Req #2: expression sources are also valid on an ASYNCHRONOUS RHS.
+        out_expr = reduce_and(src8 ^ mask8);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] src8;
+        IN  [8] mask8;
+        OUT [1] out_plain;
+        OUT [1] out_expr;
+    }
+
+    WIRE {
+        h_plain [1];
+        h_expr  [1];
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] src8 = src8;
+        IN  [8] mask8 = mask8;
+        OUT [1] out_plain = h_plain;
+        OUT [1] out_expr = h_expr;
+    };
+
+    ASYNCHRONOUS {
+        out_plain = h_plain;
+        out_expr = h_expr;
+    }
+@endmod

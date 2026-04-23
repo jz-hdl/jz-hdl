@@ -1,0 +1,52 @@
+// TEMPLATE_EXTERNAL_REF: external signal reference inside a template applied
+// in a SYNCHRONOUS block. This isolates the missing sync-expr context.
+
+@project TEMPLATE_EXTERNAL_REF_sync_expr
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+// Trigger 1 (sync-expr): template body references external register.
+@template ext_sync(dst)
+    dst <= ext_r;
+@endtemplate
+
+// Valid: parameter-only template in SYNCHRONOUS block.
+@template valid_sync(dst, src)
+    dst <= src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        ext_r [8] = 8'h00;
+        dst_r [8] = 8'h00;
+        ok_r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout = ok_r | dst_r | ext_r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1 (sync-expr): external register in template body.
+        @apply ext_sync(dst_r);
+
+        // Valid: only template parameters are referenced.
+        @apply valid_sync(ok_r, din);
+
+        ext_r <= din;
+    }
+@endmod

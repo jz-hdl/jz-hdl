@@ -1,0 +1,65 @@
+// Req #2: Limit tri-state to I/O boundaries.
+// Internal logic uses ordinary muxing, while the only z-release appears on the
+// top-level INOUT port where tri-state is intended to remain.
+
+@project req2_top_level_inout_boundary_ok
+    @top TopMod {
+        IN    [1] drive_en = _;
+        IN    [1] select_b = _;
+        IN    [8] data_a = _;
+        IN    [8] data_b = _;
+        OUT   [8] observed = _;
+        INOUT [8] pad = _;
+    }
+@endproj
+
+@module InternalMux
+    PORT {
+        IN  [1] select_b;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        OUT [8] data_out;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: internal selection stays as explicit mux logic.
+        IF (select_b == 1'b1) {
+            data_out <= data_b;
+        } ELSE {
+            data_out <= data_a;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] drive_en;
+        IN    [1] select_b;
+        IN    [8] data_a;
+        IN    [8] data_b;
+        OUT   [8] observed;
+        INOUT [8] pad;
+    }
+
+    WIRE {
+        mux_data [8];
+    }
+
+    @new mux InternalMux {
+        IN  [1] select_b = select_b;
+        IN  [8] data_a = data_a;
+        IN  [8] data_b = data_b;
+        OUT [8] data_out = mux_data;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: tri-state is confined to the top-level I/O boundary.
+        IF (drive_en == 1'b1) {
+            pad <= mux_data;
+        } ELSE {
+            pad <= 8'bzzzz_zzzz;
+        }
+
+        observed <= mux_data;
+    }
+@endmod

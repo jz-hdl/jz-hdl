@@ -1,0 +1,41 @@
+// Req #10 (10.9 Rationale): Templates apply in both ASYNCHRONOUS and
+// SYNCHRONOUS blocks.
+
+@project REQ10_works_in_async_and_sync_ok
+    CONFIG {
+        WIDTH = 1;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template invert_once(src, dst)
+    dst <= ~src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        stage [1];
+    }
+
+    ASYNCHRONOUS {
+        @apply invert_once(r, stage);
+        data = ~stage;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        @apply invert_once(r, r);
+    }
+@endmod

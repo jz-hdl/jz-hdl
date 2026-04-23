@@ -1,0 +1,75 @@
+// Req #2: @check is a static validator, not a behavioral construct.
+// Runtime signals are rejected in @check because it is compile-time only.
+
+@project check_static_validator_not_behavioral
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    // Valid: project-level compile-time check.
+    @check (CONFIG.WIDTH == 8, "project config ok");
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST { LOCAL_W = 8; }
+
+    // Valid: module CONST in @check.
+    @check (LOCAL_W == CONFIG.WIDTH, "helper const ok");
+
+    // Trigger 1: input port is a runtime signal, not a static validator operand.
+    @check (din == 8'h00, "helper runtime signal");
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST { WIDTH_OK = CONFIG.WIDTH; }
+
+    WIRE {
+        w [8];
+    }
+
+    // Valid: module CONST in @check.
+    @check (WIDTH_OK == 8, "top const ok");
+
+    @new helper HelperMod {
+        IN  [8] din = r;
+        OUT [8] data = _;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Trigger 2: register is runtime state, not a static validator operand.
+    @check (r == 8'h00, "top register signal");
+
+    // Trigger 3: wire is runtime logic, not a static validator operand.
+    @check (w == 8'h00, "top wire signal");
+
+    ASYNCHRONOUS {
+        w = r;
+        data = w;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

@@ -1,0 +1,93 @@
+// TOP_PORT_SIGNAL_WIDTH_MISMATCH: binding width must match differential pin width=.
+// Target diagnostics: TOP_PORT_SIGNAL_WIDTH_MISMATCH on IN, OUT, and INOUT
+// bindings whose widths disagree with the pin's logical width attribute.
+
+@project(CHIP="XC7A35T-2FGG484") TOP_PORT_SIGNAL_WIDTH_MISMATCH_diff_pin_width_attr
+    CLOCKS {
+        sys_clk = { period=10.0 };
+        serial_clk = { period=2.5 };
+        parallel_clk = { period=10.0 };
+        reset_n = { period=10.0 };
+    }
+
+    IN_PINS {
+        sys_clk = { standard=LVCMOS33 };
+        serial_clk = { standard=LVCMOS33 };
+        parallel_clk = { standard=LVCMOS33 };
+        reset_n = { standard=LVCMOS33 };
+        rx_ok = { mode=DIFFERENTIAL, standard=LVDS25, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+        rx_bad = { mode=DIFFERENTIAL, standard=LVDS25, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+    }
+
+    OUT_PINS {
+        tx_ok = { mode=DIFFERENTIAL, standard=LVDS25, drive=8, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+        tx_bad = { mode=DIFFERENTIAL, standard=LVDS25, drive=8, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+    }
+
+    INOUT_PINS {
+        io_ok = { mode=DIFFERENTIAL, standard=LVDS25, drive=8, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+        io_bad = { mode=DIFFERENTIAL, standard=LVDS25, drive=8, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+    }
+
+    MAP {
+        sys_clk = "E3";
+        serial_clk = "F3";
+        parallel_clk = "G3";
+        reset_n = "H3";
+        rx_ok = { P="A1", N="A2" };
+        rx_bad = { P="A3", N="A4" };
+        tx_ok = { P="B1", N="B2" };
+        tx_bad = { P="B3", N="B4" };
+        io_ok = { P="C1", N="C2" };
+        io_bad = { P="C3", N="C4" };
+    }
+
+    @top TopMod {
+        IN    [1] clk      = sys_clk;
+        IN    [4] rx_good  = rx_ok;
+        // Trigger 1: top binding width [3] does not match differential width=4.
+        IN    [3] rx_bad_w = rx_bad;
+        OUT   [4] tx_good  = tx_ok;
+        // Trigger 2: top binding width [5] does not match differential width=4.
+        OUT   [5] tx_bad_w = tx_bad;
+        INOUT [4] io_good  = io_ok;
+        // Trigger 3: top binding width [2] does not match differential width=4.
+        INOUT [2] io_bad_w = io_bad;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [4] rx_good;
+        IN    [3] rx_bad_w;
+        OUT   [4] tx_good;
+        OUT   [5] tx_bad_w;
+        INOUT [4] io_good;
+        INOUT [2] io_bad_w;
+    }
+
+    REGISTER {
+        phase [1] = 1'b0;
+        tx_reg [4] = 4'b0000;
+        io_reg [4] = 4'b0000;
+    }
+
+    ASYNCHRONOUS {
+        tx_good = tx_reg;
+        tx_bad_w = { tx_reg, phase };
+        IF (phase) {
+            io_good <= io_reg;
+            io_bad_w <= io_reg[1:0];
+        } ELSE {
+            io_good <= 4'bzzzz;
+            io_bad_w <= 2'bzz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        phase <= ~phase;
+        tx_reg <= rx_good;
+        io_reg <= { rx_bad_w, phase };
+    }
+@endmod

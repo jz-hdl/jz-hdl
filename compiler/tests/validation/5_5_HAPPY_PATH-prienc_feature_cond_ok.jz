@@ -1,0 +1,80 @@
+// HAPPY_PATH: prienc(source) used inside a @feature condition.
+// Exercises §5.5.14 prienc syntax, result width, and MSB-first semantics
+// in the feature-cond context with sized-literal operands. No diagnostics
+// expected.
+// new-binding is inapplicable: @new instance bindings only accept signal-like
+// expressions and literals (parser_instance.c).
+// check-expr is inapplicable: @check rejects prienc() with
+// CHECK_INVALID_EXPR_TYPE before §5.5.14 can fire.
+
+@project HAPPY_PATH_prienc_feature_cond_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1: minimum valid source width. prienc(2'b10) -> 1'd1.
+    @feature prienc(2'b10) == 1'd1
+        CONST { F_PAIR = 1; }
+    @else
+        CONST { F_PAIR = 0; }
+    @endfeat
+
+    // Trigger 2: 4-bit source. Result width = clog2(4) = 2.
+    @feature prienc(4'b0100) == 2'd2
+        CONST { F_NIBBLE = 1; }
+    @else
+        CONST { F_NIBBLE = 0; }
+    @endfeat
+
+    // Trigger 3: MSB-first semantics. Highest set bit is bit 7, not bit 5.
+    @feature prienc(8'b1010_0000) == 3'd7
+        CONST { F_MSB = 1; }
+    @else
+        CONST { F_MSB = 0; }
+    @endfeat
+
+    // Trigger 4: middle bits. Highest set bit is bit 2.
+    @feature prienc(8'b0000_0110) == 3'd2
+        CONST { F_MID = 1; }
+    @else
+        CONST { F_MID = 0; }
+    @endfeat
+
+    // Trigger 5: no bits set. Result is 0.
+    @feature prienc(8'b0000_0000) == 3'd0
+        CONST { F_ZERO = 1; }
+    @else
+        CONST { F_ZERO = 0; }
+    @endfeat
+
+    // Trigger 6: 16-bit source. Result width = clog2(16) = 4.
+    @feature prienc(16'h8001) == 4'd15
+        CONST { F_WIDE = 1; }
+    @else
+        CONST { F_WIDE = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'd0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

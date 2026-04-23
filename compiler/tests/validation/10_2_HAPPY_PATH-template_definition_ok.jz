@@ -1,7 +1,9 @@
 // HAPPY_PATH: Valid template definitions in all supported contexts.
 // Covers: module-scoped templates, file-scoped templates, zero-parameter templates,
 // multiple distinct templates in same scope, same template name in different module
-// scopes, and template name matching wire/register names.
+// scopes, template name matching wire/register names, and expression
+// placeholders used alongside @new bindings, @check expressions, and @feature
+// conditions.
 // No diagnostics expected.
 
 @project HAPPY_PATH_template_definition_ok
@@ -27,6 +29,15 @@
 // Multiple distinct file-scoped templates in same scope
 @template file_tmpl_b(a, b)
     a <= b;
+@endtemplate
+
+// File-scoped template with expression placeholders
+@template file_tmpl_select(dst, cond, when_true, when_false)
+    IF (cond) {
+        dst <= when_true;
+    } ELSE {
+        dst <= when_false;
+    }
 @endtemplate
 
 @module HelperMod
@@ -66,6 +77,22 @@
         OUT [1] data;
     }
 
+    CONST {
+        CHECK_CONST = CONFIG.WIDTH;
+    }
+
+    @check (CHECK_CONST == 8, "template definition happy-path check context");
+
+    @feature CHECK_CONST == 8
+        CONST {
+            FEATURE_GATE = 1;
+        }
+    @else
+        CONST {
+            FEATURE_GATE = 0;
+        }
+    @endfeat
+
     // Module-scoped template in TopMod
     @template inner_tmpl(a, b)
         a <= b;
@@ -87,7 +114,7 @@
     @endtemplate
 
     @new inst_a HelperMod {
-        IN  [1] din = r;
+        IN  [1] din = w2;
         OUT [1] data = _;
     };
 
@@ -95,7 +122,12 @@
         r [1] = 1'b0;
     }
 
+    WIRE {
+        w2 [1];
+    }
+
     ASYNCHRONOUS {
+        @apply file_tmpl_select(w2, r, r, 1'b0);
         data = r;
     }
 

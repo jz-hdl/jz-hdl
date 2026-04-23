@@ -1,0 +1,51 @@
+// Req #3: `jz-hdl design.jz` defaults to ASIC/simulation tri-state semantics.
+// Internal tri-state is allowed without transform flags and should warn rather
+// than trigger transformation.
+
+@project REQ3_default_allows_z_ok
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en = _;
+        OUT   [8] data = _;
+        INOUT [8] bidir = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        OUT   [8] data;
+        INOUT [8] bidir;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    WIRE {
+        // Trigger 1: internal tri-state is permitted in default mode.
+        w_top [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_top <= r;
+        } ELSE {
+            w_top <= 8'bzzzz_zzzz;
+        }
+
+        // Valid: external INOUT tri-state remains permitted.
+        IF (en) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 8'bzzzz_zzzz;
+        }
+
+        data <= w_top;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

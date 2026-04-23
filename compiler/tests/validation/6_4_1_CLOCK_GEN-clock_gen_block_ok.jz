@@ -1,0 +1,96 @@
+// Req #1: Valid CLOCK_GEN block syntax and supported generator forms.
+// Exercises CLOCK_GEN with PLL, CLKDIV, OSC, BUF, CLKDIV2, and BUF2.
+
+@project(CHIP="gw2ar-18-qn88-c8-i7") CLOCK_GEN_clock_gen_block_ok
+    CLOCKS {
+        ref_clk = { period=10 };
+        pll_base;
+        pll_phase;
+        div_clk;
+        osc_clk;
+        buf_clk;
+        hclk_div2;
+        hclk_buf2;
+    }
+
+    IN_PINS {
+        ref_clk = { standard=LVCMOS33 };
+    }
+
+    MAP {
+        ref_clk = 1;
+    }
+
+    CLOCK_GEN {
+        PLL {
+            IN REF_CLK ref_clk;
+            OUT BASE pll_base;
+            OUT PHASE pll_phase;
+            WIRE LOCK pll_lock;
+
+            CONFIG {
+                IDIV = 0;
+                FBDIV = 3;
+                ODIV = 2;
+            };
+        };
+
+        CLKDIV {
+            IN REF_CLK ref_clk;
+            OUT BASE div_clk;
+
+            CONFIG {
+                DIV_MODE = 2;
+            };
+        };
+
+        OSC {
+            OUT BASE osc_clk;
+
+            CONFIG {
+                DIV = 10;
+            };
+        };
+
+        BUF {
+            IN REF_CLK ref_clk;
+            OUT BASE buf_clk;
+        };
+
+        CLKDIV2 {
+            IN REF_CLK ref_clk;
+            OUT BASE hclk_div2;
+        };
+
+        BUF2 {
+            IN REF_CLK ref_clk;
+            OUT BASE hclk_buf2;
+        };
+    }
+
+    @top TopMod {
+        IN  [1] clk = ref_clk;
+        IN  [1] lock = pll_lock;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] lock;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r & lock;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,0 +1,37 @@
+// Req #3: the same data bus is used as an output when rw = 1 and as an input
+// when rw = 0, with the control signal selecting the direction of use.
+
+@project REQ3_rw_controls_bus_direction_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] rw = _;
+        IN  [8] write_data = _;
+        OUT [8] observed = _;
+        INOUT [8] data_bus = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] rw;
+        IN    [8] write_data;
+        OUT   [8] observed;
+        INOUT [8] data_bus;
+    }
+
+    REGISTER {
+        rx_buffer [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: rw = 1 makes data_bus an output from the transceiver.
+        data_bus <= (rw == 1'b1) ? write_data : 8'bzzzz_zzzz;
+        observed <= rx_buffer;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: rw = 0 makes the same data_bus an input to sample.
+        rx_buffer <= data_bus;
+    }
+@endmod

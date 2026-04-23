@@ -1,0 +1,71 @@
+// Req #1: If it compiles, the hardware is valid.
+// This happy-path test uses @check for compile-time structural sanity only.
+
+@project if_it_compiles_hardware_is_valid_ok
+    CONFIG {
+        WIDTH = 8;
+        DEPTH = 16;
+    }
+
+    // Valid: project-level width sanity check.
+    @check (CONFIG.WIDTH == 8, "project width ok");
+
+    // Valid: project-level parameter compatibility check.
+    @check (clog2(CONFIG.DEPTH) == 4, "project depth ok");
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST { LOCAL_W = 8; }
+
+    // Valid: module-local width relationship.
+    @check (LOCAL_W == CONFIG.WIDTH, "helper width matches config");
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        WIDTH_OK = CONFIG.WIDTH;
+        ADDR_W = clog2(CONFIG.DEPTH);
+    }
+
+    // Valid: top-level parameter propagation.
+    @check (WIDTH_OK == 8, "top width ok");
+
+    // Valid: address width derived from depth.
+    @check (ADDR_W == 4, "top addr width ok");
+
+    @new helper HelperMod {
+        IN  [8] din = r;
+        OUT [8] data = _;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

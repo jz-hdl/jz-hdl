@@ -1,0 +1,73 @@
+// HAPPY_PATH: Explicit sized literals are valid runtime values.
+// Covers §6.3.1 Req #8 by assigning sized literals to nets and registers
+// instead of using CONFIG/CONST identifiers directly as runtime literals.
+// No diagnostics expected.
+
+@project EXPLICIT_SIZED_LITERAL_runtime_assignment_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [CONFIG.WIDTH] din = _;
+        OUT [CONFIG.WIDTH] dout = _;
+    }
+@endproj
+
+@module HelperLit
+    PORT {
+        IN  [1] clk;
+        IN  [CONFIG.WIDTH] din;
+        OUT [CONFIG.WIDTH] dout;
+    }
+    REGISTER {
+        hold [CONFIG.WIDTH] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Valid: explicit sized literal in runtime expression
+        dout <= din ^ hold ^ 8'hA5;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: explicit sized literal assigned to a register and later read
+        hold <= 8'h3C;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        LOCAL_W = CONFIG.WIDTH;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [LOCAL_W] din;
+        OUT [LOCAL_W] dout;
+    }
+
+    WIRE {
+        helper_out [LOCAL_W];
+        lit_wire [LOCAL_W];
+    }
+
+    @new helper HelperLit {
+        IN  [1] clk = clk;
+        IN  [LOCAL_W] din = din;
+        OUT [LOCAL_W] dout = helper_out;
+    };
+
+    REGISTER {
+        state [LOCAL_W] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: explicit sized literal assigned to a net with receive syntax
+        lit_wire <= 8'hFF;
+        dout = helper_out | lit_wire | state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: explicit sized literal in synchronous logic
+        state <= 8'h55;
+    }
+@endmod

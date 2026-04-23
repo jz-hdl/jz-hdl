@@ -73,6 +73,21 @@ typedef struct IR_ModuleSpec {
  */
 char *ir_strdup_arena(JZArena *arena, const char *s);
 
+/**
+ * @brief Deep-clone an IR design into the given arena.
+ *
+ * The clone duplicates all nested arrays, strings, expression trees, and
+ * statement trees so the result can be mutated independently of the source.
+ *
+ * @param src        Source design to clone.
+ * @param arena      Arena that will own the cloned design.
+ * @param out_clone  Receives the cloned design on success.
+ * @return 0 on success, non-zero on allocation failure.
+ */
+int ir_clone_design(const IR_Design *src,
+                    JZArena *arena,
+                    IR_Design **out_clone);
+
 /* ============================================================================
  * Top-level IR construction
  * ============================================================================

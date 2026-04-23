@@ -1,0 +1,57 @@
+// Req #1: Use explicit guards instead of separate conditional assignments.
+// This fixture keeps the data selection portable by expressing the choice as a
+// single IF/ELIF/ELSE chain rather than as multiple independent drivers.
+
+@project req1_explicit_guards_ok
+    @top TopMod {
+        IN  [2] sel = _;
+        IN  [8] rom_data = _;
+        IN  [8] ram_data = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMux
+    PORT {
+        IN  [2] sel;
+        IN  [8] rom_data;
+        IN  [8] ram_data;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: explicit guard chain with a defined default arm.
+        IF (sel == 2'b00) {
+            data <= rom_data;
+        } ELIF (sel == 2'b01) {
+            data <= ram_data;
+        } ELSE {
+            data <= 8'h00;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [2] sel;
+        IN  [8] rom_data;
+        IN  [8] ram_data;
+        OUT [8] data;
+    }
+
+    WIRE {
+        helper_data [8];
+    }
+
+    @new mux HelperMux {
+        IN  [2] sel = sel;
+        IN  [8] rom_data = rom_data;
+        IN  [8] ram_data = ram_data;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: top-level assignment remains a single guarded data path.
+        data <= helper_data;
+    }
+@endmod

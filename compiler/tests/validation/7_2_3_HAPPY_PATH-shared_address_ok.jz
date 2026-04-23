@@ -1,0 +1,100 @@
+// HAPPY_PATH: Valid §7.2.3 INOUT usage with one shared address for read and write.
+// Exercises read-only and read/write cycles through the same `.addr` pseudo-field,
+// leaves `.wdata` unassigned on some execution paths to model read-only cycles,
+// and captures `.data` through a register to model the documented one-cycle
+// read latency in both helper and top modules without false positives.
+
+@project HAPPY_PATH_shared_address_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] addr = _;
+        IN  [16] wdata = _;
+        IN  [1] we = _;
+        OUT [16] helper_data = _;
+        OUT [16] top_data = _;
+    }
+@endproj
+
+// Helper: the same `.addr` field selects the read data and the optional write target.
+// `r_data` captures `mem_h.rw.data`, modeling the previous-cycle read result.
+// When `we` is false, `.wdata` is not assigned and the cycle remains read-only.
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] addr;
+        IN  [16] wdata;
+        IN  [1] we;
+        OUT [16] data;
+    }
+
+    REGISTER {
+        r_data [16] = 16'h0000;
+    }
+
+    MEM(type=BLOCK) {
+        mem_h [16] [256] = 16'h0000 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_h.rw.addr <= addr;
+        r_data <= mem_h.rw.data;
+        IF (we) {
+            mem_h.rw.wdata <= wdata;
+        }
+    }
+@endmod
+
+// Top: one `.addr` field drives both the visible readback and the conditional write.
+// `r_read` captures `mem_t.rw.data`, again exercising the one-cycle read latency.
+// The `IF (we)` guard also covers the read-only-cycle form with no `.wdata` write.
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] addr;
+        IN  [16] wdata;
+        IN  [1] we;
+        OUT [16] helper_data;
+        OUT [16] top_data;
+    }
+
+    REGISTER {
+        r_read [16] = 16'h0000;
+    }
+
+    MEM(type=BLOCK) {
+        mem_t [16] [256] = 16'h0000 {
+            INOUT rw;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] addr = addr;
+        IN  [16] wdata = wdata;
+        IN  [1] we = we;
+        OUT [16] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        top_data = r_read;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_t.rw.addr <= addr;
+        r_read <= mem_t.rw.data;
+        IF (we) {
+            mem_t.rw.wdata <= wdata;
+        }
+    }
+@endmod

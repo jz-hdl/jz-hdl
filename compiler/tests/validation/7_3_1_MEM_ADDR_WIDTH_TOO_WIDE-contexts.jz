@@ -1,0 +1,45 @@
+// MEM_ADDR_WIDTH_TOO_WIDE: ASYNC read address wider than ceil(log2(depth))
+// in a SYNCHRONOUS expression for §7.3.1.
+
+@project MEM_ADDR_WIDTH_TOO_WIDE_contexts
+    CONFIG {
+        OK_W = 4;
+        WIDE_W = 5;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [OK_W] ok_addr = _;
+        IN  [WIDE_W] wide_addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] ok_addr;
+        IN  [5] wide_addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        // Valid: 4-bit address fits the 16-deep memory.
+        data = mem_t.rd[ok_addr] ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1 (sync-expr): 5-bit address for 16-deep ASYNC read in sync.
+        r <= mem_t.rd[wide_addr];
+    }
+@endmod

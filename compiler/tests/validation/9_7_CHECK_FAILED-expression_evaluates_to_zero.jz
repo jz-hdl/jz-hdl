@@ -1,0 +1,50 @@
+// CHECK_FAILED: @check conditions that evaluate to zero must fail under S9.7.
+// Valid nonzero checks are included to verify no false positives.
+
+@project CHECK_FAILED_expression_evaluates_to_zero
+    CONFIG {
+        WIDTH = 8;
+        DEPTH = 16;
+    }
+
+    // Valid: project-scope nonzero constant expression.
+    @check (CONFIG.WIDTH == 8, "project width ok");
+
+    // Trigger 1: project-scope expression evaluates to zero.
+    @check (CONFIG.WIDTH - 8, "project zero expression");
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        LOCAL_W = 8;
+        ADDR_W = 4;
+    }
+
+    // Valid: module-scope nonzero constant expression.
+    @check (LOCAL_W == CONFIG.WIDTH, "module width ok");
+
+    // Trigger 2: module-scope expression evaluates to zero.
+    @check (ADDR_W - clog2(CONFIG.DEPTH), "module zero expression");
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

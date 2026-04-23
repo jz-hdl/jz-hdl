@@ -1,0 +1,93 @@
+// OUT (Read Port): SYNC read-port access contexts for §7.2.1.
+// Includes valid SYNC `.addr`/`.data` usage and exploratory invalid uses
+// across ASYNC, @new, @check, and @feature contexts.
+
+@project OUT_READ_PORT_sync_read_contexts
+    CONFIG {
+        ADDR_W = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module SinkMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd SYNC;
+        };
+    }
+
+    // Trigger 1 (new-binding): SYNC read data in @new binding.
+    @new inst_data SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rd.data;
+        OUT [8] dout = _;
+    };
+
+    // Trigger 2 (new-binding): SYNC read address pseudo-field used as readable value.
+    @new inst_addr SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = {4'b0000, mem_t.rd.addr};
+        OUT [8] dout = _;
+    };
+
+    // Trigger 3 (check-expr): SYNC read data in @check.
+    @check (mem_t.rd.data == 8'h00, "sync data in check");
+
+    // Trigger 4 (check-expr): SYNC read address in @check.
+    @check (mem_t.rd.addr == 4'h0, "sync addr in check");
+
+    // Trigger 5 (feature-cond): SYNC read data in @feature.
+    @feature mem_t.rd.data == 8'h00
+        CONST { MODE_A = 1; }
+    @else
+        CONST { MODE_A = 0; }
+    @endfeat
+
+    // Trigger 6 (feature-cond): SYNC read address in @feature.
+    @feature mem_t.rd.addr == 4'h0
+        CONST { MODE_B = 1; }
+    @else
+        CONST { MODE_B = 0; }
+    @endfeat
+
+    ASYNCHRONOUS {
+        // Trigger 7 (async-expr): SYNC read data in ASYNCHRONOUS block.
+        data = mem_t.rd.data ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: SYNC read address assignment and data capture.
+        mem_t.rd.addr <= addr;
+        r <= mem_t.rd.data;
+    }
+@endmod

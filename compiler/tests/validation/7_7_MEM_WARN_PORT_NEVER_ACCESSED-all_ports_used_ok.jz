@@ -1,0 +1,61 @@
+// MEM_WARN_PORT_NEVER_ACCESSED: all MEM port kinds are used and should not warn.
+// Verifies ASYNC OUT, SYNC OUT, IN, and INOUT ports compile cleanly when exercised.
+
+@project MEM_WARN_PORT_NEVER_ACCESSED_all_ports_used_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        sync_read [8] = 8'h00;
+        rw_read [8] = 8'h00;
+    }
+
+    MEM {
+        mem_async [8] [4] = 8'h00 {
+            OUT rd_async ASYNC;
+            IN  wr_async;
+        };
+    }
+
+    MEM {
+        mem_sync [8] [4] = 8'h00 {
+            OUT rd_sync SYNC;
+            IN  wr_sync;
+        };
+    }
+
+    MEM {
+        mem_rw [8] [4] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_async.rd_async[addr] ^ sync_read ^ rw_read;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_sync.rd_sync.addr <= addr;
+        sync_read <= mem_sync.rd_sync.data;
+
+        mem_rw.rw.addr <= addr;
+        rw_read <= mem_rw.rw.data;
+
+        mem_async.wr_async[addr] <= wdata;
+        mem_sync.wr_sync[addr] <= wdata;
+        mem_rw.rw.wdata <= wdata;
+    }
+@endmod

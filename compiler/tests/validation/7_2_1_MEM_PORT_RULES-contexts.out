@@ -1,0 +1,6 @@
+File: 7_2_1_MEM_PORT_RULES-contexts.jz
+      63:13   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)
+      66:13   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)
+      69:14   error FEATURE_EXPR_INVALID_CONTEXT S4.14 Feature guard condition may only reference CONFIG.<name>, module CONST, and literals
+      76:14   error FEATURE_EXPR_INVALID_CONTEXT S4.14 Feature guard condition may only reference CONFIG.<name>, module CONST, and literals
+      76:23   error FEATURE_EXPR_INVALID_CONTEXT S4.14 Feature guard condition may only reference CONFIG.<name>, module CONST, and literals

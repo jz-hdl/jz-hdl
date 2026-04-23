@@ -1,0 +1,35 @@
+// HAPPY_PATH: abs() allowed on SYNCHRONOUS RHS in §5.5.18.
+// Exercises:
+//   Req #6 - SYNCHRONOUS RHS.
+
+@project HAPPY_PATH_abs_sync_rhs_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] src = _;
+        OUT [9] out_abs = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src;
+        OUT [9] out_abs;
+    }
+
+    REGISTER {
+        r_abs [9] = 9'd0;
+    }
+
+    ASYNCHRONOUS {
+        out_abs = r_abs;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_abs <= abs(src);
+    }
+@endmod

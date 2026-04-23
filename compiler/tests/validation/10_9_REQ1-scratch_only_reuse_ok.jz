@@ -1,0 +1,45 @@
+// Req #1 (10.9 Rationale): @scratch enables local temporary wires inside
+// templates without introducing structural declarations into the module.
+
+@project REQ1_scratch_only_reuse_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template invert_then_forward(src, dst)
+    @scratch tmp [1];
+    tmp <= ~src;
+    dst <= ~tmp;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        stage_a [1];
+        stage_b [1];
+    }
+
+    ASYNCHRONOUS {
+        @apply invert_then_forward(r, stage_a);
+        @apply invert_then_forward(stage_a, stage_b);
+        data = stage_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

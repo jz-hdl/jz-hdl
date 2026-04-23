@@ -1,0 +1,41 @@
+// MEM_INVALID_PORT_TYPE: supported MEM port direction/qualifier combinations are valid.
+
+@project MEM_INVALID_PORT_TYPE_valid_port_types_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_ok [8] [4] = 8'h00 {
+            OUT rd_async ASYNC;
+            OUT rd_sync SYNC;
+            IN  wr;
+        };
+    }
+
+    REGISTER {
+        sync_data [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = mem_ok.rd_async[addr] ^ sync_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_ok.rd_sync.addr <= addr;
+        sync_data <= mem_ok.rd_sync.data;
+        mem_ok.wr[addr] <= wdata;
+    }
+@endmod

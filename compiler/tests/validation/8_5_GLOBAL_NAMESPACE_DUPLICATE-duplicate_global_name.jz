@@ -1,0 +1,37 @@
+// GLOBAL_NAMESPACE_DUPLICATE: duplicate @global namespace names are rejected compilation-wide.
+// Trigger 1 duplicates the namespace name while keeping both blocks otherwise valid.
+
+@global ISA
+    ADD = 8'h01;
+@endglob
+
+// Trigger 1: duplicate @global namespace name in the same compilation unit
+@global ISA
+    SUB = 8'h02;
+@endglob
+
+@project GLOBAL_NAMESPACE_DUPLICATE_duplicate_global_name
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ISA.ADD;
+    }
+@endmod

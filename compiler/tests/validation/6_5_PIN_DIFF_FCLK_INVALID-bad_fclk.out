@@ -1,0 +1,2 @@
+File: 6_5_PIN_DIFF_FCLK_INVALID-bad_fclk.jz
+      21:9    error PIN_DIFF_FCLK_INVALID S6.5/S6.9 Differential pin fclk must reference CLOCKS or CLOCK_GEN output

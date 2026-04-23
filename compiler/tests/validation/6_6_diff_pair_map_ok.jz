@@ -1,0 +1,46 @@
+// HAPPY_PATH: Valid scalar and indexed differential MAP entries.
+// Covers <pin_name> = { P=<id>, N=<id> } and <pin_name>[<index>] = { P=<id>, N=<id> }.
+
+@project diff_pair_map_ok
+    IN_PINS {
+        clk = { standard=LVCMOS33 };
+        diff_in = { mode=DIFFERENTIAL, standard=LVDS25 };
+        diff_bus[2] = { mode=DIFFERENTIAL, standard=LVDS25 };
+    }
+
+    OUT_PINS {
+        led = { standard=LVCMOS33, drive=8 };
+    }
+
+    MAP {
+        clk = 1;
+        diff_in = { P=10, N=11 };
+        diff_bus[0] = { P=12, N=13 };
+        diff_bus[1] = { P=14, N=15 };
+        led = 16;
+    }
+
+    @top TopMod {
+        IN  [1] clk = clk;
+        OUT [1] data = led;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

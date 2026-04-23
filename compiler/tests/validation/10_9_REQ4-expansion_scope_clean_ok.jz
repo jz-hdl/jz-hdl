@@ -1,0 +1,45 @@
+// Req #4 (10.9 Rationale): Reapplying a scratch-using template does not add
+// visible identifiers to the enclosing module namespace.
+
+@project REQ4_expansion_scope_clean_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template local_temp(src, dst)
+    @scratch tmp [1];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        stage_a [1];
+        stage_b [1];
+    }
+
+    ASYNCHRONOUS {
+        @apply local_temp(r, stage_a);
+        @apply local_temp(stage_a, stage_b);
+        data = stage_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

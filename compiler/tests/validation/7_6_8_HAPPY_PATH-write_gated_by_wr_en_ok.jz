@@ -1,0 +1,74 @@
+// HAPPY_PATH: Valid §7.6.8 write-enable gating for single-port INOUT memory.
+// Covers Req #4: writes occur only when wr_en is asserted.
+
+@project HAPPY_PATH_write_gated_by_wr_en_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [6] addr = _;
+        IN  [8] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [8] gated_read = _;
+        OUT [8] ungated_observe = _;
+    }
+@endproj
+
+@module GatedWriteRam
+    PORT {
+        IN  [1] clk;
+        IN  [6] addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] gated_read;
+        OUT [8] ungated_observe;
+    }
+
+    REGISTER {
+        gated_hold [8] = 8'h00;
+        observe_hold [8] = 8'h00;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [8] [64] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        gated_read = gated_hold;
+        ungated_observe = observe_hold;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem.rw.addr <= addr;
+        gated_hold <= mem.rw.data;
+        observe_hold <= gated_hold;
+        IF (wr_en) {
+            mem.rw.wdata <= wr_data;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [6] addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] gated_read;
+        OUT [8] ungated_observe;
+    }
+
+    @new gated_ram GatedWriteRam {
+        IN  [1] clk = clk;
+        IN  [6] addr = addr;
+        IN  [8] wr_data = wr_data;
+        IN  [1] wr_en = wr_en;
+        OUT [8] gated_read = gated_read;
+        OUT [8] ungated_observe = ungated_observe;
+    };
+
+    ASYNCHRONOUS {
+        gated_read = gated_ram.gated_read;
+        ungated_observe = gated_ram.ungated_observe;
+    }
+@endmod

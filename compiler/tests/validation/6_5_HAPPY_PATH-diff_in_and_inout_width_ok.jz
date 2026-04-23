@@ -1,0 +1,68 @@
+// HAPPY_PATH: Differential input and inout pins with width=4 bind cleanly.
+// Exercises deserializer semantics on IN_PINS and width-aware binding on
+// INOUT_PINS without introducing non-target diagnostics.
+
+@project(CHIP="XC7A35T-2FGG484") HAPPY_PATH_diff_in_and_inout_width_ok
+    CLOCKS {
+        sys_clk = { period=10.0 };
+        serial_clk = { period=2.5 };
+        parallel_clk = { period=10.0 };
+        reset_n = { period=10.0 };
+    }
+
+    IN_PINS {
+        sys_clk = { standard=LVCMOS33 };
+        serial_clk = { standard=LVCMOS33 };
+        parallel_clk = { standard=LVCMOS33 };
+        reset_n = { standard=LVCMOS33 };
+        diff_rx = { mode=DIFFERENTIAL, standard=LVDS25, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+    }
+
+    INOUT_PINS {
+        diff_io = { mode=DIFFERENTIAL, standard=LVDS25, drive=8, width=4, fclk=serial_clk, pclk=parallel_clk, reset=reset_n };
+    }
+
+    MAP {
+        sys_clk = "E3";
+        serial_clk = "F3";
+        parallel_clk = "G3";
+        reset_n = "H3";
+        diff_rx = { P="A1", N="A2" };
+        diff_io = { P="B1", N="B2" };
+    }
+
+    @top TopMod {
+        IN    [1] clk    = sys_clk;
+        IN    [4] rx     = diff_rx;
+        INOUT [4] io_bus = diff_io;
+        OUT   [4] data   = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [4] rx;
+        INOUT [4] io_bus;
+        OUT   [4] data;
+    }
+
+    REGISTER {
+        phase [1] = 1'b0;
+        shadow [4] = 4'b0000;
+    }
+
+    ASYNCHRONOUS {
+        data = shadow ^ rx;
+        IF (phase) {
+            io_bus <= shadow;
+        } ELSE {
+            io_bus <= 4'bzzzz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        phase <= ~phase;
+        shadow <= rx;
+    }
+@endmod

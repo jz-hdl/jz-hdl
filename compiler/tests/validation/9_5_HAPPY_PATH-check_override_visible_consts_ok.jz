@@ -1,0 +1,56 @@
+// HAPPY_PATH: S9.5 @check sees overridden CONST values in an instantiated module.
+// The child module's @check directives must observe both the overridden base
+// CONST and the derived CONSTs computed from it.
+
+@project HAPPY_PATH_check_override_visible_consts_ok
+    CONFIG {
+        CHILD_BASE = 4;
+    }
+
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module CheckedChild
+    CONST {
+        BASE = 2;
+        WIDTH = BASE * 2;
+        DEPTH = WIDTH + BASE;
+    }
+
+    PORT {
+        IN  [WIDTH] din;
+        OUT [WIDTH] data;
+    }
+
+    // Trigger 1: the overridden base CONST is visible to @check.
+    @check (BASE == 4, "override base visible");
+
+    // Trigger 2: derived CONSTs are re-evaluated after OVERRIDE is applied.
+    @check (WIDTH == 8, "override derived width visible");
+    @check (DEPTH == 12, "override transitive const visible");
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    @new checked CheckedChild {
+        OVERRIDE {
+            BASE = CONFIG.CHILD_BASE;
+        }
+        IN  [8] din = din;
+        OUT [8] data = data;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

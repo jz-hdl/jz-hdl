@@ -1,0 +1,134 @@
+// Req #2: --tristate-default applies to multi-driver tri-state nets where at
+// least one driver assigns z and peers assign 0, 1, or expressions.
+// Valid: each shared net is driven by two helper instances with complementary
+// tri-state enables, so the net is truly multi-driver and transformable.
+
+@project REQ2_multi_driver_values_transform
+    @top TopMod {
+        IN  [1] sel_zero = _;
+        IN  [1] sel_one = _;
+        IN  [1] sel_expr = _;
+        IN  [8] din = _;
+        OUT [8] dout_zero = _;
+        OUT [8] dout_one = _;
+        OUT [8] dout_expr = _;
+    }
+@endproj
+
+@module DriveZeroHi
+    PORT {
+        IN    [1] sel;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b1) ? 8'h00 : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriveOneHi
+    PORT {
+        IN    [1] sel;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b1) ? 8'hFF : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriveZeroLo
+    PORT {
+        IN    [1] sel;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b0) ? 8'h00 : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriveExprHi
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b1) ? (din ^ 8'h3C) : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriveExprLo
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        bus <= (sel == 1'b0) ? (din | 8'hA5) : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel_zero;
+        IN  [1] sel_one;
+        IN  [1] sel_expr;
+        IN  [8] din;
+        OUT [8] dout_zero;
+        OUT [8] dout_one;
+        OUT [8] dout_expr;
+    }
+
+    WIRE {
+        zero_bus [8];
+        one_bus  [8];
+        expr_bus [8];
+    }
+
+    @new inst_zero_const DriveZeroHi {
+        IN    [1] sel = sel_zero;
+        INOUT [8] bus = zero_bus;
+    };
+
+    @new inst_zero_expr DriveExprLo {
+        IN    [1] sel = sel_zero;
+        IN    [8] din = din;
+        INOUT [8] bus = zero_bus;
+    };
+
+    @new inst_one_const DriveOneHi {
+        IN    [1] sel = sel_one;
+        INOUT [8] bus = one_bus;
+    };
+
+    @new inst_one_expr DriveExprLo {
+        IN    [1] sel = sel_one;
+        IN    [8] din = din;
+        INOUT [8] bus = one_bus;
+    };
+
+    @new inst_expr_hi DriveExprHi {
+        IN    [1] sel = sel_expr;
+        IN    [8] din = din;
+        INOUT [8] bus = expr_bus;
+    };
+
+    @new inst_expr_zero DriveZeroLo {
+        IN    [1] sel = sel_expr;
+        INOUT [8] bus = expr_bus;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 1: multi-driver net with z + constant-zero peer.
+        // Trigger 2: multi-driver net with z + constant-one peer.
+        // Trigger 3: multi-driver net with z + expression peer.
+
+        dout_zero <= zero_bus;
+        dout_one <= one_bus;
+        dout_expr <= expr_bus;
+    }
+@endmod

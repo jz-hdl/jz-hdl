@@ -3,7 +3,13 @@
 // Valid complete {P,N} mapping included to verify no false positives.
 
 @project MAP_DIFF_MISSING_PN_missing_pn
+    CLOCKS {
+        clk = { period=10 };
+    }
+
     IN_PINS {
+        clk = { standard=LVCMOS33 };
+        rst = { standard=LVCMOS33 };
         // Trigger 1: missing N in differential MAP
         diff_a = { mode=DIFFERENTIAL, standard=LVDS25 };
         // Trigger 2: missing P in differential MAP
@@ -14,7 +20,7 @@
 
     OUT_PINS {
         // Trigger 3: missing N in OUT differential MAP
-        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=diff_a, pclk=diff_a, reset=diff_a };
+        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=clk, pclk=clk, reset=rst };
     }
 
     INOUT_PINS {
@@ -23,6 +29,8 @@
     }
 
     MAP {
+        clk = 1;
+        rst = 2;
         diff_a = { P=10 };
         diff_b = { N=12 };
         valid_diff = { P=14, N=15 };
@@ -31,7 +39,7 @@
     }
 
     @top TopMod {
-        IN  [1] clk = _;
+        IN  [1] clk = clk;
         OUT [1] data = _;
     }
 @endproj

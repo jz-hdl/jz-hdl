@@ -1,0 +1,68 @@
+// MEM_PORT_NAME_CONFLICT_MODULE_ID: MEM port names distinct from module-scope identifiers are valid.
+
+@project MEM_PORT_NAME_CONFLICT_MODULE_ID_unique_names_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    CONST {
+        DEPTH = 4;
+    }
+
+    REGISTER {
+        reg_q [8] = 8'h00;
+    }
+
+    WIRE {
+        wire_q [8];
+    }
+
+    MEM {
+        mem_ok [8] [DEPTH] = 8'h00 {
+            OUT mem_rd ASYNC;
+            IN  mem_wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        wire_q = mem_ok.mem_rd[addr];
+        data = wire_q ^ reg_q;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        reg_q <= wdata;
+        mem_ok.mem_wr[addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = inst_h.data;
+    }
+@endmod

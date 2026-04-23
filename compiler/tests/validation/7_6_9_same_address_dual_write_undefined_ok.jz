@@ -1,0 +1,86 @@
+// HAPPY_PATH: Valid §7.6.9 concurrent same-address writes on dual INOUT ports.
+// Covers Req #4: same-address dual writes are allowed and left hardware-dependent.
+
+@project same_address_dual_write_undefined_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] shared_addr = _;
+        IN  [DATA_W] wdata_a = _;
+        IN  [DATA_W] wdata_b = _;
+        IN  [1] we_a = _;
+        IN  [1] we_b = _;
+        OUT [DATA_W] rdata_a = _;
+        OUT [DATA_W] rdata_b = _;
+        OUT [DATA_W] write_mix = _;
+    }
+@endproj
+
+@module WriteMixer
+    PORT {
+        IN  [8] left;
+        IN  [8] right;
+        OUT [8] mixed;
+    }
+
+    ASYNCHRONOUS {
+        mixed = left ^ right;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] shared_addr;
+        IN  [8] wdata_a;
+        IN  [8] wdata_b;
+        IN  [1] we_a;
+        IN  [1] we_b;
+        OUT [8] rdata_a;
+        OUT [8] rdata_b;
+        OUT [8] write_mix;
+    }
+
+    REGISTER {
+        rd_hold_a [8] = 8'h00;
+        rd_hold_b [8] = 8'h00;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [8] [16] = 8'h00 {
+            INOUT port_a;
+            INOUT port_b;
+        };
+    }
+
+    @new mixer WriteMixer {
+        IN  [8] left = rd_hold_a;
+        IN  [8] right = rd_hold_b;
+        OUT [8] mixed = write_mix;
+    };
+
+    ASYNCHRONOUS {
+        rdata_a = rd_hold_a;
+        rdata_b = rd_hold_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Both ports intentionally target the same address in the same cycle.
+        mem.port_a.addr <= shared_addr;
+        mem.port_b.addr <= shared_addr;
+        rd_hold_a <= mem.port_a.data;
+        rd_hold_b <= mem.port_b.data;
+
+        IF (we_a) {
+            mem.port_a.wdata <= wdata_a;
+        }
+
+        IF (we_b) {
+            mem.port_b.wdata <= wdata_b;
+        }
+    }
+@endmod

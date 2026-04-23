@@ -1,0 +1,37 @@
+// MEM_DUP_PORT_NAME: distinct MEM port names compile cleanly.
+
+@project MEM_DUP_PORT_NAME_unique_port_names_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_ok [8] [4] = 8'h00 {
+            OUT rd_a ASYNC;
+            OUT rd_b ASYNC;
+            IN  wr_a;
+            IN  wr_b;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_ok.rd_a[addr] ^ mem_ok.rd_b[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_ok.wr_a[addr] <= wdata;
+        mem_ok.wr_b[addr] <= wdata ^ 8'hFF;
+    }
+@endmod

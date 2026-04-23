@@ -30,6 +30,9 @@
 
     @top TopMod {
         IN  [1] clk = clk_a;
+        IN  [1] clk_b_in = clk_b;
+        IN  [1] clk_c_in = clk_c;
+        IN  [1] clk_d_in = clk_d;
         OUT [1] data = _;
     }
 @endproj
@@ -37,6 +40,9 @@
 @module TopMod
     PORT {
         IN  [1] clk;
+        IN  [1] clk_b_in;
+        IN  [1] clk_c_in;
+        IN  [1] clk_d_in;
         OUT [1] data;
     }
 
@@ -45,7 +51,7 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = r ^ clk_b_in ^ clk_c_in ^ clk_d_in;
     }
 
     SYNCHRONOUS(CLK=clk) {

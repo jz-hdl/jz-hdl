@@ -1,0 +1,77 @@
+// REQ2: A tri-state net cannot be transformed when different bit groups of the
+// same signal are driven by different driver sets.
+
+@project DIFFERENT_DRIVER_SETS_PER_BIT
+    @top TopMod {
+        IN  [1] en_hi = _;
+        IN  [1] en_lo = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] en_hi;
+        IN  [1] en_lo;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        helper_bus [8];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: High bits and low bits use different driver sets inside a
+        // helper module, forcing a forbidden per-bit transform.
+        IF (en_hi) {
+            helper_bus[7:4] <= 4'hA;
+        } ELSE {
+            helper_bus[7:4] <= 4'bzzzz;
+        }
+
+        IF (en_lo) {
+            helper_bus[3:0] <= 4'h5;
+        } ELSE {
+            helper_bus[3:0] <= 4'bzzzz;
+        }
+
+        observed <= helper_bus;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en_hi;
+        IN  [1] en_lo;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        shared_bus [8];
+        helper_out [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en_hi = en_hi;
+        IN  [1] en_lo = en_lo;
+        OUT [8] observed = helper_out;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: The top-level bus repeats the same per-bit mismatch so
+        // the rule is covered in a direct module context as well.
+        IF (en_hi) {
+            shared_bus[7:4] <= 4'hC;
+        } ELSE {
+            shared_bus[7:4] <= 4'bzzzz;
+        }
+
+        IF (en_lo) {
+            shared_bus[3:0] <= 4'h3;
+        } ELSE {
+            shared_bus[3:0] <= 4'bzzzz;
+        }
+
+        observed <= shared_bus;
+    }
+@endmod

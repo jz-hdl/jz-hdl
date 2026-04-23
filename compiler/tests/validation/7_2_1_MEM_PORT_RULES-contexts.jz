@@ -1,0 +1,92 @@
+// MEM_PORT_USED_AS_SIGNAL and MEM_SYNC_PORT_INDEXED across non-sync contexts.
+// Includes valid SYNC `.addr`/`.data` usage as the happy-path counterpart.
+
+@project MEM_PORT_RULES_contexts
+    CONFIG {
+        ADDR_W = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module SinkMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd SYNC;
+        };
+    }
+
+    // Trigger 1 (new-binding): bare SYNC read port in @new binding.
+    @new inst_bare SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rd;
+        OUT [8] dout = _;
+    };
+
+    // Trigger 2 (new-binding): indexed SYNC read port in @new binding.
+    @new inst_idx SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rd[addr];
+        OUT [8] dout = _;
+    };
+
+    // Trigger 3 (check-expr): bare SYNC read port in @check.
+    @check (mem_t.rd == 8'h00, "bare sync port in check");
+
+    // Trigger 4 (check-expr): indexed SYNC read port in @check.
+    @check (mem_t.rd[addr] == 8'h00, "indexed sync port in check");
+
+    // Trigger 5 (feature-cond): bare SYNC read port in @feature.
+    @feature mem_t.rd == 8'h00
+        CONST { MODE_A = 1; }
+    @else
+        CONST { MODE_A = 0; }
+    @endfeat
+
+    // Trigger 6 (feature-cond): indexed SYNC read port in @feature.
+    @feature mem_t.rd[addr] == 8'h00
+        CONST { MODE_B = 1; }
+    @else
+        CONST { MODE_B = 0; }
+    @endfeat
+
+    ASYNCHRONOUS {
+        // Trigger 7 (async-expr): indexed SYNC read port in ASYNCHRONOUS block.
+        data = mem_t.rd[addr] ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: proper SYNC read-port access.
+        mem_t.rd.addr <= addr;
+        r <= mem_t.rd.data;
+    }
+@endmod

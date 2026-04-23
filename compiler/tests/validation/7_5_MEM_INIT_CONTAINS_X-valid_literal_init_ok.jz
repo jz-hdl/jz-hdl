@@ -1,0 +1,79 @@
+// MEM_INIT_CONTAINS_X: Valid memory init literals do not contain x bits.
+// Covers helper and top module literal initialization without false positives.
+// No diagnostics expected.
+
+@project MEM_INIT_CONTAINS_X_valid_literal_init_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        hold [8] = 8'h00;
+    }
+
+    // Valid: binary literal init contains only 0/1 bits.
+    MEM {
+        mem_a [8] [16] = 8'b1100_0100 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_a.rd[addr] ^ hold;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        hold <= 8'h3C;
+        mem_a.wr[addr] <= 8'h00;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    WIRE {
+        helper_data [8];
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    // Valid: hexadecimal literal init contains no x bits.
+    MEM {
+        mem_b [8] [16] = 8'hA5 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        data = helper_data ^ mem_b.rd[addr] ^ state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= 8'h5A;
+        mem_b.wr[addr] <= 8'h00;
+    }
+@endmod

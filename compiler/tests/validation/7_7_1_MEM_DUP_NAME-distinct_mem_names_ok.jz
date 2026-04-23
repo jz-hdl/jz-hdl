@@ -1,0 +1,42 @@
+// MEM_DUP_NAME: multiple MEM blocks with distinct names compile cleanly.
+
+@project MEM_DUP_NAME_distinct_mem_names_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_a [8] [4] = 8'h11 {
+            OUT rd_a ASYNC;
+            IN  wr_a;
+        };
+    }
+
+    MEM {
+        mem_b [8] [4] = 8'h22 {
+            OUT rd_b ASYNC;
+            IN  wr_b;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_a.rd_a[addr] ^ mem_b.rd_b[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_a.wr_a[addr] <= wdata;
+        mem_b.wr_b[addr] <= wdata ^ 8'hFF;
+    }
+@endmod

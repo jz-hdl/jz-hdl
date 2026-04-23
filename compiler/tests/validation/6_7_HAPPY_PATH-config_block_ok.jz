@@ -1,0 +1,39 @@
+// HAPPY_PATH: Valid CONFIG block inside a blackbox project.
+// Covers S6.7 Req #6-#9 by exercising CONFIG { ... } with multiple
+// nonnegative integer entries and using CONFIG values in blackbox/module widths.
+
+@project HAPPY_PATH_config_block_ok
+    CONFIG {
+        BASE_W = 4;
+        EXTRA_W = 4;
+        DATA_W = 8;
+    }
+
+    @blackbox bb_cfg {
+        PORT {
+            IN  [CONFIG.DATA_W] din;
+            OUT [CONFIG.DATA_W] dout;
+        }
+    }
+
+    @top TopMod {
+        IN  [CONFIG.DATA_W] din = _;
+        OUT [CONFIG.DATA_W] dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [CONFIG.DATA_W] din;
+        OUT [CONFIG.DATA_W] dout;
+    }
+
+    @new inst_cfg bb_cfg {
+        IN  [CONFIG.DATA_W] din = din;
+        OUT [CONFIG.DATA_W] dout = dout;
+    };
+
+    ASYNCHRONOUS {
+        // blackbox drives dout
+    }
+@endmod

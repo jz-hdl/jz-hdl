@@ -1,0 +1,4 @@
+File: 11_5_GND_REQ1-maintain_width_ok.jz
+      13:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      26:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      48:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

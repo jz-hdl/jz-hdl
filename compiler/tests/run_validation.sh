@@ -48,6 +48,10 @@ for file in "${validation_files[@]}"; do
     *_GND_*) extra_flags+=(--tristate-default=GND) ;;
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
     12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    12_4_HAPPY_PATH-textual_normalization_nonexistent_outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    12_4_REQ11-additional_sandbox_root_ok.jz) extra_flags+=(--allow-traversal "--sandbox-root=${ROOT_DIR}/tests") ;;
+    12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz) extra_flags+=(--allow-absolute-paths) ;;
+    12_4_PATH_TRAVERSAL_FORBIDDEN-traversal_import_ok.jz) extra_flags+=(--allow-traversal) ;;
   esac
 
   # Run linter by default; serializer coverage needs backend emission because

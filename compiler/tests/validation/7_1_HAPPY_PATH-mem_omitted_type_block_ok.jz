@@ -1,0 +1,41 @@
+// HAPPY_PATH: Omitted MEM type with depth > 16 and SYNC OUT infers BLOCK.
+// On the selected chip, width 32 is unsupported for DISTRIBUTED but valid for BLOCK.
+
+@project(CHIP="gw1nr-9-qn88-c6-i5") HAPPY_PATH_mem_omitted_type_block_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [5] addr = _;
+        IN  [32] wdata = _;
+        OUT [32] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [5] addr;
+        IN  [32] wdata;
+        OUT [32] data;
+    }
+
+    REGISTER {
+        rdata [32] = 32'h0000_0000;
+    }
+
+    MEM {
+        mem_auto [32] [32] = 32'h0000_0000 {
+            OUT rd SYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = rdata;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_auto.rd.addr <= addr;
+        rdata <= mem_auto.rd.data;
+        mem_auto.wr[addr] <= wdata;
+    }
+@endmod

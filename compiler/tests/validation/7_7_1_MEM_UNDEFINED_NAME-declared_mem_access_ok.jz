@@ -1,0 +1,67 @@
+// MEM_UNDEFINED_NAME: declared MEM accesses in valid async and sync contexts.
+// Exercises the same access forms as the negative fixtures without any
+// undefined memory names, so no diagnostics should be emitted.
+
+@project MEM_UNDEFINED_NAME_declared_mem_access_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        helper_mem [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = helper_mem.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        helper_mem.wr[addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        top_mem [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = top_mem.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        top_mem.wr[addr] <= wdata;
+    }
+@endmod

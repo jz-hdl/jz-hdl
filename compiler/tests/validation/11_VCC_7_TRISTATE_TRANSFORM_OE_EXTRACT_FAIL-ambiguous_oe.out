@@ -1,7 +1,3 @@
-File: 11_VCC_7_TRISTATE_TRANSFORM_OE_EXTRACT_FAIL-ambiguous_oe.jz
-      15:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      28:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      50:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-
 File: <input>
       32:0    error TRISTATE_TRANSFORM_OE_EXTRACT_FAIL S11.7 Could not extract output-enable condition from tri-state port; _oe driven high as fallback
+      32:0    error TRISTATE_TRANSFORM_ROLLBACK S11.5 Tri-state transform failed and was rolled back to the pre-transform IR

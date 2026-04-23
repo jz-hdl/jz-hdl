@@ -3,7 +3,13 @@
 // Valid different P and N included to verify no false positives.
 
 @project MAP_DIFF_SAME_PIN_same_pn
+    CLOCKS {
+        clk = { period=10 };
+    }
+
     IN_PINS {
+        clk = { standard=LVCMOS33 };
+        rst = { standard=LVCMOS33 };
         // Trigger 1: P and N are same pin on IN
         diff_in = { mode=DIFFERENTIAL, standard=LVDS25 };
         // Valid: P and N are different
@@ -12,7 +18,7 @@
 
     OUT_PINS {
         // Trigger 2: P and N are same pin on OUT
-        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=diff_in, pclk=diff_in, reset=diff_in };
+        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=clk, pclk=clk, reset=rst };
     }
 
     INOUT_PINS {
@@ -21,6 +27,8 @@
     }
 
     MAP {
+        clk = 1;
+        rst = 2;
         diff_in = { P=10, N=10 };
         valid_diff = { P=12, N=13 };
         diff_out = { P=20, N=20 };
@@ -28,7 +36,7 @@
     }
 
     @top TopMod {
-        IN  [1] clk = _;
+        IN  [1] clk = clk;
         OUT [1] data = _;
     }
 @endproj

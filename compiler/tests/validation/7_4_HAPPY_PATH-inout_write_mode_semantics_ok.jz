@@ -1,0 +1,116 @@
+// HAPPY_PATH: Valid §7.4 INOUT write-mode semantics coverage.
+// Covers Req #26-32 with shared-address INOUT accesses, write cycles for all
+// three write modes, read-only cycles when .wdata is not assigned, and
+// subsequent-cycle visibility after writes commit.
+
+@project HAPPY_PATH_inout_write_mode_semantics_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        IN  [DATA_W] wdata = _;
+        IN  [1] we = _;
+        OUT [DATA_W] write_cycle_view = _;
+        OUT [DATA_W] read_only_view = _;
+        OUT [DATA_W] later_cycle_view = _;
+    }
+@endproj
+
+@module InoutHelper
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        IN  [1] we;
+        OUT [8] write_cycle_view;
+        OUT [8] read_only_view;
+        OUT [8] later_cycle_view;
+    }
+
+    REGISTER {
+        read_only_hold [8] = 8'h00;
+        later_capture [8] = 8'h00;
+    }
+
+    // Req #26-30: INOUT ports always share .addr and apply write mode on write cycles.
+    MEM(type=BLOCK) {
+        mem_wf [8] [16] = 8'h00 {
+            INOUT rw_wf WRITE_FIRST;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_rf [8] [16] = 8'h00 {
+            INOUT rw_rf READ_FIRST;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_nc [8] [16] = 8'h00 {
+            INOUT rw_nc NO_CHANGE;
+        };
+    }
+
+    ASYNCHRONOUS {
+        write_cycle_view = mem_wf.rw_wf.data
+                         ^ mem_rf.rw_rf.data
+                         ^ mem_nc.rw_nc.data;
+        // Req #31: read-only cycles observe stored value regardless of mode.
+        read_only_view = read_only_hold;
+        // Req #32: later cycles observe the written value after commit.
+        later_cycle_view = later_capture;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_wf.rw_wf.addr <= addr;
+        mem_rf.rw_rf.addr <= addr;
+        mem_nc.rw_nc.addr <= addr;
+
+        IF (we) {
+            // Req #27-30: write-cycle .data behavior with shared address.
+            mem_wf.rw_wf.wdata <= wdata;
+            mem_rf.rw_rf.wdata <= wdata;
+            mem_nc.rw_nc.wdata <= wdata;
+        }
+
+        // Req #31: no .wdata assignment on read-only cycles.
+        read_only_hold <= mem_wf.rw_wf.data
+                        ^ mem_rf.rw_rf.data
+                        ^ mem_nc.rw_nc.data;
+
+        // Req #32: later-cycle view after the prior write.
+        later_capture <= read_only_hold;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        IN  [1] we;
+        OUT [8] write_cycle_view;
+        OUT [8] read_only_view;
+        OUT [8] later_cycle_view;
+    }
+
+    @new inout_modes InoutHelper {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        IN  [1] we = we;
+        OUT [8] write_cycle_view = write_cycle_view;
+        OUT [8] read_only_view = read_only_view;
+        OUT [8] later_cycle_view = later_cycle_view;
+    };
+
+    ASYNCHRONOUS {
+        write_cycle_view = inout_modes.write_cycle_view;
+        read_only_view = inout_modes.read_only_view;
+        later_cycle_view = inout_modes.later_cycle_view;
+    }
+@endmod

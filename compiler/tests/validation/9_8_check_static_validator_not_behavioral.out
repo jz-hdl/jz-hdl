@@ -1,0 +1,4 @@
+File: 9_8_check_static_validator_not_behavioral.jz
+      30:13   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)
+      62:13   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)
+      65:13   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)

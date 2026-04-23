@@ -1,0 +1,60 @@
+// MAP_DIFF_EXPECTED_PAIR: Differential pins must use { P=<id>, N=<id> } MAP syntax.
+// Triggers: scalar MAP syntax on IN, OUT, and INOUT differential pins.
+// Valid single-ended mappings included to verify no false positives.
+
+@project MAP_DIFF_EXPECTED_PAIR_scalar_rhs
+    CLOCKS {
+        clk = { period=10 };
+    }
+
+    IN_PINS {
+        clk = { standard=LVCMOS33 };
+        rst = { standard=LVCMOS33 };
+        // Trigger 1: IN differential pin mapped with scalar RHS
+        diff_in = { mode=DIFFERENTIAL, standard=LVDS25 };
+    }
+
+    OUT_PINS {
+        led = { standard=LVCMOS33, drive=8 };
+        // Trigger 2: OUT differential pin mapped with scalar RHS
+        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=clk, pclk=clk, reset=rst };
+    }
+
+    INOUT_PINS {
+        // Trigger 3: INOUT differential pin mapped with scalar RHS
+        diff_io = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5 };
+    }
+
+    MAP {
+        clk = 1;
+        rst = 2;
+        diff_in = 10;
+        led = 11;
+        diff_out = 12;
+        diff_io = 13;
+    }
+
+    @top TopMod {
+        IN  [1] clk = clk;
+        OUT [1] data = led;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

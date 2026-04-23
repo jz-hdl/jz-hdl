@@ -1,0 +1,65 @@
+// GLOBAL_USED_WHERE_FORBIDDEN: GLOBAL.<name> used in forbidden value contexts.
+// Tests GLOBAL references in @new bindings, @check expressions, and @feature
+// conditions. Valid runtime use in ASYNCHRONOUS and SYNCHRONOUS blocks is
+// included to verify no false positives.
+
+@global FLAGS
+    ENABLE = 1'b1;
+    VALUE  = 8'hA5;
+@endglob
+
+@project GLOBAL_USED_WHERE_FORBIDDEN_missing_contexts
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module ChildMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Trigger 1: GLOBAL reference in @check expression
+    @check (FLAGS.VALUE == 8'hA5, "global in check");
+
+    // Trigger 2: GLOBAL reference in @feature condition
+    @feature FLAGS.ENABLE == 1'b1
+    @endfeat
+
+    // Trigger 3: GLOBAL reference in @new binding expression
+    @new inst_a ChildMod {
+        IN  [8] din = FLAGS.VALUE;
+        OUT [8] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: GLOBAL in async RHS
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: GLOBAL in sync RHS
+        r <= FLAGS.VALUE;
+    }
+@endmod

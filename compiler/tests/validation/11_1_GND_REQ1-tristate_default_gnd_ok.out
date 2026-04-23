@@ -1,0 +1,5 @@
+File: 11_1_GND_REQ1-tristate_default_gnd_ok.jz
+      14:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      23:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC
+      36:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      56:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC

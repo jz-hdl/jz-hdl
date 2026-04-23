@@ -1,0 +1,74 @@
+// HAPPY_PATH: Triple-port memory is valid for ALU input staging (S7.6.5).
+// Exercises dual asynchronous reads feeding an ALU-style combinational consumer plus one synchronous write port.
+
+@project HAPPY_PATH_alu_input_staging_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] src_addr_a = _;
+        IN  [8] src_addr_b = _;
+        IN  [8] wr_addr = _;
+        IN  [16] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [16] operand_a = _;
+        OUT [16] operand_b = _;
+        OUT [16] alu_sum = _;
+        OUT [16] alu_xor = _;
+    }
+@endproj
+
+@module AluStage
+    PORT {
+        IN  [16] lhs;
+        IN  [16] rhs;
+        OUT [16] sum;
+        OUT [16] xored;
+    }
+
+    ASYNCHRONOUS {
+        sum = lhs + rhs;
+        xored = lhs ^ rhs;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src_addr_a;
+        IN  [8] src_addr_b;
+        IN  [8] wr_addr;
+        IN  [16] wr_data;
+        IN  [1] wr_en;
+        OUT [16] operand_a;
+        OUT [16] operand_b;
+        OUT [16] alu_sum;
+        OUT [16] alu_xor;
+    }
+
+    MEM {
+        mem [16] [256] = 16'h0000 {
+            OUT rd_a ASYNC;
+            OUT rd_b ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new alu AluStage {
+        IN  [16] lhs = operand_a;
+        IN  [16] rhs = operand_b;
+        OUT [16] sum = alu_sum;
+        OUT [16] xored = alu_xor;
+    };
+
+    ASYNCHRONOUS {
+        // Valid use 1: stage ALU operand A from the first async read port.
+        operand_a = mem.rd_a[src_addr_a];
+        // Valid use 2: stage ALU operand B from the second async read port.
+        operand_b = mem.rd_b[src_addr_b];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (wr_en) {
+            mem.wr[wr_addr] <= wr_data;
+        }
+    }
+@endmod

@@ -1,0 +1,38 @@
+// MEM_INVALID_DEPTH: positive integer depths compile cleanly.
+
+@project MEM_INVALID_DEPTH_positive_depth_ok
+    CONFIG {
+        DEPTH = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_ok [8] [CONFIG.DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_ok.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_ok.wr[addr] <= wdata;
+    }
+@endmod

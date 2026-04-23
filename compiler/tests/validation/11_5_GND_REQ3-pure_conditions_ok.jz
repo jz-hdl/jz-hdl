@@ -1,0 +1,67 @@
+// Req #3: No Side Effects.
+// JZ-HDL expressions are pure, so this fixture exercises tri-state
+// transformation with nontrivial pure conditions in every driver.
+
+@project req3_pure_conditions_ok
+    @top TopMod {
+        IN  [2] mode = _;
+        IN  [8] data_a = _;
+        IN  [8] data_b = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN    [2] mode;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: Pure comparison condition in a tri-state driver.
+        bus <= (mode == 2'b00) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN    [2] mode;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 2: Pure comparison condition in a tri-state driver.
+        bus <= (mode == 2'b01) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [2] mode;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        shared_bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [2] mode = mode;
+        IN    [8] din = data_a;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [2] mode = mode;
+        IN    [8] din = data_b;
+        INOUT [8] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        observed <= shared_bus;
+    }
+@endmod

@@ -1,0 +1,55 @@
+// REQ3: Manual refactoring to a full-width payload plus a single full-width z
+// release keeps the driver set uniform across the entire signal.
+
+@project MANUAL_REFACTOR_UNIFORM_DRIVER_SET_OK
+    @top TopMod {
+        IN  [1] en_hi = _;
+        IN  [1] en_lo = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] en_hi;
+        IN  [1] en_lo;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        helper_payload [8];
+        helper_bus [8];
+    }
+
+    ASYNCHRONOUS {
+        helper_payload <= {(en_hi == 1'b1) ? 4'hA : 4'h0, (en_lo == 1'b1) ? 4'h5 : 4'h0};
+        helper_bus <= ((en_hi || en_lo) == 1'b1) ? helper_payload : 8'bzzzz_zzzz;
+        observed <= helper_bus;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en_hi;
+        IN  [1] en_lo;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        local_payload [8];
+        shared_bus [8];
+        helper_out [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en_hi = en_hi;
+        IN  [1] en_lo = en_lo;
+        OUT [8] observed = helper_out;
+    };
+
+    ASYNCHRONOUS {
+        local_payload <= {(en_hi == 1'b1) ? 4'hC : 4'h0, (en_lo == 1'b1) ? 4'h3 : 4'h0};
+        shared_bus <= ((en_hi || en_lo) == 1'b1) ? local_payload : 8'bzzzz_zzzz;
+        observed <= shared_bus;
+    }
+@endmod

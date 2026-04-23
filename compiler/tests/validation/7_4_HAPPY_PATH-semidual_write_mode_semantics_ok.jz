@@ -1,0 +1,149 @@
+// HAPPY_PATH: Valid §7.4 semidual-port write-mode semantics coverage.
+// Covers Req #16-25 with same-address and different-address read/write shapes,
+// all three write modes on IN ports, ASYNC and SYNC read ports, and read-after-write
+// structure showing subsequent-cycle visibility without diagnostics.
+
+@project HAPPY_PATH_semidual_write_mode_semantics_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] same_addr = _;
+        IN  [ADDR_W] read_addr = _;
+        IN  [ADDR_W] write_addr = _;
+        IN  [DATA_W] wdata = _;
+        OUT [DATA_W] same_cycle_view = _;
+        OUT [DATA_W] different_addr_view = _;
+        OUT [DATA_W] later_cycle_view = _;
+    }
+@endproj
+
+@module SemiDualHelper
+    PORT {
+        IN  [1] clk;
+        IN  [4] same_addr;
+        IN  [4] read_addr;
+        IN  [4] write_addr;
+        IN  [8] wdata;
+        OUT [8] same_cycle_view;
+        OUT [8] different_addr_view;
+        OUT [8] later_cycle_view;
+    }
+
+    REGISTER {
+        sync_same_data [8] = 8'h00;
+        sync_diff_data [8] = 8'h00;
+        later_capture [8] = 8'h00;
+    }
+
+    // Req #16 / #22: WRITE_FIRST same-address read/write shape on an IN port.
+    MEM {
+        mem_same_wf [8] [16] = 8'h00 {
+            OUT rd_same_wf ASYNC;
+            IN  wr_same_wf WRITE_FIRST;
+        };
+    }
+
+    // Req #17 / #23: READ_FIRST same-address read/write shape on an IN port.
+    MEM(type=BLOCK) {
+        mem_same_rf [8] [16] = 8'h00 {
+            OUT rd_same_rf SYNC;
+            IN  wr_same_rf READ_FIRST;
+        };
+    }
+
+    // Req #18 / #24: NO_CHANGE same-address read/write shape on an IN port.
+    MEM {
+        mem_same_nc [8] [16] = 8'h00 {
+            OUT rd_same_nc ASYNC;
+            IN  wr_same_nc NO_CHANGE;
+        };
+    }
+
+    // Req #19 / #20: Different read/write addresses behave the same across modes.
+    MEM {
+        mem_diff_wf [8] [16] = 8'h00 {
+            OUT rd_diff_wf ASYNC;
+            IN  wr_diff_wf WRITE_FIRST;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_diff_rf [8] [16] = 8'h00 {
+            OUT rd_diff_rf SYNC;
+            IN  wr_diff_rf READ_FIRST;
+        };
+    }
+
+    MEM {
+        mem_diff_nc [8] [16] = 8'h00 {
+            OUT rd_diff_nc ASYNC;
+            IN  wr_diff_nc NO_CHANGE;
+        };
+    }
+
+    ASYNCHRONOUS {
+        same_cycle_view = mem_same_wf.rd_same_wf[same_addr]
+                        ^ mem_same_nc.rd_same_nc[same_addr]
+                        ^ sync_same_data;
+        different_addr_view = mem_diff_wf.rd_diff_wf[read_addr]
+                            ^ mem_diff_nc.rd_diff_nc[read_addr]
+                            ^ sync_diff_data;
+        later_cycle_view = later_capture;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Req #21: same-cycle write through IN port with addr_r == addr_w.
+        mem_same_rf.rd_same_rf.addr <= same_addr;
+        mem_same_wf.wr_same_wf[same_addr] <= wdata;
+        mem_same_rf.wr_same_rf[same_addr] <= wdata;
+        mem_same_nc.wr_same_nc[same_addr] <= wdata;
+        sync_same_data <= mem_same_rf.rd_same_rf.data;
+
+        // Req #19 / #20: same-cycle write with addr_r != addr_w.
+        mem_diff_rf.rd_diff_rf.addr <= read_addr;
+        mem_diff_wf.wr_diff_wf[write_addr] <= wdata;
+        mem_diff_rf.wr_diff_rf[write_addr] <= wdata;
+        mem_diff_nc.wr_diff_nc[write_addr] <= wdata;
+        sync_diff_data <= mem_diff_rf.rd_diff_rf.data;
+
+        // Req #25: later-cycle visibility after the write has committed.
+        later_capture <= mem_same_wf.rd_same_wf[same_addr]
+                       ^ mem_diff_wf.rd_diff_wf[write_addr]
+                       ^ sync_same_data
+                       ^ sync_diff_data;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] same_addr;
+        IN  [4] read_addr;
+        IN  [4] write_addr;
+        IN  [8] wdata;
+        OUT [8] same_cycle_view;
+        OUT [8] different_addr_view;
+        OUT [8] later_cycle_view;
+    }
+
+    @new semidual SemiDualHelper {
+        IN  [1] clk = clk;
+        IN  [4] same_addr = same_addr;
+        IN  [4] read_addr = read_addr;
+        IN  [4] write_addr = write_addr;
+        IN  [8] wdata = wdata;
+        OUT [8] same_cycle_view = same_cycle_view;
+        OUT [8] different_addr_view = different_addr_view;
+        OUT [8] later_cycle_view = later_cycle_view;
+    };
+
+    ASYNCHRONOUS {
+        same_cycle_view = semidual.same_cycle_view;
+        different_addr_view = semidual.different_addr_view;
+        later_cycle_view = semidual.later_cycle_view;
+    }
+@endmod

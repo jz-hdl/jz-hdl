@@ -1,0 +1,65 @@
+// HAPPY_PATH: Blackbox instantiation without OVERRIDE emits no info diagnostic.
+// Covers BLACKBOX_OVERRIDE_UNCHECKED happy-path behavior in both helper and top modules.
+
+@project BLACKBOX_OVERRIDE_UNCHECKED_no_override_ok
+    @blackbox bb_ip {
+        PORT {
+            IN  [1] din;
+            OUT [1] dout;
+        }
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    @new inst_bb bb_ip {
+        IN  [1] din = din;
+        OUT [1] dout = dout;
+    };
+
+    ASYNCHRONOUS {
+        // blackbox drives dout
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    WIRE {
+        helper_out [1];
+    }
+
+    @new inst_helper HelperMod {
+        IN  [1] din = r;
+        OUT [1] dout = helper_out;
+    };
+
+    @new inst_top bb_ip {
+        IN  [1] din = r;
+        OUT [1] dout = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = helper_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

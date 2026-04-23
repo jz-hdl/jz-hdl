@@ -1,0 +1,26 @@
+// Library file for 6_2_1_HAPPY_PATH-imported_namespace_ok.jz
+// Defines an imported top module and an imported blackbox in project scope.
+
+@blackbox ImportedBlackbox {
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+}
+
+@module ImportedTop
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_helper ImportedHelper {
+        IN  [1] din = clk;
+        OUT [1] dout = data;
+    };
+
+    @new inst_bb ImportedBlackbox {
+        IN  [1] din = clk;
+        OUT [1] dout = _;
+    };
+@endmod

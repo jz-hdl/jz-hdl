@@ -1,0 +1,87 @@
+// HAPPY_PATH: Valid §7.6.9 true dual-port memory with two INOUT ports.
+// Covers Req #1: two INOUT ports select dual-port BLOCK RAM mode.
+
+@project true_dual_port_memory_two_inout_ports_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr_a = _;
+        IN  [ADDR_W] addr_b = _;
+        IN  [DATA_W] wdata_a = _;
+        IN  [DATA_W] wdata_b = _;
+        IN  [1] we_a = _;
+        IN  [1] we_b = _;
+        OUT [DATA_W] rdata_a = _;
+        OUT [DATA_W] rdata_b = _;
+        OUT [DATA_W] combined = _;
+    }
+@endproj
+
+@module Probe
+    PORT {
+        IN  [8] lhs;
+        IN  [8] rhs;
+        OUT [8] mixed;
+    }
+
+    ASYNCHRONOUS {
+        mixed = lhs ^ rhs;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr_a;
+        IN  [4] addr_b;
+        IN  [8] wdata_a;
+        IN  [8] wdata_b;
+        IN  [1] we_a;
+        IN  [1] we_b;
+        OUT [8] rdata_a;
+        OUT [8] rdata_b;
+        OUT [8] combined;
+    }
+
+    REGISTER {
+        rd_hold_a [8] = 8'h00;
+        rd_hold_b [8] = 8'h00;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [8] [16] = 8'h00 {
+            INOUT port_a;
+            INOUT port_b;
+        };
+    }
+
+    @new probe Probe {
+        IN  [8] lhs = rd_hold_a;
+        IN  [8] rhs = rd_hold_b;
+        OUT [8] mixed = combined;
+    };
+
+    ASYNCHRONOUS {
+        rdata_a = rd_hold_a;
+        rdata_b = rd_hold_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem.port_a.addr <= addr_a;
+        mem.port_b.addr <= addr_b;
+        rd_hold_a <= mem.port_a.data;
+        rd_hold_b <= mem.port_b.data;
+
+        IF (we_a) {
+            mem.port_a.wdata <= wdata_a;
+        }
+
+        IF (we_b) {
+            mem.port_b.wdata <= wdata_b;
+        }
+    }
+@endmod

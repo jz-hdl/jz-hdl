@@ -1,0 +1,73 @@
+// Req #3: --tristate-default applies to internal WIRE nets, internal PORT
+// nets, and merged nets created by aliasing.
+// Valid: each context uses an internal net that can be transformed.
+
+@project REQ3_internal_net_kinds_transform
+    @top TopMod {
+        IN  [1] en = _;
+        IN  [8] din = _;
+        OUT [8] dout_wire = _;
+        OUT [8] dout_port = _;
+        OUT [8] dout_alias = _;
+    }
+@endproj
+
+@module PortDriver
+    PORT {
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] bus;
+        OUT   [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: internal PORT net participates in transform.
+        bus <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
+        dout <= bus;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] dout_wire;
+        OUT [8] dout_port;
+        OUT [8] dout_alias;
+    }
+
+    WIRE {
+        // Trigger 2: declared WIRE net is transformed.
+        w_wire [8];
+        port_bus [8];
+        // Trigger 3: alias merges these into one implicit internal net.
+        alias_a [8];
+        alias_b [8];
+    }
+
+    @new inst_p PortDriver {
+        IN    [1] en = en;
+        IN    [8] din = din;
+        INOUT [8] bus = port_bus;
+        OUT   [8] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_wire <= din;
+        } ELSE {
+            w_wire <= 8'bzzzz_zzzz;
+        }
+
+        alias_a = alias_b;
+        IF (en) {
+            alias_a <= din;
+        } ELSE {
+            alias_a <= 8'bzzzz_zzzz;
+        }
+
+        dout_wire <= w_wire;
+        dout_port <= port_bus;
+        dout_alias <= alias_b;
+    }
+@endmod

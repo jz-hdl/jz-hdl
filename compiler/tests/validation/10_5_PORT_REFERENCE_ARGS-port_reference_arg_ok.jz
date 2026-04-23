@@ -1,0 +1,57 @@
+// HAPPY_PATH: @apply arguments may be instance port references (`inst.port`).
+
+@project PORT_REFERENCE_ARGS_port_reference_arg_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@template pass_through(dst, src)
+    dst <= src;
+@endtemplate
+
+@module SourceMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h3C;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= {r[6:0], r[7:7]};
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    WIRE {
+        copied [8];
+    }
+
+    @new inst_src SourceMod {
+        IN  [1] clk = clk;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        // Req #17: instance port reference is a valid @apply argument.
+        @apply pass_through(copied, inst_src.data);
+        data = copied;
+    }
+@endmod

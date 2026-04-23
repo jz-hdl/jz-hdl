@@ -1,0 +1,41 @@
+// PRIENC_INPUT_TOO_NARROW: prienc() source must be at least 2 bits wide.
+// Negative coverage for the feature-cond declaration context: a 1-bit
+// sized-literal source inside a @feature condition fires
+// PRIENC_INPUT_TOO_NARROW.
+
+@project PRIENC_INPUT_TOO_NARROW_feature_cond
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1: prienc(1'b1) in @feature condition — source is 1 bit wide.
+    @feature prienc(1'b1) == 1'd0
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'd0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

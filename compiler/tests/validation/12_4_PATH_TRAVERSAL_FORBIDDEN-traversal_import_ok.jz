@@ -1,0 +1,24 @@
+// PATH_TRAVERSAL_FORBIDDEN: traversal is allowed when --allow-traversal is set.
+// This import contains a .. component but normalizes back inside the sandbox.
+
+@project PATH_TRAVERSAL_FORBIDDEN_traversal_import_ok
+
+    @import "../validation/12_4_PATH_SECURITY-valid_lib.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_rel PathSecurityImported {
+        IN  [1] din = clk;
+        OUT [1] dout = data;
+    };
+@endmod

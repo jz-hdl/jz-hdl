@@ -1,0 +1,112 @@
+// HAPPY_PATH: Valid §7.2.3 INOUT write-mode declarations and accesses.
+// Covers shorthand WRITE_FIRST/READ_FIRST/NO_CHANGE and block-form
+// WRITE_MODE assignments on INOUT ports without false positives.
+
+@project HAPPY_PATH_write_modes_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        IN  [DATA_W] wdata = _;
+        IN  [1] we = _;
+        OUT [DATA_W] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        IN  [1] we;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=BLOCK) {
+        mem_default [8] [16] = 8'h00 {
+            INOUT rw_default;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_wf [8] [16] = 8'h00 {
+            INOUT rw_wf WRITE_FIRST;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_rf [8] [16] = 8'h00 {
+            INOUT rw_rf READ_FIRST;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_nc [8] [16] = 8'h00 {
+            INOUT rw_nc NO_CHANGE;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_attr_wf [8] [16] = 8'h00 {
+            INOUT rw_attr_wf {
+                WRITE_MODE = WRITE_FIRST;
+            };
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_attr_rf [8] [16] = 8'h00 {
+            INOUT rw_attr_rf {
+                WRITE_MODE = READ_FIRST;
+            };
+        };
+    }
+
+    MEM(type=BLOCK) {
+        mem_attr_nc [8] [16] = 8'h00 {
+            INOUT rw_attr_nc {
+                WRITE_MODE = NO_CHANGE;
+            };
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_default.rw_default.addr <= addr;
+        mem_wf.rw_wf.addr <= addr;
+        mem_rf.rw_rf.addr <= addr;
+        mem_nc.rw_nc.addr <= addr;
+        mem_attr_wf.rw_attr_wf.addr <= addr;
+        mem_attr_rf.rw_attr_rf.addr <= addr;
+        mem_attr_nc.rw_attr_nc.addr <= addr;
+
+        r <= mem_default.rw_default.data
+           ^ mem_wf.rw_wf.data
+           ^ mem_rf.rw_rf.data
+           ^ mem_nc.rw_nc.data
+           ^ mem_attr_wf.rw_attr_wf.data
+           ^ mem_attr_rf.rw_attr_rf.data
+           ^ mem_attr_nc.rw_attr_nc.data;
+
+        IF (we) {
+            mem_default.rw_default.wdata <= wdata;
+            mem_wf.rw_wf.wdata <= wdata;
+            mem_rf.rw_rf.wdata <= wdata;
+            mem_nc.rw_nc.wdata <= wdata;
+            mem_attr_wf.rw_attr_wf.wdata <= wdata;
+            mem_attr_rf.rw_attr_rf.wdata <= wdata;
+            mem_attr_nc.rw_attr_nc.wdata <= wdata;
+        }
+    }
+@endmod

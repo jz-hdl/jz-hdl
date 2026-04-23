@@ -1,0 +1,54 @@
+// HAPPY_PATH: Configurable memory with CONST-parameterized word width and depth.
+// Verifies S7.6.7 allows reusable MEM declarations where width and depth come
+// from module-local CONST values.
+
+@project HAPPY_PATH_parameterized_word_width_and_depth
+    @top ParamMemTop {
+        IN  [1] clk = _;
+        IN  [4] rd_addr = _;
+        IN  [4] wr_addr = _;
+        IN  [12] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [12] rd_data = _;
+    }
+@endproj
+
+@module ParamMemTop
+    CONST {
+        WORD_WIDTH = 12;
+        DEPTH = 16;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [4] rd_addr;
+        IN  [4] wr_addr;
+        IN  [WORD_WIDTH] wr_data;
+        IN  [1] wr_en;
+        OUT [WORD_WIDTH] rd_data;
+    }
+
+    REGISTER {
+        read_q [WORD_WIDTH] = 12'h000;
+    }
+
+    MEM(type=BLOCK) {
+        storage [WORD_WIDTH] [DEPTH] = 12'h000 {
+            OUT rd SYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        rd_data = read_q;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        storage.rd.addr <= rd_addr;
+        read_q <= storage.rd.data;
+
+        IF (wr_en) {
+            storage.wr[wr_addr] <= wr_data;
+        }
+    }
+@endmod

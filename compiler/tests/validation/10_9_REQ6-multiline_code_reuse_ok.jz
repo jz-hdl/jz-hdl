@@ -1,0 +1,59 @@
+// Req #6 (10.9 Rationale): Templates support reusable multi-line logic blocks.
+
+@project REQ6_multiline_code_reuse_ok
+    CONFIG {
+        WIDTH = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] data = _;
+    }
+@endproj
+
+@template mix_and_invert(a, b, dst)
+    @scratch mix [4];
+    mix <= a ^ b;
+    dst <= ~mix;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [4] din_a;
+        IN  [4] din_b;
+        OUT [4] dout;
+    }
+
+    ASYNCHRONOUS {
+        @apply mix_and_invert(din_a, din_b, dout);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] data;
+    }
+
+    REGISTER {
+        r [4] = 4'h0;
+    }
+
+    WIRE {
+        stage [4];
+    }
+
+    @new helper HelperMod {
+        IN  [4] din_a = r;
+        IN  [4] din_b = 4'h3;
+        OUT [4] dout = stage;
+    };
+
+    ASYNCHRONOUS {
+        @apply mix_and_invert(stage, 4'h5, data);
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 4'h1;
+    }
+@endmod

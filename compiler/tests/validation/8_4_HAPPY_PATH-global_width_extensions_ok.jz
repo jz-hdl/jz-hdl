@@ -1,0 +1,68 @@
+// HAPPY_PATH: Global constants with valid width extension in runtime logic.
+// Exercises zero-extension and sign-extension of sized @global values in
+// ASYNCHRONOUS and SYNCHRONOUS assignments. No diagnostics expected.
+
+@global CODES
+    NIBBLE = 4'b0101;
+    NEG    = 4'b1001;
+@endglob
+
+@project HAPPY_PATH_global_new_binding_extensions_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+        OUT [8] out_c = _;
+        OUT [8] out_d = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_c;
+        OUT [8] out_d;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        out_c =z CODES.NIBBLE;
+        out_d = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <=s CODES.NEG;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+        OUT [8] out_b;
+        OUT [8] out_c;
+        OUT [8] out_d;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        OUT [8] out_c = out_c;
+        OUT [8] out_d = out_d;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        out_a =z CODES.NIBBLE;
+        out_b = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <=s CODES.NEG;
+    }
+@endmod

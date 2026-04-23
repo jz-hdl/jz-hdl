@@ -1,0 +1,81 @@
+// HAPPY_PATH: bswap() behavioral requirements from §5.5.25.
+// Exercises:
+//   Req #2 - syntax `bswap(<source>)`.
+//   Req #3 - result width is `width(source)`.
+//   Req #4 - source accepts byte-aligned bit-vector expressions.
+//   Req #5 - 16-bit and 32-bit byte-swap example shapes are exercised.
+//   Req #6 - bswap() is allowed on ASYNCHRONOUS RHS.
+//   Req #7 - bswap() is allowed on SYNCHRONOUS RHS.
+
+@project HAPPY_PATH_bswap_semantics_ok
+    CONFIG {
+        WIDTH = 32;
+    }
+
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [16] src16 = _;
+        IN  [16] src16b = _;
+        IN  [32] src32 = _;
+        OUT [16] out_async16 = _;
+        OUT [32] out_async32 = _;
+        OUT [16] out_sync16 = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [16] src16;
+        IN  [16] src16b;
+        IN  [32] src32;
+        OUT [16] out_async16;
+        OUT [32] out_async32;
+    }
+
+    ASYNCHRONOUS {
+        // Req #2/#3/#5/#6: 16-bit source keeps width 16 after byte swap.
+        out_async16 = bswap(src16);
+        // Req #3/#4/#5/#6: byte-aligned 32-bit expression is valid on ASYNC RHS.
+        out_async32 = bswap(src32 ^ {src16, src16b});
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [16] src16;
+        IN  [16] src16b;
+        IN  [32] src32;
+        OUT [16] out_async16;
+        OUT [32] out_async32;
+        OUT [16] out_sync16;
+    }
+
+    WIRE {
+        h_async16 [16];
+        h_async32 [32];
+    }
+
+    REGISTER {
+        r_sync16 [16] = 16'd0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [16] src16 = src16;
+        IN  [16] src16b = src16b;
+        IN  [32] src32 = src32;
+        OUT [16] out_async16 = h_async16;
+        OUT [32] out_async32 = h_async32;
+    };
+
+    ASYNCHRONOUS {
+        out_async16 = h_async16;
+        out_async32 = h_async32;
+        out_sync16 = r_sync16;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Req #3/#5/#7: 16-bit byte-swap example is valid on SYNC RHS.
+        r_sync16 <= bswap(src16b);
+    }
+@endmod

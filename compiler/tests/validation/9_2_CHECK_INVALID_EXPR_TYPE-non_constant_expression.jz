@@ -1,0 +1,68 @@
+// CHECK_INVALID_EXPR_TYPE: non-constant @check expressions are rejected.
+// Exercises runtime operands in @check to cover the S9.2 semantic rule that
+// @check expressions must be evaluable at compile time.
+
+@project CHECK_INVALID_EXPR_TYPE_non_constant_expression
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    // Valid: project-scope CONFIG expression is constant.
+    @check (CONFIG.WIDTH == 8, "config width ok");
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST { SIZE = 4; }
+
+    // Valid: module CONST expression is constant.
+    @check (SIZE == 4, "size ok");
+
+    // Trigger 1: input port is a runtime signal, not a compile-time constant.
+    @check (din == 1'b1, "helper port is runtime");
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    CONST { SIZE = 8; }
+
+    // Valid: top-module CONST expression is constant.
+    @check (SIZE > 0, "size positive");
+
+    @new inst_a HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    // Trigger 2: register is a runtime signal, not a compile-time constant.
+    @check (r == 1'b0, "register is runtime");
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

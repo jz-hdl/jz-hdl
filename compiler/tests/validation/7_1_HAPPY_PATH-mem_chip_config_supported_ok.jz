@@ -1,0 +1,49 @@
+// HAPPY_PATH: Chip-backed MEM validation accepts supported configurations.
+// Uses one valid DISTRIBUTED memory and one valid BLOCK memory on a real chip.
+
+@project(CHIP="gw1nr-9-qn88-c6-i5") HAPPY_PATH_mem_chip_config_supported_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [5] addr = _;
+        IN  [32] wdata = _;
+        OUT [32] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [5] addr;
+        IN  [32] wdata;
+        OUT [32] data;
+    }
+
+    REGISTER {
+        block_rdata [32] = 32'h0000_0000;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        dist_mem [16] [16] = 16'h0000 {
+            OUT dist_rd ASYNC;
+            IN  dist_wr;
+        };
+    }
+
+    MEM(type=BLOCK) {
+        block_mem [32] [32] = 32'h0000_0000 {
+            OUT block_rd SYNC;
+            IN  block_wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = {block_rdata[31:16], dist_mem.dist_rd[addr[3:0]]};
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        block_mem.block_rd.addr <= addr;
+        block_rdata <= block_mem.block_rd.data;
+        dist_mem.dist_wr[addr[3:0]] <= wdata[15:0];
+        block_mem.block_wr[addr] <= wdata;
+    }
+@endmod

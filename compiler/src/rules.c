@@ -310,6 +310,12 @@ const JZRuleInfo jz_rule_table[] = {
     { "CLOCKS_PINS_MAP", "PIN_DIFF_OUT_MISSING_FCLK",              0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential output pin missing required fclk attribute" },
     { "CLOCKS_PINS_MAP", "PIN_DIFF_OUT_MISSING_PCLK",              0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential output pin missing required pclk attribute" },
     { "CLOCKS_PINS_MAP", "PIN_DIFF_OUT_MISSING_RESET",             0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential output pin missing required reset attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_MISSING_FCLK",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential input/INOUT pin missing required fclk attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_MISSING_PCLK",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential input/INOUT pin missing required pclk attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_MISSING_RESET",                 0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential input/INOUT pin missing required reset attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_FCLK_INVALID",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential pin fclk must reference CLOCKS or CLOCK_GEN output" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_PCLK_INVALID",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential pin pclk must reference CLOCKS or CLOCK_GEN output" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_RESET_INVALID",                 0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential pin reset must reference a declared pin, clock, or CLOCK_GEN signal" },
     { "CLOCKS_PINS_MAP", "MAP_DIFF_EXPECTED_PAIR",                 0, JZ_RULE_MODE_ERR, "S6.6/S6.9 Differential pin must use { P=<id>, N=<id> } MAP syntax" },
     { "CLOCKS_PINS_MAP", "MAP_SINGLE_UNEXPECTED_PAIR",             0, JZ_RULE_MODE_ERR, "S6.6/S6.9 Single-ended pin must not use { P, N } MAP syntax" },
     { "CLOCKS_PINS_MAP", "MAP_DIFF_MISSING_PN",                    0, JZ_RULE_MODE_ERR, "S6.6/S6.9 Differential MAP entry missing P or N identifier" },
@@ -350,6 +356,7 @@ const JZRuleInfo jz_rule_table[] = {
     /* [TOP_LEVEL_INSTANTIATION] */
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_NOT_LISTED",             0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Top module port omitted from project-level @top block" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_WIDTH_MISMATCH",         0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Instantiated top port width does not match module port width" },
+    { "TOP_LEVEL_INSTANTIATION", "CLOCK_NAME_NOT_TOP_IN_PORT",      0, JZ_RULE_MODE_ERR, "S6.10 Clock with period in CLOCKS is not bound to any IN port on the top module" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_PIN_DECL_MISSING",       0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Connected top port has no corresponding IN_PINS/OUT_PINS/INOUT_PINS/CLOCKS declaration" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_PIN_DIRECTION_MISMATCH", 0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Module IN/OUT/INOUT direction incompatible with pin category" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_OUT_LITERAL_BINDING",         0, JZ_RULE_MODE_ERR, "S6.9 OUT ports may not be bound to literal values in project-level @top" },
@@ -422,6 +429,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_SINGLE_DRIVER",         0, JZ_RULE_MODE_WRN, "S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC" },
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_OE_EXTRACT_FAIL",       0, JZ_RULE_MODE_ERR, "S11.7 Could not extract output-enable condition from tri-state port; _oe driven high as fallback" },
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_UNUSED_DEFAULT",        0, JZ_RULE_MODE_WRN, "S11.7 --tristate-default specified but no internal tri-state nets found to transform" },
+    { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_ROLLBACK",             0, JZ_RULE_MODE_ERR, "S11.5 Tri-state transform failed and was rolled back to the pre-transform IR" },
     { "TRISTATE_TRANSFORM", "INFO_TRISTATE_TRANSFORM",                  0, JZ_RULE_MODE_INF, "S11 Tri-state net transformed by --tristate-default" },
 
     /* [SERIALIZER] */

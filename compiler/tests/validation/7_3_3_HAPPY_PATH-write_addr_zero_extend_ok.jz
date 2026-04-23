@@ -1,0 +1,68 @@
+// HAPPY_PATH: Narrower synchronous write addresses are accepted and implicitly
+// zero-extended to the memory depth address width.
+
+@project HAPPY_PATH_write_addr_zero_extend_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] small_addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] small_addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_h [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_h.rd[small_addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: 2-bit address is narrower than ceil(log2(16)) and is allowed.
+        mem_h.wr[small_addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] small_addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] small_addr = small_addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_t.rd[small_addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: narrower write address is accepted in the top module too.
+        mem_t.wr[small_addr] <= wdata;
+    }
+@endmod

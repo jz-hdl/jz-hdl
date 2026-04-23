@@ -1,0 +1,50 @@
+// CHECK_INVALID_EXPR_TYPE: @check expressions with undefined identifiers fail under S9.7.
+// Project-scope triggers are used so the fixture emits only CHECK_INVALID_EXPR_TYPE.
+
+@project CHECK_INVALID_EXPR_TYPE_undefined_identifiers
+    CONFIG {
+        WIDTH = 8;
+        DEPTH = 16;
+    }
+
+    // Valid: defined CONFIG reference.
+    @check (CONFIG.WIDTH == 8, "width ok");
+
+    // Trigger 1: bare undefined identifier at project scope.
+    @check (UNDEF_A > 0, "undefined A");
+
+    // Valid: defined CONFIG arithmetic.
+    @check (CONFIG.WIDTH + CONFIG.DEPTH > 0, "config arithmetic ok");
+
+    // Trigger 2: undefined identifier inside arithmetic.
+    @check (UNDEF_B + CONFIG.WIDTH > 0, "undefined B in arithmetic");
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    CONST { DEPTH_W = 4; }
+
+    // Valid: module-scope defined CONST reference.
+    @check (DEPTH_W == 4, "depth width ok");
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

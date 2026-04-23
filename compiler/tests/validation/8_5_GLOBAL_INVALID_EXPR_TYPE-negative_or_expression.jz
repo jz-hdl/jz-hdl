@@ -1,0 +1,37 @@
+// GLOBAL_INVALID_EXPR_TYPE: negative and computed expressions are invalid in @global blocks.
+// Trigger 1 uses a negative expression.
+// Trigger 2 uses a computed expression instead of a single sized literal.
+
+@global BAD_GLOBALS
+    // Trigger 1: negative expression is not a sized literal
+    NEG_VALUE = -8'd1;
+    // Trigger 2: computed expression is not a sized literal
+    SUM_VALUE = 8'd1 + 8'd2;
+    OK_VALUE  = 8'd3;
+@endglob
+
+@project GLOBAL_INVALID_EXPR_TYPE_negative_or_expression
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= BAD_GLOBALS.OK_VALUE;
+    }
+@endmod

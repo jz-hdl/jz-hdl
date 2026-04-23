@@ -1,0 +1,88 @@
+// HAPPY_PATH: umax() coverage for §5.5.20.
+// Exercises:
+//   Req #1 - syntax `umax(<a>, <b>)`.
+//   Req #2 - result width is max(width(a), width(b)).
+//   Req #3 - selects the larger unsigned operand and zero-extends to result width.
+//   Req #4 - allowed on ASYNCHRONOUS RHS.
+//   Req #5 - allowed on SYNCHRONOUS RHS.
+
+@project HAPPY_PATH_umax_semantics_contexts_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [3] small_a = _;
+        IN  [5] wide_b = _;
+        IN  [4] async_left = _;
+        IN  [4] async_right = _;
+        IN  [2] sync_small = _;
+        IN  [6] sync_wide = _;
+        OUT [5] out_mixed_width = _;
+        OUT [4] out_async_same_width = _;
+        OUT [6] out_sync = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [3] small_a;
+        IN  [5] wide_b;
+        IN  [4] async_left;
+        IN  [4] async_right;
+        OUT [5] mixed_width;
+        OUT [4] async_same_width;
+    }
+
+    ASYNCHRONOUS {
+        // Req #1/#2/#3/#4: 3-bit and 5-bit operands yield a 5-bit result.
+        mixed_width = umax(small_a, wide_b);
+        // Req #1/#3/#4: same-width operands are valid on ASYNCHRONOUS RHS.
+        async_same_width = umax(async_left, async_right);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [3] small_a;
+        IN  [5] wide_b;
+        IN  [4] async_left;
+        IN  [4] async_right;
+        IN  [2] sync_small;
+        IN  [6] sync_wide;
+        OUT [5] out_mixed_width;
+        OUT [4] out_async_same_width;
+        OUT [6] out_sync;
+    }
+
+    WIRE {
+        h_mixed [5];
+        h_async [4];
+    }
+
+    REGISTER {
+        r_sync [6] = 6'd0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [3] small_a = small_a;
+        IN  [5] wide_b = wide_b;
+        IN  [4] async_left = async_left;
+        IN  [4] async_right = async_right;
+        OUT [5] mixed_width = h_mixed;
+        OUT [4] async_same_width = h_async;
+    };
+
+    ASYNCHRONOUS {
+        out_mixed_width = h_mixed;
+        out_async_same_width = h_async;
+        out_sync = r_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Req #2/#3/#5: 2-bit and 6-bit operands yield a 6-bit zero-extended result.
+        r_sync <= umax(sync_small, sync_wide);
+    }
+@endmod

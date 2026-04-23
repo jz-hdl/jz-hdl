@@ -1,0 +1,35 @@
+// HAPPY_PATH: @apply[count] exposes IDX in compile-time slice bounds.
+// Covers §10.5 Req #7, #8, #10, and #15.
+
+@project COUNT_ONE_IDX_ZERO_count_one_idx_zero_ok
+    @top TopMod {
+        OUT [1] done = _;
+    }
+@endproj
+
+@template copy_idx_bit(dst, src)
+    dst[IDX:IDX] <= src[IDX:IDX];
+@endtemplate
+
+@module TopMod
+    PORT {
+        OUT [1] done;
+    }
+
+    WIRE {
+        src_one  [1];
+        dst_one  [1];
+        src_many [2];
+        dst_many [2];
+    }
+
+    ASYNCHRONOUS {
+        src_one <= 1'b1;
+        src_many <= 2'b10;
+
+        @apply[1] copy_idx_bit(dst_one, src_one);
+        @apply[2] copy_idx_bit(dst_many, src_many);
+
+        done <= dst_one[0] & dst_many[1];
+    }
+@endmod

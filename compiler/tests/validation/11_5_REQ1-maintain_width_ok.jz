@@ -1,0 +1,66 @@
+// Req #1: Maintain Width.
+// Verifies that tri-state transformation preserves a non-default shared-net width.
+
+@project req1_maintain_width_ok
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [13] data_a = _;
+        IN  [13] data_b = _;
+        OUT [13] observed = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN    [1] sel;
+        IN    [13] din;
+        INOUT [13] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: 13-bit tri-state driver contributes to transformed chain.
+        bus <= (sel == 1'b1) ? din : 13'bz_zzzz_zzzz_zzzz;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN    [1] sel;
+        IN    [13] din;
+        INOUT [13] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 2: Second 13-bit tri-state driver must match the same width.
+        bus <= (sel == 1'b0) ? din : 13'bz_zzzz_zzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [13] data_a;
+        IN  [13] data_b;
+        OUT [13] observed;
+    }
+
+    WIRE {
+        shared_bus [13];
+    }
+
+    @new inst_a DriverA {
+        IN    [1] sel = sel;
+        IN    [13] din = data_a;
+        INOUT [13] bus = shared_bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [1] sel = sel;
+        IN    [13] din = data_b;
+        INOUT [13] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        observed <= shared_bus;
+    }
+@endmod

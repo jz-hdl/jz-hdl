@@ -1,0 +1,40 @@
+// IMPORT_FILE_MULTIPLE_TIMES: Same file imported twice using different path case.
+// Tests case-normalized duplicate detection on case-insensitive filesystems.
+
+@project IMPORT_FILE_MULTIPLE_TIMES_case_normalized_dup
+
+    // Valid: first import of the library file.
+    @import "6_2_1_IMPORT_FILE_MULTIPLE_TIMES-case_normalized_dup_lib.jz";
+
+    // Trigger 1: same file imported again with different path casing.
+    @import "6_2_1_import_file_multiple_times-CASE_normalized_DUP_lib.JZ";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_a ImportedMod {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
