@@ -19,8 +19,6 @@
 - Don't apologize, just fix it
 - Don't explain obvious things
 - Don't use platitudes
-- Greet each new context with "Hello, I've read AGENTS.md and am ready to procede."
-  *Explain all the rules are must follow*
 
 # Tool Constraints
 - Use the available read/search/edit tools that exist in the current environment.
@@ -61,3 +59,8 @@
 - specification/simulation-specification.md : The JZ-HDL simulation specification
 - specification/testbench-specification.md : The JZ-HDL testbench specification
 - datasheets/ : Manufacturer fpga datasheets
+
+# Git
+- Don’t use a generic message
+- When committing always create a commit message the describes what is in the commit
+- Use a summary line plus bullets for multi-change commits
