@@ -7,3 +7,4 @@ boards
 __pycache__/
 *.pyc
 /audit/
+/security-audit/
