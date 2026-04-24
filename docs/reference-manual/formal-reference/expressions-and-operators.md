@@ -89,10 +89,10 @@ outline: deep
 | `sadd(a, b)` | max(a, b) + 1 | Signed add with carry (sign-extends) |
 | `umul(a, b)` | 2 * max(a, b) | Unsigned full product |
 | `smul(a, b)` | 2 * max(a, b) | Signed full product (sign-extends) |
-| `clog2(value)` | compile-time int | Ceiling log2; compile-time contexts only |
+| `clog2(value)` | compile-time int | Ceiling log2 with `clog2(1) = 1`; compile-time contexts only |
 | `widthof(signal)` | compile-time int | Declared width of local wire/register |
 | `gbit(source, index)` | 1 | Dynamic single-bit extract |
-| `sbit(source, index, set)` | width(source) | Dynamic single-bit set/clear |
+| `sbit(source, index, set)` | width(source) | Dynamic single-bit set/clear; source must be a wire or register |
 | `gslice(source, index, width)` | width (constant) | Dynamic multi-bit extraction |
 | `sslice(source, index, width, value)` | width(source) | Dynamic multi-bit overwrite |
 | `lit(width, value)` | width | Compile-time integer to sized literal |
@@ -115,10 +115,11 @@ outline: deep
 | `reduce_xor(source)` | 1 | XOR reduction |
 
 **Notes:**
-- `clog2` and `widthof` are compile-time only. `widthof` accepts wire, register, or bus identifiers.
+- `clog2` and `widthof` are compile-time only. `widthof` accepts wire, register, or bus identifiers that are visible at the point of use.
 - `lit` produces a runtime literal; not valid where a compile-time integer is required.
 - `gbit`/`gslice` out-of-range at runtime returns 0.
 - `sbit`/`sslice` out-of-range at runtime returns source unchanged / ignores out-of-range bits.
+- `sbit` requires a wire or register source; other source kinds are compile errors.
 - `oh2b` source must be >= 2 bits wide. If no bit is set, result is 0. If multiple bits are set, behavior is hardware-defined.
 - `b2oh` width must be a compile-time constant >= 2. Index out of range returns all zeros.
 - `prienc` source must be >= 2 bits wide. No bits set returns 0.

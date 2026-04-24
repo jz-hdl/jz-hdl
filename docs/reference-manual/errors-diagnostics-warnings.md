@@ -199,6 +199,10 @@ The sections below list all diagnostic rules organized by category. Each entry s
 - Severity: ERROR
 - Fix: The third argument to sbit() must be a 1-bit expression.
 
+### OPERATORS_AND_EXPRESSIONS.SBIT_INVALID_SOURCE — sbit source kind is not writable
+- Severity: ERROR
+- Fix: Use a wire or register as the first `sbit(...)` argument.
+
 ### OPERATORS_AND_EXPRESSIONS.GBIT_INDEX_OUT_OF_RANGE — gbit() index out of range
 - Severity: ERROR
 - Fix: Ensure index is within [0, width(source)-1].
@@ -262,7 +266,7 @@ The sections below list all diagnostic rules organized by category. Each entry s
 
 ### IDENTIFIERS_AND_SCOPE.UNDECLARED_IDENTIFIER — Undeclared name used
 - Severity: ERROR
-- Fix: Declare the identifier or correct the name.
+- Fix: Declare the identifier before use or correct the name. This also covers `widthof(...)` targets that are missing or only declared later.
 
 ### IDENTIFIERS_AND_SCOPE.AMBIGUOUS_REFERENCE — Ambiguous reference
 - Severity: ERROR
@@ -406,6 +410,10 @@ The sections below list all diagnostic rules organized by category. Each entry s
 ### MUX_RULES.MUX_SELECTOR_OUT_OF_RANGE_CONST — Selector statically out of range
 - Severity: ERROR
 - Fix: Correct selector width or bounds; ensure compile-time indices fall within valid range.
+
+### MUX_RULES.MUX_SELECTOR_WIDTH_MISMATCH — Runtime selector width does not match MUX width
+- Severity: ERROR
+- Fix: Make the runtime selector exactly `clog2(N)` bits wide, or widen/slice it explicitly before the MUX access.
 
 ---
 
@@ -573,7 +581,7 @@ The sections below list all diagnostic rules organized by category. Each entry s
 
 ### FUNCTIONS_AND_CLOG2.CLOG2_NONPOSITIVE_ARG — clog2 arg ≤ 0
 - Severity: ERROR
-- Fix: Provide positive integer argument.
+- Fix: Provide a positive integer argument. `clog2(1)` is valid and evaluates to `1`; only zero or negative arguments are rejected.
 
 ### FUNCTIONS_AND_CLOG2.CLOG2_INVALID_CONTEXT — clog2 used at runtime
 - Severity: ERROR
@@ -743,9 +751,9 @@ The sections below list all diagnostic rules organized by category. Each entry s
 - Severity: ERROR
 - Fix: Perform writes in SYNCHRONOUS blocks only.
 
-### MEM_ACCESS.MEM_ADDR_WIDTH_TOO_WIDE / MEM_CONST_ADDR_OUT_OF_RANGE — Address width / const address out-of-range
+### MEM_ACCESS.MEM_ADDR_WIDTH_MISMATCH / MEM_CONST_ADDR_OUT_OF_RANGE — Address width / const address out-of-range
 - Severity: ERROR
-- Fix: Use address width ≤ ceil(log2(depth)); ensure constant addresses < depth.
+- Fix: Runtime addresses must exactly match `clog2(depth)` (minimum 1 bit). Use explicit widening or slicing when needed, and ensure constant addresses remain < depth.
 
 ### MEM_ACCESS.MEM_MULTIPLE_WRITES_SAME_IN — Multiple writes to same IN port in one block
 - Severity: ERROR
