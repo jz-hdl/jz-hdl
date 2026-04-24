@@ -756,7 +756,7 @@ Each contains:
 
 #### Serializer / Deserializer Array
 
-An array of serializer (or deserializer) option objects, ordered by ascending ratio. Each chip lists all the serialization ratios it supports. The compiler selects the smallest ratio that is greater than or equal to the required data width.
+An array of serializer (or deserializer) option objects, ordered by ascending ratio. Each chip lists all the serialization ratios it supports. For a requested differential data width `N`, the compiler selects the smallest ratio that is greater than or equal to `N`; the requested width does not need to exactly match a listed ratio. If the selected primitive ratio is wider than `N`, backend wrapper generation and/or the emitted template must pad, tie off, or otherwise safely handle the surplus lanes without changing the logical project-visible width. If no listed ratio is large enough, backend code generation reports an unsupported-width compile error.
 
 Each element:
 
@@ -767,7 +767,7 @@ Each element:
 | `required_clocks` | array   | Yes      | Clock/reset signals the primitive needs; subset of `["fclk", "pclk", "reset"]` |
 | `map`             | object  | Yes      | Backend templates                                                  |
 
-The `required_clocks` array tells the compiler which pin attributes (`fclk`, `pclk`, `reset`) are mandatory for pins that use this serializer or deserializer. For example, a simple DDR primitive (ratio 2) may only require `["fclk"]`, while a 10:1 serializer typically requires `["fclk", "pclk", "reset"]`. The compiler uses this field to validate differential pin declarations in the project file, rather than hardcoding which attributes are required.
+The `required_clocks` array tells the compiler which pin attributes (`fclk`, `pclk`, `reset`) are mandatory for pins that use the selected serializer or deserializer primitive. For example, a simple DDR primitive (ratio 2) may only require `["fclk"]`, while a 10:1 serializer typically requires `["fclk", "pclk", "reset"]`. The compiler uses this field to validate differential pin declarations in the project file, rather than hardcoding which attributes are required.
 
 ### 10.3 `clock` Object
 
@@ -781,7 +781,7 @@ The `buffer` object has the same structure as `input.buffer` / `output.buffer` (
 
 ### 10.4 Serializer / Deserializer Arrays
 
-When a chip supports multiple ratios using different hardware primitives (e.g., Gowin OSER4, OSER8, OSER10), each primitive gets its own entry with its own template. When a wider ratio requires cascading hardware (e.g., Xilinx OSERDESE2 master+slave for 10:1), the template is self-contained — it emits all necessary wire declarations and primitive instantiations. The compiler does not need to know whether a template uses one primitive or multiple; it simply picks the best-fit ratio and emits the template.
+When a chip supports multiple ratios using different hardware primitives (e.g., Gowin OSER4, OSER8, OSER10), each primitive gets its own entry with its own template. When a wider ratio requires cascading hardware (e.g., Xilinx OSERDESE2 master+slave for 10:1), the template is self-contained — it emits all necessary wire declarations and primitive instantiations. The compiler does not need to know whether a template uses one primitive or multiple; it simply picks the best-fit ratio and emits the template. The selected primitive may be wider than the requested logical width; any surplus serializer/deserializer lanes must be padded, tied off, or otherwise safely handled by backend wrapper generation and/or the emitted template, and are not exposed as extra user-visible port width.
 
 ```json
 "differential": {
@@ -904,8 +904,8 @@ Template strings in `map` arrays use `%%name%%` delimiters to mark substitution 
 - `%%output%%` - Single-ended output signal
 - `%%pin_p%%` - Positive differential pin
 - `%%pin_n%%` - Negative differential pin
-- `%%D0%%` through `%%D13%%` - Serializer data inputs (indices beyond the selected ratio resolve to `1'b0`)
-- `%%Q0%%` through `%%Q13%%` - Deserializer data outputs (indices beyond the selected ratio resolve to `1'b0`)
+- `%%D0%%` through `%%D13%%` - Serializer lane placeholders for the selected primitive ratio; lanes beyond the selected primitive ratio resolve to `1'b0`, and any surplus lanes beyond the logical user-visible width must be padded or tied off by backend wrapper generation and/or the emitted template
+- `%%Q0%%` through `%%Q13%%` - Deserializer lane placeholders for the selected primitive ratio; lanes beyond the selected primitive ratio resolve to `1'b0`, and any surplus lanes beyond the logical user-visible width must be padded, discarded, or otherwise handled by backend wrapper generation and/or the emitted template
 - `%%fclk%%` - Fast clock for serializer/deserializer
 - `%%pclk%%` - Parallel clock for serializer/deserializer
 - `%%reset%%` - Reset signal for serializer/deserializer
