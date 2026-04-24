@@ -1,6 +1,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 
 #include "sem_driver.h"
@@ -401,8 +403,9 @@ static int sem_mem_parse_unsigned_value(const char *start,
         return -1;
     }
 
+    errno = 0;
     value = strtoull(clean, &endptr, base);
-    if (!endptr || *endptr != '\0') {
+    if (errno == ERANGE || !endptr || *endptr != '\0') {
         free(clean);
         return -1;
     }
@@ -424,6 +427,65 @@ static void sem_mem_mark_addr(unsigned char *assigned,
     if (!assigned[addr]) {
         assigned[addr] = 1;
         (*count)++;
+    }
+}
+
+static int sem_mem_is_saturated_mif_addr(unsigned long long addr)
+{
+    return addr == ULLONG_MAX;
+}
+
+static void sem_mem_mark_addr_range(unsigned char *assigned,
+                                    unsigned depth,
+                                    unsigned long long start_addr,
+                                    unsigned long long end_addr,
+                                    unsigned long long *count,
+                                    int *overflow)
+{
+    unsigned long long capped_end;
+
+    if (start_addr >= (unsigned long long)depth) {
+        *overflow = 1;
+        return;
+    }
+
+    capped_end = end_addr;
+    if (capped_end >= (unsigned long long)depth) {
+        capped_end = (unsigned long long)depth - 1ull;
+        *overflow = 1;
+    }
+
+    for (unsigned long long addr = start_addr; addr <= capped_end; ++addr) {
+        sem_mem_mark_addr(assigned, depth, addr, count, overflow);
+    }
+}
+
+static void sem_mem_mark_addr_sequence(unsigned char *assigned,
+                                       unsigned depth,
+                                       unsigned long long start_addr,
+                                       int token_count,
+                                       unsigned long long *count,
+                                       int *overflow)
+{
+    unsigned long long available;
+    int mark_count;
+
+    if (token_count <= 0) return;
+    if (start_addr >= (unsigned long long)depth) {
+        *overflow = 1;
+        return;
+    }
+
+    available = (unsigned long long)depth - start_addr;
+    mark_count = token_count;
+    if ((unsigned long long)mark_count > available) {
+        mark_count = (int)available;
+        *overflow = 1;
+    }
+
+    for (int idx = 0; idx < mark_count; ++idx) {
+        sem_mem_mark_addr(assigned, depth, start_addr + (unsigned long long)idx,
+                          count, overflow);
     }
 }
 
@@ -598,6 +660,8 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
                     sem_mem_trim_span(&rhs_start, &rhs_end);
                     if (sem_mem_parse_unsigned_value(lhs_start, lhs_end, addr_radix, &start_addr) != 0 ||
                         sem_mem_parse_unsigned_value(rhs_start, rhs_end, addr_radix, &end_addr) != 0 ||
+                        sem_mem_is_saturated_mif_addr(start_addr) ||
+                        sem_mem_is_saturated_mif_addr(end_addr) ||
                         end_addr < start_addr) {
                         free(assigned);
                         free(stripped);
@@ -608,6 +672,11 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
             } else {
                 if (sem_mem_parse_unsigned_value(addr_spec_start, addr_spec_end,
                                                  addr_radix, &start_addr) != 0) {
+                    free(assigned);
+                    free(stripped);
+                    return -1;
+                }
+                if (sem_mem_is_saturated_mif_addr(start_addr)) {
                     free(assigned);
                     free(stripped);
                     return -1;
@@ -649,16 +718,12 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
             }
 
             if (is_range) {
-                unsigned long long span = end_addr - start_addr + 1ull;
-                for (unsigned long long off = 0; off < span; ++off) {
-                    sem_mem_mark_addr(assigned, depth, start_addr + off,
-                                      &assigned_words, &overflow);
-                }
+                sem_mem_mark_addr_range(assigned, depth, start_addr, end_addr,
+                                        &assigned_words, &overflow);
             } else {
-                for (int idx = 0; idx < token_count; ++idx) {
-                    sem_mem_mark_addr(assigned, depth, start_addr + (unsigned long long)idx,
-                                      &assigned_words, &overflow);
-                }
+                sem_mem_mark_addr_sequence(assigned, depth, start_addr,
+                                           token_count, &assigned_words,
+                                           &overflow);
             }
         }
     }

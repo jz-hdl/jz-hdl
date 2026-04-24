@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "ir_builder.h"
 #include "ir.h"
@@ -26,6 +27,8 @@ typedef enum {
     MEM_RADIX_HEX = 16,
     MEM_RADIX_UNS = 100
 } MemInitRadix;
+
+#define MEM_INIT_BLOB_MAX_BYTES ((size_t)256u * 1024u * 1024u)
 
 static const char *mem_init_get_ext(const char *path)
 {
@@ -1176,9 +1179,36 @@ int jz_ir_init_lowering(IR_Design *design,
                 return -1;
             }
 
-            int bytes_per_word = (mem->word_width + 7) / 8;
-            size_t capacity_bytes = (size_t)bytes_per_word * (size_t)mem->depth;
-            size_t capacity_bits = (size_t)mem->word_width * (size_t)mem->depth;
+            size_t bytes_per_word_size = ((size_t)mem->word_width + 7u) / 8u;
+            size_t capacity_bytes = 0;
+            size_t capacity_bits = 0;
+            int bytes_per_word;
+
+            if ((size_t)mem->depth > SIZE_MAX / bytes_per_word_size ||
+                (size_t)mem->depth > SIZE_MAX / (size_t)mem->word_width) {
+                char msg[1024];
+                snprintf(msg, sizeof(msg),
+                         "memory init blob too large to lower safely: %s.%s",
+                         mod->name ? mod->name : "jz_module",
+                         mem->name ? mem->name : "jz_mem");
+                report_init_lowering_error(diagnostics, msg);
+                return -1;
+            }
+
+            capacity_bytes = bytes_per_word_size * (size_t)mem->depth;
+            capacity_bits = (size_t)mem->word_width * (size_t)mem->depth;
+            if (capacity_bytes > MEM_INIT_BLOB_MAX_BYTES ||
+                capacity_bytes > (size_t)INT_MAX) {
+                char msg[1024];
+                snprintf(msg, sizeof(msg),
+                         "memory init blob too large (%zu bytes, max %zu): %s.%s",
+                         capacity_bytes, MEM_INIT_BLOB_MAX_BYTES,
+                         mod->name ? mod->name : "jz_module",
+                         mem->name ? mem->name : "jz_mem");
+                report_init_lowering_error(diagnostics, msg);
+                return -1;
+            }
+            bytes_per_word = (int)bytes_per_word_size;
 
             IR_MemoryInitBlob *blob = (IR_MemoryInitBlob *)jz_arena_alloc(
                 arena, sizeof(IR_MemoryInitBlob));
