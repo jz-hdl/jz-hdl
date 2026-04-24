@@ -5,5 +5,5 @@ File: 5_1_ASYNC_ALIAS_LITERAL_RHS-literal_in_if_select.jz
       38:17   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?
       69:13   error ASYNC_ALIAS_LITERAL_RHS S4.10/S5.1 Literal on RHS of `=` in ASYNCHRONOUS block; did you mean `<=` or `=>`?
       69:13   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?
-      78:17   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?
       78:17   error ASYNC_ALIAS_LITERAL_RHS S4.10/S5.1 Literal on RHS of `=` in ASYNCHRONOUS block; did you mean `<=` or `=>`?
+      78:17   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?

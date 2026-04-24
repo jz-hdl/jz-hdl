@@ -189,6 +189,15 @@ static int compare_diag_ptrs(const void *a, const void *b)
         return (pa > pb) ? -1 : 1; /* higher priority first */
     }
 
+    /* Preserve append order for true ties so same-location diagnostics render
+     * deterministically across libc qsort implementations.
+     */
+    if (*da < *db) {
+        return -1;
+    }
+    if (*da > *db) {
+        return 1;
+    }
     return 0;
 }
 
