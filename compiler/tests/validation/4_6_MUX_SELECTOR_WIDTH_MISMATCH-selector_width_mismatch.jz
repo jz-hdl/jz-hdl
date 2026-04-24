@@ -1,0 +1,92 @@
+// MUX_SELECTOR_WIDTH_MISMATCH: runtime selector width must equal clog2(N).
+// Covers narrower and wider selectors on aggregation and auto-slice MUXes.
+
+@project MUX_SELECTOR_WIDTH_MISMATCH_selector_width_mismatch
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        IN  [1] narrow_sel = _;
+        IN  [2] ok_sel = _;
+        IN  [3] wide_sel = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        IN  [1] narrow_sel;
+        IN  [2] ok_sel;
+        OUT [8] data;
+    }
+
+    MUX {
+        agg3 = a, b, c;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: narrower selector for 3-element mux (needs 2 bits).
+        data = agg3[narrow_sel] | agg3[ok_sel] | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: same narrower selector in SYNC context.
+        r <= agg3[narrow_sel];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        IN  [1] narrow_sel;
+        IN  [2] ok_sel;
+        IN  [3] wide_sel;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w24 [24];
+        helper_out [8];
+    }
+
+    MUX {
+        slice3 [8] = w24;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        IN  [8] b = b;
+        IN  [8] c = c;
+        IN  [1] narrow_sel = narrow_sel;
+        IN  [2] ok_sel = ok_sel;
+        OUT [8] data = helper_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        w24 = {a, b, c};
+        // Trigger 3: wider selector for 3-element auto-slice mux (needs 2 bits).
+        data = slice3[wide_sel] | slice3[ok_sel] | helper_out | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 4: same wider selector in SYNC context.
+        r <= slice3[wide_sel];
+    }
+@endmod

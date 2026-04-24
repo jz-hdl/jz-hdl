@@ -42,8 +42,8 @@
 
     SYNCHRONOUS(CLK=clk) {
         // Trigger: constant index 0 (minimum valid).
-        r0 <= slice_mux[0];
+        r0 <= slice_mux[1'b0];
         // Trigger: constant index K-1 = 1 (maximum valid).
-        r1 <= slice_mux[1];
+        r1 <= slice_mux[1'b1];
     }
 @endmod

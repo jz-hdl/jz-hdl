@@ -4,7 +4,7 @@
 @project(CHIP="gw1nr-9-qn88-c6-i5") MEM_BLOCK_RESOURCE_EXCEEDED_at_limit_ok
     @top TopMod {
         IN  [1] clk = _;
-        IN  [4] addr = _;
+        IN  [11] addr = _;
         IN  [8] wdata = _;
         OUT [8] data = _;
     }
@@ -13,7 +13,7 @@
 @module HelperMod
     PORT {
         IN  [1] clk;
-        IN  [4] addr;
+        IN  [11] addr;
         IN  [8] wdata;
         OUT [8] data;
     }
@@ -44,7 +44,7 @@
 @module TopMod
     PORT {
         IN  [1] clk;
-        IN  [4] addr;
+        IN  [11] addr;
         IN  [8] wdata;
         OUT [8] data;
     }
@@ -83,7 +83,7 @@
 
     @new inst_h HelperMod {
         IN  [1] clk = clk;
-        IN  [4] addr = addr;
+        IN  [11] addr = addr;
         IN  [8] wdata = wdata;
         OUT [8] data = _;
     };

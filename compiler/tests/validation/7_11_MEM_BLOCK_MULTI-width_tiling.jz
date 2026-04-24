@@ -36,9 +36,9 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        small_mem.rd.addr <= addr[7:0];
+        small_mem.rd.addr <= addr;
         r <= {small_mem.rd.data, 56'h00000000000000};
-        small_mem.wr[addr[7:0]] <= wdata[7:0];
+        small_mem.wr[addr] <= wdata[7:0];
     }
 @endmod
 

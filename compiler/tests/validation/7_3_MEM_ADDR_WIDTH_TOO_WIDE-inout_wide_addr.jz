@@ -1,8 +1,8 @@
-// MEM_ADDR_WIDTH_TOO_WIDE: Address width exceeds ceil(log2(depth)) on INOUT port.
-// mem [8] [16] needs ceil(log2(16))=4 bit address. Using 8-bit address on INOUT .addr.
+// MEM_ADDR_WIDTH_MISMATCH: INOUT .addr width must equal ceil(log2(depth)).
+// mem [8] [16] needs a 4-bit address. This fixture uses 8-bit INOUT .addr.
 // Valid 4-bit INOUT .addr included for no false positives.
 
-@project MEM_ADDR_WIDTH_TOO_WIDE_inout_wide_addr
+@project MEM_ADDR_WIDTH_MISMATCH_inout_wide_addr
     @top TopMod {
         IN  [1] clk = _;
         IN  [8] wide_addr = _;

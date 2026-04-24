@@ -1,5 +1,5 @@
 // MEM_CONST_ADDR_OUT_OF_RANGE: Constant INOUT .addr assignment >= depth.
-// mem [8] [4] has depth 4, so valid addresses are 0-3.
+// mem [8] [3] has depth 3, so valid addresses are 0-2 and required width is 2.
 
 @project MEM_CONST_ADDR_OUT_OF_RANGE_inout_const_overflow
     @top TopMod {
@@ -21,7 +21,7 @@
     }
 
     MEM {
-        mem_a [8] [4] = 8'h00 {
+        mem_a [8] [3] = 8'h00 {
             INOUT rw;
         };
     }
@@ -33,7 +33,7 @@
     SYNCHRONOUS(CLK=clk) {
         r <= r;
         mem_a.rw.wdata <= wdata;
-        // Trigger: 3'd5 >= depth 4
-        mem_a.rw.addr <= 3'd5;
+        // Trigger: 2'b11 >= depth 3
+        mem_a.rw.addr <= 2'b11;
     }
 @endmod

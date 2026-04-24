@@ -1429,7 +1429,7 @@ static void sem_check_block_expressions_inner(JZASTNode *block,
         }
 
         /* Run MUX selector range checks on the full statement subtree. */
-        sem_check_mux_selectors_recursive(stmt, mod_scope, diagnostics);
+        sem_check_mux_selectors_recursive(stmt, mod_scope, project_symbols, diagnostics);
 
         /* Enforce CONFIG/CONST runtime scope restrictions on all expressions
          * in this executable statement subtree.

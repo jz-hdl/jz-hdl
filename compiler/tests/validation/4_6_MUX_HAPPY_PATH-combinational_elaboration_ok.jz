@@ -56,6 +56,6 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        r <= agg[1];
+        r <= agg[1'b1];
     }
 @endmod

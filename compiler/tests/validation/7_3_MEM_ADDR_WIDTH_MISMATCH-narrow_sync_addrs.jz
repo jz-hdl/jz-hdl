@@ -1,0 +1,49 @@
+// MEM_ADDR_WIDTH_MISMATCH: narrower synchronous MEM addresses are rejected.
+// Covers SYNC OUT .addr and INOUT .addr assignments with too-narrow addresses.
+
+@project MEM_ADDR_WIDTH_MISMATCH_narrow_sync_addrs
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [3] narrow_addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [3] narrow_addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_rd [8] [16] = 8'h00 {
+            OUT rd SYNC;
+        };
+    }
+
+    MEM {
+        mem_rw [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_rw.rw.data | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: narrower SYNC read address assignment.
+        mem_rd.rd.addr <= narrow_addr;
+        // Trigger 2: narrower INOUT address assignment.
+        mem_rw.rw.addr <= narrow_addr;
+        mem_rw.rw.wdata <= wdata;
+        r <= mem_rw.rw.data;
+    }
+@endmod

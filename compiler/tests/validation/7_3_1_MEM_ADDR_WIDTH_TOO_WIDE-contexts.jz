@@ -1,7 +1,7 @@
-// MEM_ADDR_WIDTH_TOO_WIDE: ASYNC read address wider than ceil(log2(depth))
-// in a SYNCHRONOUS expression for §7.3.1.
+// MEM_ADDR_WIDTH_MISMATCH: ASYNC read address width must exactly match
+// ceil(log2(depth)) in both ASYNCHRONOUS and SYNCHRONOUS contexts.
 
-@project MEM_ADDR_WIDTH_TOO_WIDE_contexts
+@project MEM_ADDR_WIDTH_MISMATCH_contexts
     CONFIG {
         OK_W = 4;
         WIDE_W = 5;

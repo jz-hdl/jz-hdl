@@ -2671,6 +2671,7 @@ int sem_expr_has_lit_call(const char *expr_text)
  */
 void sem_check_mux_selectors_recursive(JZASTNode *node,
                                        const JZModuleScope *mod_scope,
+                                       const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics);
 
 
@@ -2839,11 +2840,25 @@ static int sem_mux_compute_element_count(const JZModuleScope *scope,
     return 0;
 }
 
-/* Check constant MUX selector indices against the number of elements inferred
- * from the MUX declaration. Only literal indices are handled here.
+static unsigned sem_mux_required_selector_width(unsigned elem_count)
+{
+    unsigned width = 1u;
+    unsigned representable = 2u;
+
+    if (elem_count <= 1u) return 1u;
+    while (representable < elem_count && width < 31u) {
+        ++width;
+        representable <<= 1u;
+    }
+    return width;
+}
+
+/* Check runtime MUX selector width and constant out-of-range indices against
+ * the number of elements inferred from the MUX declaration.
  */
 static void sem_check_mux_selector_expr(JZASTNode *expr,
                                         const JZModuleScope *mod_scope,
+                                        const JZBuffer *project_symbols,
                                         JZDiagnosticList *diagnostics)
 {
     if (!expr || !mod_scope) return;
@@ -2856,19 +2871,37 @@ static void sem_check_mux_selector_expr(JZASTNode *expr,
     if (!mux_sym || !mux_sym->node) return;
     JZASTNode *mux_decl = mux_sym->node;
 
-    /* Only handle literal selector indices. */
     JZASTNode *idx_node = expr->children[1];
-    if (!idx_node || idx_node->type != JZ_AST_EXPR_LITERAL || !idx_node->text) return;
-
-    unsigned idx_val = 0;
-    if (!parse_literal_unsigned_value(idx_node->text, &idx_val)) return;
+    if (!idx_node) return;
 
     unsigned elem_count = 0;
     if (!sem_mux_compute_element_count(mod_scope, mux_decl, &elem_count) || elem_count == 0u) {
         return; /* unable to determine element count statically */
     }
 
-    if (idx_val >= elem_count) {
+    unsigned selector_width = sem_mux_required_selector_width(elem_count);
+
+    JZBitvecType idx_type;
+    idx_type.width = 0;
+    idx_type.is_signed = 0;
+    infer_expr_type(idx_node, mod_scope, project_symbols, diagnostics, &idx_type);
+    if (idx_type.width > 0 && idx_type.width != selector_width) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "MUX selector width is %u but %s requires %u-bit selector",
+                 idx_type.width, base->name, selector_width);
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "MUX_SELECTOR_WIDTH_MISMATCH",
+                        msg);
+        return;
+    }
+
+    if (idx_node->type == JZ_AST_EXPR_LITERAL && idx_node->text) {
+        unsigned idx_val = 0;
+        if (!parse_literal_unsigned_value(idx_node->text, &idx_val)) return;
+        if (idx_val < elem_count) return;
+
         char msg[512];
         snprintf(msg, sizeof(msg),
                  "%s[%u] is out of range; MUX '%s' has %u element%s (valid indices: 0..%u)",
@@ -2885,12 +2918,13 @@ static void sem_check_mux_selector_expr(JZASTNode *expr,
 
 void sem_check_mux_selectors_recursive(JZASTNode *node,
                                        const JZModuleScope *mod_scope,
+                                       const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics)
 {
     if (!node) return;
-    sem_check_mux_selector_expr(node, mod_scope, diagnostics);
+    sem_check_mux_selector_expr(node, mod_scope, project_symbols, diagnostics);
     for (size_t i = 0; i < node->child_count; ++i) {
-        sem_check_mux_selectors_recursive(node->children[i], mod_scope, diagnostics);
+        sem_check_mux_selectors_recursive(node->children[i], mod_scope, project_symbols, diagnostics);
     }
 }
 

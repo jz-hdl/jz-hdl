@@ -1,7 +1,6 @@
-// HAPPY_PATH: narrower ASYNC read addresses are accepted and implicitly
-// zero-extended to the memory address width for §7.3.1.
+// MEM_ADDR_WIDTH_MISMATCH: narrower ASYNC read addresses are rejected.
 
-@project HAPPY_PATH_async_read_narrow_addr_zero_extend_ok
+@project MEM_ADDR_WIDTH_MISMATCH_async_read_narrow_addr
     CONFIG {
         NARROW_W = 3;
         ADDR_W = 4;
@@ -46,7 +45,7 @@
         };
     }
 
-    // Valid: narrower ASYNC read address in @new binding.
+    // Trigger 1: narrower ASYNC read address in @new binding.
     @new inst_sink SinkMod {
         IN  [1] clk = clk;
         IN  [8] din = mem_t.rd[narrow_addr];
@@ -54,12 +53,12 @@
     };
 
     ASYNCHRONOUS {
-        // Valid: narrower address is zero-extended from 3 bits to 4 bits.
+        // Trigger 2: narrower ASYNC read address in ASYNCHRONOUS block.
         data = mem_t.rd[narrow_addr] ^ r;
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Valid: narrower address is also accepted in sync reads.
+        // Trigger 3: narrower ASYNC read address in SYNCHRONOUS expression.
         r <= mem_t.rd[narrow_addr];
     }
 @endmod

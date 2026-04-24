@@ -57,6 +57,6 @@
     SYNCHRONOUS(CLK=clk) {
         // Trigger: constant-index read on the same MUX is another independent
         // many-to-one selection; MUX is not storage.
-        r <= shared_mux[2];
+        r <= shared_mux[2'b10];
     }
 @endmod

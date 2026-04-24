@@ -1072,10 +1072,14 @@ MUX {
 
 **Width Rule:**
   - Let N = number of aggregated sources
-  - Selector width should be >= clog2(N)
-  - If narrower: implicitly zero-extend
+  - Required selector width = `clog2(N)` (`clog2(1)` = `1`)
+  - Runtime selector width must match exactly
+  - If selector width differs, compile error unless explicitly widened or sliced before access
   - If statically provable out-of-range: compile error
   - If runtime out-of-range indices return 0
+
+Runtime addressed selectors are width-checked as ordinary runtime bit-vectors.
+This differs from compile-time indexing constructs such as `IDX`, which are substituted during elaboration and are not runtime signals.
 
 **Read-Only:**
 - A `MUX` identifier is **read-only** and acts as a source.
@@ -4686,6 +4690,9 @@ SYNCHRONOUS(CLK=clk) {
 
 ### 7.3 Memory Access Syntax
 
+Runtime memory addresses are width-checked as ordinary runtime bit-vectors.
+This differs from compile-time indexing constructs such as `IDX`, which are substituted during elaboration and are not runtime signals.
+
 #### 7.3.1 Asynchronous Read
 
 **Declaration:**
@@ -4705,8 +4712,8 @@ ASYNCHRONOUS {
 ```
 
 **Width Rules:**
-- `address_signal` width must be ≤ `ceil(log2(256))` = 8 bits
-- If narrower, zero-extended to fit
+- `address_signal` width must equal `ceil(log2(256))` = 8 bits
+- If width differs, compile error unless explicitly widened or sliced before access
 - Result width = memory's `word_width` (8 bits in this example)
 
 **Semantics:**
@@ -4760,8 +4767,8 @@ SYNCHRONOUS(CLK=clk) {
 - `.data` is automatically exposed as a readable net (usable in `ASYNCHRONOUS` blocks), and may in turn participate in other `=`, `=>`, or `<=` assignments.
 
 **Width Rules:**
-- `address_signal` width must be ≤ `ceil(log2(depth))`
-- If narrower, zero-extended
+- `address_signal` width must equal `ceil(log2(depth))`
+- The value assigned to `.addr` must have exact address width; use `<=z` for narrower values or an explicit slice for wider values
 - Result width = memory's `word_width`
 
 **Read Output Semantics:**
@@ -4815,10 +4822,14 @@ SYNCHRONOUS(CLK=clk) {
 ```
 
 **Width Rules:**
-- `address_signal` width must be ≤ `ceil(log2(depth))`
-- If narrower, zero-extended
-- `data_signal` width must be ≤ memory's `word_width`
-- If narrower, zero-extended to match word width
+- `address_signal` width must equal `ceil(log2(depth))`
+- The address expression must have exact address width; widen or slice it explicitly before the access
+- Bare `<=` requires `data_signal` width to equal memory's `word_width`
+- If narrower, use `<=z` to zero-extend to match word width
+- If wider, compile error unless explicitly sliced to word width
+
+Compile-time indexing and runtime addressing are intentionally distinct.
+Compile-time constructs such as `IDX` are substituted during elaboration, while runtime addresses and write data follow the normal exact-width rules unless an explicit widening operator is used.
 
 **Semantics:**
 - Address and data are captured at clock edge

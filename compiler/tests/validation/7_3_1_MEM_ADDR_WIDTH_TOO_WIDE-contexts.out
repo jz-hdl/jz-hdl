@@ -1,2 +1,2 @@
 File: 7_3_1_MEM_ADDR_WIDTH_TOO_WIDE-contexts.jz
-      43:14   error MEM_ADDR_WIDTH_TOO_WIDE S7.2/S7.3/S7.7.2 Address width exceeds ceil(log2(depth)) in constant-time-provable way
+      43:14   error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access

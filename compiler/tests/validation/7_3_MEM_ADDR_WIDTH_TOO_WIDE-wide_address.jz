@@ -1,9 +1,9 @@
-// MEM_ADDR_WIDTH_TOO_WIDE: Address signal wider than ceil(log2(depth)).
-// mem [8] [16] needs ceil(log2(16))=4 bit address. Using 8-bit address.
+// MEM_ADDR_WIDTH_MISMATCH: Runtime MEM address width must equal ceil(log2(depth)).
+// mem [8] [16] needs a 4-bit address. This fixture uses 8-bit addresses.
 // Triggers in async read, sync write, and sync .addr contexts.
 // Valid 4-bit address included for no false positives.
 
-@project MEM_ADDR_WIDTH_TOO_WIDE_wide_address
+@project MEM_ADDR_WIDTH_MISMATCH_wide_address
     @top TopMod {
         IN  [1] clk = _;
         IN  [8] wide_addr = _;

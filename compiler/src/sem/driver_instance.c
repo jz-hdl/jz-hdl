@@ -569,6 +569,14 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                         memset(&read_ctx, 0, sizeof(read_ctx));
                         read_ctx.is_instance_binding = 1;
                         read_ctx.check_bus_rules = 1;
+                        sem_check_mem_access_expr(rhs,
+                                                  scope,
+                                                  project_symbols,
+                                                  diagnostics);
+                        sem_check_mux_selectors_recursive(rhs,
+                                                          scope,
+                                                          project_symbols,
+                                                          diagnostics);
                         sem_check_expr_read_rules(rhs,
                                                   scope,
                                                   project_symbols,

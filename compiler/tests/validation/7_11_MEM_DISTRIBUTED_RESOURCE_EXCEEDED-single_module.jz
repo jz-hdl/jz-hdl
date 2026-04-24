@@ -5,7 +5,7 @@
 @project(CHIP="gw1nr-9-qn88-c6-i5") MEM_DISTRIBUTED_RESOURCE_EXCEEDED_single_module
     @top TopMod {
         IN  [1] clk = _;
-        IN  [4] addr = _;
+        IN  [10] addr = _;
         IN  [8] wdata = _;
         OUT [8] data = _;
     }
@@ -44,7 +44,7 @@
 @module TopMod
     PORT {
         IN  [1] clk;
-        IN  [4] addr;
+        IN  [10] addr;
         IN  [8] wdata;
         OUT [8] data;
     }
@@ -70,7 +70,7 @@
 
     @new inst_h HelperMod {
         IN  [1] clk = clk;
-        IN  [4] addr = addr;
+        IN  [4] addr = addr[3:0];
         IN  [8] wdata = wdata;
         OUT [8] data = _;
     };
@@ -80,9 +80,9 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        r <= {7'h00, dist_c.rd_c[addr[0:0]]};
+        r <= {7'h00, dist_c.rd_c[addr[3:0]]};
         dist_a.wr_a[addr] <= wdata;
         dist_b.wr_b[addr] <= wdata;
-        dist_c.wr_c[addr[0:0]] <= wdata[0:0];
+        dist_c.wr_c[addr[3:0]] <= wdata[0:0];
     }
 @endmod

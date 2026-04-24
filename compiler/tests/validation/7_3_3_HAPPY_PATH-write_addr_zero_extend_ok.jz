@@ -1,7 +1,6 @@
-// HAPPY_PATH: Narrower synchronous write addresses are accepted and implicitly
-// zero-extended to the memory depth address width.
+// MEM_ADDR_WIDTH_MISMATCH: narrower runtime MEM addresses are rejected.
 
-@project HAPPY_PATH_write_addr_zero_extend_ok
+@project MEM_ADDR_WIDTH_MISMATCH_write_addr_narrow
     @top TopMod {
         IN  [1] clk = _;
         IN  [2] small_addr = _;
@@ -30,7 +29,7 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Valid: 2-bit address is narrower than ceil(log2(16)) and is allowed.
+        // Trigger 1: narrower synchronous write address in helper.
         mem_h.wr[small_addr] <= wdata;
     }
 @endmod
@@ -62,7 +61,7 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Valid: narrower write address is accepted in the top module too.
+        // Trigger 2: narrower synchronous write address in top module.
         mem_t.wr[small_addr] <= wdata;
     }
 @endmod

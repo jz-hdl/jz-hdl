@@ -12,7 +12,8 @@
         IN  [1] clk = _;
         IN  [8] a = _;
         IN  [8] b = _;
-        IN  [1] sel = _;
+        IN  [1] sel_small = _;
+        IN  [2] sel_many = _;
         OUT [8] data = _;
     }
 @endproj
@@ -43,7 +44,7 @@
 
     SYNCHRONOUS(CLK=clk) {
         // Valid: constant index in SYNC (index 1 is in range for 2-element MUX)
-        r <= agg_mux[1];
+        r <= agg_mux[1'b1];
     }
 @endmod
 
@@ -72,7 +73,7 @@
 
     SYNCHRONOUS(CLK=clk) {
         // Valid: constant index 0 in SYNC
-        r <= slice_mux[0];
+        r <= slice_mux[1'b0];
     }
 @endmod
 
@@ -82,7 +83,8 @@
         IN  [1] clk;
         IN  [8] a;
         IN  [8] b;
-        IN  [1] sel;
+        IN  [1] sel_small;
+        IN  [2] sel_many;
         OUT [8] data;
     }
 
@@ -103,14 +105,14 @@
         IN  [1] clk = clk;
         IN  [8] a = a;
         IN  [8] b = b;
-        IN  [1] sel = sel;
+        IN  [1] sel = sel_small;
         OUT [8] data = agg_out;
     };
 
     @new inst_slice HelperSlice {
         IN  [1] clk = clk;
         IN  [16] wide = w16;
-        IN  [1] sel = sel;
+        IN  [1] sel = sel_small;
         OUT [8] data = slice_out;
     };
 
@@ -123,11 +125,11 @@
         d = b;
         w16 = {a, b};
         // Valid: dynamic selection on 4-element MUX
-        data = many_mux[sel] | agg_out | slice_out | r;
+        data = many_mux[sel_many] | agg_out | slice_out | r;
     }
 
     SYNCHRONOUS(CLK=clk) {
         // Valid: constant index 3 on 4-element MUX
-        r <= many_mux[3];
+        r <= many_mux[2'b11];
     }
 @endmod

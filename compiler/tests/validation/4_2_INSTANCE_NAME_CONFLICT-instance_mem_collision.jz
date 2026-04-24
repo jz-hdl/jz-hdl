@@ -49,8 +49,13 @@
         r [8] = 8'h00;
     }
 
+    WIRE {
+        addr [4];
+    }
+
     ASYNCHRONOUS {
-        data = my_mem.rd[din];
+        addr =z din;
+        data = my_mem.rd[addr];
     }
 
     SYNCHRONOUS(CLK=clk) {

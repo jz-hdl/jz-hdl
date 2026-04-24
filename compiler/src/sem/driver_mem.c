@@ -482,72 +482,79 @@ static int sem_mem_compute_depth_and_addr_width(JZASTNode *mem_decl,
     return 1;
 }
 
+static void sem_check_mem_access_expr_impl(JZASTNode *expr,
+                                           const JZModuleScope *mod_scope,
+                                           const JZBuffer *project_symbols,
+                                           JZDiagnosticList *diagnostics)
+{
+    if (!expr || !mod_scope) return;
+    if (expr->type == JZ_AST_EXPR_SLICE && expr->child_count >= 3) {
+        JZMemPortRef ref;
+        if (sem_match_mem_port_slice(expr, mod_scope, diagnostics, &ref)) {
+            if (ref.port && ref.port->block_kind &&
+                strcmp(ref.port->block_kind, "OUT") == 0 &&
+                ref.port->text && strcmp(ref.port->text, "SYNC") == 0) {
+                sem_report_rule(diagnostics,
+                                expr->loc,
+                                "MEM_SYNC_PORT_INDEXED",
+                                "SYNC MEM read ports may not be indexed; use .addr/.data");
+            } else {
+                unsigned depth = 0, addr_width = 0;
+                if (sem_mem_compute_depth_and_addr_width(ref.mem_decl, &depth, &addr_width)) {
+                    /* Index expression is the first index node (msb). For [idx] the parser
+                     * creates msb/lsb duplicates, so inspecting msb is sufficient.
+                     */
+                    JZASTNode *msb_node = expr->children[1];
+                    if (msb_node) {
+                        if (addr_width > 0) {
+                            JZBitvecType idx_type;
+                            idx_type.width = 0;
+                            idx_type.is_signed = 0;
+                            infer_expr_type(msb_node, mod_scope, project_symbols, diagnostics, &idx_type);
+                            if (idx_type.width > 0 && idx_type.width != addr_width) {
+                                sem_report_rule(diagnostics,
+                                                expr->loc,
+                                                "MEM_ADDR_WIDTH_MISMATCH",
+                                                "memory address expression width must equal ceil(log2(depth))");
+                                goto recurse_children;
+                            }
+                        }
+
+                        /* Constant-address out-of-range check when the address already satisfies
+                         * the exact-width rule above. This avoids duplicate diagnostics for a
+                         * single malformed literal.
+                         */
+                        if (msb_node->type == JZ_AST_EXPR_LITERAL && msb_node->text && depth > 0) {
+                            unsigned idx = 0;
+                            if (parse_literal_unsigned_value(msb_node->text, &idx) && idx >= depth) {
+                                sem_report_rule(diagnostics,
+                                                expr->loc,
+                                                "MEM_CONST_ADDR_OUT_OF_RANGE",
+                                                "constant memory address index is out of range for declared depth");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+recurse_children:
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        sem_check_mem_access_expr_impl(expr->children[i],
+                                       mod_scope,
+                                       project_symbols,
+                                       diagnostics);
+    }
+}
+
 /* Expression-level MEM access checks: address width and constant range. */
 void sem_check_mem_access_expr(JZASTNode *expr,
                                const JZModuleScope *mod_scope,
                                const JZBuffer *project_symbols,
                                JZDiagnosticList *diagnostics)
 {
-    if (!expr || !mod_scope) return;
-    if (expr->type != JZ_AST_EXPR_SLICE || expr->child_count < 3) return;
-
-    JZMemPortRef ref;
-    if (!sem_match_mem_port_slice(expr, mod_scope, diagnostics, &ref)) {
-        return;
-    }
-    if (ref.port && ref.port->block_kind &&
-        strcmp(ref.port->block_kind, "OUT") == 0 &&
-        ref.port->text && strcmp(ref.port->text, "SYNC") == 0) {
-        sem_report_rule(diagnostics,
-                        expr->loc,
-                        "MEM_SYNC_PORT_INDEXED",
-                        "SYNC MEM read ports may not be indexed; use .addr/.data");
-        return;
-    }
-
-    unsigned depth = 0, addr_width = 0;
-    if (!sem_mem_compute_depth_and_addr_width(ref.mem_decl, &depth, &addr_width)) {
-        return; /* unknown depth; cannot enforce width/range rules yet */
-    }
-
-    /* Index expression is the first index node (msb). For [idx] the parser
-     * creates msb/lsb duplicates, so inspecting msb is sufficient.
-     */
-    JZASTNode *msb_node = expr->children[1];
-    if (!msb_node) return;
-
-    /* Constant-address out-of-range check when index is a plain integer
-     * literal. This is independent of the address *width* rule below.
-     */
-    if (msb_node->type == JZ_AST_EXPR_LITERAL && msb_node->text && depth > 0) {
-        unsigned idx = 0;
-        if (parse_literal_unsigned_value(msb_node->text, &idx) && idx >= depth) {
-            sem_report_rule(diagnostics,
-                            expr->loc,
-                            "MEM_CONST_ADDR_OUT_OF_RANGE",
-                            "constant memory address index is out of range for declared depth");
-        }
-    }
-
-    /* Bit-width based address rule: index width must not exceed
-     * ceil(log2(depth)). We reuse infer_expr_type on the index expression.
-     *
-     * For purely constant indices we already enforce MEM_CONST_ADDR_OUT_OF_RANGE
-     * and skip MEM_ADDR_WIDTH_TOO_WIDE to avoid redundant diagnostics.
-     */
-    if (addr_width > 0 &&
-        !(msb_node->type == JZ_AST_EXPR_LITERAL && msb_node->text)) {
-        JZBitvecType idx_type;
-        idx_type.width = 0;
-        idx_type.is_signed = 0;
-        infer_expr_type(msb_node, mod_scope, project_symbols, diagnostics, &idx_type);
-        if (idx_type.width > addr_width) {
-            sem_report_rule(diagnostics,
-                            expr->loc,
-                            "MEM_ADDR_WIDTH_TOO_WIDE",
-                            "memory address expression width exceeds ceil(log2(depth))");
-        }
-    }
+    sem_check_mem_access_expr_impl(expr, mod_scope, project_symbols, diagnostics);
 }
 
 void sem_check_mem_addr_assign(const JZMemPortRef *ref,
@@ -563,6 +570,20 @@ void sem_check_mem_addr_assign(const JZMemPortRef *ref,
         return;
     }
 
+    if (addr_width > 0) {
+        JZBitvecType idx_type;
+        idx_type.width = 0;
+        idx_type.is_signed = 0;
+        infer_expr_type(addr_expr, mod_scope, project_symbols, diagnostics, &idx_type);
+        if (idx_type.width > 0 && idx_type.width != addr_width) {
+            sem_report_rule(diagnostics,
+                            addr_expr->loc,
+                            "MEM_ADDR_WIDTH_MISMATCH",
+                            "memory address expression width must equal ceil(log2(depth))");
+            return;
+        }
+    }
+
     if (addr_expr->type == JZ_AST_EXPR_LITERAL && addr_expr->text && depth > 0) {
         unsigned idx = 0;
         if (parse_literal_unsigned_value(addr_expr->text, &idx) && idx >= depth) {
@@ -570,20 +591,6 @@ void sem_check_mem_addr_assign(const JZMemPortRef *ref,
                             addr_expr->loc,
                             "MEM_CONST_ADDR_OUT_OF_RANGE",
                             "constant memory address index is out of range for declared depth");
-        }
-    }
-
-    if (addr_width > 0 &&
-        !(addr_expr->type == JZ_AST_EXPR_LITERAL && addr_expr->text)) {
-        JZBitvecType idx_type;
-        idx_type.width = 0;
-        idx_type.is_signed = 0;
-        infer_expr_type(addr_expr, mod_scope, project_symbols, diagnostics, &idx_type);
-        if (idx_type.width > addr_width) {
-            sem_report_rule(diagnostics,
-                            addr_expr->loc,
-                            "MEM_ADDR_WIDTH_TOO_WIDE",
-                            "memory address expression width exceeds ceil(log2(depth))");
         }
     }
 }

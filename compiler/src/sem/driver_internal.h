@@ -471,6 +471,7 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
 /* driver.c helpers shared with new files */
 void sem_check_mux_selectors_recursive(JZASTNode *node,
                                        const JZModuleScope *mod_scope,
+                                       const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics);
 
 int sem_expr_contains_x_literal_anywhere(const JZASTNode *expr);

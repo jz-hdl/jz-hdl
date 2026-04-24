@@ -146,6 +146,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "MUX_RULES", "MUX_AGG_SOURCE_WIDTH_MISMATCH",                 0, JZ_RULE_MODE_ERR, "S4.6 Aggregation form sources must all have identical bit-width" },
     { "MUX_RULES", "MUX_AGG_SOURCE_INVALID",                        0, JZ_RULE_MODE_ERR, "S4.6 Aggregation source not a valid readable signal in module scope" },
     { "MUX_RULES", "MUX_SLICE_WIDTH_NOT_DIVISOR",                   0, JZ_RULE_MODE_ERR, "S4.6 Auto-slicing form requires wide_source width to be exact multiple of element_width" },
+    { "MUX_RULES", "MUX_SELECTOR_WIDTH_MISMATCH",                   0, JZ_RULE_MODE_ERR, "S4.6 Runtime MUX selector width must equal clog2(N); widen or slice explicitly before access" },
     { "MUX_RULES", "MUX_SELECTOR_OUT_OF_RANGE_CONST",               0, JZ_RULE_MODE_ERR, "S4.6 Selector statically provable outside valid index range" },
     { "MUX_RULES", "MUX_NAME_DUPLICATE",                            0, JZ_RULE_MODE_ERR, "S4.6 MUX identifier duplicates another identifier in module" },
 
@@ -414,7 +415,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "MEM_ACCESS", "MEM_WRITE_IN_ASYNC_BLOCK",                     2, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3 MEM writes must be in SYNCHRONOUS blocks; move this assignment out of ASYNCHRONOUS" },
     { "MEM_ACCESS", "MEM_WRITE_TO_READ_PORT",                       1, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2 Writing to MEM read port (IN); did you mean to use an OUT port?" },
     { "MEM_ACCESS", "MEM_READ_FROM_WRITE_PORT",                     1, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3 Reading from MEM write port (OUT); did you mean to use an IN port?" },
-    { "MEM_ACCESS", "MEM_ADDR_WIDTH_TOO_WIDE",                      0, JZ_RULE_MODE_ERR, "S7.2/S7.3/S7.7.2 Address width exceeds ceil(log2(depth)) in constant-time-provable way" },
+    { "MEM_ACCESS", "MEM_ADDR_WIDTH_MISMATCH",                      0, JZ_RULE_MODE_ERR, "S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access" },
     { "MEM_ACCESS", "MEM_MULTIPLE_WRITES_SAME_IN",                  0, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3/S7.7.2 Multiple writes to same IN port within single SYNCHRONOUS block" },
     { "MEM_ACCESS", "MEM_MULTIPLE_ASSIGN_SYNC_READ_OUT",            0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 Synchronous read address sampled from multiple addresses in one execution path" },
     { "MEM_ACCESS", "MEM_CONST_ADDR_OUT_OF_RANGE",                  0, JZ_RULE_MODE_ERR, "S7.2/S7.3/S7.7.2 Constant address index >= depth" },

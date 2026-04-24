@@ -146,6 +146,6 @@
     }
 
     SYNCHRONOUS(CLK=clk) {
-        r <= ok_mux[0];
+        r <= ok_mux[1'b0];
     }
 @endmod
