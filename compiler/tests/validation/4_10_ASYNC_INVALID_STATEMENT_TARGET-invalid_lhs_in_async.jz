@@ -1,5 +1,7 @@
 // ASYNC_INVALID_STATEMENT_TARGET: LHS in ASYNCHRONOUS assignment is not assignable.
-// Tests CONST assignment in ASYNC blocks across multiple modules.
+// Tests CONST assignment in ASYNC blocks across multiple modules and operators.
+// Function-call LHS is not a valid assignment syntax in JZ-HDL, so it is not
+// reachable by this semantic rule.
 // Valid assignments (WIRE, PORT OUT) verify no false positives.
 
 @project ASYNC_INVALID_STATEMENT_TARGET_invalid_lhs_in_async
@@ -26,8 +28,10 @@
     }
 
     ASYNCHRONOUS {
-        // Trigger 1: assign to CONST in ASYNC (helper module)
+        // Trigger 1: receive-assign (<=) to CONST in ASYNC (helper module)
         MY_CONST <= din;
+        // Trigger 2: alias-assign (=) to CONST in ASYNC (helper module)
+        MY_CONST = din;
         // Valid: wire assignment (no error)
         w <= din;
         dout = w;
@@ -51,8 +55,8 @@
     };
 
     ASYNCHRONOUS {
-        // Trigger 2: assign to CONST in ASYNC (top module)
-        TOP_CONST <= din;
+        // Trigger 3: drive-assign (=>) to CONST in ASYNC (top module)
+        din => TOP_CONST;
         // Valid: PORT OUT assignment (no error)
         dout_b <= din;
     }

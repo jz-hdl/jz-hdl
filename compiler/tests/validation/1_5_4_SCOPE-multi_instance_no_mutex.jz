@@ -1,0 +1,66 @@
+// §1.5.4 SCOPE (Req #4): When two module instances both connect their
+// OUT ports to the same wire, §1.6 (not §1.5) governs validity and
+// requires provable mutual exclusion of active (non-z) drivers. Here
+// both instances drive the shared wire unconditionally, so §1.6 fires
+// NET_MULTIPLE_ACTIVE_DRIVERS while §1.5 does NOT fire
+// ASSIGN_MULTIPLE_SAME_BITS (each instance's port is a separate
+// identifier checked independently in its own block).
+
+@project SCOPE_multi_instance_no_mutex
+    @top TopMod {
+        IN  [8] data_a   = _;
+        IN  [8] data_b   = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        // Only one assignment to `dout` in this block — passes §1.5 locally.
+        dout <= din;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        // Only one assignment to `dout` in this block — passes §1.5 locally.
+        dout <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] data_a;
+        IN  [8] data_b;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        // Shared wire driven by two instances with no mutual exclusion.
+        shared [8];
+    }
+
+    // Trigger: two instance OUT ports both actively drive `shared`
+    // unconditionally — §1.6 flags NET_MULTIPLE_ACTIVE_DRIVERS.
+    @new inst_a DriverA {
+        IN  [8] din  = data_a;
+        OUT [8] dout = shared;
+    };
+
+    @new inst_b DriverB {
+        IN  [8] din  = data_b;
+        OUT [8] dout = shared;
+    };
+
+    ASYNCHRONOUS {
+        observed <= shared;
+    }
+@endmod

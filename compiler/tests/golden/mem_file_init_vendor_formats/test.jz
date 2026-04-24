@@ -1,0 +1,55 @@
+// Golden test: vendor text memory init formats lower into backend blobs.
+// Verifies .mif and .coe both produce generated Verilog sidecar loads and
+// inline RTLIL $meminit_v2 cells from the lowered raw-byte payload.
+
+@project(CHIP=GENERIC) mem_file_init_vendor_formats
+
+    CLOCKS {
+    }
+
+    IN_PINS {
+        addr [2] = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        mif_dout [8] = { standard=LVCMOS33, drive=4 };
+        coe_dout [8] = { standard=LVCMOS33, drive=4 };
+    }
+
+    MAP {
+        addr[0] = 1; addr[1] = 2;
+        mif_dout[0] = 3; mif_dout[1] = 4; mif_dout[2] = 5; mif_dout[3] = 6;
+        mif_dout[4] = 7; mif_dout[5] = 8; mif_dout[6] = 9; mif_dout[7] = 10;
+        coe_dout[0] = 11; coe_dout[1] = 12; coe_dout[2] = 13; coe_dout[3] = 14;
+        coe_dout[4] = 15; coe_dout[5] = 16; coe_dout[6] = 17; coe_dout[7] = 18;
+    }
+
+    @top vendor_mem_top {
+        IN  [2] addr = addr;
+        OUT [8] mif_dout = mif_dout;
+        OUT [8] coe_dout = coe_dout;
+    }
+@endproj
+
+@module vendor_mem_top
+    PORT {
+        IN  [2] addr;
+        OUT [8] mif_dout;
+        OUT [8] coe_dout;
+    }
+
+    MEM {
+        mif_mem [8] [4] = @file("data/init.mif") {
+            OUT mif_rd ASYNC;
+        };
+
+        coe_mem [8] [4] = @file("data/init.coe") {
+            OUT coe_rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        mif_dout = mif_mem.mif_rd[addr];
+        coe_dout = coe_mem.coe_rd[addr];
+    }
+@endmod

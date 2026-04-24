@@ -1,0 +1,63 @@
+// TYPE_BINOP_WIDTH_MISMATCH: Comparison binary operators reject mismatched operand widths.
+// Tests width mismatch for <=, >=, == operators
+// across ASYNCHRONOUS and SYNCHRONOUS blocks in multiple modules.
+// Valid same-width comparisons included to verify no false positives.
+
+@project TYPE_BINOP_WIDTH_MISMATCH_comparison_ops
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [4] b = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// Helper: width mismatch in less-or-equal comparison
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [4] b;
+        OUT [8] data;
+    }
+    REGISTER {
+        r [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        // Trigger: less-or-equal with mismatched widths (8 vs 4)
+        data <= (a <= b) ? r : 8'd0;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: same-width comparison (no false positive)
+        r <= (a == 8'd5) ? a : 8'd0;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [4] b;
+        OUT [8] result;
+    }
+    WIRE {
+        h_data [8];
+    }
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        IN  [4] b = b;
+        OUT [8] data = h_data;
+    };
+    REGISTER {
+        r [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        // Trigger: greater-or-equal with mismatched widths (8 vs 4)
+        result <= (a >= b) ? h_data : r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: equality with mismatched widths (8 vs 4)
+        r <= (a == b) ? a : 8'd0;
+    }
+@endmod

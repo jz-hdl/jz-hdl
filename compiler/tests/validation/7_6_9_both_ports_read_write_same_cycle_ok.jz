@@ -1,0 +1,89 @@
+// HAPPY_PATH: Valid §7.6.9 simultaneous dual-port read/write activity.
+// Covers Req #3: both INOUT ports can read and write independently in the same cycle.
+
+@project both_ports_read_write_same_cycle_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr_a = _;
+        IN  [ADDR_W] addr_b = _;
+        IN  [DATA_W] wdata_a = _;
+        IN  [DATA_W] wdata_b = _;
+        IN  [1] we_a = _;
+        IN  [1] we_b = _;
+        OUT [DATA_W] rdata_a = _;
+        OUT [DATA_W] rdata_b = _;
+        OUT [DATA_W] cycle_mix = _;
+    }
+@endproj
+
+@module CycleObserver
+    PORT {
+        IN  [8] read_a;
+        IN  [8] read_b;
+        OUT [8] mixed;
+    }
+
+    ASYNCHRONOUS {
+        mixed = read_a ^ read_b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr_a;
+        IN  [4] addr_b;
+        IN  [8] wdata_a;
+        IN  [8] wdata_b;
+        IN  [1] we_a;
+        IN  [1] we_b;
+        OUT [8] rdata_a;
+        OUT [8] rdata_b;
+        OUT [8] cycle_mix;
+    }
+
+    REGISTER {
+        rd_hold_a [8] = 8'h00;
+        rd_hold_b [8] = 8'h00;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [8] [16] = 8'h00 {
+            INOUT port_a;
+            INOUT port_b;
+        };
+    }
+
+    @new observer CycleObserver {
+        IN  [8] read_a = rd_hold_a;
+        IN  [8] read_b = rd_hold_b;
+        OUT [8] mixed = cycle_mix;
+    };
+
+    ASYNCHRONOUS {
+        rdata_a = rd_hold_a;
+        rdata_b = rd_hold_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Both ports perform their read-side address and data activity each cycle.
+        mem.port_a.addr <= addr_a;
+        mem.port_b.addr <= addr_b;
+        rd_hold_a <= mem.port_a.data;
+        rd_hold_b <= mem.port_b.data;
+
+        // Both write ports may also be active in the same cycle.
+        IF (we_a) {
+            mem.port_a.wdata <= wdata_a;
+        }
+
+        IF (we_b) {
+            mem.port_b.wdata <= wdata_b;
+        }
+    }
+@endmod

@@ -1,0 +1,65 @@
+// Req #5: when the tri-state transform fails after starting work, it must
+// roll back to the pre-transform IR and emit a compile error.
+// Target diagnostic: TRISTATE_TRANSFORM_ROLLBACK.
+// Non-target diagnostic: TRISTATE_TRANSFORM_OE_EXTRACT_FAIL, which is the
+// transform failure that triggers the rollback path.
+
+@project REQ5_rollback_on_postcheck_fail
+    @top TopMod {
+        IN  [1] en = _;
+        IN  [8] din = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        data <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        data <= (en == 1'b0) ? din : {4'bzzzz, 4'bzzzz};
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] result;
+    }
+
+    WIRE {
+        bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [1] en = en;
+        IN    [8] din = din;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [1] en = en;
+        IN    [8] din = din;
+        INOUT [8] data = bus;
+    };
+
+    ASYNCHRONOUS {
+        result <= bus;
+    }
+@endmod

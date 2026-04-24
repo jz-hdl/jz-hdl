@@ -1,0 +1,81 @@
+// OBS_X_TO_OBSERVABLE_SINK (§2.1 Req #13): happy path — x bits are
+// structurally masked before reaching any observable sink. No diagnostics
+// expected. Covers async-expr, sync-expr, and new-binding contexts.
+
+@project OBS_X_TO_OBSERVABLE_SINK_masked
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper: x-bearing selector is consumed by a CASE pattern; x bits never
+// flow into the OUT port path.
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    WIRE {
+        w_xdep [8];
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // async-expr: x-dependent net kept internal
+        w_xdep <= 8'b0000_xxxx;
+        dout <= r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // sync-expr: x bits used in a CASE pattern (legal wildcard)
+        SELECT (w_xdep) {
+            CASE 8'b0000_xxxx {
+                r <= din;
+            }
+            DEFAULT {
+                r <= 8'h00;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        ha_out [8];
+        w_x [8];
+        w_masked [8];
+    }
+
+    // new-binding: only fully-known values pass into helper inputs
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // async-expr: x-producing literal is combined via mask so that all
+        // x bits are cleared before it is published.
+        w_x <= 8'bxxxx_0000;
+        w_masked <= (w_x & 8'h00) | ha_out;
+        data <= w_masked ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // sync-expr: masked x value used safely on register RHS
+        r <= (w_x & 8'h00) | din;
+    }
+@endmod

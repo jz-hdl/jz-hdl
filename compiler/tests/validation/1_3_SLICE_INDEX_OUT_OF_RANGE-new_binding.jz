@@ -1,0 +1,75 @@
+// SLICE_INDEX_OUT_OF_RANGE: Out-of-range slice indices inside @new port-binding
+// expressions. Triggers a literal-index out-of-range slice and a CONST-index
+// out-of-range slice in the new-binding context. Valid in-range binding
+// included to verify no false positives.
+
+@project SLICE_INDEX_OUT_OF_RANGE_new_binding
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] out_a = _;
+        OUT [4] out_b = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [4] nib;
+        OUT [4] out_a;
+    }
+    REGISTER {
+        r [4] = 4'h0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= nib;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] out_a;
+        OUT [4] out_b;
+    }
+    CONST {
+        HI = 20;
+        LO = 17;
+    }
+    WIRE {
+        ha_out_a [4];
+        ha_out_b [4];
+    }
+    REGISTER {
+        r [16] = 16'h0000;
+    }
+
+    // Trigger 1: literal indices out of range (19:16 for a 16-bit signal)
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [4] nib = r[19:16];
+        OUT [4] out_a = ha_out_a;
+    };
+
+    // Trigger 2: CONST-driven indices out of range (HI=20, LO=17 for a 16-bit signal)
+    @new inst_b HelperA {
+        IN  [1] clk = clk;
+        IN  [4] nib = r[HI:LO];
+        OUT [4] out_a = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

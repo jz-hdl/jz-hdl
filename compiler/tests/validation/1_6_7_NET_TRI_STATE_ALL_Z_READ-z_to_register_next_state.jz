@@ -1,0 +1,44 @@
+// §1.6.7 Req #3: Structural masking must eliminate all unknown bits
+// before a z-carrying value reaches a REGISTER next-state input.
+// Negative test: a wire with only z drivers feeds a register in a
+// SYNCHRONOUS block — compile-time error expected.
+
+@project OBS_Z_TO_REGISTER_NEXT_STATE
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en  = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    WIRE {
+        // Trigger: wire has only z drivers on every branch
+        w_allz [8];
+    }
+
+    REGISTER {
+        // Trigger sink: register next-state reads the z-only wire
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_allz <= 8'bzzzz_zzzz;
+        } ELSE {
+            w_allz <= 8'bzzzz_zzzz;
+        }
+        data <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: z-carrying net feeding REGISTER next-state
+        r <= w_allz;
+    }
+@endmod

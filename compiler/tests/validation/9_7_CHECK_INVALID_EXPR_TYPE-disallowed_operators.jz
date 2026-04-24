@@ -1,0 +1,79 @@
+// CHECK_INVALID_EXPR_TYPE: @check rejects operators not allowed in constant expressions.
+// Exercises disallowed operator forms that are independently rejected by the
+// @check validator: elaborating builtin calls, concatenation, and ternary.
+
+@project CHECK_INVALID_EXPR_TYPE_disallowed_operators
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST {
+        A = 8;
+        B = 3;
+        FLAG = 1;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Valid: plain constant expression in @check.
+    @check (A + B > 0, "const arithmetic ok");
+
+    // Trigger 1: elaborating builtin call is not allowed in @check.
+    @check (uadd(A, B) > 0, "uadd in check");
+
+    // Trigger 2: concatenation is not allowed in @check.
+    @check ({A[3:0], B[3:0]} == 8'h83, "concat in check");
+
+    // Trigger 3: ternary is not allowed in @check.
+    @check ((FLAG ? A : B) > 0, "ternary in check");
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_a HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

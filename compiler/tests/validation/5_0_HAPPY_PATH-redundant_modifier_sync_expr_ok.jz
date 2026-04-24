@@ -1,0 +1,54 @@
+// HAPPY_PATH: Redundant extension modifiers on same-width directional
+// operators in the sync-expr context. Per §5.0, modifiers are optional
+// but harmless when widths are equal.
+
+@project HAPPY_PATH_redundant_modifier_sync_expr_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+        OUT [8] dout_d = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+        OUT [8] dout_d;
+    }
+
+    REGISTER {
+        r_a [8] = 8'h00;
+        r_b [8] = 8'h00;
+        r_c [8] = 8'h00;
+        r_d [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout_a = r_a;
+        dout_b = r_b;
+        dout_c = r_c;
+        dout_d = r_d;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid (sync-expr): redundant `<=z` on equal widths (8 <=z 8).
+        r_a <=z din;
+        // Valid (sync-expr): redundant `<=s` on equal widths (8 <=s 8).
+        r_b <=s din;
+        // Valid (sync-expr): redundant `=>z` on equal widths (8 =>z 8).
+        din =>z r_c;
+        // Valid (sync-expr): redundant `=>s` on equal widths (8 =>s 8).
+        din =>s r_d;
+    }
+@endmod

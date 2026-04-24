@@ -1,0 +1,38 @@
+// INSTANCE_ARRAY_INDEX_NOT_ARRAY: scalar instance ports cannot use [index].
+// Target diagnostic: INSTANCE_ARRAY_INDEX_NOT_ARRAY.
+// Non-target diagnostics expected: none. The child output port exists and the
+// scalar instance binding is complete and width-correct.
+
+@project INSTANCE_ARRAY_INDEX_NOT_ARRAY_scalar_indexed_port
+    @top TopMod {
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Child
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    WIRE {
+        child_data [1];
+    }
+    @new inst_one Child {
+        IN  [1] din = din;
+        OUT [1] data = child_data;
+    };
+    ASYNCHRONOUS {
+        data = inst_one[0].data;
+    }
+@endmod

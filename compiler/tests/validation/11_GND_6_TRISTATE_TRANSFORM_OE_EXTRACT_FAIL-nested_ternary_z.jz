@@ -1,0 +1,71 @@
+// TRISTATE_TRANSFORM_OE_EXTRACT_FAIL: Nested ternary z pattern confuses OE extractor.
+// Trigger: DriverB uses nested ternary with z on inner branch, which the OE
+// extractor cannot parse into a simple enable condition.
+// DriverA uses standard ternary z pattern — OE extracts fine (no false positive).
+
+@project OE_EXTRACT_FAIL_nested_ternary_z
+    @top TopMod {
+        IN  [1] en_a = _;
+        IN  [1] en_b = _;
+        IN  [8] din = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// DriverA: standard ternary z pattern — OE extracts fine
+@module DriverA
+    PORT {
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        data <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+// Trigger: nested ternary z pattern — z buried in inner branch, not top-level
+@module DriverB
+    PORT {
+        IN    [1] en_a;
+        IN    [1] en_b;
+        IN    [8] din;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        data <= (en_a == 1'b1) ? ((en_b == 1'b1) ? din : 8'bzzzz_zzzz) : din;
+    }
+@endmod
+
+// Top module: connects both drivers to shared wire via INOUT ports
+@module TopMod
+    PORT {
+        IN  [1] en_a;
+        IN  [1] en_b;
+        IN  [8] din;
+        OUT [8] result;
+    }
+
+    WIRE {
+        bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [1] en = en_a;
+        IN    [8] din = din;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [1] en_a = en_a;
+        IN    [1] en_b = en_b;
+        IN    [8] din = din;
+        INOUT [8] data = bus;
+    };
+
+    ASYNCHRONOUS {
+        result <= bus;
+    }
+@endmod

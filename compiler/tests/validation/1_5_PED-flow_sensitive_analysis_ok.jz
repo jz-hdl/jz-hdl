@@ -1,0 +1,77 @@
+// PED §1.5.2: Flow-sensitive analysis happy-path. The compiler must accept
+// assignments that are mutually exclusive across all control-flow structures.
+// Exercises IF/ELIF/ELSE, SELECT/CASE/DEFAULT, nested chains, and
+// cross-block (ASYNCHRONOUS + SYNCHRONOUS) drivers — covering the umbrella
+// statement of §1.5.2 (Independent Chain Conflict, Sequential Shadowing,
+// Branch Exclusivity together) without triggering any diagnostic.
+
+@project PED_flow_sensitive_analysis_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [2] mode = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+        OUT [1] out_c = _;
+        OUT [4] out_d = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [2] mode;
+        OUT [1] out_a;
+        OUT [1] out_b;
+        OUT [1] out_c;
+        OUT [4] out_d;
+    }
+    REGISTER {
+        r [4] = 4'b0000;
+    }
+    ASYNCHRONOUS {
+        // Branch Exclusivity: every IF/ELIF/ELSE branch may assign out_a.
+        IF (sel_a) {
+            out_a <= VCC;
+        } ELIF (sel_b) {
+            out_a <= GND;
+        } ELSE {
+            out_a <= VCC;
+        }
+        // Branch Exclusivity in SELECT/CASE/DEFAULT.
+        SELECT (mode) {
+            CASE 2'b00 { out_b <= VCC; }
+            CASE 2'b01 { out_b <= GND; }
+            DEFAULT    { out_b <= VCC; }
+        }
+        // Nested IF inside ELIF chain: still mutually exclusive across all paths.
+        IF (sel_a) {
+            IF (sel_b) {
+                out_c <= VCC;
+            } ELSE {
+                out_c <= GND;
+            }
+        } ELIF (sel_b) {
+            out_c <= VCC;
+        } ELSE {
+            out_c <= GND;
+        }
+        out_d = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Disjoint slices in independent IFs — no overlap, no shadowing.
+        IF (sel_a) {
+            r[1:0] <= 2'b11;
+        } ELSE {
+            r[1:0] <= 2'b00;
+        }
+        IF (sel_b) {
+            r[3:2] <= 2'b10;
+        } ELSE {
+            r[3:2] <= 2'b01;
+        }
+    }
+@endmod

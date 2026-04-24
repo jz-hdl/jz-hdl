@@ -1,10 +1,10 @@
 // TRISTATE_TRANSFORM_SINGLE_DRIVER: Single-driver tri-state net transformed.
-// Verifies that a single-driver tri-state wire (one IF/ELSE with z in else)
+// Verifies that a single-driver tri-state wire (one ternary with z fallback)
 // triggers TRISTATE_TRANSFORM_SINGLE_DRIVER warning when transformed.
 // Contexts: helper module with single-driver tristate wire, top module with
 // single-driver tristate wire.
-// NOTE: Compiler currently emits INFO_TRISTATE_TRANSFORM but not the
-// TRISTATE_TRANSFORM_SINGLE_DRIVER warning — see issues.md.
+// Expected: compiler emits INFO_TRISTATE_TRANSFORM and the
+// TRISTATE_TRANSFORM_SINGLE_DRIVER warning for each single-driver net.
 
 @project TRISTATE_TRANSFORM_SINGLE_DRIVER_single_driver
     @top TopMod {
@@ -25,13 +25,8 @@
         w [8];
     }
 
-    // Trigger 1: single-driver tri-state wire in helper module
     ASYNCHRONOUS {
-        IF (en) {
-            w <= din;
-        } ELSE {
-            w <= 8'bzzzz_zzzz;
-        }
+        w <= (en == 1'b1) ? din : 8'bzzzz_zzzz;
         data <= w;
     }
 @endmod
@@ -53,13 +48,8 @@
         OUT [8] data = _;
     };
 
-    // Trigger 2: single-driver tri-state wire in top module
     ASYNCHRONOUS {
-        IF (en) {
-            w_top <= 8'hCC;
-        } ELSE {
-            w_top <= 8'bzzzz_zzzz;
-        }
+        w_top <= (en == 1'b1) ? 8'hCC : 8'bzzzz_zzzz;
         data <= w_top;
     }
 @endmod

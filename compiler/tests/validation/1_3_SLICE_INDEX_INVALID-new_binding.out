@@ -1,0 +1,3 @@
+File: 1_3_SLICE_INDEX_INVALID-new_binding.jz
+      52:25   error SLICE_INDEX_INVALID S1.3/S8.1 Slice index is not an integer/CONST or CONST is undefined/negative
+      59:25   error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly

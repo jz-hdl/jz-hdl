@@ -1,0 +1,30 @@
+// SYNC_MULTI_ASSIGN_SAME_REG_BITS: Overlapping register slices assigned
+// more than once along one SYNCHRONOUS execution path.
+
+@project SYNC_MULTI_ASSIGN_SAME_REG_BITS_overlapping_slices
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] a = _;
+        IN  [4] b = _;
+        OUT [8] out = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] a;
+        IN  [4] b;
+        OUT [8] out;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        out = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r[7:4] <= a;
+        r[5:2] <= b;
+    }
+@endmod

@@ -41,13 +41,18 @@
     REGISTER {
         r_asr [8] = 8'h00;
         r_sh0 [8] = 8'h00;
+        r_neg [8] = 8'h00;
+        r_pos [8] = 8'h00;
+        r_shr [8] = 8'h00;
+        r_not [8] = 8'h00;
     }
     ASYNCHRONOUS {
         // Parenthesized unary minus — valid
-        out_unary = (-a);
+        out_unary = (-a) | r_neg | r_pos | r_shr | r_not;
         // Logical shift left — zero-fill from right
         // Logical shift right — zero-fill from left
-        out_shift = (a << sh) | (a >> sh) | r_asr | r_sh0;
+        // Arithmetic shift right also valid in async-expr (MSB replicated)
+        out_shift = (a << sh) | (a >> sh) | (a >>> sh) | r_asr | r_sh0;
         // Comparison operators: all valid with equal-width operands
         out_cmp = (a == b) | (a != b) | (a < b) | (a > b) | (a <= b) | (a >= b);
     }
@@ -56,6 +61,13 @@
         r_asr <= a >>> sh;
         // Edge case: shift by zero — no change
         r_sh0 <= a << 3'd0;
+        // Parenthesized unary minus / unary plus in sync-expr
+        r_neg <= (-a);
+        r_pos <= (+a);
+        // Logical right shift in sync-expr
+        r_shr <= a >> sh;
+        // Bitwise NOT in sync-expr (~val)
+        r_not <= ~a;
     }
 @endmod
 
@@ -83,13 +95,18 @@
         h_cmp   [1];
     }
     REGISTER {
-        r_div  [8] = 8'd0;
-        r_mod  [8] = 8'd0;
-        r_gt   [8] = 8'd0;
-        r_ge   [8] = 8'd0;
-        r_eq   [8] = 8'd0;
-        r_nest [8] = 8'd0;
-        r_else [8] = 8'd0;
+        r_div  [8]  = 8'd0;
+        r_mod  [8]  = 8'd0;
+        r_gt   [8]  = 8'd0;
+        r_ge   [8]  = 8'd0;
+        r_eq   [8]  = 8'd0;
+        r_nest [8]  = 8'd0;
+        r_else [8]  = 8'd0;
+        r_mul  [16] = 16'd0;
+        r_tern [8]  = 8'd0;
+        r_cat  [12] = 12'd0;
+        r_log  [1]  = 1'b0;
+        r_cmp  [1]  = 1'b0;
     }
 
     @new inst_ops HelperOps {
@@ -106,19 +123,19 @@
         // Parenthesized unary plus — valid
         out_unary = (+a) | h_unary;
         // Multiply 8-bit * 8-bit = 16-bit result (2N width)
-        out_mul = a * b;
+        out_mul = (a * b) | r_mul;
         // Shift operations from helper
         out_shift = h_shift;
         // Ternary with 1-bit condition and matching 8-bit branches — valid
-        out_tern = flag ? a : b;
+        out_tern = (flag ? a : b) | r_tern;
         // Concatenation: MSB ordering, 8+4 = 12 bits; single-element concat
-        out_cat = {a, nibble};
+        out_cat = {a, nibble} | r_cat;
         // Division results from registers
         out_div = r_div | r_mod | r_gt | r_ge | r_eq | r_nest | r_else;
         // Logical operators on 1-bit operands — valid
-        out_log = (flag && bit_b) | (flag || bit_b) | (!flag);
+        out_log = (flag && bit_b) | (flag || bit_b) | (!flag) | r_log;
         // Comparison from helper
-        out_cmp = h_cmp;
+        out_cmp = h_cmp | r_cmp;
     }
     SYNCHRONOUS(CLK=clk) {
         // Guarded division: != 0 pattern
@@ -163,5 +180,13 @@
         } ELSE {
             r_else <= a / b;
         }
+        // Sync-expr coverage: multiply (Reqs #11, #12), ternary (Reqs #36-#39),
+        // concatenation (Reqs #40-#44), logical result width (Req #26),
+        // comparison result width (Req #29).
+        r_mul  <= a * b;
+        r_tern <= flag ? a : b;
+        r_cat  <= {a, nibble};
+        r_log  <= (flag && bit_b);
+        r_cmp  <= (a == b);
     }
 @endmod

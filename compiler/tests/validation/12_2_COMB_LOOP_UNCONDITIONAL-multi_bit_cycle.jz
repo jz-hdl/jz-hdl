@@ -1,0 +1,65 @@
+// COMB_LOOP_UNCONDITIONAL: Multi-bit signal cycles.
+// Tests that the compiler detects combinational loops involving
+// multi-bit signals. Valid feed-forward paths included for no false positives.
+
+@project COMB_LOOP_UNCONDITIONAL_multi_bit_cycle
+    @top TopMod {
+        IN  [8] in_a = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+        OUT [8] out_c = _;
+    }
+@endproj
+
+// Helper: multi-bit two-signal cycle
+@module HelperMulti
+    PORT {
+        IN  [8] in_a;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+
+    WIRE {
+        a [8];
+        b [8];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: multi-bit cycle a -> b -> a
+        a <= b;
+        b <= a;
+        out_a = a;
+        // Valid: feed-forward (no loop)
+        out_b = in_a;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] in_a;
+        OUT [8] out_a;
+        OUT [8] out_b;
+        OUT [8] out_c;
+    }
+
+    WIRE {
+        x [8];
+        y [8];
+    }
+
+    @new inst_multi HelperMulti {
+        IN  [8] in_a = in_a;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: multi-bit cycle x -> y -> x in top module
+        x <= y;
+        y <= x;
+        out_a = x;
+        // Valid: feed-forward (no loop)
+        out_b = in_a;
+        out_c = in_a;
+    }
+@endmod

@@ -1,0 +1,2 @@
+File: 1_1_ID_SYNTAX_INVALID-invalid_chars_hash.jz
+      23:12   error PARSE000 parse error near token '#': expected '=' after CONST name (orig: PARSE000)

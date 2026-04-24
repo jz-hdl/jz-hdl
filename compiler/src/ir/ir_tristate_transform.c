@@ -1538,7 +1538,8 @@ typedef struct {
 } SliceDriverCount;
 
 static int validate_no_multidriver(const IR_Design *design,
-                                    JZDiagnosticList *diagnostics)
+                                    JZDiagnosticList *diagnostics,
+                                    JZLocation *first_error_loc)
 {
     int errors = 0;
     for (int m = 0; m < design->num_modules; m++) {
@@ -1606,6 +1607,9 @@ static int validate_no_multidriver(const IR_Design *design,
                          psig && psig->name ? psig->name : "?",
                          slices[s].msb, slices[s].lsb,
                          slices[s].active_drivers);
+                if (errors == 0 && first_error_loc) {
+                    *first_error_loc = loc;
+                }
                 jz_diagnostic_report(diagnostics, loc, JZ_SEVERITY_ERROR,
                                      "TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL", msg);
                 errors++;
@@ -2135,6 +2139,57 @@ static int transform_shared_nets(IR_Design *design,
     return 0;
 }
 
+static int append_diagnostics(JZDiagnosticList *dst,
+                              const JZDiagnosticList *src,
+                              JZSeverity min_severity)
+{
+    const JZDiagnostic *diags;
+    size_t count;
+    size_t i;
+
+    if (!dst || !src) return -1;
+
+    diags = (const JZDiagnostic *)src->buffer.data;
+    count = src->buffer.len / sizeof(JZDiagnostic);
+    for (i = 0; i < count; i++) {
+        if (diags[i].severity < min_severity) continue;
+        if (jz_diagnostic_report(dst,
+                                 diags[i].loc,
+                                 diags[i].severity,
+                                 diags[i].code,
+                                 diags[i].message) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+typedef enum TristateTransformStatus {
+    TRISTATE_TRANSFORM_STATUS_OK = 0,
+    TRISTATE_TRANSFORM_STATUS_FAILED = 1,
+    TRISTATE_TRANSFORM_STATUS_POSTCHECK_FAILED = 2
+} TristateTransformStatus;
+
+static JZLocation first_error_location(const JZDiagnosticList *diagnostics)
+{
+    const JZDiagnostic *diags;
+    size_t count;
+    size_t i;
+    JZLocation loc;
+
+    memset(&loc, 0, sizeof(loc));
+    if (!diagnostics) return loc;
+
+    diags = (const JZDiagnostic *)diagnostics->buffer.data;
+    count = diagnostics->buffer.len / sizeof(JZDiagnostic);
+    for (i = 0; i < count; i++) {
+        if (diags[i].severity >= JZ_SEVERITY_ERROR) {
+            return diags[i].loc;
+        }
+    }
+    return loc;
+}
+
 /* ======================================================================== */
 /*  Eliminate pass-through combinational loops on non-tristate ports          */
 /* ======================================================================== */
@@ -2554,9 +2609,10 @@ static int deduplicate_alias_group_drivers(IR_Design *design,
 /*  Public entry point                                                       */
 /* ======================================================================== */
 
-int jz_ir_tristate_transform(IR_Design *design,
-                              JZArena *arena,
-                              JZDiagnosticList *diagnostics)
+static TristateTransformStatus tristate_transform_in_place(IR_Design *design,
+                                                           JZArena *arena,
+                                                           JZDiagnosticList *diagnostics,
+                                                           JZLocation *postcheck_fail_loc)
 {
     if (!design || design->tristate_default == TRISTATE_DEFAULT_NONE) return 0;
 
@@ -2722,8 +2778,8 @@ int jz_ir_tristate_transform(IR_Design *design,
     }
 
     /* Phase 3: Post-transform validation. */
-    if (validate_no_multidriver(design, diagnostics) > 0) {
-        return 1;
+    if (validate_no_multidriver(design, diagnostics, postcheck_fail_loc) > 0) {
+        return TRISTATE_TRANSFORM_STATUS_POSTCHECK_FAILED;
     }
 
     if (total_replaced == 0) {
@@ -2749,5 +2805,61 @@ int jz_ir_tristate_transform(IR_Design *design,
         }
     }
 
-    return 0;
+    return TRISTATE_TRANSFORM_STATUS_OK;
+}
+
+int jz_ir_tristate_transform(IR_Design *design,
+                              JZArena *arena,
+                              JZDiagnosticList *diagnostics)
+{
+    IR_Design *working = NULL;
+    JZDiagnosticList work_diags;
+    JZLocation rollback_loc;
+    TristateTransformStatus status;
+
+    if (!design || design->tristate_default == TRISTATE_DEFAULT_NONE) return 0;
+
+    if (ir_clone_design(design, arena, &working) != 0) {
+        return 1;
+    }
+
+    memset(&rollback_loc, 0, sizeof(rollback_loc));
+    jz_diagnostic_list_init(&work_diags);
+
+    status = tristate_transform_in_place(working,
+                                         arena,
+                                         &work_diags,
+                                         &rollback_loc);
+
+    if (status == TRISTATE_TRANSFORM_STATUS_OK &&
+        jz_diagnostic_has_severity(&work_diags, JZ_SEVERITY_ERROR)) {
+        status = TRISTATE_TRANSFORM_STATUS_FAILED;
+    }
+
+    if (status != TRISTATE_TRANSFORM_STATUS_OK) {
+        if (!rollback_loc.filename && rollback_loc.line == 0 && rollback_loc.column == 0) {
+            rollback_loc = first_error_location(&work_diags);
+        }
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "tri-state transform failed and was rolled back to the pre-transform IR");
+        jz_diagnostic_report(&work_diags, rollback_loc, JZ_SEVERITY_ERROR,
+                             "TRISTATE_TRANSFORM_ROLLBACK", msg);
+    }
+
+    if (append_diagnostics(diagnostics,
+                           &work_diags,
+                           status == TRISTATE_TRANSFORM_STATUS_OK
+                               ? JZ_SEVERITY_NOTE
+                               : JZ_SEVERITY_ERROR) != 0) {
+        jz_diagnostic_list_free(&work_diags);
+        return 1;
+    }
+
+    if (status == TRISTATE_TRANSFORM_STATUS_OK) {
+        *design = *working;
+    }
+
+    jz_diagnostic_list_free(&work_diags);
+    return status == TRISTATE_TRANSFORM_STATUS_OK ? 0 : 1;
 }

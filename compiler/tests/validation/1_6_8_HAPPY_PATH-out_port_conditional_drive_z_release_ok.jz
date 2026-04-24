@@ -1,0 +1,50 @@
+// §1.6.8 Req #1: Valid use case — conditional drive that releases the
+// OUT port by assigning `z` when disabled:
+//   out_port <= enable ? data : 8'bzzzz_zzzz;
+// Happy-path test: only the expected WARN_INTERNAL_TRISTATE warning
+// appears (internal tri-state is legal but flagged as not-FPGA-compatible
+// without --tristate-default).
+
+@project HAPPY_PATH_out_port_conditional_drive_z_release_ok
+    @top TopMod {
+        IN  [1] clk    = _;
+        IN  [1] enable = _;
+        IN  [8] data   = _;
+        OUT [8] out_port = _;
+    }
+@endproj
+
+// Trigger 1: conditional drive on OUT port with z release via ternary
+@module Driver
+    PORT {
+        IN  [1] enable;
+        IN  [8] data;
+        OUT [8] out_port;
+    }
+    ASYNCHRONOUS {
+        out_port <= enable ? data : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [8] data;
+        OUT [8] out_port;
+    }
+
+    REGISTER {
+        tick [1] = 1'b0;
+    }
+
+    @new inst Driver {
+        IN  [1] enable   = enable;
+        IN  [8] data     = data;
+        OUT [8] out_port = out_port;
+    };
+
+    SYNCHRONOUS(CLK=clk) {
+        tick <= ~tick;
+    }
+@endmod

@@ -1,0 +1,65 @@
+// §1.6.8 Req #4: Invalid use case (COMPILE ERROR) — reading a floating
+// net via an IN port whose upstream drivers are exclusively `z`:
+//   register <= in_port;    // ERROR: reading a floating net
+// The parent drives a wire exclusively with z on every path, then binds
+// that wire to the child's IN port. The child samples the IN port into
+// a register. The compiler must reject the read because every driver
+// supplies only tri-state.
+
+@project NET_TRI_STATE_ALL_Z_READ_read_floating_in_port
+    @top TopMod {
+        IN  [1] clk    = _;
+        IN  [1] en     = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// Trigger: child reads its IN port into a register. All upstream
+// drivers (in the parent) assign only z.
+@module Child
+    PORT {
+        IN  [1] clk;
+        IN  [8] in_port;
+        OUT [8] result;
+    }
+
+    REGISTER {
+        reg_a [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        result <= reg_a;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // register <= in_port;    // ERROR: reading a floating net
+        reg_a <= in_port;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        OUT [8] result;
+    }
+
+    WIRE {
+        // Parent's only driver of in_port is z on every branch
+        w_allz [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_allz <= 8'bzzzz_zzzz;
+        } ELSE {
+            w_allz <= 8'bzzzz_zzzz;
+        }
+    }
+
+    @new inst Child {
+        IN  [1] clk     = clk;
+        IN  [8] in_port = w_allz;
+        OUT [8] result  = result;
+    };
+@endmod

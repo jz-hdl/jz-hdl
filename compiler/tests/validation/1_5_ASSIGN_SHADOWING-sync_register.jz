@@ -1,0 +1,44 @@
+// ASSIGN_SHADOWING (sync preemption): In SYNCHRONOUS blocks, the generic
+// "root + nested assignment" shadowing rule is preempted by the sync-specific
+// SYNC_ROOT_AND_CONDITIONAL_ASSIGN rule. This test documents that preemption
+// — a root-level assignment followed (or preceded) by a nested assignment
+// to the same register inside a SYNCHRONOUS block fires the sync-specific
+// rule, not the async shadowing rule.
+
+@project ASSIGN_SHADOWING_sync_register
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        IN  [8] a   = _;
+        IN  [8] b   = _;
+        OUT [8] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] out_a;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: root-level assignment shadowed by nested IF assignment.
+        // Async classification would fire ASSIGN_SHADOWING, but the
+        // sync-specific rule preempts it in SYNCHRONOUS context.
+        r <= a;
+        IF (sel) {
+            r <= b;
+        }
+    }
+@endmod

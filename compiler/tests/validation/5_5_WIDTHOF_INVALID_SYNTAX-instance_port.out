@@ -1,0 +1,2 @@
+File: 5_5_WIDTHOF_INVALID_SYNTAX-instance_port.jz
+      50:9    error WIDTHOF_INVALID_SYNTAX S5.5.10 widthof() argument must be a plain identifier, not a slice/concat/qualified expression

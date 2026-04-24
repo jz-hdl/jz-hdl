@@ -1,0 +1,61 @@
+// HAPPY_PATH: template argument substitution must avoid accidental capture when
+// a callsite identifier contains the scratch name as a substring.
+// The template declares `@scratch tmp`, while the caller passes `tmp_src`;
+// scratch renaming must not rewrite the argument identifier itself.
+
+@project CAPTURE_AVOIDING_SUBSTITUTION_capture_avoiding_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@template copy_with_scratch(src, dst)
+    @scratch tmp [8];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@module SourceMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'hA5;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= {r[6:0], r[7:7]};
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    WIRE {
+        tmp_src [8];
+        copied [8];
+    }
+
+    @new inst_src SourceMod {
+        IN  [1] clk = clk;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        // Req #20: argument `tmp_src` must remain intact while template-local
+        // `@scratch tmp` is renamed per expansion.
+        @apply copy_with_scratch(inst_src.data, tmp_src);
+        @apply copy_with_scratch(tmp_src, copied);
+        data = copied;
+    }
+@endmod

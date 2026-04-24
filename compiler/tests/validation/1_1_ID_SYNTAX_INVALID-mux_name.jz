@@ -1,0 +1,30 @@
+// ID_SYNTAX_INVALID: Identifier exceeds 255-char limit used as MUX name.
+// Tests 256-char identifier in MUX declaration context.
+// Valid MUX name included to verify no false positives.
+
+@project ID_SYNTAX_INVALID_mux_name
+    @top TopMod {
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    MUX {
+        // Valid: short MUX name (should NOT trigger)
+        valid_mux = a, b;
+        // Trigger: 256-char identifier as MUX name
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = a, b;
+    }
+
+    ASYNCHRONOUS {
+        data = valid_mux[1'b0][0];
+    }
+@endmod

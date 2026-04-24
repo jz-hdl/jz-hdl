@@ -1,0 +1,43 @@
+// WIDTHOF_INVALID_TARGET: widthof() on a project pin identifier.
+// Spec §5.5.10: widthof() resolves names in the current module scope only;
+// project pins are not local WIRE/REGISTER/PORT/BUS declarations and must not
+// be queried by widthof().
+
+@project(CHIP=GENERIC) WIDTHOF_INVALID_TARGET_project_pin
+    IN_PINS {
+        clk_pin = { standard=LVCMOS33 };
+    }
+    OUT_PINS {
+        led_pin = { standard=LVCMOS33, drive=8 };
+    }
+    MAP {
+        clk_pin = 1;
+        led_pin = 2;
+    }
+    @top TopMod {
+        IN  [1] clk = clk_pin;
+        OUT [1] led = led_pin;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] led;
+    }
+    CONST {
+        // Trigger 1: widthof() on a project pin name — not a module-scope signal.
+        BAD_W = widthof(clk_pin);
+        // Valid: widthof() on a local PORT (no false positive).
+        GOOD_W = widthof(clk);
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        led = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

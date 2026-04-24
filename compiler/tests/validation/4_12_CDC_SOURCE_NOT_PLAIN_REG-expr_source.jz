@@ -1,0 +1,55 @@
+// CDC_SOURCE_NOT_PLAIN_REG: CDC source must be a plain register identifier,
+// not a parenthesized expression.
+
+@project CDC_SOURCE_NOT_PLAIN_REG_expr_source
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+        OUT [1] src_a_out = _;
+        OUT [1] src_b_out = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        IN  [1] din;
+        OUT [1] data;
+        OUT [1] src_a_out;
+        OUT [1] src_b_out;
+    }
+
+    REGISTER {
+        src_a [1] = 1'b0;
+        src_b [1] = 1'b0;
+        ok_src [1] = 1'b0;
+    }
+
+    CDC {
+        // Trigger: expression as CDC source
+        BIT (src_a & src_b) (clk_a) => expr_sync (clk_b);
+        // Valid: plain register identifier
+        BIT ok_src (clk_a) => ok_alias (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        data = ok_alias;
+        src_a_out = src_a;
+        src_b_out = src_b;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        src_a <= din;
+        src_b <= ~din;
+        ok_src <= din;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        IF (expr_sync) {
+            // reading alias
+        }
+    }
+@endmod

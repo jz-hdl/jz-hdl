@@ -1,0 +1,57 @@
+// INSTANCE_ARRAY_IDX_INVALID_CONTEXT: Happy path for IDX in valid contexts.
+// Exercises IDX used within arrayed @new parent-signal bindings
+// (IN, OUT, and bit-slice expressions). No IDX appears in scalar @new or OVERRIDE.
+
+@project INSTANCE_ARRAY_IDX_INVALID_CONTEXT_idx_valid_uses_ok
+    CONFIG {
+        WIDTH = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [4] dout = _;
+    }
+@endproj
+
+@module BitMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [4] dout;
+    }
+
+    WIRE {
+        outbus [4];
+    }
+
+    // Valid: IDX used in IN port bit-index binding of an array instance
+    // Valid: IDX used in OUT port bit-index binding of an array instance
+    // Valid: broadcast binding (clk) alongside IDX bindings
+    @new inst_arr[4] BitMod {
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX];
+        OUT [1] data = outbus[IDX];
+    };
+
+    ASYNCHRONOUS {
+        dout = outbus;
+    }
+@endmod

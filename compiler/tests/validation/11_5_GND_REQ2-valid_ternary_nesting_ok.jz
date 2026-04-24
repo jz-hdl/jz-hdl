@@ -1,0 +1,88 @@
+// Req #2: Valid Ternary Nesting.
+// Verifies that tri-state transformation can build a nested priority chain
+// from three mutually exclusive drivers with compatible widths.
+
+@project req2_valid_ternary_nesting_ok
+    @top TopMod {
+        IN  [2] sel = _;
+        IN  [9] data_a = _;
+        IN  [9] data_b = _;
+        IN  [9] data_c = _;
+        OUT [9] observed = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN    [2] sel;
+        IN    [9] din;
+        INOUT [9] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: First branch in the generated ternary chain.
+        bus <= (sel == 2'b00) ? din : 9'bz_zzzz_zzzz;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN    [2] sel;
+        IN    [9] din;
+        INOUT [9] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 2: Middle branch in the generated ternary chain.
+        bus <= (sel == 2'b01) ? din : 9'bz_zzzz_zzzz;
+    }
+@endmod
+
+@module DriverC
+    PORT {
+        IN    [2] sel;
+        IN    [9] din;
+        INOUT [9] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 3: Final explicit branch before the default value.
+        bus <= (sel == 2'b10) ? din : 9'bz_zzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [2] sel;
+        IN  [9] data_a;
+        IN  [9] data_b;
+        IN  [9] data_c;
+        OUT [9] observed;
+    }
+
+    WIRE {
+        shared_bus [9];
+    }
+
+    @new inst_a DriverA {
+        IN    [2] sel = sel;
+        IN    [9] din = data_a;
+        INOUT [9] bus = shared_bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [2] sel = sel;
+        IN    [9] din = data_b;
+        INOUT [9] bus = shared_bus;
+    };
+
+    @new inst_c DriverC {
+        IN    [2] sel = sel;
+        IN    [9] din = data_c;
+        INOUT [9] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        observed <= shared_bus;
+    }
+@endmod

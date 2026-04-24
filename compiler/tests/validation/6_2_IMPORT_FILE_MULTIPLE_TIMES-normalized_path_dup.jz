@@ -1,0 +1,39 @@
+// IMPORT_FILE_MULTIPLE_TIMES: Same file imported via different path forms.
+// Tests that importing the same file with ./lib.jz and lib.jz forms is detected
+// as a duplicate import after path normalization.
+
+@project IMPORT_FILE_MULTIPLE_TIMES_normalized_path_dup
+
+    // Valid: first import of the library file
+    @import "6_2_IMPORT_FILE_MULTIPLE_TIMES-duplicate_import_lib.jz";
+
+    // Trigger: same file imported via ./ prefix path normalization
+    @import "./6_2_IMPORT_FILE_MULTIPLE_TIMES-duplicate_import_lib.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_a ImportedMod {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

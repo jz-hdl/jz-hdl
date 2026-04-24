@@ -3,9 +3,9 @@
 // individual bit slices of the same signal have different z-assignment patterns.
 // Contexts: helper module with per-bit tristate wire, top module with per-bit
 // tristate wire.
-// NOTE: Compiler does not emit TRISTATE_TRANSFORM_PER_BIT_FAIL — it transforms
-// the per-bit pattern without error, emitting INFO_TRISTATE_TRANSFORM instead.
-// See issues.md for details.
+// Expected: compiler emits TRISTATE_TRANSFORM_PER_BIT_FAIL for the per-bit
+// pattern after identifying the tri-state transform candidates, while valid
+// full-width z assignments remain transformable.
 
 @project TRISTATE_TRANSFORM_PER_BIT_FAIL_per_bit
     @top TopMod {
@@ -27,18 +27,9 @@
         w [8];
     }
 
-    // Trigger 1: per-bit tri-state in helper module
     ASYNCHRONOUS {
-        IF (en_a) {
-            w[7:4] <= 4'hA;
-        } ELSE {
-            w[7:4] <= 4'bzzzz;
-        }
-        IF (en_b) {
-            w[3:0] <= 4'hB;
-        } ELSE {
-            w[3:0] <= 4'bzzzz;
-        }
+        w[7:4] <= (en_a == 1'b1) ? 4'hA : 4'bzzzz;
+        w[3:0] <= (en_b == 1'b1) ? 4'hB : 4'bzzzz;
         data <= w;
     }
 @endmod
@@ -61,18 +52,9 @@
         OUT [8] data = _;
     };
 
-    // Trigger 2: per-bit tri-state in top module
     ASYNCHRONOUS {
-        IF (en_a) {
-            w_top[7:4] <= 4'hC;
-        } ELSE {
-            w_top[7:4] <= 4'bzzzz;
-        }
-        IF (en_b) {
-            w_top[3:0] <= 4'hD;
-        } ELSE {
-            w_top[3:0] <= 4'bzzzz;
-        }
+        w_top[7:4] <= (en_a == 1'b1) ? 4'hC : 4'bzzzz;
+        w_top[3:0] <= (en_b == 1'b1) ? 4'hD : 4'bzzzz;
         data <= w_top;
     }
 @endmod

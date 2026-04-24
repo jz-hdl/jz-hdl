@@ -434,7 +434,11 @@ static int ir_build_assignment_stmt(JZArena *arena,
             }
             unsigned ew = 0;
             if (!esym->node || !esym->node->width ||
-                sem_eval_width_expr(esym->node->width, mod_scope, project_symbols, &ew) != 0 ||
+                sem_eval_width_expr_at_loc(esym->node->width,
+                                           mod_scope,
+                                           project_symbols,
+                                           &ew,
+                                           esym->node->loc) != 0 ||
                 ew == 0) {
                 return -1;
             }
@@ -451,7 +455,11 @@ static int ir_build_assignment_stmt(JZArena *arena,
             JZASTNode *elem = lhs->children[ei];
             const JZSymbol *esym = module_scope_lookup(mod_scope, elem->name);
             unsigned ew = 0;
-            sem_eval_width_expr(esym->node->width, mod_scope, project_symbols, &ew);
+            sem_eval_width_expr_at_loc(esym->node->width,
+                                       mod_scope,
+                                       project_symbols,
+                                       &ew,
+                                       esym->node->loc);
 
             int elem_lsb = bit_offset - (int)ew;
             bit_offset = elem_lsb;
@@ -643,8 +651,12 @@ static int ir_build_assignment_stmt(JZArena *arena,
                 /* Fallback: try symbol width. */
                 if (lhs_width <= 0 && sym && sym->node && sym->node->width) {
                     unsigned sw = 0;
-                    if (sem_eval_width_expr(sym->node->width, mod_scope,
-                                            project_symbols, &sw) == 0 && sw > 0) {
+                    if (sem_eval_width_expr_at_loc(sym->node->width,
+                                                   mod_scope,
+                                                   project_symbols,
+                                                   &sw,
+                                                   sym->node->loc) == 0 &&
+                        sw > 0) {
                         lhs_width = (int)sw;
                     }
                 }
@@ -870,7 +882,11 @@ static int ir_build_assignment_stmt(JZArena *arena,
         } else if (sym) {
             unsigned sw = 0;
             if (sym->node && sym->node->width &&
-                sem_eval_width_expr(sym->node->width, mod_scope, project_symbols, &sw) == 0 &&
+                sem_eval_width_expr_at_loc(sym->node->width,
+                                           mod_scope,
+                                           project_symbols,
+                                           &sw,
+                                           sym->node->loc) == 0 &&
                 sw > 0) {
                 target_w = (int)sw;
             }
@@ -1312,10 +1328,11 @@ static int ir_build_select_stmt_with_reg_selector(JZArena *arena,
     /* Infer width for the selector from the symbol's declared width. */
     unsigned w = 0;
     if (reg_sym->node && reg_sym->node->width &&
-        sem_eval_width_expr(reg_sym->node->width,
-                            mod_scope,
-                            project_symbols,
-                            &w) == 0 &&
+        sem_eval_width_expr_at_loc(reg_sym->node->width,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   reg_sym->node->loc) == 0 &&
         w > 0u) {
         selector_ir->width = (int)w;
     } else {

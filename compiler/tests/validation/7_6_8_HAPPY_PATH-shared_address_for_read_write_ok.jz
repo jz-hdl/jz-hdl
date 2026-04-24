@@ -1,0 +1,88 @@
+// HAPPY_PATH: Valid §7.6.8 shared-address INOUT memory access.
+// Covers Req #2: the same INOUT port shares one address for read and write.
+
+@project HAPPY_PATH_shared_address_for_read_write_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [8] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [8] rd_data = _;
+        OUT [8] helper_data = _;
+    }
+@endproj
+
+@module SharedAddressRam
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] rd_data;
+    }
+
+    REGISTER {
+        rd_hold [8] = 8'h00;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        rd_data = rd_hold;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Shared read/write address on the same INOUT port.
+        mem.rw.addr <= addr;
+        rd_hold <= mem.rw.data;
+        IF (wr_en) {
+            mem.rw.wdata <= wr_data;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] rd_data;
+        OUT [8] helper_data;
+    }
+
+    @new shared_ram SharedAddressRam {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wr_data = wr_data;
+        IN  [1] wr_en = wr_en;
+        OUT [8] rd_data = helper_data;
+    };
+
+    MEM(TYPE=BLOCK) {
+        local_mem [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    REGISTER {
+        local_rd [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        rd_data = local_rd;
+        helper_data = shared_ram.rd_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        local_mem.rw.addr <= addr;
+        local_rd <= local_mem.rw.data;
+        IF (wr_en) {
+            local_mem.rw.wdata <= wr_data;
+        }
+    }
+@endmod

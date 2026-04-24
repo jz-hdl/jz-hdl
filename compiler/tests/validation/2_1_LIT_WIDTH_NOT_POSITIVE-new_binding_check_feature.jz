@@ -1,0 +1,76 @@
+// LIT_WIDTH_NOT_POSITIVE and LIT_UNDEFINED_CONST_WIDTH:
+// zero-width and undefined-CONST-width literals in new-binding, check-expr,
+// and feature-cond contexts.
+
+@project LIT_WIDTH_new_binding_check_feature
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din_a;
+        IN  [8] din_b;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din_a ^ din_b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger 1 (check-expr): zero-width literal inside @check expression
+    @check (VAL == 0'b0, "zero width in check");
+
+    // Trigger 2 (check-expr): undefined CONST as width inside @check expression
+    @check (VAL == UNDEF_W'd0, "undefined const width in check");
+
+    // Trigger 3 (feature-cond): zero-width literal inside @feature condition
+    @feature VAL == 0'b0
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 4 (feature-cond): undefined CONST as width in @feature condition
+    @feature VAL == UNDEF_W'd0
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // Trigger 5 (new-binding): zero-width literal in @new port binding
+    // Trigger 6 (new-binding): undefined CONST as width in @new port binding
+    @new inst_a HelperA {
+        IN  [8] din_a = 0'b0;
+        IN  [8] din_b = UNDEF_W'h0;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

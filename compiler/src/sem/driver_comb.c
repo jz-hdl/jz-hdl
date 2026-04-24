@@ -651,9 +651,505 @@ static int sem_comb_any_path_has_cycle(const JZBuffer *paths,
     return 0;
 }
 
+/* -------------------------------------------------------------------------
+ *  Cross-module combinational transparency
+ *
+ *  Pattern is modeled after the tristate proof engine (driver_tristate.c):
+ *  query-style helpers answer "does the child module have a combinational
+ *  path from this IN port to that OUT port?" on demand, backed by a per-
+ *  module cache so nested instances and heavily-instantiated modules don't
+ *  repeat work.
+ * -------------------------------------------------------------------------
+ */
+
+typedef struct JZCombPortEdge {
+    JZASTNode *in_port_decl;   /* IN or INOUT port decl in target module */
+    JZASTNode *out_port_decl;  /* OUT or INOUT port decl in target module */
+    int        conditional;    /* 1 if path exists on only some IF/SELECT paths */
+} JZCombPortEdge;
+
+/* Cache states for JZModuleCombCache. */
+#define COMB_CACHE_PENDING     0
+#define COMB_CACHE_DONE        1
+#define COMB_CACHE_IN_PROGRESS 2   /* guard against instantiation cycles */
+#define COMB_CACHE_OPAQUE      3   /* blackbox or cycle-guard hit */
+
+typedef struct JZModuleCombCache {
+    JZASTNode *module_node;
+    JZBuffer   edges;   /* array of JZCombPortEdge (deduped) */
+    int        state;
+} JZModuleCombCache;
+
+void sem_comb_free_module_comb_cache(JZBuffer *cache)
+{
+    if (!cache) return;
+    size_t count = cache->len / sizeof(JZModuleCombCache);
+    JZModuleCombCache *arr = (JZModuleCombCache *)cache->data;
+    for (size_t i = 0; i < count; ++i) {
+        jz_buf_free(&arr[i].edges);
+    }
+    jz_buf_free(cache);
+}
+
+/* Locate (or create) a cache slot for a given module scope. Slots are
+ * identified by their module AST node pointer. */
+static JZModuleCombCache *sem_comb_cache_slot(JZBuffer *cache,
+                                              const JZModuleScope *scope)
+{
+    if (!cache || !scope || !scope->node) return NULL;
+    JZASTNode *key = scope->node;
+
+    size_t count = cache->len / sizeof(JZModuleCombCache);
+    JZModuleCombCache *arr = (JZModuleCombCache *)cache->data;
+    for (size_t i = 0; i < count; ++i) {
+        if (arr[i].module_node == key) {
+            return &arr[i];
+        }
+    }
+
+    JZModuleCombCache fresh;
+    memset(&fresh, 0, sizeof(fresh));
+    fresh.module_node = key;
+    fresh.state = COMB_CACHE_PENDING;
+    if (jz_buf_append(cache, &fresh, sizeof(fresh)) != 0) {
+        return NULL;
+    }
+    arr = (JZModuleCombCache *)cache->data;
+    count = cache->len / sizeof(JZModuleCombCache);
+    return &arr[count - 1];
+}
+
+/* Reachability DFS: returns 1 if dst is reachable from src through one or
+ * more edges in the given edge set. */
+static int sem_comb_reachable_in_edgeset(const JZCombEdge *edges,
+                                          size_t edge_count,
+                                          size_t net_count,
+                                          size_t src,
+                                          size_t dst)
+{
+    if (!edges || edge_count == 0 || net_count == 0) return 0;
+    if (src >= net_count || dst >= net_count) return 0;
+
+    size_t *adj_count = (size_t *)calloc(net_count, sizeof(size_t));
+    if (!adj_count) return 0;
+    for (size_t ei = 0; ei < edge_count; ++ei) {
+        if (edges[ei].src_net_ix < net_count) adj_count[edges[ei].src_net_ix]++;
+    }
+    size_t *adj_offset = (size_t *)calloc(net_count + 1, sizeof(size_t));
+    if (!adj_offset) { free(adj_count); return 0; }
+    for (size_t i = 0; i < net_count; ++i) adj_offset[i + 1] = adj_offset[i] + adj_count[i];
+    size_t *adj_dst = (size_t *)malloc(edge_count * sizeof(size_t));
+    if (!adj_dst) { free(adj_offset); free(adj_count); return 0; }
+    memset(adj_count, 0, net_count * sizeof(size_t));
+    for (size_t ei = 0; ei < edge_count; ++ei) {
+        size_t s = edges[ei].src_net_ix;
+        if (s < net_count) {
+            adj_dst[adj_offset[s] + adj_count[s]] = edges[ei].dst_net_ix;
+            adj_count[s]++;
+        }
+    }
+
+    int *visited = (int *)calloc(net_count, sizeof(int));
+    size_t *stack = (size_t *)malloc(net_count * sizeof(size_t));
+    int found = 0;
+    if (visited && stack) {
+        size_t sp = 0;
+        /* Push neighbors of src (so a self-loop reports correctly and we
+         * don't trivially mark src->src). */
+        for (size_t ni = adj_offset[src]; ni < adj_offset[src + 1]; ++ni) {
+            size_t w = adj_dst[ni];
+            if (w >= net_count) continue;
+            if (w == dst) { found = 1; break; }
+            if (!visited[w]) { visited[w] = 1; stack[sp++] = w; }
+        }
+        while (!found && sp > 0) {
+            size_t v = stack[--sp];
+            for (size_t ni = adj_offset[v]; ni < adj_offset[v + 1]; ++ni) {
+                size_t w = adj_dst[ni];
+                if (w >= net_count) continue;
+                if (w == dst) { found = 1; break; }
+                if (!visited[w]) { visited[w] = 1; stack[sp++] = w; }
+            }
+        }
+    }
+    free(stack);
+    free(visited);
+    free(adj_dst);
+    free(adj_offset);
+    free(adj_count);
+    return found;
+}
+
+/* Append (src_net_ix -> dst_net_ix) to paths.
+ *   - unconditional: edge is appended to every path.
+ *   - conditional:   each path is split into {with_edge, without_edge},
+ *                    mirroring the IF-without-ELSE idiom in
+ *                    sem_comb_analyze_if_chain.
+ * Honors COMB_MAX_PATHS via sem_comb_collapse_paths.
+ */
+static void sem_comb_add_edge_to_paths(JZBuffer *paths,
+                                       size_t src_net_ix,
+                                       size_t dst_net_ix,
+                                       int conditional)
+{
+    if (!paths) return;
+    size_t path_count = paths->len / sizeof(JZCombPathState);
+    if (path_count == 0) return;
+
+    JZCombEdge edge;
+    edge.src_net_ix = src_net_ix;
+    edge.dst_net_ix = dst_net_ix;
+
+    JZCombPathState *arr = (JZCombPathState *)paths->data;
+
+    if (!conditional) {
+        for (size_t i = 0; i < path_count; ++i) {
+            (void)jz_buf_append(&arr[i].edges, &edge, sizeof(edge));
+        }
+        return;
+    }
+
+    /* Conditional: duplicate each path. The clone represents "without edge";
+     * the original (moved into new_paths) gets the edge appended.
+     */
+    JZBuffer new_paths = (JZBuffer){0};
+    for (size_t i = 0; i < path_count; ++i) {
+        JZCombPathState without_edge;
+        if (sem_comb_clone_path_state(&arr[i], &without_edge) != 0) {
+            /* On clone failure, fall back to unconditional append so we
+             * don't silently lose the edge. */
+            (void)jz_buf_append(&arr[i].edges, &edge, sizeof(edge));
+            (void)jz_buf_append(&new_paths, &arr[i], sizeof(arr[i]));
+            continue;
+        }
+        JZCombPathState with_edge = arr[i];   /* transfer ownership */
+        (void)jz_buf_append(&with_edge.edges, &edge, sizeof(edge));
+        (void)jz_buf_append(&new_paths, &with_edge, sizeof(with_edge));
+        (void)jz_buf_append(&new_paths, &without_edge, sizeof(without_edge));
+    }
+
+    /* arr's contents have been moved into new_paths; free only the outer
+     * buffer (the per-path edge buffers were moved or cloned). */
+    jz_buf_free(paths);
+    *paths = new_paths;
+
+    if (paths->len / sizeof(JZCombPathState) > COMB_MAX_PATHS) {
+        sem_comb_collapse_paths(paths);
+    }
+}
+
+/* Forward decl: lazily builds a module's transparency summary. */
+static void sem_comb_build_summary(JZModuleCombCache *slot,
+                                   const JZModuleScope *child_scope,
+                                   JZBuffer *module_scopes,
+                                   const JZBuffer *project_symbols,
+                                   JZBuffer *cache);
+
+/* Appends the child module's IN->OUT combinational transparency edges to
+ * out_edges. Lazily builds and caches the result. */
+static size_t sem_comb_module_port_edges(const JZModuleScope *child_scope,
+                                         JZBuffer *module_scopes,
+                                         const JZBuffer *project_symbols,
+                                         JZBuffer *cache,
+                                         JZBuffer *out_edges)
+{
+    if (!child_scope || !child_scope->node || !cache) return 0;
+
+    JZModuleCombCache *slot = sem_comb_cache_slot(cache, child_scope);
+    if (!slot) return 0;
+
+    if (slot->state == COMB_CACHE_PENDING) {
+        sem_comb_build_summary(slot, child_scope, module_scopes, project_symbols, cache);
+    }
+
+    if (slot->state != COMB_CACHE_DONE) {
+        /* OPAQUE or IN_PROGRESS (cycle guard) -> no edges. */
+        return 0;
+    }
+
+    if (!out_edges || slot->edges.len == 0) {
+        return slot->edges.len / sizeof(JZCombPortEdge);
+    }
+    (void)jz_buf_append(out_edges, slot->edges.data, slot->edges.len);
+    return slot->edges.len / sizeof(JZCombPortEdge);
+}
+
+/* Locate the instance-binding child (JZ_AST_PORT_DECL) whose name matches
+ * the given port decl's name. Returns NULL if not bound. */
+static JZASTNode *sem_comb_find_instance_binding(JZASTNode *inst_node,
+                                                 const char *port_name)
+{
+    if (!inst_node || inst_node->type != JZ_AST_MODULE_INSTANCE || !port_name) return NULL;
+    for (size_t i = 0; i < inst_node->child_count; ++i) {
+        JZASTNode *bind = inst_node->children[i];
+        if (!bind || bind->type != JZ_AST_PORT_DECL || !bind->name) continue;
+        if (strcmp(bind->name, port_name) == 0) {
+            return bind;
+        }
+    }
+    return NULL;
+}
+
+/* Inject edges for one module instance into the outer paths. */
+static void sem_comb_inject_edges_for_instance(JZASTNode *inst_node,
+                                               const JZModuleScope *outer_scope,
+                                               JZBuffer *outer_nets,
+                                               JZBuffer *outer_bindings,
+                                               JZBuffer *module_scopes,
+                                               const JZBuffer *project_symbols,
+                                               JZBuffer *cache,
+                                               JZBuffer *paths,
+                                               int extra_conditional)
+{
+    if (!inst_node || inst_node->type != JZ_AST_MODULE_INSTANCE) return;
+    if (!inst_node->text) return;
+
+    const JZSymbol *target_sym =
+        project_lookup_module_or_blackbox(project_symbols, inst_node->text);
+    if (!target_sym || !target_sym->node) return;
+
+    const JZModuleScope *target_scope =
+        find_module_scope_for_node(module_scopes, target_sym->node);
+    if (!target_scope) return;
+
+    JZBuffer edges_buf = (JZBuffer){0};
+    (void)sem_comb_module_port_edges(target_scope, module_scopes, project_symbols,
+                                     cache, &edges_buf);
+    size_t edge_count = edges_buf.len / sizeof(JZCombPortEdge);
+    if (edge_count == 0) {
+        jz_buf_free(&edges_buf);
+        return;
+    }
+
+    size_t outer_net_count = outer_nets->len / sizeof(JZNet);
+    const JZCombPortEdge *edges = (const JZCombPortEdge *)edges_buf.data;
+
+    for (size_t ei = 0; ei < edge_count; ++ei) {
+        const JZCombPortEdge *pe = &edges[ei];
+        if (!pe->in_port_decl || !pe->out_port_decl) continue;
+        if (!pe->in_port_decl->name || !pe->out_port_decl->name) continue;
+
+        JZASTNode *in_bind = sem_comb_find_instance_binding(inst_node, pe->in_port_decl->name);
+        JZASTNode *out_bind = sem_comb_find_instance_binding(inst_node, pe->out_port_decl->name);
+        if (!in_bind || in_bind->child_count == 0) continue;
+        if (!out_bind || out_bind->child_count == 0) continue;
+
+        JZASTNode *in_rhs  = in_bind->children[0];
+        JZASTNode *out_rhs = out_bind->children[0];
+        if (!in_rhs || !out_rhs) continue;
+
+        JZBuffer src_decls = (JZBuffer){0};
+        JZBuffer dst_decls = (JZBuffer){0};
+        sem_comb_collect_sources_from_expr(in_rhs, outer_scope, &src_decls);
+        sem_comb_collect_targets_from_lhs(out_rhs, outer_scope, &dst_decls);
+
+        size_t src_count = src_decls.len / sizeof(JZASTNode *);
+        size_t dst_count = dst_decls.len / sizeof(JZASTNode *);
+
+        JZASTNode **src_arr = (JZASTNode **)src_decls.data;
+        JZASTNode **dst_arr = (JZASTNode **)dst_decls.data;
+
+        for (size_t si = 0; si < src_count; ++si) {
+            JZNetBinding *sb = sem_net_find_binding(outer_bindings, src_arr[si]);
+            if (!sb || sb->net_ix >= outer_net_count) continue;
+            for (size_t di = 0; di < dst_count; ++di) {
+                JZNetBinding *db = sem_net_find_binding(outer_bindings, dst_arr[di]);
+                if (!db || db->net_ix >= outer_net_count) continue;
+                int cond = pe->conditional || extra_conditional;
+                sem_comb_add_edge_to_paths(paths, sb->net_ix, db->net_ix, cond);
+            }
+        }
+
+        jz_buf_free(&src_decls);
+        jz_buf_free(&dst_decls);
+    }
+
+    jz_buf_free(&edges_buf);
+}
+
+/* Walk all module instances in `mod` (including those inside FEATURE_GUARD
+ * branches) and inject their transparency edges into paths. Instances
+ * inside FEATURE_GUARD are marked conditional so feature resolution cannot
+ * cause a false unconditional error. */
+static void sem_comb_inject_all_instance_edges(JZASTNode *mod,
+                                               const JZModuleScope *outer_scope,
+                                               JZBuffer *outer_nets,
+                                               JZBuffer *outer_bindings,
+                                               JZBuffer *module_scopes,
+                                               const JZBuffer *project_symbols,
+                                               JZBuffer *cache,
+                                               JZBuffer *paths)
+{
+    if (!mod) return;
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *child = mod->children[ci];
+        if (!child) continue;
+
+        if (child->type == JZ_AST_FEATURE_GUARD) {
+            for (size_t fi = 1; fi < child->child_count; ++fi) {
+                JZASTNode *branch = child->children[fi];
+                if (!branch) continue;
+                for (size_t gi = 0; gi < branch->child_count; ++gi) {
+                    JZASTNode *inst = branch->children[gi];
+                    if (!inst || inst->type != JZ_AST_MODULE_INSTANCE) continue;
+                    sem_comb_inject_edges_for_instance(
+                        inst, outer_scope, outer_nets, outer_bindings,
+                        module_scopes, project_symbols, cache, paths,
+                        /*extra_conditional=*/1);
+                }
+            }
+            continue;
+        }
+
+        if (child->type != JZ_AST_MODULE_INSTANCE) continue;
+        sem_comb_inject_edges_for_instance(
+            child, outer_scope, outer_nets, outer_bindings,
+            module_scopes, project_symbols, cache, paths,
+            /*extra_conditional=*/0);
+    }
+}
+
+static void sem_comb_build_summary(JZModuleCombCache *slot,
+                                   const JZModuleScope *child_scope,
+                                   JZBuffer *module_scopes,
+                                   const JZBuffer *project_symbols,
+                                   JZBuffer *cache)
+{
+    if (!slot || !child_scope || !child_scope->node) return;
+
+    slot->state = COMB_CACHE_IN_PROGRESS;
+
+    JZASTNode *mod = child_scope->node;
+    if (mod->type == JZ_AST_BLACKBOX) {
+        slot->state = COMB_CACHE_OPAQUE;
+        return;
+    }
+
+    JZBuffer nets = (JZBuffer){0};
+    JZBuffer bindings = (JZBuffer){0};
+    if (sem_net_build_module_graph(child_scope, project_symbols, &nets, &bindings) != 0) {
+        slot->state = COMB_CACHE_OPAQUE;
+        return;
+    }
+
+    JZBuffer paths = (JZBuffer){0};
+    JZCombPathState initial = (JZCombPathState){0};
+    (void)jz_buf_append(&paths, &initial, sizeof(initial));
+
+    /* Inject edges from grandchild instances first; their transparency
+     * composes with this module's own ASYNCHRONOUS assignments. */
+    sem_comb_inject_all_instance_edges(mod, child_scope, &nets, &bindings,
+                                       module_scopes, project_symbols, cache, &paths);
+
+    /* Walk ASYNCHRONOUS blocks using the existing path-aware walker.
+     * Pass NULL diagnostics so any internal cycle error in this module is
+     * not emitted twice (the main per-module pass will emit it). */
+    int had_unconditional_cycle = 0;
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *blk = mod->children[ci];
+        if (!blk || blk->type != JZ_AST_BLOCK || !blk->block_kind) continue;
+        if (strcmp(blk->block_kind, "ASYNCHRONOUS") != 0) continue;
+
+        for (size_t i = 0; i < blk->child_count; ++i) {
+            JZASTNode *stmt = blk->children[i];
+            if (!stmt) continue;
+
+            if (stmt->type == JZ_AST_STMT_IF) {
+                size_t start = i;
+                size_t end = i + 1;
+                while (end < blk->child_count) {
+                    JZASTNode *next = blk->children[end];
+                    if (!next) { end++; continue; }
+                    if (next->type == JZ_AST_STMT_ELIF || next->type == JZ_AST_STMT_ELSE) {
+                        end++;
+                        if (next->type == JZ_AST_STMT_ELSE) break;
+                    } else {
+                        break;
+                    }
+                }
+                sem_comb_analyze_if_chain(blk, start, end, child_scope, &nets, &bindings,
+                                          &paths, &had_unconditional_cycle, NULL);
+                i = end - 1;
+            } else {
+                sem_comb_analyze_stmt(stmt, child_scope, &nets, &bindings, &paths,
+                                       &had_unconditional_cycle, NULL);
+            }
+        }
+    }
+
+    /* Collect IN-capable and OUT-capable port decls from the module's PORT
+     * block. INOUT participates on both sides. */
+    JZBuffer in_ports = (JZBuffer){0};
+    JZBuffer out_ports = (JZBuffer){0};
+    for (size_t ci = 0; ci < mod->child_count; ++ci) {
+        JZASTNode *pb = mod->children[ci];
+        if (!pb || pb->type != JZ_AST_PORT_BLOCK) continue;
+        for (size_t pi = 0; pi < pb->child_count; ++pi) {
+            JZASTNode *p = pb->children[pi];
+            if (!p || p->type != JZ_AST_PORT_DECL || !p->block_kind) continue;
+            /* BUS ports are out of scope for phase-1 transparency analysis. */
+            if (strcmp(p->block_kind, "BUS") == 0) continue;
+            int is_in    = (strcmp(p->block_kind, "IN") == 0);
+            int is_out   = (strcmp(p->block_kind, "OUT") == 0);
+            int is_inout = (strcmp(p->block_kind, "INOUT") == 0);
+            if (is_in || is_inout) (void)jz_buf_append(&in_ports, &p, sizeof(p));
+            if (is_out || is_inout) (void)jz_buf_append(&out_ports, &p, sizeof(p));
+        }
+    }
+
+    size_t in_count = in_ports.len / sizeof(JZASTNode *);
+    size_t out_count = out_ports.len / sizeof(JZASTNode *);
+    size_t net_count = nets.len / sizeof(JZNet);
+    size_t path_count = paths.len / sizeof(JZCombPathState);
+
+    JZASTNode **ins = (JZASTNode **)in_ports.data;
+    JZASTNode **outs = (JZASTNode **)out_ports.data;
+    JZCombPathState *path_arr = (JZCombPathState *)paths.data;
+
+    for (size_t ii = 0; ii < in_count; ++ii) {
+        JZNetBinding *ib = sem_net_find_binding(&bindings, ins[ii]);
+        if (!ib || ib->net_ix >= net_count) continue;
+        for (size_t oi = 0; oi < out_count; ++oi) {
+            if (ins[ii] == outs[oi]) continue;  /* skip INOUT self-loop */
+            JZNetBinding *ob = sem_net_find_binding(&bindings, outs[oi]);
+            if (!ob || ob->net_ix >= net_count) continue;
+
+            size_t reachable_in = 0;
+            for (size_t pi = 0; pi < path_count; ++pi) {
+                const JZCombPathState *ps = &path_arr[pi];
+                size_t eC = ps->edges.len / sizeof(JZCombEdge);
+                if (eC == 0) continue;
+                if (sem_comb_reachable_in_edgeset(
+                        (const JZCombEdge *)ps->edges.data, eC, net_count,
+                        ib->net_ix, ob->net_ix)) {
+                    reachable_in++;
+                }
+            }
+            if (reachable_in == 0) continue;
+
+            JZCombPortEdge pe;
+            pe.in_port_decl = ins[ii];
+            pe.out_port_decl = outs[oi];
+            pe.conditional = (reachable_in < path_count) ? 1 : 0;
+            (void)jz_buf_append(&slot->edges, &pe, sizeof(pe));
+        }
+    }
+
+    jz_buf_free(&in_ports);
+    jz_buf_free(&out_ports);
+
+    sem_comb_free_paths(&paths);
+    sem_net_free_module_graph(&nets, &bindings);
+
+    slot->state = COMB_CACHE_DONE;
+}
+
 void sem_check_combinational_loops_for_module(const JZModuleScope *scope,
                                                      JZBuffer *nets,
                                                      JZBuffer *bindings,
+                                                     JZBuffer *module_scopes,
+                                                     const JZBuffer *project_symbols,
+                                                     JZBuffer *module_comb_cache,
                                                      JZDiagnosticList *diagnostics)
 {
     if (!scope || !scope->node) return;
@@ -667,6 +1163,14 @@ void sem_check_combinational_loops_for_module(const JZModuleScope *scope,
         JZBuffer paths = (JZBuffer){0};
         JZCombPathState initial = (JZCombPathState){0};
         (void)jz_buf_append(&paths, &initial, sizeof(initial));
+
+        /* Inject combinational transparency edges contributed by module
+         * instances. These represent signal paths through @new instance
+         * port bindings; without them, cycles that close across a module
+         * boundary would be missed. */
+        sem_comb_inject_all_instance_edges(mod, scope, nets, bindings,
+                                           module_scopes, project_symbols,
+                                           module_comb_cache, &paths);
 
         int had_unconditional_cycle = 0;
 

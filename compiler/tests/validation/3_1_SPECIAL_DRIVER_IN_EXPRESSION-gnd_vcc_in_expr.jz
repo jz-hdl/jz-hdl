@@ -1,80 +1,83 @@
 // SPECIAL_DRIVER_IN_EXPRESSION: GND/VCC may not appear in expressions.
-// Tests GND/VCC in binary ops, unary ops, ternary condition across
-// async and sync blocks in multiple modules.
-// Valid standalone uses of GND/VCC included to verify no false positives.
+// Focuses on operator-category contexts: comparisons, shifts, logical ops,
+// multiplication, and ternary conditions across ASYNC and SYNC blocks.
+// Valid standalone uses of GND/VCC are included to verify no false positives.
 
 @project SPECIAL_DRIVER_IN_EXPRESSION_gnd_vcc_in_expr
     @top TopMod {
         IN  [1] clk = _;
+        IN  [1] flag = _;
         OUT [8] out_a = _;
-        OUT [8] out_b = _;
-        OUT [1] out_c = _;
+        OUT [1] out_b = _;
+        OUT [16] out_c = _;
     }
 @endproj
 
-// Helper: GND/VCC in binary and unary expressions
-@module HelperA
+// Helper: special drivers in non-additive operator categories
+@module HelperExpr
     PORT {
         IN  [1] clk;
+        IN  [1] flag;
         IN  [8] data;
         OUT [8] out_a;
-        OUT [8] out_b;
-        OUT [1] out_c;
+        OUT [1] out_b;
+        OUT [16] out_c;
     }
     REGISTER {
-        r [8] = 8'h00;
+        r [16] = 16'h0000;
     }
     ASYNCHRONOUS {
-        // Trigger 1: GND in binary add (async RHS)
-        out_a = data + GND;
-        // Trigger 2: VCC in binary or (async RHS)
-        out_b = data | VCC;
-        // Trigger 3: GND as unary NOT operand (async RHS)
-        out_c = ~GND;
+        // Trigger 1: VCC as shift amount in ASYNCHRONOUS context
+        out_a = data << VCC;
+        // Trigger 2: GND in comparison expression
+        out_b = data == GND;
+        // Valid: GND as a ternary branch and register read (no false positive)
+        out_c = flag ? r : GND;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 4: VCC in binary add (sync RHS)
-        r <= r + VCC;
+        // Trigger 3: VCC in multiply expression in SYNCHRONOUS context
+        r <= data * VCC;
     }
 @endmod
 
 @module TopMod
     PORT {
         IN  [1] clk;
+        IN  [1] flag;
         OUT [8] out_a;
-        OUT [8] out_b;
-        OUT [1] out_c;
+        OUT [1] out_b;
+        OUT [16] out_c;
     }
     WIRE {
-        ha_out_a [8];
-        ha_out_b [8];
-        ha_out_c [1];
+        h_out_a [8];
+        h_out_b [1];
+        h_out_c [16];
     }
     REGISTER {
-        r [8] = 8'h00;
+        r [16] = 16'h0000;
         s [1] = 1'b0;
     }
 
-    @new inst_a HelperA {
+    @new inst_expr HelperExpr {
         IN  [1] clk = clk;
-        IN  [8] data = r;
-        OUT [8] out_a = ha_out_a;
-        OUT [8] out_b = ha_out_b;
-        OUT [1] out_c = ha_out_c;
+        IN  [1] flag = flag;
+        IN  [8] data = r[7:0];
+        OUT [8] out_a = h_out_a;
+        OUT [1] out_b = h_out_b;
+        OUT [16] out_c = h_out_c;
     };
 
     ASYNCHRONOUS {
-        // Valid: GND as standalone RHS (no false positive)
-        out_a = ha_out_a;
-        out_b = ha_out_b;
-        // Trigger 5: VCC as ternary condition (async)
-        out_c <= VCC ? ha_out_c : 1'b0;
+        out_a = h_out_a;
+        // Trigger 4: GND in logical expression in ASYNCHRONOUS context
+        out_b = (flag && GND) | s;
+        out_c = h_out_c;
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Valid: GND as standalone register assignment (no false positive)
-        r <= GND;
-        // Trigger 6: GND in binary subtract (sync RHS)
-        s <= s - GND;
+        // Valid: standalone VCC register assignment (no false positive)
+        r <= VCC;
+        // Trigger 5: VCC as ternary condition in SYNCHRONOUS context
+        s <= VCC ? h_out_b : flag;
     }
 @endmod

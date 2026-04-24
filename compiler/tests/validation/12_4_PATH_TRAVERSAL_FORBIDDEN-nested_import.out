@@ -1,0 +1,2 @@
+File: ./12_4_PATH_TRAVERSAL_FORBIDDEN-nested_import_mid.jz
+       3:1    error PATH_TRAVERSAL_FORBIDDEN S12.2 Path contains '..' traversal without --allow-traversal

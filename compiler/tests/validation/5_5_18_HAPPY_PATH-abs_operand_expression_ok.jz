@@ -1,0 +1,60 @@
+// HAPPY_PATH: abs() operand form from §5.5.18.
+// Exercises:
+//   Req #3 - operand is a bit-vector expression interpreted by abs() as signed.
+
+@project HAPPY_PATH_abs_operand_expression_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] src = _;
+        IN  [8] mask = _;
+        OUT [9] out_abs_expr = _;
+    }
+@endproj
+
+@module HelperAbsExpr
+    PORT {
+        IN  [8] src;
+        IN  [8] mask;
+        OUT [9] out_abs_expr;
+    }
+
+    ASYNCHRONOUS {
+        // Req #3: a bit-vector expression operand is accepted.
+        out_abs_expr = abs(src ^ mask);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src;
+        IN  [8] mask;
+        OUT [9] out_abs_expr;
+    }
+
+    WIRE {
+        h_abs_expr [9];
+    }
+
+    REGISTER {
+        hold [1] = 1'b0;
+    }
+
+    @new inst_h HelperAbsExpr {
+        IN  [8] src = src;
+        IN  [8] mask = mask;
+        OUT [9] out_abs_expr = h_abs_expr;
+    };
+
+    ASYNCHRONOUS {
+        out_abs_expr = h_abs_expr;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        hold <= ~hold;
+    }
+@endmod

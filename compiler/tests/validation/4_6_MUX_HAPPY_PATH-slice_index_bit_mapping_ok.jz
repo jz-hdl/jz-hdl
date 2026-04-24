@@ -1,0 +1,58 @@
+// MUX §4.6 Req #33 and Req #34 happy-path:
+// Req #33: "Index 1 corresponds to bits [2*element_width-1 : element_width]."
+// Req #34: "In general, index i (0 <= i < K) corresponds to bits
+//          [(i+1)*element_width-1 : i*element_width]."
+// Exercises auto-slicing reads at index 1 and at a general index i > 1,
+// covering the K-element partition.
+// No diagnostics expected.
+
+@project MUX_HAPPY_PATH_slice_index_bit_mapping_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [32] wide = _;
+        IN  [2] sel = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [32] wide;
+        IN  [2] sel;
+        OUT [8] data;
+    }
+
+    // 32-bit source sliced into four 8-bit elements (K = 4).
+    //   index 0 -> wide[7:0]
+    //   index 1 -> wide[15:8]        (Req #33)
+    //   index 2 -> wide[23:16]       (Req #34, general i)
+    //   index 3 -> wide[31:24]       (Req #34, general i)
+    MUX {
+        slice_mux [8] = wide;
+    }
+
+    REGISTER {
+        r1 [8] = 8'h00;
+        r2 [8] = 8'h00;
+        r3 [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: dynamic index covers indices 0..3 including 1 and i > 1.
+        data = slice_mux[sel] | r1 | r2 | r3;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger (Req #33): constant index 1 -> wide[15:8].
+        r1 <= slice_mux[2'b01];
+        // Trigger (Req #34): constant index 2 -> wide[23:16].
+        r2 <= slice_mux[2'b10];
+        // Trigger (Req #34): constant index 3 (K-1) -> wide[31:24].
+        r3 <= slice_mux[2'b11];
+    }
+@endmod

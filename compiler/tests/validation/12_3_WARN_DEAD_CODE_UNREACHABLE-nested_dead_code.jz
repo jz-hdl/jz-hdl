@@ -1,0 +1,77 @@
+// WARN_DEAD_CODE_UNREACHABLE: Nested dead code detection.
+// Tests always-false IF nested inside always-true IF.
+// Valid: non-constant conditions included for no false positives.
+
+@project WARN_DEAD_CODE_UNREACHABLE_nested_dead_code
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module with nested dead code in ASYNCHRONOUS block
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: always-false IF nested inside always-true IF (body is dead)
+        IF (1'b1) {
+            IF (1'b0) {
+                data <= 1'b1;
+            } ELSE {
+                data <= r;
+            }
+        } ELSE {
+            data <= 1'b0;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: non-constant nested condition (no warning)
+        IF (sel) {
+            r <= ~r;
+        } ELSE {
+            r <= r;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        OUT [1] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] sel = sel;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: runtime condition wrapping a constant condition (outer is non-constant)
+        IF (sel) {
+            data <= r;
+        } ELSE {
+            data <= 1'b0;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,0 +1,82 @@
+// KEYWORD_AS_IDENTIFIER: Reserved keywords in declaration contexts not
+// previously exercised: MEM port name, MUX name, instance name (with
+// non-MUX keyword), and wire name (with a non-VCC/GND keyword).
+// Uses CONFIG and MUX as test keywords since they are known to
+// trigger KEYWORD_AS_IDENTIFIER reliably in these contexts.
+
+@project KEYWORD_AS_IDENTIFIER_more_contexts
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        IN  [1] we = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        IN  [1] we;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    // Trigger 1: keyword CONFIG as wire name
+    WIRE {
+        CONFIG [1];
+    }
+
+    // Trigger 2: keyword CONFIG as MEM port name
+    MEM {
+        valid_mem [1] [4] = 1'b0 {
+            OUT CONFIG ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Trigger 3: keyword MUX as MUX name
+    MUX {
+        MUX = a, b;
+    }
+
+    // Trigger 4: keyword CLOCKS as instance name
+    @new CLOCKS HelperA {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (we) {
+            valid_mem.wr[2'b00] <= din;
+        }
+        r <= ~r;
+    }
+@endmod

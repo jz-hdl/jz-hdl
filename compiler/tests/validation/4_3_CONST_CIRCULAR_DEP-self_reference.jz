@@ -1,0 +1,57 @@
+// CONST_CIRCULAR_DEP: Self-referencing CONST declaration.
+// Tests that a CONST referencing itself (A = A) is caught as circular.
+// Valid CONST declarations included to verify no false positives.
+
+@project CONST_CIRCULAR_DEP_self_reference
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+        OUT [1] out_h = _;
+    }
+@endproj
+
+@module HelperMod
+    CONST {
+        GOOD = 1;
+        // Trigger: self-reference in helper module
+        SELF = SELF;
+    }
+
+    PORT {
+        IN  [1] din;
+        OUT [GOOD] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        OK = 1;
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [OK] data;
+        OUT [OK] out_h;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = out_h;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

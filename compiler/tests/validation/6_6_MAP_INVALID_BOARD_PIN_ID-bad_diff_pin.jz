@@ -1,0 +1,51 @@
+// MAP_INVALID_BOARD_PIN_ID: Differential P/N mapped to invalid board pin ID.
+// Valid differential mapping included to verify no false positives.
+
+@project MAP_INVALID_BOARD_PIN_ID_bad_diff_pin
+    CHIP = "gw1nr-9-qn88-c6-i5";
+
+    IN_PINS {
+        clk_in [1] = { standard=LVCMOS33 };
+        // Valid: differential IN pin with proper numeric P/N IDs
+        diff_ok = { mode=DIFFERENTIAL, standard=LVDS25 };
+        // Trigger: differential P/N with invalid board pin ID
+        diff_bad = { mode=DIFFERENTIAL, standard=LVDS25 };
+    }
+
+    OUT_PINS {
+        led [1] = { standard=LVCMOS33, drive=4 };
+    }
+
+    MAP {
+        clk_in = 52;
+        // Valid: numeric P/N IDs
+        diff_ok = { P=30, N=31 };
+        // Trigger: invalid board pin ID in P position
+        diff_bad = { P=X#9, N=32 };
+        led = 10;
+    }
+
+    @top TopMod {
+        IN  [1] clk = clk_in;
+        OUT [1] led_out = led;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] led_out;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        led_out = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

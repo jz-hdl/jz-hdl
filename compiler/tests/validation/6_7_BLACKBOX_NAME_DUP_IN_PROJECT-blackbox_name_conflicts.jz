@@ -64,6 +64,11 @@
         OUT [1] dout = _;
     };
 
+    @new inst_conflict ConflictMod {
+        IN  [1] din = r;
+        OUT [1] dout = _;
+    };
+
     REGISTER {
         r [1] = 1'b0;
     }

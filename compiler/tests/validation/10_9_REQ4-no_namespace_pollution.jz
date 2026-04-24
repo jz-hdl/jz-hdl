@@ -1,0 +1,45 @@
+// Req #4 (10.9 Rationale): Template-local names must not leak into module scope.
+// Target diagnostic: UNDECLARED_IDENTIFIER.
+
+@project REQ4_no_namespace_pollution
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template local_temp(src, dst)
+    @scratch tmp [1];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        stage [1];
+    }
+
+    ASYNCHRONOUS {
+        @apply local_temp(r, stage);
+
+        // Trigger 1: scratch name must not exist after expansion.
+        data = tmp;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

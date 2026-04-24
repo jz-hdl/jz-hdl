@@ -1,0 +1,57 @@
+// LATCH_SELF_DRIVE: A latch never drives itself; reading a latch does
+// not create a driver. Therefore a latch value may legally appear on
+// the RHS of its own guarded assignment without creating a combinational
+// feedback loop — the latch is storage, and the read is passive. The
+// latch's output participates in net resolution like a REGISTER's
+// current-value output, so mixing latch reads with other combinational
+// logic is legal.
+// No diagnostics expected.
+
+@project LATCH_SELF_DRIVE_latch_never_self_drives_ok
+    @top TopMod {
+        IN  [1] enable = _;
+        IN  [8] din = _;
+        IN  [1] hold_mask = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] enable;
+        IN  [8] din;
+        IN  [1] hold_mask;
+        OUT [8] data;
+    }
+
+    LATCH {
+        // lat_self reads itself in its own data expression — legal
+        // because reading a latch does not create a driver, and the
+        // latch never drives itself combinationally.
+        lat_self [8] D;
+    }
+
+    ASYNCHRONOUS {
+        // RHS uses lat_self but this is a passive read. No driver is
+        // created by the read, so there is no combinational self-drive.
+        // The latch remains pure storage.
+        lat_self <= enable : (hold_mask ? lat_self : din);
+        data <= lat_self;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] enable;
+        IN  [8] din;
+        IN  [1] hold_mask;
+        OUT [8] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] enable = enable;
+        IN  [8] din = din;
+        IN  [1] hold_mask = hold_mask;
+        OUT [8] data = data;
+    };
+@endmod

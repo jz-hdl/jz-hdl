@@ -1,0 +1,128 @@
+// NET_TRI_STATE_ALL_Z_READ: Multiple instance outputs all releasing z on same wire.
+// Tests that the compiler detects when three instance INOUT drivers all assign z
+// to a shared wire but the wire is still read.
+// Valid: wire with at least one non-z driver included for negative testing.
+
+@project NET_TRI_STATE_ALL_Z_READ_multi_instance_all_z
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en  = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Driver that always assigns z via INOUT port
+@module ZDriverA
+    PORT {
+        IN    [1] en;
+        INOUT [8] bus;
+        OUT   [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        bus <= 8'bzzzz_zzzz;
+        ack <= en;
+    }
+@endmod
+
+// Another driver that always assigns z via INOUT port
+@module ZDriverB
+    PORT {
+        IN    [1] en;
+        INOUT [8] bus;
+        OUT   [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        bus <= 8'bzzzz_zzzz;
+        ack <= en;
+    }
+@endmod
+
+// Third driver that always assigns z via INOUT port
+@module ZDriverC
+    PORT {
+        IN    [1] en;
+        INOUT [8] bus;
+        OUT   [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        bus <= 8'bzzzz_zzzz;
+        ack <= en;
+    }
+@endmod
+
+// Driver that provides real data (non-z) for negative testing
+@module ActiveDriver
+    PORT {
+        IN    [1] en;
+        INOUT [8] bus;
+        OUT   [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            bus <= 8'hFF;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+        }
+        ack <= en;
+    }
+@endmod
+
+// Top module: three z-drivers on one wire (error), active driver on another (valid)
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    WIRE {
+        // Trigger: all three instance INOUT drivers assign z, but wire is read
+        allz_bus [8];
+        // Valid: at least one driver provides real data
+        ok_bus [8];
+    }
+
+    @new inst_a ZDriverA {
+        IN    [1] en = en;
+        INOUT [8] bus = allz_bus;
+        OUT   [1] ack = _;
+    };
+
+    @new inst_b ZDriverB {
+        IN    [1] en = en;
+        INOUT [8] bus = allz_bus;
+        OUT   [1] ack = _;
+    };
+
+    @new inst_c ZDriverC {
+        IN    [1] en = en;
+        INOUT [8] bus = allz_bus;
+        OUT   [1] ack = _;
+    };
+
+    @new inst_ok ActiveDriver {
+        IN    [1] en = en;
+        INOUT [8] bus = ok_bus;
+        OUT   [1] ack = _;
+    };
+
+    ASYNCHRONOUS {
+        data <= allz_bus | ok_bus;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

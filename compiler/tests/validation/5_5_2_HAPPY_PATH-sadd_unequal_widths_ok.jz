@@ -1,0 +1,51 @@
+// HAPPY_PATH: §5.5.2 sadd(a, b) accepts operands of unequal widths.
+// max_bits = MAX(width(a), width(b)); each operand is sign-extended to
+// max_bits + 1 bits (MSB replicated). Result width is max_bits + 1.
+// No diagnostics expected.
+
+@project SADD_UNEQUAL_WIDTHS_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] a4  = _;
+        IN  [8] b8  = _;
+        IN  [3] c3  = _;
+        IN  [5] d5  = _;
+        OUT [9] sum_a4_b8 = _;
+        OUT [6] sum_c3_d5 = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] a4;
+        IN  [8] b8;
+        IN  [3] c3;
+        IN  [5] d5;
+        OUT [9] sum_a4_b8;
+        OUT [6] sum_c3_d5;
+    }
+
+    REGISTER {
+        r_a4b8 [9] = 9'd0;
+        r_c3d5 [6] = 6'd0;
+    }
+
+    ASYNCHRONOUS {
+        // sadd with a narrower LHS operand: width(a4)=4, width(b8)=8
+        // max_bits = 8, result width = 9; a4 sign-extended from 4 to 9 bits.
+        sum_a4_b8 = r_a4b8;
+        // sadd with a narrower RHS operand: width(c3)=3, width(d5)=5
+        // max_bits = 5, result width = 6; c3 sign-extended from 3 to 6 bits.
+        sum_c3_d5 = r_c3d5;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_a4b8 <= sadd(a4, b8);
+        r_c3d5 <= sadd(c3, d5);
+    }
+@endmod

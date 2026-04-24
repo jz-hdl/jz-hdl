@@ -1,7 +1,5 @@
 // BUS_PORT_UNKNOWN_BUS: BUS port references BUS name not declared in project.
 // Tests BUS port referencing undeclared bus in helper module and top module.
-// NOTE: BUS_PORT_UNKNOWN_BUS is not emitted by the compiler — see issues.md.
-// Instead, the undeclared BUS ports appear as dangling unused signals.
 // Valid BUS port referencing declared bus included to verify no false positives.
 
 @project BUS_PORT_UNKNOWN_BUS_unknown_bus_name

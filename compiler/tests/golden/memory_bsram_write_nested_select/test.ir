@@ -1,0 +1,208 @@
+{
+  "ir_version": "0.1.0",
+  "design": {
+    "name": "bsram_nested_select_test",
+    "modules": [
+      {
+        "id": 0,
+        "name": "mini_cpu",
+        "base_module_id": -1,
+        "source_line": 48,
+        "source_file": "test.jz",
+      "signals": [
+        {
+          "id": 0,
+          "name": "clk",
+          "kind": "port",
+          "width": 1,
+          "owner_module_id": 0,
+          "source_line": 50,
+          "can_be_z": false,
+          "iob": false,
+          "port": { "direction": "IN" }
+        },
+        {
+          "id": 1,
+          "name": "rst_n",
+          "kind": "port",
+          "width": 1,
+          "owner_module_id": 0,
+          "source_line": 51,
+          "can_be_z": false,
+          "iob": false,
+          "port": { "direction": "IN" }
+        },
+        {
+          "id": 2,
+          "name": "data_in",
+          "kind": "port",
+          "width": 8,
+          "owner_module_id": 0,
+          "source_line": 52,
+          "can_be_z": false,
+          "iob": false,
+          "port": { "direction": "IN" }
+        },
+        {
+          "id": 3,
+          "name": "data_out",
+          "kind": "port",
+          "width": 8,
+          "owner_module_id": 0,
+          "source_line": 53,
+          "can_be_z": false,
+          "iob": false,
+          "port": { "direction": "OUT" }
+        },
+        {
+          "id": 4,
+          "name": "state",
+          "kind": "register",
+          "width": 2,
+          "owner_module_id": 0,
+          "source_line": 57,
+          "can_be_z": false,
+          "iob": false,
+          "reg": { "reset_value": { "value": 0, "width": 2 }, "home_clock_domain_id": 0 }
+        },
+        {
+          "id": 5,
+          "name": "instr",
+          "kind": "register",
+          "width": 8,
+          "owner_module_id": 0,
+          "source_line": 58,
+          "can_be_z": false,
+          "iob": false,
+          "reg": { "reset_value": { "value": 0, "width": 8 }, "home_clock_domain_id": 0 }
+        },
+        {
+          "id": 6,
+          "name": "acc",
+          "kind": "register",
+          "width": 8,
+          "owner_module_id": 0,
+          "source_line": 59,
+          "can_be_z": false,
+          "iob": false,
+          "reg": { "reset_value": { "value": 0, "width": 8 }, "home_clock_domain_id": 0 }
+        },
+        {
+          "id": 7,
+          "name": "addr",
+          "kind": "register",
+          "width": 4,
+          "owner_module_id": 0,
+          "source_line": 60,
+          "can_be_z": false,
+          "iob": false,
+          "reg": { "reset_value": { "value": 0, "width": 4 }, "home_clock_domain_id": 0 }
+        },
+        {
+          "id": 200000,
+          "name": "ram_read_addr",
+          "kind": "register",
+          "width": 4,
+          "owner_module_id": 0,
+          "source_line": 0,
+          "can_be_z": false,
+          "iob": false,
+          "reg": { "reset_value": { "value": 0, "width": 4 }, "home_clock_domain_id": 0 }
+        }
+      ],
+        "clock_domains": [
+          {
+            "id": 0,
+            "clock_signal_id": 0,
+            "edge": "RISING",
+            "register_ids": [5, 4, 200000, 6, 7],
+            "reset_signal_id": 1,
+            "reset_sync_signal_id": -1,
+            "reset_active": "ACTIVE_LOW",
+            "reset_type": "CLOCKED",
+            "sensitivity_list": [{ "signal_id": 0, "edge": "RISING" }],
+            "statements": { "kind": "if", "source_line": 74, "condition": { "kind": "logical_not", "width": 1, "source_line": 74, "operand": { "kind": "signal_ref", "width": 1, "source_line": 74, "signal_id": 1 } }, "then": { "kind": "block", "source_line": 74, "statements": [{ "kind": "assignment", "id": 9, "source_line": 74, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 5, "is_sliced": false, "rhs": { "kind": "literal", "width": 8, "source_line": 74, "literal": { "value": 0, "width": 8 } } }, { "kind": "assignment", "id": 10, "source_line": 74, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 4, "is_sliced": false, "rhs": { "kind": "literal", "width": 2, "source_line": 74, "literal": { "value": 0, "width": 2 } } }, { "kind": "assignment", "id": 11, "source_line": 74, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 200000, "is_sliced": false, "rhs": { "kind": "literal", "width": 4, "source_line": 74, "literal": { "value": 0, "width": 4 } } }, { "kind": "assignment", "id": 12, "source_line": 74, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 6, "is_sliced": false, "rhs": { "kind": "literal", "width": 8, "source_line": 74, "literal": { "value": 0, "width": 8 } } }, { "kind": "assignment", "id": 13, "source_line": 74, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 7, "is_sliced": false, "rhs": { "kind": "literal", "width": 4, "source_line": 74, "literal": { "value": 0, "width": 4 } } }] }, "else": { "kind": "block", "source_line": 74, "statements": [{ "kind": "select", "source_line": 75, "selector": { "kind": "signal_ref", "width": 2, "source_line": 75, "signal_id": 4 }, "cases": [{ "case_value": { "kind": "literal", "width": 2, "source_line": 76, "literal": { "value": 0, "width": 2 } }, "body": { "kind": "block", "source_line": 76, "statements": [{ "kind": "assignment", "id": 0, "source_line": 77, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 5, "is_sliced": false, "rhs": { "kind": "signal_ref", "width": 8, "source_line": 77, "signal_id": 2 } }, { "kind": "assignment", "id": 1, "source_line": 78, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 4, "is_sliced": false, "rhs": { "kind": "literal", "width": 2, "source_line": 78, "literal": { "value": 1, "width": 2 } } }] } }, { "case_value": { "kind": "literal", "width": 2, "source_line": 80, "literal": { "value": 1, "width": 2 } }, "body": { "kind": "block", "source_line": 80, "statements": [{ "kind": "select", "source_line": 81, "selector": { "kind": "signal_ref", "width": 8, "source_line": 81, "signal_id": 5 }, "cases": [{ "case_value": { "kind": "literal", "width": 8, "source_line": 82, "literal": { "value": 0, "width": 8 } }, "body": { "kind": "block", "source_line": 82, "statements": [{ "kind": "assignment", "id": 2, "source_line": 83, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 4, "is_sliced": false, "rhs": { "kind": "literal", "width": 2, "source_line": 83, "literal": { "value": 0, "width": 2 } } }] } }, { "case_value": { "kind": "literal", "width": 8, "source_line": 85, "literal": { "value": 1, "width": 8 } }, "body": { "kind": "block", "source_line": 85, "statements": [{ "kind": "assignment", "id": 3, "source_line": 86, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 200000, "is_sliced": false, "rhs": { "kind": "signal_ref", "width": 4, "source_line": 86, "signal_id": 7 } }, { "kind": "assignment", "id": 4, "source_line": 87, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 6, "is_sliced": false, "rhs": { "kind": "mem_read", "width": 8, "source_line": 87, "memory_name": "ram", "port_name": "read", "address": null } }, { "kind": "assignment", "id": 5, "source_line": 88, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 4, "is_sliced": false, "rhs": { "kind": "literal", "width": 2, "source_line": 88, "literal": { "value": 0, "width": 2 } } }] } }, { "case_value": { "kind": "literal", "width": 8, "source_line": 90, "literal": { "value": 2, "width": 8 } }, "body": { "kind": "block", "source_line": 90, "statements": [{ "kind": "mem_write", "source_line": 91, "memory_name": "ram", "port_name": "write", "address": { "kind": "signal_ref", "width": 4, "source_line": 91, "signal_id": 7 }, "data": { "kind": "signal_ref", "width": 8, "source_line": 91, "signal_id": 6 } }, { "kind": "assignment", "id": 6, "source_line": 92, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 4, "is_sliced": false, "rhs": { "kind": "literal", "width": 2, "source_line": 92, "literal": { "value": 0, "width": 2 } } }] } }, { "case_value": null, "body": { "kind": "block", "source_line": 94, "statements": [{ "kind": "assignment", "id": 7, "source_line": 95, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 4, "is_sliced": false, "rhs": { "kind": "literal", "width": 2, "source_line": 95, "literal": { "value": 2, "width": 2 } } }] } }] }] } }, { "case_value": { "kind": "literal", "width": 2, "source_line": 99, "literal": { "value": 2, "width": 2 } }, "body": null }, { "case_value": null, "body": { "kind": "block", "source_line": 102, "statements": [{ "kind": "assignment", "id": 8, "source_line": 103, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 4, "is_sliced": false, "rhs": { "kind": "literal", "width": 2, "source_line": 103, "literal": { "value": 0, "width": 2 } } }] } }] }] } }
+          }
+        ],
+        "instances": [
+        ],
+        "memories": [
+          {
+            "id": 0,
+            "name": "ram",
+            "type": "BLOCK",
+            "word_width": 8,
+            "depth": 16,
+            "address_width": 4,
+            "init_literal": { "value": 0, "width": 8 },
+            "ports": [
+              { "name": "write", "kind": "WRITE", "address_width": 4, "write_mode": "WRITE_FIRST", "addr_signal_id": 7, "data_in_signal_id": 6 },
+              { "name": "read", "kind": "READ_SYNC", "address_width": 4, "addr_signal_id": 7, "data_out_signal_id": 6, "sync_clock_domain_id": 0 }
+            ]
+          }
+        ],
+        "cdc_crossings": [
+        ],
+        "async_block": { "kind": "block", "source_line": 70, "statements": [{ "kind": "assignment", "id": 0, "source_line": 71, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 3, "is_sliced": false, "rhs": { "kind": "signal_ref", "width": 8, "source_line": 71, "signal_id": 6 } }] }
+      }
+    ],
+    "project": {
+      "name": "bsram_nested_select_test",
+      "clocks": [
+        { "name": "clk", "period_ns": 37.04, "edge": "RISING" }
+      ],
+      "clock_gens": [
+      ],
+      "pins": [
+        { "id": 0, "name": "clk", "kind": "IN", "width": 1, "standard": "LVCMOS33", "drive_ma": -1, "drive": -1, "mode": "SINGLE", "term": false, "pull": "NONE" },
+        { "id": 1, "name": "rst_n", "kind": "IN", "width": 1, "standard": "LVCMOS33", "drive_ma": -1, "drive": -1, "mode": "SINGLE", "term": false, "pull": "NONE" },
+        { "id": 2, "name": "data_in", "kind": "IN", "width": 8, "standard": "LVCMOS33", "drive_ma": -1, "drive": -1, "mode": "SINGLE", "term": false, "pull": "NONE" },
+        { "id": 3, "name": "data_out", "kind": "OUT", "width": 8, "standard": "LVCMOS33", "drive_ma": 4, "drive": 4, "mode": "SINGLE", "term": false, "pull": "NONE" }
+      ],
+      "mappings": [
+        { "logical_pin_name": "clk", "bit_index": -1, "board_pin_id": "1" },
+        { "logical_pin_name": "rst_n", "bit_index": -1, "board_pin_id": "2" },
+        { "logical_pin_name": "data_in", "bit_index": 0, "board_pin_id": "3" },
+        { "logical_pin_name": "data_in", "bit_index": 1, "board_pin_id": "4" },
+        { "logical_pin_name": "data_in", "bit_index": 2, "board_pin_id": "5" },
+        { "logical_pin_name": "data_in", "bit_index": 3, "board_pin_id": "6" },
+        { "logical_pin_name": "data_in", "bit_index": 4, "board_pin_id": "7" },
+        { "logical_pin_name": "data_in", "bit_index": 5, "board_pin_id": "8" },
+        { "logical_pin_name": "data_in", "bit_index": 6, "board_pin_id": "9" },
+        { "logical_pin_name": "data_in", "bit_index": 7, "board_pin_id": "10" },
+        { "logical_pin_name": "data_out", "bit_index": 0, "board_pin_id": "11" },
+        { "logical_pin_name": "data_out", "bit_index": 1, "board_pin_id": "12" },
+        { "logical_pin_name": "data_out", "bit_index": 2, "board_pin_id": "13" },
+        { "logical_pin_name": "data_out", "bit_index": 3, "board_pin_id": "14" },
+        { "logical_pin_name": "data_out", "bit_index": 4, "board_pin_id": "15" },
+        { "logical_pin_name": "data_out", "bit_index": 5, "board_pin_id": "16" },
+        { "logical_pin_name": "data_out", "bit_index": 6, "board_pin_id": "17" },
+        { "logical_pin_name": "data_out", "bit_index": 7, "board_pin_id": "18" }
+      ],
+      "top_module_id": 0,
+      "top_bindings": [
+        { "top_port_signal_id": 0, "top_bit_index": -1, "pin_id": 0, "pin_bit_index": -1 },
+        { "top_port_signal_id": 1, "top_bit_index": -1, "pin_id": 1, "pin_bit_index": -1 },
+        { "top_port_signal_id": 2, "top_bit_index": 0, "pin_id": 2, "pin_bit_index": 0 },
+        { "top_port_signal_id": 2, "top_bit_index": 1, "pin_id": 2, "pin_bit_index": 1 },
+        { "top_port_signal_id": 2, "top_bit_index": 2, "pin_id": 2, "pin_bit_index": 2 },
+        { "top_port_signal_id": 2, "top_bit_index": 3, "pin_id": 2, "pin_bit_index": 3 },
+        { "top_port_signal_id": 2, "top_bit_index": 4, "pin_id": 2, "pin_bit_index": 4 },
+        { "top_port_signal_id": 2, "top_bit_index": 5, "pin_id": 2, "pin_bit_index": 5 },
+        { "top_port_signal_id": 2, "top_bit_index": 6, "pin_id": 2, "pin_bit_index": 6 },
+        { "top_port_signal_id": 2, "top_bit_index": 7, "pin_id": 2, "pin_bit_index": 7 },
+        { "top_port_signal_id": 3, "top_bit_index": 0, "pin_id": 3, "pin_bit_index": 0 },
+        { "top_port_signal_id": 3, "top_bit_index": 1, "pin_id": 3, "pin_bit_index": 1 },
+        { "top_port_signal_id": 3, "top_bit_index": 2, "pin_id": 3, "pin_bit_index": 2 },
+        { "top_port_signal_id": 3, "top_bit_index": 3, "pin_id": 3, "pin_bit_index": 3 },
+        { "top_port_signal_id": 3, "top_bit_index": 4, "pin_id": 3, "pin_bit_index": 4 },
+        { "top_port_signal_id": 3, "top_bit_index": 5, "pin_id": 3, "pin_bit_index": 5 },
+        { "top_port_signal_id": 3, "top_bit_index": 6, "pin_id": 3, "pin_bit_index": 6 },
+        { "top_port_signal_id": 3, "top_bit_index": 7, "pin_id": 3, "pin_bit_index": 7 }
+      ]
+    },
+    "source_files": [
+      { "path": "test.jz", "line_count": 107 }
+    ]
+  }
+}

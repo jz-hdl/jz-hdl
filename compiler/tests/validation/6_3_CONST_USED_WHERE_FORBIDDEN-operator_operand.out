@@ -1,0 +1,2 @@
+File: 6_3_CONST_USED_WHERE_FORBIDDEN-operator_operand.jz
+      30:20   error CONST_USED_WHERE_FORBIDDEN S4.3/S6.3 CONST identifier used outside compile-time constant expression contexts (runtime expression)

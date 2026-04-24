@@ -1,0 +1,4 @@
+File: 10_7_EXAMPLES-clamp_expansion_exclusive_assignment.jz
+      19:9    error SYNC_ROOT_AND_CONDITIONAL_ASSIGN S5.2/S1.5/S8.1 Root-level register assignment combined with nested conditional assignment to same bits
+      21:9    error SYNC_ROOT_AND_CONDITIONAL_ASSIGN S5.2/S1.5/S8.1 Root-level register assignment combined with nested conditional assignment to same bits
+      23:9    error SYNC_ROOT_AND_CONDITIONAL_ASSIGN S5.2/S1.5/S8.1 Root-level register assignment combined with nested conditional assignment to same bits

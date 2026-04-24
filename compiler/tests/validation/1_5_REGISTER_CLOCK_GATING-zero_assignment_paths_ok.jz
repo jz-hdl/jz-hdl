@@ -1,0 +1,68 @@
+// §1.5.3 Req #2: Registers (SYNCHRONOUS) — zero-assignment path is valid.
+// When a SYNCHRONOUS execution path contains zero assignments to a register,
+// the register holds its current value (clock gating). This happy-path test
+// exercises multiple forms: IF without ELSE, IF/ELIF without ELSE, nested
+// IF with partial coverage, and bit-slice partial assignment. No diagnostics
+// are expected.
+
+@project REGISTER_CLOCK_GATING_zero_assignment_paths
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [8] data_in = _;
+        OUT [8] out_if = _;
+        OUT [8] out_elif = _;
+        OUT [8] out_nested = _;
+        OUT [8] out_slice = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [8] data_in;
+        OUT [8] out_if;
+        OUT [8] out_elif;
+        OUT [8] out_nested;
+        OUT [8] out_slice;
+    }
+    REGISTER {
+        r_if [8]     = 8'h00;
+        r_elif [8]   = 8'h00;
+        r_nested [8] = 8'h00;
+        r_slice [8]  = 8'h00;
+    }
+    ASYNCHRONOUS {
+        out_if     = r_if;
+        out_elif   = r_elif;
+        out_nested = r_nested;
+        out_slice  = r_slice;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: IF without ELSE — zero-assignment path holds value
+        IF (en) {
+            r_if <= data_in;
+        }
+        // Valid: IF/ELIF without ELSE — uncovered path holds value
+        IF (sel_a) {
+            r_elif <= data_in;
+        } ELIF (sel_b) {
+            r_elif <= 8'hFF;
+        }
+        // Valid: nested IF with partial coverage — holds value where unassigned
+        IF (sel_a) {
+            IF (sel_b) {
+                r_nested <= data_in;
+            }
+        }
+        // Valid: bit-slice partial assignment — unassigned slice holds value
+        IF (en) {
+            r_slice[3:0] <= data_in[3:0];
+        }
+    }
+@endmod

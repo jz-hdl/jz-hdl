@@ -1,0 +1,76 @@
+// HAPPY_PATH: Valid project with unique blackbox names and no name collisions.
+// Two uniquely-named blackboxes, one helper module, all instantiated.
+// No diagnostics expected.
+
+@project HAPPY_PATH_blackbox_unique_ok
+    @blackbox bb_spi {
+        PORT {
+            IN  [1] clk;
+            IN  [8] tx_data;
+            OUT [8] rx_data;
+            OUT [1] busy;
+        }
+    }
+
+    @blackbox bb_uart {
+        PORT {
+            IN  [1] clk;
+            IN  [8] tx_byte;
+            OUT [8] rx_byte;
+            OUT [1] tx_ready;
+        }
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    @new inst_spi bb_spi {
+        IN  [1] clk = clk;
+        IN  [8] tx_data = 8'h00;
+        OUT [8] rx_data = _;
+        OUT [1] busy = _;
+    };
+
+    @new inst_uart bb_uart {
+        IN  [1] clk = clk;
+        IN  [8] tx_byte = 8'h00;
+        OUT [8] rx_byte = _;
+        OUT [1] tx_ready = _;
+    };
+
+    @new inst_h Helper {
+        IN  [1] din = r;
+        OUT [1] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

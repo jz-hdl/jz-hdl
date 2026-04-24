@@ -1,7 +1,8 @@
 // MUX_SELECTOR_OUT_OF_RANGE_CONST: Selector statically provable outside valid index range.
 // Tests out-of-range constant indices on aggregation and auto-slice MUXes
 // in both ASYNCHRONOUS and SYNCHRONOUS blocks.
-// Valid constant indices included to verify no false positives.
+// Sized literals use the exact required selector width so only the out-of-range
+// rule fires.
 
 @project MUX_SELECTOR_OUT_OF_RANGE_CONST_static_index_oob
     CONFIG {
@@ -12,6 +13,7 @@
         IN  [1] clk = _;
         IN  [8] a = _;
         IN  [8] b = _;
+        IN  [8] c = _;
         OUT [8] data = _;
     }
 @endproj
@@ -22,12 +24,13 @@
         IN  [1] clk;
         IN  [8] a;
         IN  [8] b;
+        IN  [8] c;
         OUT [8] data;
     }
 
-    // 2-element aggregation: valid indices are 0 and 1
+    // 3-element aggregation: valid indices are 0, 1, and 2. Required selector width is 2.
     MUX {
-        agg2 = a, b;
+        agg3 = a, b, c;
     }
 
     REGISTER {
@@ -35,13 +38,13 @@
     }
 
     ASYNCHRONOUS {
-        // Trigger 1: static index 2 on 2-element MUX in ASYNC
-        data = agg2[2] | r;
+        // Trigger 1: exact-width static index 2'b11 on 3-element MUX in ASYNC
+        data = agg3[2'b11] | r;
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 2: static index 3 on 2-element MUX in SYNC
-        r <= agg2[3];
+        // Trigger 2: exact-width static index 2'b11 on 3-element MUX in SYNC
+        r <= agg3[2'b11];
     }
 @endmod
 
@@ -51,23 +54,25 @@
         IN  [1] clk;
         IN  [8] a;
         IN  [8] b;
+        IN  [8] c;
         OUT [8] data;
     }
 
     WIRE {
-        w16 [16];
+        w24 [24];
         helper_out [8];
     }
 
-    // 2-element auto-slice: 16 bits / 8 = 2 elements, valid indices 0 and 1
+    // 3-element auto-slice: 24 bits / 8 = 3 elements, valid indices 0, 1, and 2.
     MUX {
-        slice2 [8] = w16;
+        slice3 [8] = w24;
     }
 
     @new inst_h HelperMod {
         IN  [1] clk = clk;
         IN  [8] a = a;
         IN  [8] b = b;
+        IN  [8] c = c;
         OUT [8] data = helper_out;
     };
 
@@ -76,14 +81,14 @@
     }
 
     ASYNCHRONOUS {
-        w16 = {a, b};
-        // Trigger 3: static index 2 on 2-element auto-slice MUX in ASYNC
-        data = slice2[2] | helper_out | r;
+        w24 = {a, b, c};
+        // Trigger 3: exact-width static index 2'b11 on 3-element auto-slice MUX in ASYNC
+        data = slice3[2'b11] | helper_out | r;
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 4: static index 3 on 2-element auto-slice MUX in SYNC
-        r <= slice2[3];
-        // Valid: index 1 is in range (no false positive)
+        // Trigger 4: exact-width static index 2'b11 on 3-element auto-slice MUX in SYNC
+        r <= slice3[2'b11];
+        // Valid: index 2'b10 is in range (no false positive)
     }
 @endmod

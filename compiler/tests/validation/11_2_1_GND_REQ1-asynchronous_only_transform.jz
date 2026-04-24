@@ -1,0 +1,83 @@
+// Req #1: --tristate-default applies to combinational tri-state nets in
+// ASYNCHRONOUS blocks.
+// Valid: internal tri-state wires in ASYNCHRONOUS blocks are transformed.
+// Valid: top-level INOUT tri-state remains preserved as an I/O pad property.
+
+@project REQ1_asynchronous_only_transform
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en = _;
+        IN    [8] din = _;
+        OUT   [8] dout = _;
+        INOUT [8] bidir = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    WIRE {
+        // Trigger 1: ASYNCHRONOUS internal tri-state wire is transformed.
+        w_async [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_async <= din;
+        } ELSE {
+            w_async <= 8'bzzzz_zzzz;
+        }
+
+        dout <= w_async;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        IN    [8] din;
+        OUT   [8] dout;
+        INOUT [8] bidir;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en = en;
+        IN  [8] din = r;
+        OUT [8] dout = _;
+    };
+
+    WIRE {
+        // Trigger 2: top-module ASYNCHRONOUS internal tri-state wire is transformed.
+        w_top [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_top <= r;
+        } ELSE {
+            w_top <= 8'bzzzz_zzzz;
+        }
+
+        // Valid: external INOUT tri-state is preserved, not transformed.
+        IF (en) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 8'bzzzz_zzzz;
+        }
+
+        dout <= w_top;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

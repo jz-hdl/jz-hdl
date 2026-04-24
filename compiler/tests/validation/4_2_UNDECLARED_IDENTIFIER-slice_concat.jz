@@ -1,0 +1,65 @@
+// UNDECLARED_IDENTIFIER: Undeclared identifier in slice index and concat operand.
+// Tests slice and concatenation contexts for undeclared identifiers.
+
+@project UNDECLARED_IDENTIFIER_slice_concat
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: undeclared identifier in slice index
+@module SliceMod
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: undeclared identifier 'ghost_idx' in slice index
+        data = din[ghost_idx];
+    }
+@endmod
+
+// Module with undeclared identifier in concat operand
+@module ConcatMod
+    PORT {
+        IN  [4] din;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: undeclared identifier 'ghost_cat' in concat operand
+        data = {din, ghost_cat};
+    }
+@endmod
+
+// Top module — structurally valid, no triggers
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_s SliceMod {
+        IN  [8] din = r;
+        OUT [8] data = _;
+    };
+
+    @new inst_c ConcatMod {
+        IN  [4] din = r[3:0];
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

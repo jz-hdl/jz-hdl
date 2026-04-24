@@ -1,0 +1,45 @@
+// Req #7 (10.9 Rationale): Scratch wires support non-trivial intermediate
+// combinational logic inside templates.
+
+@project REQ7_scratch_enables_non_trivial_logic_ok
+    CONFIG {
+        WIDTH = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] data = _;
+    }
+@endproj
+
+@template fold_and_mask(a, b, dst)
+    @scratch sum [4];
+    @scratch masked [4];
+    sum <= a + b;
+    masked <= sum ^ 4'hA;
+    dst <= masked;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] data;
+    }
+
+    REGISTER {
+        r [4] = 4'h0;
+    }
+
+    WIRE {
+        stage [4];
+    }
+
+    ASYNCHRONOUS {
+        @apply fold_and_mask(r, 4'h3, stage);
+        data = stage;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 4'h1;
+    }
+@endmod

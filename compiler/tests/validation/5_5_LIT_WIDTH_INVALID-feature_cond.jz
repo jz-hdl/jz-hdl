@@ -1,0 +1,33 @@
+// LIT_WIDTH_INVALID: lit() with non-positive width inside @feature condition.
+// Adds feature-cond context coverage to §5.5.11 LIT_WIDTH_INVALID.
+// new-binding (parser rejects function-call RHS) and check-expr
+// (CHECK_INVALID_EXPR_TYPE preempts §5.5.11) are inapplicable; see
+// audit/runner.log.
+
+@project LIT_WIDTH_INVALID_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST { VAL = 5; }
+
+    // Trigger 1: lit() with width=0 in @feature condition
+    @feature VAL == lit(0, 5)
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    REGISTER { r [8] = 8'd0; }
+
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= r; }
+@endmod

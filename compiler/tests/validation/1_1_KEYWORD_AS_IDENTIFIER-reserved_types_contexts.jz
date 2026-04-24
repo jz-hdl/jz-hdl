@@ -1,0 +1,368 @@
+// KEYWORD_AS_IDENTIFIER: Tests reserved identifiers from rows 18-24 in
+// declaration contexts not previously covered.
+// Row 18 (Reserved IDs): IDX in config/latch/mem/mux; VCC/GND in config/latch/mem/mux
+// Row 19 (Clock Types): PLL as module/port/wire/register/config/latch/mem/mux/instance
+// Row 20 (CDC Types): FIFO as module/port/wire/register/config/latch/mem/mux/instance
+// Row 21 (Memory Types): BLOCK as module/port/wire/register/config/latch/mem/mux/instance
+// Row 22 (Memory Ports): ASYNC as module/port/wire/register/config/latch/mem/mux/instance
+// Row 23 (Template/Array): IDX as wire/config/latch/mem/mux
+// Row 24 (Semantic Drivers): VCC as module/port/register/config/latch/mem/mux/instance,
+//         GND as module/port/register/config/latch/mem/mux/instance
+// Keywords are declared but not referenced in expressions.
+
+@project KEYWORD_AS_IDENTIFIER_reserved_types_contexts
+    CONFIG {
+        // Trigger 1: Row 18/23 IDX as config-name
+        IDX = 1;
+        // Trigger 2: Row 18/24 VCC as config-name
+        VCC = 2;
+        // Trigger 3: Row 18/24 GND as config-name
+        GND = 3;
+        // Trigger 4: Row 19 PLL as config-name
+        PLL = 4;
+        // Trigger 5: Row 20 FIFO as config-name
+        FIFO = 5;
+        // Trigger 6: Row 21 BLOCK as config-name
+        BLOCK = 6;
+        // Trigger 7: Row 22 ASYNC as config-name
+        ASYNC = 7;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger 8: Row 19 PLL as module-name
+@module PLL
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 9: Row 20 FIFO as module-name
+@module FIFO
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 10: Row 21 BLOCK as module-name
+@module BLOCK
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 11: Row 22 ASYNC as module-name
+@module ASYNC
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 12: Row 24 VCC as module-name
+@module VCC
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Trigger 13: Row 24 GND as module-name
+@module GND
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Helper module with keyword port names
+@module HelperTypes
+    PORT {
+        IN  [1] clk;
+        // Trigger 14: Row 19 PLL as port-name
+        IN  [1] PLL;
+        // Trigger 15: Row 20 FIFO as port-name
+        IN  [1] FIFO;
+        // Trigger 16: Row 21 BLOCK as port-name
+        IN  [1] BLOCK;
+        // Trigger 17: Row 22 ASYNC as port-name
+        IN  [1] ASYNC;
+        // Trigger 18: Row 24 VCC as port-name
+        IN  [1] VCC;
+        // Trigger 19: Row 24 GND as port-name
+        IN  [1] GND;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    // Trigger 20: Row 19 PLL as wire-name
+    // Trigger 21: Row 20 FIFO as wire-name
+    // Trigger 22: Row 21 BLOCK as wire-name
+    // Trigger 23: Row 22 ASYNC as wire-name
+    // Trigger 24: Row 23 IDX as wire-name
+    WIRE {
+        PLL   [1];
+        FIFO  [1];
+        BLOCK [1];
+        ASYNC [1];
+        IDX   [1];
+    }
+
+    // Trigger 25: Row 19 PLL as register-name
+    // Trigger 26: Row 20 FIFO as register-name
+    // Trigger 27: Row 21 BLOCK as register-name
+    // Trigger 28: Row 22 ASYNC as register-name
+    // Trigger 29: Row 24 VCC as register-name
+    // Trigger 30: Row 24 GND as register-name
+    REGISTER {
+        PLL   [1] = 1'b0;
+        FIFO  [1] = 1'b0;
+        BLOCK [1] = 1'b0;
+        ASYNC [1] = 1'b0;
+        VCC   [1] = 1'b0;
+        GND   [1] = 1'b0;
+        r     [1] = 1'b0;
+    }
+
+    // Trigger 31: Row 18/23 IDX as latch-name
+    // Trigger 32: Row 19 PLL as latch-name
+    LATCH {
+        IDX [1] D;
+        PLL [1] D;
+    }
+
+    // Trigger 33: Row 20 FIFO as latch-name
+    // Trigger 34: Row 21 BLOCK as latch-name
+    LATCH {
+        FIFO  [1] D;
+        BLOCK [1] D;
+    }
+
+    // Trigger 35: Row 22 ASYNC as latch-name
+    // Trigger 36: Row 24 VCC as latch-name
+    LATCH {
+        ASYNC [1] D;
+        VCC   [1] D;
+    }
+
+    // Trigger 37: Row 24 GND as latch-name
+    LATCH {
+        GND [1] D;
+        valid_lat [1] D;
+    }
+
+    // Trigger 38: Row 18/23 IDX as mem-name
+    MEM {
+        IDX [1] [4] = 1'b0 {
+            OUT rd1 ASYNC;
+            IN  wr1;
+        };
+    }
+
+    // Trigger 39: Row 18/24 VCC as mem-name
+    MEM {
+        VCC [1] [4] = 1'b0 {
+            OUT rd2 ASYNC;
+            IN  wr2;
+        };
+    }
+
+    // Trigger 40: Row 18/24 GND as mem-name
+    MEM {
+        GND [1] [4] = 1'b0 {
+            OUT rd3 ASYNC;
+            IN  wr3;
+        };
+    }
+
+    // Trigger 41: Row 19 PLL as mem-name
+    MEM {
+        PLL [1] [4] = 1'b0 {
+            OUT rd4 ASYNC;
+            IN  wr4;
+        };
+    }
+
+    // Trigger 42: Row 20 FIFO as mem-name
+    MEM {
+        FIFO [1] [4] = 1'b0 {
+            OUT rd5 ASYNC;
+            IN  wr5;
+        };
+    }
+
+    // Trigger 43: Row 21 BLOCK as mem-name
+    MEM {
+        BLOCK [1] [4] = 1'b0 {
+            OUT rd6 ASYNC;
+            IN  wr6;
+        };
+    }
+
+    // Trigger 44: Row 22 ASYNC as mem-name
+    MEM {
+        ASYNC [1] [4] = 1'b0 {
+            OUT rd7 ASYNC;
+            IN  wr7;
+        };
+    }
+
+    // Trigger 45: Row 18/23 IDX as mux-name
+    // Trigger 46: Row 18/24 VCC as mux-name
+    // Trigger 47: Row 18/24 GND as mux-name
+    MUX {
+        IDX = a, b;
+    }
+    MUX {
+        VCC = a, b;
+    }
+    MUX {
+        GND = a, b;
+    }
+
+    // Trigger 48: Row 19 PLL as mux-name
+    // Trigger 49: Row 20 FIFO as mux-name
+    // Trigger 50: Row 21 BLOCK as mux-name
+    // Trigger 51: Row 22 ASYNC as mux-name
+    MUX {
+        PLL = a, b;
+    }
+    MUX {
+        FIFO = a, b;
+    }
+    MUX {
+        BLOCK = a, b;
+    }
+    MUX {
+        ASYNC = a, b;
+    }
+
+    // Trigger 52: Row 19 PLL as instance-name
+    @new PLL PLL {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 53: Row 20 FIFO as instance-name
+    @new FIFO FIFO {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 54: Row 21 BLOCK as instance-name
+    @new BLOCK BLOCK {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 55: Row 22 ASYNC as instance-name
+    @new ASYNC ASYNC {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 56: Row 24 VCC as instance-name
+    @new VCC VCC {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger 57: Row 24 GND as instance-name
+    @new GND GND {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        valid_lat <= enable : din;
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

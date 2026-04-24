@@ -1,0 +1,37 @@
+// OBS_X_TO_OBSERVABLE_SINK: x-valued literal bits passed through @new
+// instance port binding. Crossing a module boundary is observable, so
+// x bits in any binding RHS expression must be flagged.
+
+@project OBS_X_TO_OBSERVABLE_SINK_x_through_instance
+    @top TopMod {
+        OUT [8] out = _;
+    }
+@endproj
+
+// Helper: pass-through from input to output.
+@module PassThru
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        OUT [8] out;
+    }
+
+    @new inst PassThru {
+        // Trigger: x-valued literal passed across instance boundary into
+        // the child's IN port.
+        IN  [8] din  = 8'bxxxx_0000;
+        OUT [8] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        out = inst.dout;
+    }
+@endmod

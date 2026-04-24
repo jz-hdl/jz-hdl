@@ -1,0 +1,37 @@
+// CONCAT_EMPTY: Empty concatenation `{}` is not allowed. This test covers
+// the feature-cond context (@feature condition expression). Covers §3.1
+// Req #9. The new-binding and check-expr contexts are categorically
+// inapplicable for this rule (see audit/runner.log).
+
+@project CONCAT_EMPTY_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): empty concatenation in feature condition
+    @feature {} == 1'b0
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

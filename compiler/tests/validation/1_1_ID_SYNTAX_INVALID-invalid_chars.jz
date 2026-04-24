@@ -1,0 +1,36 @@
+// ID_SYNTAX_INVALID: Identifiers containing characters outside [A-Za-z0-9_]
+// violate the regex ^[A-Za-z_][A-Za-z0-9_]{0,254}$.
+// The lexer breaks these into separate tokens (e.g. "foo-bar" becomes
+// "foo" "-" "bar"), so the parser rejects them as syntax errors.
+// This file tests a hyphen in a WIRE declaration name.
+
+@project ID_SYNTAX_INVALID_invalid_chars
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Trigger: hyphen in identifier
+    WIRE {
+        foo-bar [1];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

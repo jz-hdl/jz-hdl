@@ -1,0 +1,36 @@
+// COMPILE_ERRORS: Imported-file diagnostics keep the user-written @import path.
+// Target diagnostic: REG_INIT_WIDTH_MISMATCH from the imported file.
+// Non-target diagnostics: none; the project and imported module are otherwise valid.
+
+@project COMPILE_ERRORS_imported_file_preserves_written_path
+    @import "./12_1_COMPILE_ERRORS-imported_file_preserves_written_path_lib.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_bad ImportedBad {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

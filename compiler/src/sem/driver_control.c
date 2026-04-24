@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <limits.h>
 
 #include "sem_driver.h"
 #include "sem.h"
@@ -16,7 +17,127 @@
 typedef struct JZSelectCaseKey {
     const char *repr;   /* textual representation: literal text or identifier */
     JZLocation loc;     /* location of the CASE value expression */
+    int has_numeric;
+    unsigned numeric_value;
 } JZSelectCaseKey;
+
+static const JZASTNode *sem_find_global_const_decl(const char *qname,
+                                                   const JZBuffer *project_symbols)
+{
+    if (!qname || !project_symbols || !project_symbols->data) return NULL;
+
+    const char *dot = strchr(qname, '.');
+    if (!dot || dot == qname || dot[1] == '\0' || strchr(dot + 1, '.')) {
+        return NULL;
+    }
+
+    char ns[128];
+    size_t ns_len = (size_t)(dot - qname);
+    if (ns_len == 0 || ns_len >= sizeof(ns)) return NULL;
+    memcpy(ns, qname, ns_len);
+    ns[ns_len] = '\0';
+
+    const char *const_name = dot + 1;
+    const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+    size_t count = project_symbols->len / sizeof(JZSymbol);
+    for (size_t i = 0; i < count; ++i) {
+        const JZSymbol *sym = &syms[i];
+        if (!sym->name || sym->kind != JZ_SYM_GLOBAL ||
+            strcmp(sym->name, ns) != 0 || !sym->node ||
+            sym->node->type != JZ_AST_GLOBAL_BLOCK) {
+            continue;
+        }
+
+        const JZASTNode *glob = sym->node;
+        for (size_t j = 0; j < glob->child_count; ++j) {
+            const JZASTNode *decl = glob->children[j];
+            if (decl && decl->type == JZ_AST_CONST_DECL && decl->name &&
+                strcmp(decl->name, const_name) == 0) {
+                return decl;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static int sem_eval_select_case_numeric_value(JZASTNode *val,
+                                              const JZModuleScope *mod_scope,
+                                              const JZBuffer *project_symbols,
+                                              unsigned *out_value)
+{
+    if (!val || !out_value) return 0;
+
+    if (val->type == JZ_AST_EXPR_LITERAL && val->text) {
+        return parse_literal_unsigned_value(val->text, out_value);
+    }
+
+    if ((val->type == JZ_AST_EXPR_IDENTIFIER ||
+         val->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
+        val->name) {
+        if (val->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+            const JZASTNode *decl =
+                sem_find_global_const_decl(val->name, project_symbols);
+            if (decl && decl->text) {
+                if (parse_literal_unsigned_value(decl->text, out_value)) {
+                    return 1;
+                }
+                long long global_eval = 0;
+                if (sem_eval_const_expr_in_project(decl->text,
+                                                   project_symbols,
+                                                   &global_eval) == 0 &&
+                    global_eval >= 0 && global_eval <= UINT_MAX) {
+                    *out_value = (unsigned)global_eval;
+                    return 1;
+                }
+            }
+        }
+
+        long long eval = 0;
+        if (mod_scope &&
+            sem_eval_const_expr_in_module(val->name,
+                                          mod_scope,
+                                          project_symbols,
+                                          &eval) == 0 &&
+            eval >= 0 && eval <= UINT_MAX) {
+            *out_value = (unsigned)eval;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int sem_select_keys_cover_all_values(const JZBuffer *keys,
+                                            unsigned selector_width)
+{
+    if (!keys || selector_width == 0 || selector_width > 20) return 0;
+
+    size_t total = (size_t)1u << selector_width;
+    unsigned char *seen = (unsigned char *)calloc(total, sizeof(unsigned char));
+    if (!seen) return 0;
+
+    size_t covered = 0;
+    const JZSelectCaseKey *arr = (const JZSelectCaseKey *)keys->data;
+    size_t key_count = keys->len / sizeof(JZSelectCaseKey);
+    for (size_t i = 0; i < key_count; ++i) {
+        if (!arr[i].has_numeric || (size_t)arr[i].numeric_value >= total) {
+            continue;
+        }
+        if (seen[arr[i].numeric_value]) {
+            continue;
+        }
+        seen[arr[i].numeric_value] = 1;
+        covered++;
+        if (covered == total) {
+            free(seen);
+            return 1;
+        }
+    }
+
+    free(seen);
+    return 0;
+}
 
 static void sem_check_if_cond_width(JZASTNode *stmt,
                                     const JZModuleScope *mod_scope,
@@ -140,11 +261,24 @@ static void sem_check_select_stmt_control_flow(JZASTNode *select_stmt,
             continue; /* non-constant expressions are ignored for duplicate detection */
         }
 
+        unsigned numeric_value = 0;
+        int has_numeric = sem_eval_select_case_numeric_value(val,
+                                                             mod_scope,
+                                                             project_symbols,
+                                                             &numeric_value);
+
         /* Check against previously seen CASE values in this SELECT. */
         JZSelectCaseKey *arr = (JZSelectCaseKey *)keys.data;
         size_t key_count = keys.len / sizeof(JZSelectCaseKey);
         for (size_t k = 0; k < key_count; ++k) {
-            if (arr[k].repr && strcmp(arr[k].repr, repr) == 0) {
+            int duplicate = 0;
+            if (has_numeric && arr[k].has_numeric) {
+                duplicate = (arr[k].numeric_value == numeric_value);
+            } else if (!has_numeric && !arr[k].has_numeric && arr[k].repr) {
+                duplicate = (strcmp(arr[k].repr, repr) == 0);
+            }
+
+            if (duplicate) {
                 char explain[256];
                 snprintf(explain, sizeof(explain),
                          "CASE value '%s' appears more than once in this SELECT.\n"
@@ -161,10 +295,10 @@ static void sem_check_select_stmt_control_flow(JZASTNode *select_stmt,
         JZSelectCaseKey key;
         key.repr = repr;
         key.loc = val->loc;
+        key.has_numeric = has_numeric;
+        key.numeric_value = numeric_value;
         (void)jz_buf_append(&keys, &key, sizeof(key));
     }
-
-    jz_buf_free(&keys);
 
     /* DEFAULT coverage diagnostics differ between ASYNCHRONOUS and SYNCHRONOUS. */
     if (!has_default) {
@@ -174,11 +308,9 @@ static void sem_check_select_stmt_control_flow(JZASTNode *select_stmt,
              * CASE labels is less than 2^width, the select is provably
              * incomplete.
              */
-            size_t case_count = keys.len / sizeof(JZSelectCaseKey);
             int incomplete = 0;
             if (sel_t.width > 0 && sel_t.width <= 20) {
-                unsigned long long total = 1ULL << sel_t.width;
-                if (case_count < total) {
+                if (!sem_select_keys_cover_all_values(&keys, sel_t.width)) {
                     incomplete = 1;
                 }
             } else {
@@ -210,6 +342,8 @@ static void sem_check_select_stmt_control_flow(JZASTNode *select_stmt,
                             "This is legal but a DEFAULT may improve readability.");
         }
     }
+
+    jz_buf_free(&keys);
 }
 
 static void sem_check_control_flow_stmt(JZASTNode *stmt,

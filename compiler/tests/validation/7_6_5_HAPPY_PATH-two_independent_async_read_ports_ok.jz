@@ -1,0 +1,69 @@
+// HAPPY_PATH: Triple-port memory exposes two independent asynchronous read ports (S7.6.5).
+// Exercises distinct read addresses and data paths on rd_0 and rd_1 with one valid sync write port.
+
+@project HAPPY_PATH_two_independent_async_read_ports_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] rd_addr_0 = _;
+        IN  [8] rd_addr_1 = _;
+        IN  [8] wr_addr = _;
+        IN  [16] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [16] rd_data_0 = _;
+        OUT [16] rd_data_1 = _;
+        OUT [16] helper_mix = _;
+    }
+@endproj
+
+@module ReadProbe
+    PORT {
+        IN  [16] lhs;
+        IN  [16] rhs;
+        OUT [16] mixed;
+    }
+
+    ASYNCHRONOUS {
+        mixed = lhs ^ rhs;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] rd_addr_0;
+        IN  [8] rd_addr_1;
+        IN  [8] wr_addr;
+        IN  [16] wr_data;
+        IN  [1] wr_en;
+        OUT [16] rd_data_0;
+        OUT [16] rd_data_1;
+        OUT [16] helper_mix;
+    }
+
+    MEM {
+        mem [16] [256] = 16'h0000 {
+            OUT rd_0 ASYNC;
+            OUT rd_1 ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new probe ReadProbe {
+        IN  [16] lhs = rd_data_0;
+        IN  [16] rhs = rd_data_1;
+        OUT [16] mixed = helper_mix;
+    };
+
+    ASYNCHRONOUS {
+        // Valid use 1: independent asynchronous read port rd_0.
+        rd_data_0 = mem.rd_0[rd_addr_0];
+        // Valid use 2: independent asynchronous read port rd_1.
+        rd_data_1 = mem.rd_1[rd_addr_1];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (wr_en) {
+            mem.wr[wr_addr] <= wr_data;
+        }
+    }
+@endmod

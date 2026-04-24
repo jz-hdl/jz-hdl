@@ -1,0 +1,27 @@
+// HAPPY_PATH: §5.5.28 reduce_xor(source) syntax coverage.
+// Exercises Req #1 with plain and expression sources using `reduce_xor(<source>)`.
+
+@project HAPPY_PATH_reduce_xor_syntax_ok
+    @top TopMod {
+        IN  [8] src8 = _;
+        IN  [8] mask8 = _;
+        OUT [1] out_plain = _;
+        OUT [1] out_expr = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [8] src8;
+        IN  [8] mask8;
+        OUT [1] out_plain;
+        OUT [1] out_expr;
+    }
+
+    ASYNCHRONOUS {
+        // Req #1: plain source syntax
+        out_plain = reduce_xor(src8);
+        // Req #1: expression source still uses the same intrinsic syntax
+        out_expr = reduce_xor(src8 ^ mask8);
+    }
+@endmod

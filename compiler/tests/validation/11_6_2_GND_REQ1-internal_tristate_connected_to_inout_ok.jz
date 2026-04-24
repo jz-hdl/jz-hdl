@@ -1,0 +1,78 @@
+// Req #1: internal tri-state net connected to an INOUT port remains valid.
+// Covers Section 11.6.2 by transforming the internal net under
+// --tristate-default=GND while preserving the INOUT connection.
+
+@project REQ1_internal_tristate_connected_to_inout_ok
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en = _;
+        IN    [1] sel = _;
+        IN    [8] din = _;
+        OUT   [8] dout = _;
+        INOUT [8] bus = _;
+    }
+@endproj
+
+@module SourceMod
+    PORT {
+        IN  [8] din;
+        OUT [8] data_a;
+        OUT [8] data_b;
+    }
+
+    ASYNCHRONOUS {
+        data_a <= din;
+        data_b <= ~din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        IN    [1] sel;
+        IN    [8] din;
+        OUT   [8] dout;
+        INOUT [8] bus;
+    }
+
+    REGISTER {
+        latched [8] = 8'h00;
+    }
+
+    WIRE {
+        // Trigger 1: internal tri-state net is transformed.
+        internal_mux [8];
+        data_a [8];
+        data_b [8];
+    }
+
+    @new src SourceMod {
+        IN  [8] din = latched;
+        OUT [8] data_a = data_a;
+        OUT [8] data_b = data_b;
+    };
+
+    ASYNCHRONOUS {
+        IF (sel == 1'b1) {
+            internal_mux <= data_a;
+        } ELSE {
+            internal_mux <= 8'bzzzz_zzzz;
+        }
+
+        IF (sel == 1'b0) {
+            internal_mux <= data_b;
+        } ELSE {
+            internal_mux <= 8'bzzzz_zzzz;
+        }
+
+        // Trigger 2: connecting the transformed internal net to an INOUT port
+        // remains valid; the port stays tri-state capable.
+        bus <= (en == 1'b1) ? internal_mux : 8'bzzzz_zzzz;
+        dout <= internal_mux;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        latched <= din;
+    }
+@endmod

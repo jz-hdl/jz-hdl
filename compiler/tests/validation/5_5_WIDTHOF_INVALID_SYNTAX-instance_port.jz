@@ -1,0 +1,58 @@
+// WIDTHOF_INVALID_SYNTAX: widthof() argument must be a plain identifier,
+// not an instance-qualified port reference (`inst.port`).
+// Spec §5.5.10: widthof() does not resolve instance ports; users must
+// pass widths explicitly via CONST/OVERRIDE.
+
+@project WIDTHOF_INVALID_SYNTAX_instance_port
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+// Helper module with an OUT port we will try to reach via inst.port below.
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    REGISTER {
+        r [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        dout = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    WIRE {
+        h_dout [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk  = clk;
+        IN  [8] din  = din;
+        OUT [8] dout = h_dout;
+    };
+
+    CONST {
+        // Trigger 1: widthof() on instance-qualified port (inst.port).
+        BAD_W = widthof(inst_h.dout);
+        // Valid: widthof() on a plain local signal (no false positive).
+        GOOD_W = widthof(h_dout);
+    }
+
+    ASYNCHRONOUS {
+        dout = h_dout;
+    }
+@endmod

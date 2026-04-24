@@ -1,7 +1,7 @@
 // TEMPLATE_EXTERNAL_REF: Identifiers in template body must be parameters, @scratch wires,
 // or compile-time constants. External signals must be passed as arguments.
 // Tests external refs on RHS of <=, in expressions, in alias RHS, in IF conditions,
-// in SELECT condition, on LHS of <=, and on RHS of =>.
+// and in SELECT condition.
 // Valid uses of params, scratch, and CONST included for negative testing.
 
 @project TEMPLATE_EXTERNAL_REF_external_signal_reference

@@ -1,0 +1,41 @@
+// HAPPY_PATH for WIDTHOF_INVALID_TARGET (§5.5.10):
+// widthof() accepts WIRE, REGISTER, PORT, and BUS identifiers without error.
+
+@project WIDTHOF_INVALID_TARGET_valid_targets_ok
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [8]  din = _;
+        OUT [8]  dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    WIRE {
+        w_mid [8];
+    }
+    REGISTER {
+        r_state [8] = 8'd0;
+    }
+    CONST {
+        // Valid: widthof() on an IN PORT.
+        IN_W  = widthof(din);
+        // Valid: widthof() on an OUT PORT.
+        OUT_W = widthof(dout);
+        // Valid: widthof() on a WIRE.
+        W_W   = widthof(w_mid);
+        // Valid: widthof() on a REGISTER.
+        R_W   = widthof(r_state);
+    }
+    ASYNCHRONOUS {
+        w_mid = din;
+        dout  = r_state;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_state <= w_mid;
+    }
+@endmod

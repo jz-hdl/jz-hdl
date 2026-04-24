@@ -1,0 +1,30 @@
+// TEMPLATE_RESET_LOGIC_FORBIDDEN: templates may not encode reset-style
+// conditionals that force literals on one branch and runtime data on another.
+
+@project TEMPLATE_RESET_LOGIC_FORBIDDEN_reset_style_if
+    @top TopMod {
+        IN  [1] rst = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@template bad_reset(rst, dst, src)
+    IF (rst) {
+        dst <= 8'h00;
+    } ELSE {
+        dst <= src;
+    }
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] rst;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        @apply bad_reset(rst, data, din);
+    }
+@endmod

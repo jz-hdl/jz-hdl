@@ -1,0 +1,2 @@
+File: 10_3_scratch_not_in_module_namespace.jz
+      35:17   error UNDECLARED_IDENTIFIER S4.2/S8.1 Use of undeclared identifier in expression or statement

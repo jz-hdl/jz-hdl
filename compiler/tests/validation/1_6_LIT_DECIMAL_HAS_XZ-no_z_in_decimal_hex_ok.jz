@@ -1,0 +1,92 @@
+// HAPPY_PATH for S1.6.1 Req #2: z is not permitted in decimal or hexadecimal
+// literals. This test shows that decimal and hex literals WITHOUT z digits
+// compile cleanly and that binary literals WITH z digits (permitted) do not
+// trigger LIT_DECIMAL_HAS_XZ or LIT_INVALID_DIGIT_FOR_BASE.
+// Exercises multiple contexts: async-expr, sync-expr, new-binding, check-expr,
+// and feature-cond.
+
+@project LIT_DECIMAL_HAS_XZ_no_z_in_decimal_hex_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en = _;
+        IN    [8] din = _;
+        INOUT [8] bus = _;
+        OUT   [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        IN    [8] din;
+        INOUT [8] bus;
+        OUT   [8] data;
+    }
+
+    CONST {
+        // Valid: decimal CONST without z digits
+        LIM_DEC = 255;
+    }
+
+    // Valid (check-expr): decimal and hex literals (without z) on the RHS
+    @check (LIM_DEC == 255, "decimal literal no z");
+    @check (LIM_DEC > 8'h00, "hex literal no z");
+
+    // Valid (feature-cond): decimal literal without z
+    @feature LIM_DEC == 255
+        CONST { F_TAG = 1; }
+    @else
+        CONST { F_TAG = 0; }
+    @endfeat
+    @check (F_TAG <= 1, "feature tag sane");
+
+    REGISTER {
+        // Valid: decimal and hex register initializers without z
+        r_dec [8] = 8'd0;
+        r_hex [8] = 8'h00;
+    }
+
+    // Valid (new-binding): hex literal without z used as IN tie-off.
+    // Binary z literal is also permitted here per Req #1.
+    @new inst_a HelperA {
+        IN  [8] din = 8'hA5;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        // Valid (async-expr): decimal literal, hex literal, and binary z
+        IF (en) {
+            bus <= 8'd0;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+        }
+        data <= r_hex | r_dec;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid (sync-expr): decimal and hex literals without z, plus
+        // a binary z literal in a comparison (binary z is permitted).
+        IF (bus == 8'bzzzz_zzzz) {
+            r_dec <= 8'd0;
+            r_hex <= 8'hFF;
+        } ELSE {
+            r_dec <= din;
+            r_hex <= din;
+        }
+    }
+@endmod

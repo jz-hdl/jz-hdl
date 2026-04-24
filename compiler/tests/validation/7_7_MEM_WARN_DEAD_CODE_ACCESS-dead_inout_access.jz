@@ -1,0 +1,50 @@
+// MEM_WARN_DEAD_CODE_ACCESS: Dead INOUT MEM pseudo-field access in a
+// SYNCHRONOUS block. WARN_DEAD_CODE_UNREACHABLE is inseparable because the
+// MEM warning is emitted only while scanning statically unreachable code.
+// Reachable INOUT access included to verify no false positives.
+
+@project MEM_WARN_DEAD_CODE_ACCESS_dead_inout_access
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r_data [8] = 8'h00;
+    }
+
+    MEM {
+        mem_a [8] [4] = 8'h00 {
+            INOUT rw_live;
+            INOUT rw_dead;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: reachable INOUT access (no warning)
+        mem_a.rw_live.addr <= addr;
+        r_data <= mem_a.rw_live.data;
+        mem_a.rw_live.wdata <= wdata;
+
+        // Trigger: dead INOUT pseudo-field accesses in SYNCHRONOUS block
+        IF (1'b0) {
+            mem_a.rw_dead.addr <= addr;
+            mem_a.rw_dead.wdata <= wdata;
+        }
+    }
+@endmod

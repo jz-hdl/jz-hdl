@@ -1,0 +1,75 @@
+// Req #27 happy path: hex literal intrinsic-width examples.
+// `1FFFFFF` needs 25 bits; `3FFFFFF` needs 26 bits.
+// Exercised in async-expr, sync-expr, new-binding, check-expr, feature-cond.
+
+@project LIT_HAPPY_PATH_intrinsic_width_examples
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [26] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [25] din_25;
+        IN  [26] din_26;
+        OUT [26] dout;
+    }
+    ASYNCHRONOUS {
+        dout <= {1'b0, din_25} ^ din_26;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [26] data;
+    }
+
+    CONST {
+        VAL_25 = 25;
+        VAL_26 = 26;
+    }
+
+    // Trigger (check-expr): 1FFFFFF fits in 25 bits; 3FFFFFF fits in 26 bits
+    @check (VAL_25 == 25 && 25'h1FFFFFF == 25'h1FFFFFF, "25-bit intrinsic");
+    @check (VAL_26 == 26 && 26'h3FFFFFF == 26'h3FFFFFF, "26-bit intrinsic");
+
+    // Trigger (feature-cond): same intrinsic-width examples in compile-time cond
+    @feature 25'h1FFFFFF == 25'h1FFFFFF
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    @feature 26'h3FFFFFF == 26'h3FFFFFF
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [26];
+    }
+
+    // Trigger (new-binding): pass the exact-intrinsic-width literals
+    @new inst_a HelperA {
+        IN  [25] din_25 = 25'h1FFFFFF;
+        IN  [26] din_26 = 26'h3FFFFFF;
+        OUT [26] dout = ha_out;
+    };
+
+    REGISTER {
+        r [26] = 26'h0000000;
+    }
+
+    ASYNCHRONOUS {
+        // async-expr: reference literal at its intrinsic width
+        data <= r ^ ha_out ^ 26'h3FFFFFF;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // sync-expr: reference literal at its intrinsic width
+        r <= r + 26'h0000001;
+    }
+@endmod

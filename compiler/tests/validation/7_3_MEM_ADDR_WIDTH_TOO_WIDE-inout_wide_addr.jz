@@ -1,0 +1,86 @@
+// MEM_ADDR_WIDTH_MISMATCH: INOUT .addr width must equal ceil(log2(depth)).
+// mem [8] [16] needs a 4-bit address. This fixture uses 8-bit INOUT .addr.
+// Valid 4-bit INOUT .addr included for no false positives.
+
+@project MEM_ADDR_WIDTH_MISMATCH_inout_wide_addr
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] wide_addr = _;
+        IN  [4] ok_addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper: wide address on INOUT .addr
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] wide_addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_a [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_a.rw.data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        // Trigger: 8-bit addr on INOUT .addr (needs 4 bits)
+        mem_a.rw.addr <= wide_addr;
+        mem_a.rw.wdata <= wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] wide_addr;
+        IN  [4] ok_addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_b [8] [16] = 8'h00 {
+            INOUT rw_ok;
+            INOUT rw_wide;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] wide_addr = wide_addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_b.rw_ok.data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        // Valid: 4-bit address fits
+        mem_b.rw_ok.addr <= ok_addr;
+        mem_b.rw_ok.wdata <= wdata;
+        // Trigger: 8-bit addr on INOUT .addr in top module
+        mem_b.rw_wide.addr <= wide_addr;
+        mem_b.rw_wide.wdata <= wdata;
+    }
+@endmod

@@ -1,0 +1,64 @@
+// HAPPY_PATH: sbit() behavioral requirements from §5.5.7.
+// Exercises:
+//   Req #7  - index narrower than clog2(W) is implicitly zero-extended.
+//   Req #10 - index that may be out of range at runtime compiles cleanly
+//             (bit write is ignored at runtime; returned value is source).
+//   Req #11 - sbit returns source with exactly one bit replaced by set.
+//   Req #12 - sbit is purely combinational (no implicit storage); usable
+//             directly in ASYNCHRONOUS RHS without any register.
+// Covers async-expr and sync-expr contexts (the only contexts where sbit
+// is syntactically allowed per §5.5.7 "Allowed Contexts").
+
+@project HAPPY_PATH_sbit_semantics_ok
+    @top TopMod {
+        IN  [1] clk     = _;
+        IN  [8] src8    = _;
+        IN  [2] narrow  = _;
+        IN  [5] wide    = _;
+        IN  [1] bitval  = _;
+        OUT [8] out_narrow = _;
+        OUT [8] out_wide   = _;
+        OUT [8] out_combo  = _;
+        OUT [8] out_replace = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src8;
+        IN  [2] narrow;
+        IN  [5] wide;
+        IN  [1] bitval;
+        OUT [8] out_narrow;
+        OUT [8] out_wide;
+        OUT [8] out_combo;
+        OUT [8] out_replace;
+    }
+
+    WIRE {
+        src_w [8];
+    }
+
+    REGISTER {
+        r_src [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        src_w = src8;
+        // Req #7: 2-bit index < clog2(8)=3, implicit zero-extend allowed.
+        out_narrow = sbit(src_w, narrow, bitval);
+        // Req #10: 5-bit index > clog2(8)=3, high bits may encode values
+        //          >= 8 at runtime; allowed, the bit write is ignored.
+        out_wide   = sbit(src_w, wide, bitval);
+        // Req #11/#12: sbit used purely combinationally in ASYNCHRONOUS RHS
+        //              with no register storage, replacing one bit of source.
+        out_replace <= sbit(src_w, 3'd3, 1'b1);
+        out_combo  = r_src;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Req #7: narrower index feeding a register path.
+        r_src <= sbit(src_w, narrow, bitval);
+    }
+@endmod

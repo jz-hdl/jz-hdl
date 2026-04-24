@@ -1,0 +1,75 @@
+// LIT_DECIMAL_HAS_XZ / LIT_INVALID_DIGIT_FOR_BASE: x digit in decimal
+// and hex literals across new-binding, check-expr, and feature-cond.
+
+@project LIT_X_BIT_x_in_contexts
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din_dec;
+        IN  [8] din_hex;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din_dec ^ din_hex;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger 1 (check-expr): x in decimal literal inside @check
+    @check (VAL == 8'd1x, "x in decimal check");
+
+    // Trigger 2 (check-expr): x in hex literal inside @check
+    @check (VAL == 8'hFx, "x in hex check");
+
+    // Trigger 3 (feature-cond): x in decimal literal inside @feature
+    @feature VAL == 8'd1x
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 4 (feature-cond): x in hex literal inside @feature
+    @feature VAL == 8'hFx
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // Trigger 5 (new-binding): x in decimal literal in @new binding
+    // Trigger 6 (new-binding): x in hex literal in @new binding
+    @new inst_a HelperA {
+        IN  [8] din_dec = 8'd1x;
+        IN  [8] din_hex = 8'hFx;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

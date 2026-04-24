@@ -1,0 +1,56 @@
+// HAPPY_PATH (S1.6.3 Reqs #1, #6-7): Tri-state resolution is per-bit and
+// associative for three or more drivers, and the same table is the simulation
+// model. Three direct drivers share an INOUT bus inside a structurally
+// mutually-exclusive IF/ELIF/ELSE chain. On every execution path exactly one
+// driver supplies a non-z value while the other two release with `z`.
+// Pairwise resolution in any order yields the same result; the compiler
+// must accept this with no diagnostics.
+
+@project TRI_STATE_RESOLUTION_three_driver_associative_ok
+    @top TopMod {
+        IN    [1] sel_a = _;
+        IN    [1] sel_b = _;
+        IN    [8] data_a = _;
+        IN    [8] data_b = _;
+        IN    [8] data_c = _;
+        INOUT [8] bus = _;
+        OUT   [8] observed = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] sel_a;
+        IN    [1] sel_b;
+        IN    [8] data_a;
+        IN    [8] data_b;
+        IN    [8] data_c;
+        INOUT [8] bus;
+        OUT   [8] observed;
+    }
+
+    ASYNCHRONOUS {
+        // Three drivers on `bus` inside one structurally-exclusive
+        // IF/ELIF/ELSE chain. Each branch activates exactly one driver and
+        // releases the other two with `z`, exercising 3-driver associativity
+        // per bit.
+        IF (sel_a) {
+            bus <= data_a;
+            bus <= 8'bzzzz_zzzz;
+            bus <= 8'bzzzz_zzzz;
+        } ELIF (sel_b) {
+            bus <= 8'bzzzz_zzzz;
+            bus <= data_b;
+            bus <= 8'bzzzz_zzzz;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+            bus <= 8'bzzzz_zzzz;
+            bus <= data_c;
+        }
+
+        // Read the resolved value to confirm the resolution model is the
+        // simulation model: the value observed equals whichever driver is
+        // active on the current execution path.
+        observed <= bus;
+    }
+@endmod

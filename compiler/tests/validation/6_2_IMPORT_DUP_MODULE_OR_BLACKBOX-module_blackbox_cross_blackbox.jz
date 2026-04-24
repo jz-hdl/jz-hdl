@@ -1,0 +1,8 @@
+// Blackbox library for imported module-blackbox collision.
+
+@blackbox SharedCross {
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+}

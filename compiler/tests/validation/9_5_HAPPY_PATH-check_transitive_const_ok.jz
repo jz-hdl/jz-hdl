@@ -1,0 +1,71 @@
+// HAPPY_PATH: @check with transitive CONST resolution — CONST depending
+// on another CONST resolves correctly. No diagnostics expected.
+
+@project HAPPY_PATH_check_transitive_const_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST {
+        BASE = 4;
+        DERIVED = BASE * 2;
+        ADDR_W = clog2(DERIVED);
+    }
+
+    // Trigger: transitive CONST resolution — DERIVED depends on BASE,
+    // ADDR_W depends on DERIVED
+    @check (BASE > 0, "base ok");
+    @check (DERIVED == 8, "derived ok");
+    @check (ADDR_W == 3, "addr width ok");
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    CONST {
+        DEPTH = 256;
+        ADDR_BITS = clog2(DEPTH);
+        HALF_DEPTH = DEPTH / 2;
+    }
+
+    // Transitive CONST resolution in top module
+    @check (DEPTH > 0, "depth ok");
+    @check (ADDR_BITS == 8, "addr bits ok");
+    @check (HALF_DEPTH == 128, "half depth ok");
+
+    @new inst_a HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

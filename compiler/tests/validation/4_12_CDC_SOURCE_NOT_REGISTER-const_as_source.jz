@@ -1,0 +1,93 @@
+// CDC_SOURCE_NOT_REGISTER: CDC source must be a REGISTER declared in the module.
+// Tests CONST as CDC source in multiple modules.
+// Valid register source included to verify no false positives.
+
+@project CDC_SOURCE_NOT_REGISTER_const_as_source
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST {
+        MY_FLAG = 1;
+    }
+
+    REGISTER {
+        ok_reg [1] = 1'b0;
+    }
+
+    CDC {
+        // Trigger: const used as CDC source
+        BIT MY_FLAG (clk_a) => flag_sync (clk_b);
+        // Valid: register as source
+        BIT ok_reg (clk_a) => ok_sync (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        data = ok_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        ok_reg <= din;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        IF (flag_sync) {
+            // reading alias
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] data;
+    }
+
+    CONST {
+        TOP_FLAG = 0;
+    }
+
+    REGISTER {
+        top_ok [1] = 1'b0;
+    }
+
+    CDC {
+        // Trigger: const used as CDC source
+        BIT TOP_FLAG (clk_a) => top_flag_sync (clk_b);
+        // Valid: register as source
+        BIT top_ok (clk_a) => top_sync (clk_b);
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk_a = clk_a;
+        IN  [1] clk_b = clk_b;
+        IN  [1] din = top_ok;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = top_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        top_ok <= ~top_ok;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        IF (top_flag_sync) {
+            // reading alias
+        }
+    }
+@endmod

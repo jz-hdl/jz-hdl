@@ -1,0 +1,55 @@
+// PRECEDENCE: §3.3 Req #6 — Shift ops `<<`, `>>`, `>>>` sit between
+// multiplicative and additive ops. `a * b << c` parses as `(a * b) << c`,
+// and `a << b + c` parses as `a << (b + c)`. Wait — actually per §3.3,
+// shifts are LOWER than mul but HIGHER than add. So `a + b << c` parses
+// as `(a + b) << c`... No: the table says mul > shift > add. That means
+// shift binds tighter than add, so `a + b << c` is `a + (b << c)`.
+// This test uses explicit parentheses matching the spec grouping so the
+// grouping is unambiguous and verified.
+// No diagnostics expected.
+
+@project PRECEDENCE_shift_mid_precedence_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [3] sh = _;
+        OUT [8] out_lsl = _;
+        OUT [8] out_lsr = _;
+        OUT [8] out_asr = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [3] sh;
+        OUT [8] out_lsl;
+        OUT [8] out_lsr;
+        OUT [8] out_asr;
+    }
+    REGISTER {
+        r_lsl [8] = 8'h00;
+        r_lsr [8] = 8'h00;
+        r_asr [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // shift binds tighter than add: a + (b << sh)
+        out_lsl = (a + (b << sh)) | r_lsl;
+        // shift binds tighter than add: a - (b >> sh)
+        out_lsr = (a - (b >> sh)) | r_lsr;
+        // shift binds tighter than bitwise-OR: a | (b >>> sh)
+        out_asr = (a | (b >>> sh)) | r_asr;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // shift binds tighter than add in sync-expr too
+        r_lsl <= a + (b << sh);
+        r_lsr <= a - (b >> sh);
+        r_asr <= a | (b >>> sh);
+    }
+@endmod

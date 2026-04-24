@@ -1,0 +1,38 @@
+// NEGATIVE (S1.6.3 Req #5): Tri-state resolution row `0`/`1` -> Prohibited.
+// Two direct drivers on the same INOUT bus assign determinate non-z values
+// (one supplies `0`, the other supplies `1`) on the SAME execution path,
+// so both drivers are simultaneously active. Section 1.6.3 marks this row
+// as Prohibited; Section 1.6.4 enforces it via NET_MULTIPLE_ACTIVE_DRIVERS.
+// The ELSE arm releases both drivers with `z` so the violation is isolated
+// to the IF arm.
+
+@project TRI_STATE_RESOLUTION_zero_versus_one_prohibited
+    @top TopMod {
+        IN    [1] sel = _;
+        INOUT [8] bus = _;
+        OUT   [8] observed = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] sel;
+        INOUT [8] bus;
+        OUT   [8] observed;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: row #5 `0`/`1` simultaneously on same path. The IF
+        // arm activates both drivers (one with `0`, the other with `1`).
+        // The ELSE arm releases both with `z` so it is structurally fine.
+        IF (sel) {
+            bus <= 8'b0000_0000;
+            bus <= 8'b1111_1111;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+            bus <= 8'bzzzz_zzzz;
+        }
+
+        observed <= bus;
+    }
+@endmod

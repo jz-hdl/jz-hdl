@@ -20,6 +20,8 @@
         OUT [8] zext_out = _;
         OUT [8] tern_out = _;
         OUT [8] const_drv_out = _;
+        OUT [8] sext_drive_out = _;
+        OUT [8] sext_recv_out = _;
     }
 @endproj
 
@@ -56,6 +58,8 @@
         OUT [8] zext_out;
         OUT [8] tern_out;
         OUT [8] const_drv_out;
+        OUT [8] sext_drive_out;
+        OUT [8] sext_recv_out;
     }
 
     WIRE {
@@ -103,6 +107,12 @@
 
         // Valid: constant drive via directional <=
         const_drv_out <= 8'hFF;
+
+        // Valid: drive with sign-extend (=>s) in ASYNC (1 -> 8)
+        narrow =>s sext_drive_out;
+
+        // Valid: receive with sign-extend (<=s) in ASYNC (1 -> 8)
+        sext_recv_out <=s narrow;
     }
 
     SYNCHRONOUS(CLK=clk) {

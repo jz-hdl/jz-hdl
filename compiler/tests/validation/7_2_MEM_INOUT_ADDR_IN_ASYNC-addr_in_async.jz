@@ -41,6 +41,17 @@
     }
 @endmod
 
+@module AddrProbe
+    PORT {
+        IN  [4] addr_in;
+        OUT [4] addr_out;
+    }
+
+    ASYNCHRONOUS {
+        addr_out = addr_in;
+    }
+@endmod
+
 @module TopMod
     PORT {
         IN  [1] clk;
@@ -64,6 +75,12 @@
         IN  [4] addr = addr;
         IN  [8] wdata = wdata;
         OUT [8] data = _;
+    };
+
+    @new inst_probe AddrProbe {
+        // Trigger 3: .addr used in @new binding
+        IN  [4] addr_in = mem_b.rw.addr;
+        OUT [4] addr_out = _;
     };
 
     ASYNCHRONOUS {

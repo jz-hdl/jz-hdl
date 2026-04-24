@@ -1,0 +1,92 @@
+// ASYNC_UNDEFINED_PATH_NO_DRIVER happy path: every execution path assigns the
+// signal, so no diagnostic fires. Covers unconditional assignment, IF/ELSE,
+// IF/ELIF/ELSE, SELECT with DEFAULT, and nested IF/ELSE. Applies to both
+// WIREs and OUT ports in ASYNCHRONOUS blocks.
+
+@project ASYNC_UNDEFINED_PATH_NO_DRIVER_full_coverage
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [2] sel2 = _;
+        OUT [8] out_uncond = _;
+        OUT [8] out_if_else = _;
+        OUT [8] out_elif_else = _;
+        OUT [8] out_select_default = _;
+        OUT [8] out_nested = _;
+        OUT [8] out_wire = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [2] sel2;
+        OUT [8] out_uncond;
+        OUT [8] out_if_else;
+        OUT [8] out_elif_else;
+        OUT [8] out_select_default;
+        OUT [8] out_nested;
+        OUT [8] out_wire;
+    }
+    WIRE {
+        w_full [8];
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Happy 1: unconditional assignment — all paths driven
+        out_uncond <= 8'hAA;
+
+        // Happy 2: IF/ELSE — both branches drive
+        IF (en) {
+            out_if_else <= 8'h01;
+        } ELSE {
+            out_if_else <= 8'h02;
+        }
+
+        // Happy 3: IF/ELIF/ELSE — all branches drive
+        IF (sel_a) {
+            out_elif_else <= 8'h10;
+        } ELIF (sel_b) {
+            out_elif_else <= 8'h20;
+        } ELSE {
+            out_elif_else <= 8'h30;
+        }
+
+        // Happy 4: SELECT with DEFAULT — all cases drive
+        SELECT (sel2) {
+            CASE 2'b00 { out_select_default <= 8'h01; }
+            CASE 2'b01 { out_select_default <= 8'h02; }
+            CASE 2'b10 { out_select_default <= 8'h03; }
+            DEFAULT    { out_select_default <= 8'h00; }
+        }
+
+        // Happy 5: nested IF/ELSE — every inner and outer path drives
+        IF (sel_a) {
+            IF (sel_b) {
+                out_nested <= 8'hF0;
+            } ELSE {
+                out_nested <= 8'h0F;
+            }
+        } ELSE {
+            out_nested <= 8'h00;
+        }
+
+        // Happy 6: WIRE fully driven in both branches, then consumed
+        IF (en) {
+            w_full <= 8'hCC;
+        } ELSE {
+            w_full <= 8'h33;
+        }
+        out_wire = w_full;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,0 +1,3 @@
+File: 2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width_port.jz
+      36:17   warn  WARN_UNCONNECTED_OUTPUT S8.3 Output port is unconnected; assign a value or use `_` for intentional no-connect
+      36:17   error WIDTH_NONPOSITIVE_OR_NONINT S2.2/S8.1 Declared width <= 0 or not an integer

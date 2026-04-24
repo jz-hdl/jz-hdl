@@ -1,0 +1,3 @@
+File: 2_4_SYNC_MULTI_ASSIGN_SAME_REG_BITS-gnd_vcc_sync_multi.jz
+      30:9    error SYNC_MULTI_ASSIGN_SAME_REG_BITS S5.2/S8.1 Same register bits assigned more than once along any execution path in SYNCHRONOUS block
+      60:9    error SYNC_MULTI_ASSIGN_SAME_REG_BITS S5.2/S8.1 Same register bits assigned more than once along any execution path in SYNCHRONOUS block

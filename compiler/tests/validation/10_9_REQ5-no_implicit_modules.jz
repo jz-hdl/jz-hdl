@@ -1,0 +1,46 @@
+// Req #5 (10.9 Rationale): Templates must not create implicit modules.
+// Target diagnostic: TEMPLATE_FORBIDDEN_DIRECTIVE.
+
+@project REQ5_no_implicit_modules
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger 1: structural module directive inside template body.
+@template bad_module_factory(src, dst)
+    @module HiddenMod
+        PORT {
+            IN [1] a;
+            OUT [1] b;
+        }
+        ASYNCHRONOUS {
+            b = a;
+        }
+    @endmod
+    dst <= src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

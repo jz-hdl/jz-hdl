@@ -1,0 +1,55 @@
+// CONTROL_FLOW_OUTSIDE_BLOCK: SELECT used outside ASYNCHRONOUS or SYNCHRONOUS block.
+// Tests SELECT at module scope (between block declarations).
+// Valid SELECT inside ASYNC verifies no false positive.
+
+@project CONTROL_FLOW_OUTSIDE_BLOCK_select_outside_block
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] sel = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] sel;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    // Trigger: SELECT at module scope
+    SELECT (sel) {
+        CASE (2'b00) {
+            data <= GND;
+        }
+        CASE (2'b01) {
+            data <= VCC;
+        }
+        DEFAULT {
+            data <= GND;
+        }
+    }
+
+    ASYNCHRONOUS {
+        // Valid: SELECT inside ASYNC — no diagnostic
+        SELECT (sel) {
+            CASE (2'b00) {
+                data <= r;
+            }
+            CASE (2'b01) {
+                data <= VCC;
+            }
+            DEFAULT {
+                data <= GND;
+            }
+        }
+    }
+    SYNCHRONOUS(CLK=clk) {
+        IF (sel[0]) {
+            r <= VCC;
+        }
+    }
+@endmod

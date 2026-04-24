@@ -1,0 +1,80 @@
+// SELECT_DUP_CASE_VALUE: Duplicate CASE value via fall-through (naked) label.
+// Tests that duplicate detection works when one or both CASEs use fall-through syntax.
+// Valid fall-through with distinct values included to verify no false positive.
+
+@project SELECT_DUP_CASE_VALUE_fallthrough_dup
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] sel = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [4] sel;
+        OUT [1] out_a;
+    }
+    ASYNCHRONOUS {
+        // Trigger: fall-through CASE duplicates braced CASE in ASYNC
+        SELECT (sel) {
+            CASE 0
+            CASE 1 {
+                out_a <= VCC;
+            }
+            CASE 0 {
+                out_a <= GND;
+            }
+            DEFAULT {
+                out_a <= GND;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] sel;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    @new inst_h HelperMod {
+        IN  [4] sel = sel;
+        OUT [1] out_a = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+        // Valid: fall-through with distinct values (no false positive)
+        SELECT (sel) {
+            CASE 4'h0
+            CASE 4'h1 {
+                out_b <= VCC;
+            }
+            CASE 4'h2 {
+                out_b <= GND;
+            }
+            DEFAULT {
+                out_b <= GND;
+            }
+        }
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: two fall-through CASEs with same value in SYNC
+        SELECT (sel) {
+            CASE 3
+            CASE 3 {
+                r <= VCC;
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

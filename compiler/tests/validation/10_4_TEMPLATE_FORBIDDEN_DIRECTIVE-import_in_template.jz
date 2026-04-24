@@ -1,0 +1,38 @@
+// TEMPLATE_FORBIDDEN_DIRECTIVE: @import directive in file-scoped template.
+// Tests that structural @import is rejected inside template body.
+
+@project TEMPLATE_FORBIDDEN_DIRECTIVE_import_in_template
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger: @import directive inside file-scoped template
+@template import_tmpl(a, b)
+    @import "some_library.jzhdl";
+    a <= b;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

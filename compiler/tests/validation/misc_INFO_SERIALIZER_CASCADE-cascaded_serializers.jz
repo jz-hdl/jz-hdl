@@ -1,0 +1,54 @@
+// INFO_SERIALIZER_CASCADE: backend emits info when a differential output
+// selects a wider cascaded serializer than the requested data width.
+
+@project(CHIP="XC7A35T-2FGG484") INFO_SERIALIZER_CASCADE_cascaded_serializers
+    CLOCKS {
+        clk = { period=10.0 };
+        serial_clk = { period=1.0 };
+        pixel_clk = { period=10.0 };
+        reset_n = { period=10.0 };
+    }
+
+    IN_PINS {
+        clk = { standard=LVCMOS33 };
+        serial_clk = { standard=LVCMOS33 };
+        pixel_clk = { standard=LVCMOS33 };
+        reset_n = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        tx = { mode=DIFFERENTIAL, standard=LVDS25, drive=8, fclk=serial_clk, pclk=pixel_clk, reset=reset_n, width=9 };
+    }
+
+    MAP {
+        clk = "E3";
+        serial_clk = "F3";
+        pixel_clk = "G3";
+        reset_n = "H3";
+        tx = { P="A1", N="A2" };
+    }
+
+    @top TopMod {
+        IN  [1] clk_in = clk;
+        OUT [9] data   = tx;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk_in;
+        OUT [9] data;
+    }
+
+    REGISTER {
+        r [9] = 9'b0;
+    }
+
+    ASYNCHRONOUS {
+        data <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk_in) {
+        r <= r + 9'b1;
+    }
+@endmod

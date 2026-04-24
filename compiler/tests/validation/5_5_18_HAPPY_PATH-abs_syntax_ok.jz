@@ -1,0 +1,35 @@
+// HAPPY_PATH: abs() syntax from §5.5.18.
+// Exercises:
+//   Req #1 - syntax `abs(<a>)`.
+
+@project HAPPY_PATH_abs_syntax_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] src = _;
+        OUT [9] out_abs = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src;
+        OUT [9] out_abs;
+    }
+
+    REGISTER {
+        hold [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        out_abs = abs(src);
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        hold <= ~hold;
+    }
+@endmod

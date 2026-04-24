@@ -1,0 +1,123 @@
+// COMB_LOOP_CONDITIONAL_SAFE: Nested IF/ELSE (3+ levels).
+// Tests that the compiler warns (not errors) when cycles exist only
+// across mutually exclusive branches in deeply nested IF/ELSE structures.
+// Valid linear paths included to verify no false positives.
+
+@project COMB_LOOP_CONDITIONAL_SAFE_nested_if_else
+    @top TopMod {
+        IN  [1] sel0 = _;
+        IN  [1] sel1 = _;
+        IN  [1] sel2 = _;
+        IN  [1] in_a = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper: conditional-safe cycle in nested IF/ELSE (3 levels deep)
+@module HelperNested
+    PORT {
+        IN  [1] sel0;
+        IN  [1] sel1;
+        IN  [1] sel2;
+        IN  [1] in_a;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        a [1];
+        b [1];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: cycle only across mutually exclusive branches (3 levels deep)
+        IF (sel0) {
+            IF (sel1) {
+                IF (sel2) {
+                    a <= in_a;
+                    b <= a;
+                } ELSE {
+                    a <= in_a;
+                    b <= in_a;
+                }
+            } ELSE {
+                a <= in_a;
+                b <= in_a;
+            }
+        } ELSE {
+            IF (sel1) {
+                IF (sel2) {
+                    b <= in_a;
+                    a <= b;
+                } ELSE {
+                    a <= in_a;
+                    b <= in_a;
+                }
+            } ELSE {
+                a <= in_a;
+                b <= in_a;
+            }
+        }
+        out_a = a;
+        out_b = b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel0;
+        IN  [1] sel1;
+        IN  [1] sel2;
+        IN  [1] in_a;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        x [1];
+        y [1];
+    }
+
+    @new inst_nested HelperNested {
+        IN  [1] sel0 = sel0;
+        IN  [1] sel1 = sel1;
+        IN  [1] sel2 = sel2;
+        IN  [1] in_a = in_a;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: cycle only across mutually exclusive branches (3 levels deep)
+        IF (sel0) {
+            IF (sel1) {
+                IF (sel2) {
+                    x <= in_a;
+                    y <= x;
+                } ELSE {
+                    x <= in_a;
+                    y <= in_a;
+                }
+            } ELSE {
+                x <= in_a;
+                y <= in_a;
+            }
+        } ELSE {
+            IF (sel1) {
+                IF (sel2) {
+                    y <= in_a;
+                    x <= y;
+                } ELSE {
+                    x <= in_a;
+                    y <= in_a;
+                }
+            } ELSE {
+                x <= in_a;
+                y <= in_a;
+            }
+        }
+        out_a = x;
+        out_b = y;
+    }
+@endmod

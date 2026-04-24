@@ -1,0 +1,75 @@
+// ASSIGN_INDEPENDENT_IF_SELECT: Same identifier assigned in multiple independent IF/SELECT chains.
+// Tests mixed IF+SELECT independent chains assigning same target in ASYNCHRONOUS block.
+// Valid mixed chains on different targets included to verify no false positives.
+
+@project ASSIGN_INDEPENDENT_IF_SELECT_mixed_if_select
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        IN  [2] sel2 = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper module: IF chain then SELECT chain on same port
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [2] sel2;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // Trigger: IF assigns port, then SELECT assigns same port
+        IF (sel) {
+            out_a <= VCC;
+        } ELSE {
+            out_a <= GND;
+        }
+        SELECT (sel2) {
+            CASE 2'b00 { out_a <= r; }
+            DEFAULT { out_a <= VCC; }
+        }
+        // Valid: mixed IF+SELECT on different target (no false positive)
+        IF (sel) {
+            out_b <= VCC;
+        } ELSE {
+            out_b <= GND;
+        }
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [2] sel2;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        ha_a [1];
+        ha_b [1];
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [1] sel = sel;
+        IN  [2] sel2 = sel2;
+        OUT [1] out_a = ha_a;
+        OUT [1] out_b = ha_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_a;
+        out_b = ha_b;
+    }
+@endmod

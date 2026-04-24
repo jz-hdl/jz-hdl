@@ -1,0 +1,41 @@
+// ASSIGN_WIDTH_NO_MODIFIER: negative coverage for §5.5.12 Req #2 — the
+// oh2b() result width is clog2(width(source)). Assigning the result to a
+// register of a different width with `<=` (no width modifier) fires
+// ASSIGN_WIDTH_NO_MODIFIER. Exercises sync-expr context with two source
+// widths: 8-bit -> 3-bit result and 16-bit -> 4-bit result.
+
+@project ASSIGN_WIDTH_NO_MODIFIER_oh2b_result_width
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [8]  din8 = _;
+        IN  [16] din16 = _;
+        OUT [5]  out_a = _;
+        OUT [6]  out_b = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [8]  din8;
+        IN  [16] din16;
+        OUT [5]  out_a;
+        OUT [6]  out_b;
+    }
+    REGISTER {
+        r5 [5] = 5'd0;
+        r6 [6] = 6'd0;
+    }
+    ASYNCHRONOUS {
+        out_a = r5;
+        out_b = r6;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: oh2b(8-bit) -> 3-bit result assigned to 5-bit register
+        // with `<=` violates Req #2 result width rule.
+        r5 <= oh2b(din8);
+        // Trigger 2: oh2b(16-bit) -> 4-bit result assigned to 6-bit register
+        // with `<=` violates Req #2 result width rule.
+        r6 <= oh2b(din16);
+    }
+@endmod

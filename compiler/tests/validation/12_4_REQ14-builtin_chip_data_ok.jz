@@ -1,0 +1,33 @@
+// Req #14: Built-in chip data is exempt from path validation.
+// This project resolves CHIP data from the compiler's embedded database and
+// compiles without any path-security diagnostics.
+
+@project(CHIP="gw2ar-18-qn88-c8-i7") REQ14_builtin_chip_data_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_h Helper {
+        IN  [1] din = clk;
+        OUT [1] dout = data;
+    };
+@endmod

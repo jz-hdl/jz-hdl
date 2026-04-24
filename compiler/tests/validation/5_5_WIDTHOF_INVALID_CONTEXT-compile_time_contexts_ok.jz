@@ -1,0 +1,89 @@
+// WIDTHOF_INVALID_CONTEXT: widthof() is valid in compile-time constant contexts.
+// Happy-path coverage for enumerated items:
+//   - width brackets: [widthof(foo)]
+//   - MEM depth/width declarations
+//   - clog2(...) and other compile-time expressions
+//   - OVERRIDE assignments in @new blocks
+
+@project WIDTHOF_INVALID_CONTEXT_compile_time_contexts_ok
+    @top TopMod {
+        IN  [1] clk    = _;
+        IN  [8] din    = _;
+        OUT [8] dout   = _;
+    }
+@endproj
+
+// Helper module: takes an OVERRIDE for its width, using widthof() from the parent.
+@module HelperMod
+    CONST {
+        // Default; parent will OVERRIDE this using widthof().
+        WIDTH = 8;
+    }
+    PORT {
+        IN  [1]     clk;
+        IN  [WIDTH] din;
+        OUT [WIDTH] dout;
+    }
+    REGISTER {
+        r [WIDTH] = WIDTH'd0;
+    }
+    ASYNCHRONOUS {
+        dout = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    CONST {
+        // Valid: widthof() in CONST initializer (already-covered context, baseline).
+        DIN_W  = widthof(din);
+        // Valid: widthof() as argument to clog2() — compile-time expression.
+        ADDR_W = clog2(widthof(din));
+    }
+
+    WIRE {
+        // Valid: widthof() inside width brackets.
+        w_same [widthof(din)];
+        h_dout [widthof(din)];
+    }
+
+    REGISTER {
+        // Valid: widthof() inside width brackets for a register.
+        r_copy [widthof(din)] = 8'd0;
+    }
+
+    // Valid: widthof() used in MEM depth and width expressions.
+    MEM {
+        ram [widthof(din)] [widthof(din)] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Valid: widthof() used inside an OVERRIDE assignment of an @new block.
+    @new inst_h HelperMod {
+        OVERRIDE {
+            WIDTH = widthof(din);
+        }
+        IN  [1]            clk  = clk;
+        IN  [widthof(din)] din  = din;
+        OUT [widthof(din)] dout = h_dout;
+    };
+
+    ASYNCHRONOUS {
+        w_same = din;
+        dout   = r_copy ^ h_dout ^ ram.rd[ADDR_W'd0];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_copy <= din;
+        ram.wr[ADDR_W'd0] <= din;
+    }
+@endmod

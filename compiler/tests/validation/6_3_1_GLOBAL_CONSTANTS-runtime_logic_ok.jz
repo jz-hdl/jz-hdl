@@ -1,0 +1,82 @@
+// HAPPY_PATH: @global constants are valid runtime values.
+// Covers §6.3.1 Req #9 by using named, sized @global constants in
+// ASYNCHRONOUS and SYNCHRONOUS expressions instead of CONFIG/CONST runtime
+// literals. No diagnostics expected.
+
+@global OPCODES
+    READ  = 8'hA5;
+    WRITE = 8'h3C;
+@endglob
+
+@global FLAGS
+    READY = 1'b1;
+@endglob
+
+@project GLOBAL_CONSTANTS_runtime_logic_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [CONFIG.WIDTH] din = _;
+        OUT [CONFIG.WIDTH] dout = _;
+    }
+@endproj
+
+@module HelperGlobal
+    PORT {
+        IN  [1] clk;
+        IN  [CONFIG.WIDTH] din;
+        OUT [CONFIG.WIDTH] dout;
+    }
+    REGISTER {
+        op_reg [CONFIG.WIDTH] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Valid: @global constant in runtime expression
+        dout <= din ^ op_reg ^ OPCODES.READ;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: @global constant assigned to a register
+        op_reg <= OPCODES.WRITE;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        LOCAL_W = CONFIG.WIDTH;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [LOCAL_W] din;
+        OUT [LOCAL_W] dout;
+    }
+
+    WIRE {
+        helper_out [LOCAL_W];
+        selected [LOCAL_W];
+    }
+
+    REGISTER {
+        status [LOCAL_W] = 8'h00;
+    }
+
+    @new helper HelperGlobal {
+        IN  [1] clk = clk;
+        IN  [LOCAL_W] din = din;
+        OUT [LOCAL_W] dout = helper_out;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: @global constant in a conditional runtime expression
+        selected <= FLAGS.READY ? OPCODES.READ : helper_out;
+        dout = selected ^ status;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: @global constant assigned in synchronous logic
+        status <= OPCODES.WRITE;
+    }
+@endmod

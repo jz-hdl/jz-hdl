@@ -790,6 +790,21 @@ int jz_ir_build_design(JZASTNode *root,
             all_bus_maps[i] = bus_map;
             all_bus_map_counts[i] = bus_map_count;
 
+            /* Build instance output port mappings so that qualified
+             * identifiers of the form "inst.port" resolve during
+             * expression lowering via the bus_map lookup path.
+             */
+            if (ir_build_instance_port_mappings(scope,
+                                                 &project_symbols,
+                                                 arena,
+                                                 &bus_map,
+                                                 &bus_map_count) != 0) {
+                goto ir_fail;
+            }
+            /* Update stored bus_map after possible reallocation. */
+            all_bus_maps[i] = bus_map;
+            all_bus_map_counts[i] = bus_map_count;
+
             /* Initial lowering of ASYNCHRONOUS block into IR_Stmt tree. */
             step_t0 = clock();
             mod->async_block = ir_build_async_block(arena,
@@ -1027,7 +1042,7 @@ int jz_ir_build_design(JZASTNode *root,
                          * CONST name matches a string override in this spec,
                          * update the file_path to the overridden value.
                          */
-                        if (m->init_is_file && m->init.file_path) {
+                        if (m->init_kind == MEM_INIT_FILE && m->init.file_path) {
                             JZASTNode *init_expr = NULL;
                             if (mem_decl->child_count > 0) {
                                 JZASTNode *first = mem_decl->children[0];
@@ -1887,6 +1902,11 @@ int jz_ir_build_design(JZASTNode *root,
                             }
                         }
                     }
+
+                    p->diff_out_uses_serializer = 0;
+                    p->diff_out_data_width = 0;
+                    p->diff_out_serializer_ratio = 0;
+                    p->diff_out_surplus_lanes = 0;
 
                     ++pi;
                 }

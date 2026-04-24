@@ -1,0 +1,2 @@
+File: 1_1_ID_SYNTAX_INVALID-invalid_chars_space.jz
+      23:13   error PARSE000 parse error near token 'bar': expected '[' after register name (orig: PARSE000)

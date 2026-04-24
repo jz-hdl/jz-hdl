@@ -3,6 +3,7 @@
 // and no driver ever provides an active value, yet the net is consumed.
 // Contexts: conditional all-z in helper module, conditional all-z in top
 // module, unconditional z in top module.
+// WARN_INTERNAL_TRISTATE is expected collateral for the internal z assignments.
 
 
 @project NET_TRI_STATE_ALL_Z_READ_all_drivers_z_but_read

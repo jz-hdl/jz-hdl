@@ -1,0 +1,51 @@
+// COMMENT_IN_TOKEN: Comment inside an operator token.
+// Valid operators included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_operator_token
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] result = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    WIRE {
+        w [1];
+    }
+
+    @new inst_h Helper {
+        IN  [1] clk = clk;
+        OUT [1] data = w;
+    };
+
+    REGISTER {
+        r [8] = 8'b0000_0000;
+    }
+    ASYNCHRONOUS {
+        result = w;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: operator token (comment inside !=)
+        r <= (r !/**/= 8'b0000_0000) ? 8'b0000_0001 : 8'b0000_0000;
+    }
+@endmod

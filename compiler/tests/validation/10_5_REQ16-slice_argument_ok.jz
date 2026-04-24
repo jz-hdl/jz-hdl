@@ -1,0 +1,24 @@
+// Req #16: a slice argument is valid for @apply, including IDX-substituted bounds.
+
+@project REQ16_slice_argument_ok
+    @top TopMod {
+        IN  [1] src = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template forward(dst, src)
+    dst <= src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] src;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        // Req #16: slice arguments may use IDX after count substitution.
+        @apply[1] forward(data[IDX:IDX], src[IDX:IDX]);
+    }
+@endmod

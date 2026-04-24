@@ -1,0 +1,31 @@
+// ID_SYNTAX_INVALID: Character-class violation in mem-name context.
+// Hyphen in a MEM name; the lexer splits it into separate tokens,
+// causing a PARSE000 parser error.
+
+@project ID_SYNTAX_INVALID_invalid_chars_mem
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    // Trigger: hyphen in mem-name
+    MEM {
+        my-mem [1] [4] = 1'b0 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod

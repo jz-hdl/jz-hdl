@@ -1,0 +1,46 @@
+// HAPPY_PATH: Scratch wires are local to a single template expansion site.
+// Reapplying the same scratch-using template must not cause name collisions
+// or cross-expansion interference.
+
+@project HAPPY_PATH_template_scratch_expansion_scope_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+@template pass_with_scratch(src, dst)
+    @scratch tmp [WIDTH];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    WIRE {
+        w_a [8];
+        w_b [8];
+    }
+
+    ASYNCHRONOUS {
+        // Valid: first expansion owns its own scratch wire.
+        @apply pass_with_scratch(din, w_a);
+
+        // Valid: second expansion reuses the same scratch identifier in the
+        // template definition, but gets a distinct expansion-local wire.
+        @apply pass_with_scratch(din, w_b);
+
+        dout_a = w_a;
+        dout_b = w_b;
+    }
+@endmod

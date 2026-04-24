@@ -1,0 +1,2 @@
+File: <input>
+       0:0    error SERIALIZER_WIDTH_EXCEEDS_RATIO Differential output port width exceeds chip serializer ratio and cascade is not supported

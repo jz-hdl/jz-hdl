@@ -15,7 +15,8 @@
 void sem_lhs_observable_classify(JZASTNode *lhs,
                                         const JZModuleScope *mod_scope,
                                         int *out_has_register,
-                                        int *out_has_out_inout)
+                                        int *out_has_out_inout,
+                                        int *out_has_mem)
 {
     if (!lhs || !mod_scope) return;
 
@@ -23,16 +24,27 @@ void sem_lhs_observable_classify(JZASTNode *lhs,
     case JZ_AST_EXPR_CONCAT:
         for (size_t i = 0; i < lhs->child_count; ++i) {
             sem_lhs_observable_classify(lhs->children[i], mod_scope,
-                                        out_has_register, out_has_out_inout);
+                                        out_has_register, out_has_out_inout,
+                                        out_has_mem);
         }
         break;
 
-    case JZ_AST_EXPR_SLICE:
+    case JZ_AST_EXPR_SLICE: {
+        /* MEM port write target like `mem.wr[addr]` is an observable sink. */
+        JZMemPortRef mref;
+        memset(&mref, 0, sizeof(mref));
+        if (sem_match_mem_port_slice(lhs, mod_scope, NULL, &mref) &&
+            mref.mem_decl) {
+            if (out_has_mem) *out_has_mem = 1;
+            break;
+        }
         if (lhs->child_count >= 1) {
             sem_lhs_observable_classify(lhs->children[0], mod_scope,
-                                        out_has_register, out_has_out_inout);
+                                        out_has_register, out_has_out_inout,
+                                        out_has_mem);
         }
         break;
+    }
 
     case JZ_AST_EXPR_IDENTIFIER: {
         if (!lhs->name) return;
@@ -50,11 +62,29 @@ void sem_lhs_observable_classify(JZASTNode *lhs,
         break;
     }
 
+    case JZ_AST_EXPR_QUALIFIED_IDENTIFIER: {
+        /* INOUT MEM port field write: mem.port.wdata or mem.port.addr.
+         * Both fields are observable sinks (writes flip-flopped into
+         * the memory). .data is read-only on INOUT and rejected by a
+         * separate rule, so it cannot reach this LHS path.
+         */
+        JZMemPortRef mref;
+        memset(&mref, 0, sizeof(mref));
+        if (sem_match_mem_port_qualified_ident(lhs, mod_scope, NULL, &mref) &&
+            mref.mem_decl && mref.port &&
+            (mref.field == MEM_PORT_FIELD_WDATA ||
+             mref.field == MEM_PORT_FIELD_ADDR)) {
+            if (out_has_mem) *out_has_mem = 1;
+        }
+        break;
+    }
+
     default:
         /* Recurse generically into children for any other expression forms. */
         for (size_t i = 0; i < lhs->child_count; ++i) {
             sem_lhs_observable_classify(lhs->children[i], mod_scope,
-                                        out_has_register, out_has_out_inout);
+                                        out_has_register, out_has_out_inout,
+                                        out_has_mem);
         }
         break;
     }
@@ -166,7 +196,8 @@ static int sem_expr_contains_literal_anywhere(const JZASTNode *expr)
     if (expr->type == JZ_AST_EXPR_SLICE && expr->child_count >= 1) {
         end = 1; /* only recurse into base expression */
     }
-    if (expr->type == JZ_AST_EXPR_BUS_ACCESS) {
+    if (expr->type == JZ_AST_EXPR_BUS_ACCESS ||
+        expr->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
         end = 0; /* children are array indices, not values */
     }
 
@@ -259,44 +290,6 @@ int sem_expr_contains_x_literal_anywhere(const JZASTNode *expr)
         }
     }
     return 0;
-}
-
-/* Recursively check an expression for SYNC MEM read data accesses. Reports
- * MEM_SYNC_DATA_IN_ASYNC_BLOCK for any mem.port.data reference where the port
- * is declared as OUT SYNC.
- */
-static void sem_check_sync_mem_data_in_expr_recursive(JZASTNode *expr,
-                                                       const JZModuleScope *mod_scope,
-                                                       JZDiagnosticList *diagnostics)
-{
-    if (!expr || !mod_scope) return;
-
-    /* Check if this node is a qualified identifier referencing mem.port.data */
-    if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
-        JZMemPortRef ref;
-        memset(&ref, 0, sizeof(ref));
-        if (sem_match_mem_port_qualified_ident(expr, mod_scope, NULL, &ref) &&
-            ref.port && ref.port->block_kind &&
-            strcmp(ref.port->block_kind, "OUT") == 0 &&
-            ref.field == MEM_PORT_FIELD_DATA &&
-            ref.port->text && strcmp(ref.port->text, "SYNC") == 0) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s.data is a SYNC read output and may not be read in ASYNCHRONOUS blocks\n"
-                     "move the read into a SYNCHRONOUS block",
-                     ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
-                     ref.port->name ? ref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            expr->loc,
-                            "MEM_SYNC_DATA_IN_ASYNC_BLOCK",
-                            msg);
-        }
-    }
-
-    /* Recurse into children */
-    for (size_t i = 0; i < expr->child_count; ++i) {
-        sem_check_sync_mem_data_in_expr_recursive(expr->children[i], mod_scope, diagnostics);
-    }
 }
 
 /* Walk an ASYNCHRONOUS block and enforce ASYNC_ALIAS_LITERAL_RHS for every
@@ -1428,26 +1421,31 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
     }
 
     if (!skip_width_checks && lhs_w > 0 && rhs_w > 0) {
-        /* Bare operators require equal widths. */
+        /* Bare operators require equal widths. Alias assignments use the
+         * WIDTHS_AND_SLICING rule; directional receive/drive assignments use
+         * the ASSIGNMENTS_AND_EXCLUSIVE rule.
+         */
         if (!has_ext && lhs_w != rhs_w) {
             char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "LHS width is %u but RHS width is %u\n"
-                     "bare operator requires equal widths; add 'z' or 's' suffix to extend",
-                     lhs_w, rhs_w);
-            sem_report_rule(diagnostics,
-                            stmt->loc,
-                            "ASSIGN_WIDTH_NO_MODIFIER",
-                            msg);
-            /* Also classify under WIDTHS_AND_SLICING for rule coverage. */
-            char msg2[320];
-            snprintf(msg2, sizeof(msg2),
-                     "LHS width %u != RHS width %u; use <=z/<=s or =>z/=>s to zero/sign-extend",
-                     lhs_w, rhs_w);
-            sem_report_rule(diagnostics,
-                            stmt->loc,
-                            "WIDTH_ASSIGN_MISMATCH_NO_EXT",
-                            msg2);
+            if (is_alias) {
+                snprintf(msg, sizeof(msg),
+                         "LHS width is %u but RHS width is %u\n"
+                         "bare alias operator requires equal widths; add '=z' or '=s' suffix to extend",
+                         lhs_w, rhs_w);
+                sem_report_rule(diagnostics,
+                                stmt->loc,
+                                "WIDTH_ASSIGN_MISMATCH_NO_EXT",
+                                msg);
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "LHS width is %u but RHS width is %u\n"
+                         "bare operator requires equal widths; add 'z' or 's' suffix to extend",
+                         lhs_w, rhs_w);
+                sem_report_rule(diagnostics,
+                                stmt->loc,
+                                "ASSIGN_WIDTH_NO_MODIFIER",
+                                msg);
+            }
         }
 
         /* Truncation detection for directional assignments with explicit
@@ -1531,8 +1529,15 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
         }
     }
 
+        int allow_concat_lhs_extension =
+            (lhs->type == JZ_AST_EXPR_CONCAT &&
+             !is_alias &&
+             has_ext &&
+             rhs_w <= lhs_w);
+
         if ((lhs->type == JZ_AST_EXPR_CONCAT || rhs->type == JZ_AST_EXPR_CONCAT) &&
-            lhs_w != rhs_w) {
+            lhs_w != rhs_w &&
+            !allow_concat_lhs_extension) {
             char msg[512];
             snprintf(msg, sizeof(msg),
                      "concatenation total width is %u bits but paired expression is %u bits",
@@ -1576,13 +1581,15 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
      */
     sem_check_mem_access_expr(lhs, mod_scope, project_symbols, diagnostics);
     sem_check_mem_access_expr(rhs, mod_scope, project_symbols, diagnostics);
-
-    /* Check for SYNC MEM data reads in ASYNCHRONOUS blocks. This must be done
-     * recursively since mem.port.data may appear anywhere in the RHS expression
-     * (e.g., inside a ternary condition or concatenation).
-     */
-    if (!is_sync) {
-        sem_check_sync_mem_data_in_expr_recursive(rhs, mod_scope, diagnostics);
+    {
+        JZExprReadRulesContext read_ctx;
+        memset(&read_ctx, 0, sizeof(read_ctx));
+        read_ctx.is_sync_context = is_sync;
+        sem_check_expr_read_rules(rhs,
+                                  mod_scope,
+                                  project_symbols,
+                                  &read_ctx,
+                                  diagnostics);
     }
 
     /* MEM read/write context rules.
@@ -1602,10 +1609,6 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
     JZMemPortRef lhs_qref;
     memset(&lhs_qref, 0, sizeof(lhs_qref));
     int lhs_is_mem_q = sem_match_mem_port_qualified_ident(lhs, mod_scope, diagnostics, &lhs_qref);
-
-    JZMemPortRef rhs_qref;
-    memset(&rhs_qref, 0, sizeof(rhs_qref));
-    int rhs_is_mem_q = sem_match_mem_port_qualified_ident(rhs, mod_scope, diagnostics, &rhs_qref);
 
     if (lhs_is_mem_q && lhs_qref.port && lhs_qref.port->block_kind &&
         strcmp(lhs_qref.port->block_kind, "OUT") == 0) {
@@ -1861,13 +1864,24 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
                                ? lhs_qref.mem_decl->name : "mem";
         const char *port_name = lhs_qref.port->name ? lhs_qref.port->name : "port";
         char msg[512];
-        snprintf(msg, sizeof(msg),
-                 "%s.%s is an IN (write) port; use bracket syntax: %s.%s[addr] <= data",
-                 mem_name, port_name, mem_name, port_name);
-        sem_report_rule(diagnostics,
-                        lhs->loc,
-                        "MEM_IN_PORT_FIELD_ACCESS",
-                        msg);
+        if (lhs_qref.field == MEM_PORT_FIELD_NONE) {
+            snprintf(msg, sizeof(msg),
+                     "%s.%s cannot be used directly as a signal\n"
+                     "use bracket syntax: %s.%s[addr] <= data",
+                     mem_name, port_name, mem_name, port_name);
+            sem_report_rule(diagnostics,
+                            lhs->loc,
+                            "MEM_PORT_USED_AS_SIGNAL",
+                            msg);
+        } else {
+            snprintf(msg, sizeof(msg),
+                     "%s.%s is an IN (write) port; use bracket syntax: %s.%s[addr] <= data",
+                     mem_name, port_name, mem_name, port_name);
+            sem_report_rule(diagnostics,
+                            lhs->loc,
+                            "MEM_IN_PORT_FIELD_ACCESS",
+                            msg);
+        }
     }
 
     if (sem_match_mem_port_slice(lhs, mod_scope, diagnostics, &mem_ref) &&
@@ -1915,157 +1929,11 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
     /* Synchronous read ports must be used with RECEIVE (`<=`) in SYNCHRONOUS
      * blocks; using '=' is a MEM_READ_SYNC_WITH_EQUALS violation.
      */
-    memset(&mem_ref, 0, sizeof(mem_ref));
-    if (sem_match_mem_port_slice(rhs, mod_scope, diagnostics, &mem_ref) &&
-        mem_ref.port && mem_ref.port->block_kind) {
-        if (strcmp(mem_ref.port->block_kind, "IN") == 0) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s is an IN (write) port and cannot be read\n"
-                     "use an OUT port for read access",
-                     mem_ref.mem_decl && mem_ref.mem_decl->name ? mem_ref.mem_decl->name : "mem",
-                     mem_ref.port->name ? mem_ref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_READ_FROM_WRITE_PORT",
-                            msg);
-        } else if (strcmp(mem_ref.port->block_kind, "INOUT") == 0) {
-            /* INOUT ports may not be indexed; must use .addr/.data/.wdata */
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s is an INOUT port and may not be indexed directly\n"
-                     "use .addr, .data, or .wdata pseudo-fields instead",
-                     mem_ref.mem_decl && mem_ref.mem_decl->name ? mem_ref.mem_decl->name : "mem",
-                     mem_ref.port->name ? mem_ref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_INOUT_INDEXED",
-                            msg);
-        }
-    }
-
-    if (rhs_is_mem_q && rhs_qref.port && rhs_qref.port->block_kind &&
-        strcmp(rhs_qref.port->block_kind, "IN") == 0) {
-        char msg[512];
-        snprintf(msg, sizeof(msg),
-                 "%s.%s is an IN (write) port and cannot be read\n"
-                 "use an OUT port for read access",
-                 rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                 rhs_qref.port->name ? rhs_qref.port->name : "port");
-        sem_report_rule(diagnostics,
-                        rhs->loc,
-                        "MEM_READ_FROM_WRITE_PORT",
-                        msg);
-    }
-
-    if (rhs_is_mem_q && rhs_qref.port && rhs_qref.port->block_kind &&
-        strcmp(rhs_qref.port->block_kind, "OUT") == 0) {
-        if (rhs_qref.field == MEM_PORT_FIELD_NONE) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s cannot be used directly as a signal\n"
-                     "use %s.%s.data to read or %s.%s.addr to set address",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_PORT_USED_AS_SIGNAL",
-                            msg);
-        } else if (rhs_qref.field == MEM_PORT_FIELD_ADDR) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s.addr is a write-only input and cannot be read\n"
-                     "use %s.%s.data to read memory output",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_PORT_ADDR_READ",
-                            msg);
-        } else if (rhs_qref.field == MEM_PORT_FIELD_DATA &&
-                   rhs_qref.port->text && strcmp(rhs_qref.port->text, "ASYNC") == 0) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s is an ASYNC read port; use %s.%s[addr] indexed syntax instead of .data",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_ASYNC_PORT_FIELD_DATA",
-                            msg);
-        } else if (rhs_qref.field == MEM_PORT_FIELD_DATA &&
-                   rhs_qref.port->text && strcmp(rhs_qref.port->text, "SYNC") == 0 &&
-                   !is_sync) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s.data is a SYNC read output and may not be read in ASYNCHRONOUS blocks\n"
-                     "move the read into a SYNCHRONOUS block",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_SYNC_DATA_IN_ASYNC_BLOCK",
-                            msg);
-        }
-    }
-
-    /* INOUT port RHS checks: bare port ref and .addr/.wdata are invalid reads. */
-    if (rhs_is_mem_q && rhs_qref.port && rhs_qref.port->block_kind &&
-        strcmp(rhs_qref.port->block_kind, "INOUT") == 0) {
-        if (rhs_qref.field == MEM_PORT_FIELD_NONE) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s cannot be used directly as a signal\n"
-                     "use %s.%s.data to read or %s.%s.addr/.wdata to write",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_PORT_USED_AS_SIGNAL",
-                            msg);
-        } else if (rhs_qref.field == MEM_PORT_FIELD_ADDR) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s.addr is a write-only input and cannot be read\n"
-                     "use %s.%s.data to read memory output",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_PORT_ADDR_READ",
-                            msg);
-        } else if (rhs_qref.field == MEM_PORT_FIELD_WDATA) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "%s.%s.wdata is a write-only input and cannot be read\n"
-                     "use %s.%s.data to read memory output",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port",
-                     rhs_qref.mem_decl && rhs_qref.mem_decl->name ? rhs_qref.mem_decl->name : "mem",
-                     rhs_qref.port->name ? rhs_qref.port->name : "port");
-            sem_report_rule(diagnostics,
-                            rhs->loc,
-                            "MEM_PORT_ADDR_READ",
-                            msg);
-        }
-    }
-
-    memset(&mem_ref, 0, sizeof(mem_ref));
-    if (is_sync && rhs_is_mem_q && rhs_qref.port && rhs_qref.port->block_kind &&
+    JZMemPortRef rhs_qref;
+    memset(&rhs_qref, 0, sizeof(rhs_qref));
+    if (is_sync &&
+        sem_match_mem_port_qualified_ident(rhs, mod_scope, NULL, &rhs_qref) &&
+        rhs_qref.port && rhs_qref.port->block_kind &&
         strcmp(rhs_qref.port->block_kind, "OUT") == 0 &&
         rhs_qref.port->text && strcmp(rhs_qref.port->text, "SYNC") == 0 &&
         rhs_qref.field == MEM_PORT_FIELD_DATA &&

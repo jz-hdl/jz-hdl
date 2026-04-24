@@ -1,0 +1,66 @@
+// HAPPY_PATH: Valid §7.6.8 single-port memory via one INOUT port in BLOCK mode.
+// Covers Req #1: a MEM with exactly one INOUT port used as a single-port BSRAM.
+
+@project HAPPY_PATH_single_inout_bsram_mode_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] addr = _;
+        IN  [16] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [16] rd_data = _;
+    }
+@endproj
+
+@module SinglePortRam
+    PORT {
+        IN  [1] clk;
+        IN  [8] addr;
+        IN  [16] wr_data;
+        IN  [1] wr_en;
+        OUT [16] rd_data;
+    }
+
+    REGISTER {
+        rd_hold [16] = 16'h0000;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [16] [256] = 16'h0000 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        rd_data = rd_hold;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem.rw.addr <= addr;
+        rd_hold <= mem.rw.data;
+        IF (wr_en) {
+            mem.rw.wdata <= wr_data;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] addr;
+        IN  [16] wr_data;
+        IN  [1] wr_en;
+        OUT [16] rd_data;
+    }
+
+    @new ram SinglePortRam {
+        IN  [1] clk = clk;
+        IN  [8] addr = addr;
+        IN  [16] wr_data = wr_data;
+        IN  [1] wr_en = wr_en;
+        OUT [16] rd_data = rd_data;
+    };
+
+    ASYNCHRONOUS {
+        rd_data = ram.rd_data;
+    }
+@endmod

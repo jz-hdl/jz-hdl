@@ -1,0 +1,80 @@
+// HAPPY_PATH: Each MEM IN port is written at most once per SYNCHRONOUS block.
+// Includes unconditional single writes and a conditional single-write pattern.
+
+@project HAPPY_PATH_single_write_per_in_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] we = _;
+        IN  [4] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_h [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr_a;
+            IN  wr_b;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_h.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: one write to each port in the block.
+        mem_h.wr_a[addr] <= wdata;
+        mem_h.wr_b[addr] <= 8'hA5;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] we;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        hold [8] = 8'h00;
+    }
+
+    MEM {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_t.rd[addr] ^ hold;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        hold <= hold;
+
+        // Valid: the port is written on at most one execution path.
+        IF (we) {
+            mem_t.wr[addr] <= wdata;
+        }
+    }
+@endmod

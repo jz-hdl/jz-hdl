@@ -1,0 +1,67 @@
+// MEM_ADDR_WIDTH_MISMATCH: narrower runtime MEM addresses are rejected.
+
+@project MEM_ADDR_WIDTH_MISMATCH_write_addr_narrow
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] small_addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] small_addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_h [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_h.rd[small_addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: narrower synchronous write address in helper.
+        mem_h.wr[small_addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] small_addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] small_addr = small_addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_t.rd[small_addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: narrower synchronous write address in top module.
+        mem_t.wr[small_addr] <= wdata;
+    }
+@endmod

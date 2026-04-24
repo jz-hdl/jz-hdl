@@ -1,0 +1,2 @@
+File: 5_5_LIT_VALUE_INVALID-feature_cond.jz
+      23:21   error LIT_VALUE_INVALID S5.5.11 lit() value must be a nonnegative integer constant expression

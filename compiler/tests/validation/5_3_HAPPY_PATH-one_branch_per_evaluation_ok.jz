@@ -1,0 +1,72 @@
+// HAPPY_PATH: Req #6 - Exactly one branch executes per evaluation.
+// The IF/ELIF/ELSE chain selects exactly one branch at a time, so assigning
+// the same signal in every branch does NOT violate the Exclusive Assignment
+// Rule. This happy-path test verifies the compiler accepts such code.
+
+@project HAPPY_PATH_one_branch_per_evaluation_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [8] din = _;
+        OUT [8] out_async = _;
+        OUT [8] out_sync  = _;
+    }
+@endproj
+
+// Helper: same signal assigned across all IF/ELIF/ELSE branches in ASYNC
+@module HelperAsync
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [8] din;
+        OUT [8] out_async;
+    }
+    ASYNCHRONOUS {
+        // Exactly one branch executes, so repeated LHS is legal.
+        IF (sel_a) {
+            out_async <= din;
+        } ELIF (sel_b) {
+            out_async <= 8'hAA;
+        } ELSE {
+            out_async <= 8'h00;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [8] din;
+        OUT [8] out_async;
+        OUT [8] out_sync;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_a HelperAsync {
+        IN  [1] sel_a = sel_a;
+        IN  [1] sel_b = sel_b;
+        IN  [8] din   = din;
+        OUT [8] out_async = out_async;
+    };
+
+    ASYNCHRONOUS {
+        out_sync = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Same register assigned in every branch — valid because exactly one
+        // branch runs per cycle.
+        IF (sel_a) {
+            r <= din;
+        } ELIF (sel_b) {
+            r <= 8'hFF;
+        } ELSE {
+            r <= 8'h00;
+        }
+    }
+@endmod

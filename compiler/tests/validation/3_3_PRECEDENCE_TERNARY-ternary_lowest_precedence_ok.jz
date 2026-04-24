@@ -1,0 +1,45 @@
+// PRECEDENCE: §3.3 Req #15 — Ternary `? :` is the lowest precedence
+// operator. In `p || q ? a + b : c & d`, the condition is `(p || q)`,
+// the true branch is `(a + b)`, and the false branch is `(c & d)` —
+// every sub-expression binds before the ternary groups them.
+// No diagnostics expected.
+
+@project PRECEDENCE_ternary_lowest_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] p = _;
+        IN  [1] q = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        IN  [8] d = _;
+        OUT [8] out_sel = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] p;
+        IN  [1] q;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        IN  [8] d;
+        OUT [8] out_sel;
+    }
+    REGISTER {
+        r_sel [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Ternary is lowest precedence: all sub-expressions bind first.
+        // Condition `(p || q)`, true branch `(a + b)`, false branch `(c & d)`.
+        out_sel = ((p || q) ? (a + b) : (c & d)) | r_sel;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_sel <= (p || q) ? (a + b) : (c & d);
+    }
+@endmod

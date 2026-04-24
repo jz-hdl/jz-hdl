@@ -1,0 +1,52 @@
+// AMBIGUOUS_REFERENCE: Bare ambiguous reference in SYNCHRONOUS block.
+// Tests that the compiler detects ambiguous instance port references in SYNC context.
+
+@project AMBIGUOUS_REFERENCE_sync_reference
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// Child module with OUT port named "val"
+@module ChildMod
+    PORT {
+        IN  [8] din;
+        OUT [8] val;
+    }
+    ASYNCHRONOUS {
+        val = din;
+    }
+@endmod
+
+// Top module: bare 'val' in SYNC block is ambiguous
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] result;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_a ChildMod {
+        IN  [8] din = r;
+        OUT [8] val = _;
+    };
+
+    @new inst_b ChildMod {
+        IN  [8] din = r;
+        OUT [8] val = _;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: qualified reference (no trigger)
+        result = inst_a.val;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: bare 'val' is ambiguous in SYNC block
+        r <= val;
+    }
+@endmod

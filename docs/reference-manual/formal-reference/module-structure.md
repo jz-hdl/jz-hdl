@@ -100,10 +100,11 @@ Two forms:
 
 ### Selector width and out-of-range behavior
 
-- Selector width should be >= `clog2(N)` where N is the number of MUX elements.
-- If the selector is narrower than `clog2(N)`, it is implicitly zero-extended.
+- Required selector width is `clog2(N)` where N is the number of MUX elements. `clog2(1)` evaluates to `1`.
+- Runtime selector width must match exactly. If it differs, widen or slice the selector explicitly before access.
 - If the compiler can statically prove that the selector value is out of range (>= N), it is a **compile error**.
 - If the selector may be out of range at runtime, the result is **all zeros**.
+- Runtime selectors are ordinary runtime bit-vectors. Compile-time indexing constructs such as `IDX` are substituted during elaboration and do not use these runtime width rules.
 
 ## MEM
 

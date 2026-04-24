@@ -1,0 +1,104 @@
+// ASSIGN_INDEPENDENT_IF_SELECT: Same identifier assigned in multiple independent
+// IF/SELECT chains at same nesting level. This test covers mixed IF-then-SELECT
+// chain on the same identifier in ASYNCHRONOUS context.
+// Valid uses (single chain per target) included to verify no false positives.
+
+@project ASSIGN_INDEPENDENT_IF_SELECT_mixed_if_select
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        IN  [2] sel2 = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+        OUT [1] out_c = _;
+        OUT [1] out_d = _;
+    }
+@endproj
+
+// Helper module: IF then SELECT on same port in ASYNC
+@module HelperMod
+    PORT {
+        IN  [1] sel;
+        IN  [2] sel2;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: IF chain followed by SELECT chain on same port
+        IF (sel) {
+            out_a <= VCC;
+        } ELSE {
+            out_a <= GND;
+        }
+        SELECT (sel2) {
+            CASE 2'b00 { out_a <= VCC; }
+            DEFAULT { out_a <= GND; }
+        }
+        // Valid: single chain on different target (no false positive)
+        IF (sel) {
+            out_b <= VCC;
+        } ELSE {
+            out_b <= GND;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [2] sel2;
+        OUT [1] out_a;
+        OUT [1] out_b;
+        OUT [1] out_c;
+        OUT [1] out_d;
+    }
+
+    WIRE {
+        w [1];
+        h_a [1];
+        h_b [1];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] sel = sel;
+        IN  [2] sel2 = sel2;
+        OUT [1] out_a = h_a;
+        OUT [1] out_b = h_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = h_a;
+        out_b = h_b;
+        // Trigger: SELECT then IF on same port in ASYNC top
+        SELECT (sel2) {
+            CASE 2'b00 { out_c <= VCC; }
+            DEFAULT { out_c <= GND; }
+        }
+        IF (sel) {
+            out_c <= VCC;
+        } ELSE {
+            out_c <= GND;
+        }
+        // Trigger: mixed IF then SELECT on wire
+        IF (sel) {
+            w <= VCC;
+        } ELSE {
+            w <= GND;
+        }
+        SELECT (sel2) {
+            CASE 2'b00 { w <= VCC; }
+            DEFAULT { w <= GND; }
+        }
+        out_d = w;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

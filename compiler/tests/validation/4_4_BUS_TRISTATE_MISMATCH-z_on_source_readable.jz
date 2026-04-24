@@ -1,0 +1,63 @@
+// BUS_TRISTATE_MISMATCH: z assigned to readable BUS signal in SOURCE role.
+// SOURCE role: OUT signals from BUS def are writable, IN signals are readable.
+// Trigger: z assigned to readable signal (rx, which is IN in BUS def -> readable for SOURCE).
+// BUS_SIGNAL_WRITE_TO_READABLE co-fires because writing z to readable is also a write violation.
+// WARN_INTERNAL_TRISTATE co-fires because z literals trigger FPGA-compatibility warning.
+
+@project BUS_TRISTATE_MISMATCH_z_on_source_readable
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] ctrl = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+@module SourceMod
+    PORT {
+        IN  [1] ctrl;
+        IN  [8] din;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] data_ok;
+        OUT [8] data_err;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: write to writable signal (tx is OUT -> writable for SOURCE)
+        sbus.tx <= din;
+        // Valid: read from readable signal
+        data_ok <= sbus.rx;
+        // Trigger: z assigned to readable signal (rx is IN -> readable for SOURCE)
+        IF (ctrl) {
+            data_err <= sbus.rx;
+        } ELSE {
+            sbus.rx <= 8'bz;
+            data_err <= 8'h00;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] ctrl;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    @new inst_s SourceMod {
+        IN  [1] ctrl = ctrl;
+        IN  [8] din = din;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] data_ok = dout_a;
+        OUT [8] data_err = dout_b;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

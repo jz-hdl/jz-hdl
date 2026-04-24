@@ -1,0 +1,70 @@
+// NET_FLOATING_WITH_SINK: Signal is read but never driven (floating net).
+// Tests undriven wire read in SYNCHRONOUS block context.
+// Properly driven signals included to verify no false positives.
+
+@project NET_FLOATING_WITH_SINK_sync_read
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module: undriven wire read in SYNCHRONOUS block
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        // Trigger: wire read in SYNCHRONOUS block
+        undriven [1];
+        // Valid: wire that IS driven (should NOT trigger)
+        driven [1];
+    }
+
+    ASYNCHRONOUS {
+        driven = r;
+        data = driven;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= undriven;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    WIRE {
+        // Trigger: wire read in SYNCHRONOUS block in top module
+        floating [1];
+        // Valid: wire that IS driven
+        driven [1];
+    }
+
+    ASYNCHRONOUS {
+        driven = r;
+        data = driven;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= floating;
+    }
+@endmod

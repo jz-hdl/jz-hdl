@@ -1,7 +1,5 @@
 // BUS_PORT_NOT_BUS: BUS member access used on non-BUS port.
 // Tests dot-notation member access on regular IN port.
-// NOTE: BUS_PORT_NOT_BUS is not emitted by the compiler — see issues.md.
-// Instead, the dot access fires UNDECLARED_IDENTIFIER.
 // Valid dot access on BUS port included to verify no false positives.
 
 @project BUS_PORT_NOT_BUS_member_on_non_bus

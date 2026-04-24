@@ -1,0 +1,2 @@
+File: 10_5_EXPANDED_CODE_SEMANTICS-post_expand_semantic_check.jz
+      65:9    error ASSIGN_MULTIPLE_SAME_BITS S1.5/S5.2 Same bits assigned more than once on a single execution path (exclusive assignment violation)

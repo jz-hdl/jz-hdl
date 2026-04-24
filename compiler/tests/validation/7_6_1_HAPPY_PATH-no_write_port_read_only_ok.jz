@@ -1,0 +1,38 @@
+// HAPPY_PATH: Simple ROM is read-only and declares no write port (S7.6.1).
+// Valid uses are included to verify the MEM declaration omits IN/INOUT ports.
+
+@project HAPPY_PATH_no_write_port_read_only_ok
+    @top TopMod {
+        IN  [3] index = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module LookupTable
+    PORT {
+        IN  [3] index;
+        OUT [8] data;
+    }
+
+    MEM {
+        lut [8] [8] = 8'h5A {
+            OUT rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = lut.rd[index];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [3] index;
+        OUT [8] data;
+    }
+
+    @new table LookupTable {
+        IN  [3] index = index;
+        OUT [8] data = data;
+    };
+@endmod

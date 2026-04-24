@@ -1,0 +1,51 @@
+// TYPE_BINOP_WIDTH_MISMATCH: Binary multiply/divide/modulus with mismatched
+// operand widths in the feature-cond context (@feature condition expression).
+// Covers §3.1 Req #3. The new-binding and check-expr contexts are
+// categorically inapplicable for this rule (see audit/runner.log).
+
+@project TYPE_BINOP_WIDTH_MISMATCH_mul_div_mod_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): binary `*` with mismatched widths (8 vs 4)
+    @feature (8'd2 * 4'd2) == 8'd4
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): binary `/` with mismatched widths (8 vs 4)
+    @feature (8'd6 / 4'd2) == 8'd3
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    // Trigger 3 (feature-cond): binary `%` with mismatched widths (8 vs 4)
+    @feature (8'd5 % 4'd2) == 8'd1
+        CONST { F_C = 1; }
+    @else
+        CONST { F_C = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

@@ -1,0 +1,65 @@
+// HAPPY_PATH: Req #11 — clog2() is permitted in MEM declarations for
+// address widths. Exercises clog2() in MEM word_width, depth, and in the
+// address port widths used with the MEM instance.
+
+@project HAPPY_PATH_clog2_mem_address_ok
+    CONFIG {
+        ROM_ENTRIES = 256;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] addr_lo = _;
+        IN  [8] wdata = _;
+        OUT [8] rdata = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        DEPTH      = 64;
+        ADDR_WIDTH = clog2(DEPTH);
+        CFG_ADDR_W = clog2(CONFIG.ROM_ENTRIES);
+    }
+
+    PORT {
+        IN  [1]           clk;
+        IN  [8]           addr_lo;
+        IN  [8]           wdata;
+        OUT [8]           rdata;
+    }
+
+    // Req #11: clog2() used to size MEM depth-related widths.
+    // - `store` depth is DEPTH (derived via clog2 in ADDR_WIDTH below).
+    // - `rom`   depth uses a direct clog2-expressed capacity via CONFIG.
+    MEM {
+        store [8] [DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+        rom [8] [CONFIG.ROM_ENTRIES] = 8'h00 {
+            OUT rrd ASYNC;
+        };
+    }
+
+    WIRE {
+        rom_rd [8];
+    }
+
+    REGISTER {
+        // Register widths derived from clog2()-based CONST (address width).
+        addr_r    [ADDR_WIDTH] = 6'd0;
+        rom_addr  [CFG_ADDR_W] = 8'd0;
+    }
+
+    ASYNCHRONOUS {
+        rom_rd = rom.rrd[rom_addr];
+        rdata  = store.rd[addr_r] ^ rom_rd;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        addr_r          <= addr_lo[ADDR_WIDTH-1:0];
+        rom_addr        <= addr_lo;
+        store.wr[addr_r] <= wdata;
+    }
+@endmod

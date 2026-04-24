@@ -1,0 +1,25 @@
+// ID_SYNTAX_INVALID: Character-class violation in config-name context.
+// Hyphen in a CONFIG entry name; the lexer splits it into separate tokens,
+// causing a PARSE000 parser error.
+
+@project ID_SYNTAX_INVALID_invalid_chars_more_contexts
+    CONFIG {
+        // Trigger: hyphen in config-name
+        foo-bar = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

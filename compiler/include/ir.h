@@ -443,6 +443,30 @@ typedef enum IR_MemoryKind {
 } IR_MemoryKind;
 
 /**
+ * @enum IR_MemoryInitKind
+ * @brief Memory initialization representation carried in the IR.
+ */
+typedef enum IR_MemoryInitKind {
+    MEM_INIT_NONE,    /**< No initialization payload present. */
+    MEM_INIT_LITERAL, /**< Constant literal replicated across all words. */
+    MEM_INIT_FILE,    /**< Source file path retained prior to init lowering. */
+    MEM_INIT_BLOB     /**< Lowered raw bytes used by backend sidecar emission. */
+} IR_MemoryInitKind;
+
+/**
+ * @struct IR_MemoryInitBlob
+ * @brief Canonical byte payload for file-backed memory initialization.
+ *
+ * The blob stores `depth * ceil(word_width / 8)` bytes in memory-address
+ * order. Each word is stored in big-endian byte order and already includes
+ * any required zero-padding out to the declared memory depth.
+ */
+typedef struct IR_MemoryInitBlob {
+    uint8_t *bytes;    /**< Raw initialization bytes, arena-owned. */
+    int      num_bytes;/**< Total number of bytes in `bytes`. */
+} IR_MemoryInitBlob;
+
+/**
  * @struct IR_MemoryPort
  * @brief A single port on a memory, with optional signal bindings.
  *
@@ -482,11 +506,12 @@ typedef struct IR_Memory {
     int   depth;           /**< Number of entries. */
     int   address_width;   /**< Address width: clog2(depth). */
 
+    IR_MemoryInitKind init_kind; /**< Active member of `init`. */
     union {
-        IR_Literal literal;    /**< Constant initialization value. */
-        char      *file_path;  /**< \@file("...") initialization path. */
+        IR_Literal         literal;   /**< Constant initialization value. */
+        char              *file_path; /**< \@file("...") initialization path. */
+        IR_MemoryInitBlob *blob;      /**< Lowered raw-byte initialization payload. */
     } init; /**< Initialization data. */
-    bool init_is_file;         /**< True if init.file_path is active. */
 
     IR_MemoryPort *ports;      /**< Array of memory ports. */
     int            num_ports;  /**< Number of ports. */
@@ -719,6 +744,10 @@ typedef struct IR_Pin {
     char      *pclk_name; /**< Parallel data clock name; NULL if none. */
     char      *reset_name; /**< Reset signal name for serializer; NULL if none. */
     int        ser_width;  /**< Serialization width from width= attribute; 0 if unset. */
+    int        diff_out_uses_serializer; /**< Lowered: non-zero when output wrapper must instantiate a serializer. */
+    int        diff_out_data_width; /**< Lowered: logical parallel width for differential output serialization. */
+    int        diff_out_serializer_ratio; /**< Lowered: selected serializer ratio for differential output. */
+    int        diff_out_surplus_lanes; /**< Lowered: extra serializer lanes beyond logical width. */
 } IR_Pin;
 
 /**

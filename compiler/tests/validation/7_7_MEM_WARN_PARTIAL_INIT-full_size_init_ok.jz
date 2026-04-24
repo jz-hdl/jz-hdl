@@ -1,0 +1,62 @@
+// MEM_WARN_PARTIAL_INIT: exact-size initialization files should not warn.
+// Verifies binary and text @file initializers that fully cover the declared depth.
+
+@project MEM_WARN_PARTIAL_INIT_full_size_init_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_bin [8] [4] = @file("mem_exact_4bytes.bin") {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_bin.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_bin.wr[addr] <= 8'h00;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_hex [8] [4] = @file("mem_clean_data.hex") {
+            OUT rd_hex ASYNC;
+            IN  wr_hex;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] addr = addr;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_hex.rd_hex[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_hex.wr_hex[addr] <= 8'h00;
+    }
+@endmod

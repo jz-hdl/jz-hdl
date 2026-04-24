@@ -1,0 +1,44 @@
+// PROJECT_CHIP_DATA_NOT_FOUND: Unknown chip ID as identifier (not string literal).
+// Only one trigger possible per file (single @project per file).
+// Trigger: identifier chip ID
+
+@project(CHIP=NONEXISTENT_CHIP_XYZ) PROJECT_CHIP_DATA_NOT_FOUND_unknown_chip_identifier
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_h Helper {
+        IN  [1] din = r;
+        OUT [1] dout = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

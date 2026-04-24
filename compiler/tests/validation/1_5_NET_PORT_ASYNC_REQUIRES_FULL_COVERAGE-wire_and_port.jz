@@ -1,0 +1,56 @@
+// §1.5.3 Req #4: Nets/Ports (ASYNCHRONOUS) require full coverage.
+// For identifiers driven in an ASYNCHRONOUS block, a zero-assignment path is
+// a compile-time error. This applies to BOTH wires (nets) and output ports.
+// Each trigger demonstrates a different net/port combined with a different
+// partial-coverage construct so Req #4 is exercised holistically.
+
+@project NET_PORT_ASYNC_REQUIRES_FULL_COVERAGE_wire_and_port
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en = _;
+        IN  [1] sel_a = _;
+        IN  [2] sel2 = _;
+        OUT [1] out_wire_result = _;
+        OUT [1] out_port_if = _;
+        OUT [1] out_port_select = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [1] sel_a;
+        IN  [2] sel2;
+        OUT [1] out_wire_result;
+        OUT [1] out_port_if;
+        OUT [1] out_port_select;
+    }
+    WIRE {
+        w_partial [1];
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // Trigger 1: WIRE driven in IF without ELSE — undriven path
+        IF (en) {
+            w_partial <= VCC;
+        }
+        out_wire_result = w_partial;
+
+        // Trigger 2: OUT PORT driven in IF without ELSE — undriven path
+        IF (sel_a) {
+            out_port_if <= VCC;
+        }
+
+        // Trigger 3: OUT PORT driven in SELECT without DEFAULT — undriven path
+        SELECT (sel2) {
+            CASE 2'b00 { out_port_select <= VCC; }
+            CASE 2'b01 { out_port_select <= GND; }
+        }
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

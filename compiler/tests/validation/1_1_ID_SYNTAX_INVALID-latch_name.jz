@@ -1,0 +1,31 @@
+// ID_SYNTAX_INVALID: Identifier exceeds 255-char limit used as LATCH name.
+// Tests 256-char identifier in LATCH declaration context.
+// Valid latch name included to verify no false positives.
+
+@project ID_SYNTAX_INVALID_latch_name
+    @top TopMod {
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    LATCH {
+        // Valid: short latch name (should NOT trigger)
+        valid_lat [1] D;
+        // Trigger: 256-char identifier as LATCH name
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa [1] D;
+    }
+
+    ASYNCHRONOUS {
+        valid_lat <= enable : din;
+        data <= valid_lat;
+    }
+@endmod

@@ -1,0 +1,62 @@
+// TYPE_BINOP_WIDTH_MISMATCH: Bitwise operators (&, |, ^) with mismatched
+// operand widths in the sync-expr and feature-cond contexts. Covers §3.1
+// Req #4. The new-binding and check-expr contexts are categorically
+// inapplicable for this rule (see audit/runner.log).
+
+@project TYPE_BINOP_WIDTH_MISMATCH_bitwise_sync_feature
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [4] b = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [4] b;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): bitwise `&` with mismatched widths (8 vs 4)
+    @feature (8'hAA & 4'h5) == 8'h00
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): bitwise `|` with mismatched widths (8 vs 4)
+    @feature (8'hA0 | 4'h5) == 8'hA5
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    // Trigger 3 (feature-cond): bitwise `^` with mismatched widths (8 vs 4)
+    @feature (8'hAA ^ 4'h5) == 8'hAF
+        CONST { F_C = 1; }
+    @else
+        CONST { F_C = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+        s [8] = 8'h00;
+        t [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r | s | t;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 4 (sync-expr): bitwise `&` with mismatched widths (8 vs 4)
+        r <= a & b;
+        // Trigger 5 (sync-expr): bitwise `|` with mismatched widths (8 vs 4)
+        s <= a | b;
+        // Trigger 6 (sync-expr): bitwise `^` with mismatched widths (8 vs 4)
+        t <= a ^ b;
+    }
+@endmod

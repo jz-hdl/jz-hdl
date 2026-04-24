@@ -769,7 +769,12 @@ void sem_emit_memory_report(JZASTNode *root,
 
                 unsigned width = 0;
                 long long depth_val = 0;
-                int have_width = (sem_eval_width_expr(mem->width, scope, project_symbols, &width) == 0 && width > 0);
+                int have_width = (sem_eval_width_expr_at_loc(mem->width,
+                                                             scope,
+                                                             project_symbols,
+                                                             &width,
+                                                             mem->loc) == 0 &&
+                                  width > 0);
                 int have_depth = (sem_eval_const_expr_in_module(mem->text, scope, project_symbols, &depth_val) == 0 && depth_val > 0);
                 unsigned depth = have_depth ? (unsigned)depth_val : 0;
 

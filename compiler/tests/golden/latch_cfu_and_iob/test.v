@@ -5,12 +5,14 @@
 `default_nettype none
 
 module latch_module (
+    clk,
     enable,
     data_in,
     iob_out,
     comb_out
 );
     // Ports
+    input clk;
     input enable;
     input [7:0] data_in;
     output reg [7:0] iob_out;
@@ -44,6 +46,7 @@ module top (
     output [7:0] comb_out;
 
     // Top-level logical→physical pin mapping
+    //   latch_module.clk -> sys_clk (board 52)
     //   latch_module.enable -> enable (board 3)
     //   latch_module.data_in[7] -> data_in[7] (board 32)
     //   latch_module.data_in[6] -> data_in[6] (board 31)
@@ -73,6 +76,7 @@ module top (
 
 
     latch_module u_top (
+        .clk(sys_clk),
         .enable(enable),
         .data_in({data_in[7], data_in[6], data_in[5], data_in[4], data_in[3], data_in[2], data_in[1], data_in[0]}),
         .iob_out({iob_out[7], iob_out[6], iob_out[5], iob_out[4], iob_out[3], iob_out[2], iob_out[1], iob_out[0]}),

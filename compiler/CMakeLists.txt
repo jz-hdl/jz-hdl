@@ -102,9 +102,12 @@ add_library(jz_hdl_lib
     src/ir/ir_build_memory.c
     src/ir/ir_build_signal.c
     src/ir/ir_build_stmt.c
+    src/ir/ir_clone.c
     src/ir/ir_library.c
     src/ir/ir_serialize.c
     src/ir/ir_div_guard.c
+    src/ir/ir_differential_lowering.c
+    src/ir/ir_init_lowering.c
     src/ir/ir_tristate_transform.c
     src/parser/parser_blocks.c
     src/parser/parser_cdc.c

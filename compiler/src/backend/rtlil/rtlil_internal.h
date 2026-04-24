@@ -143,8 +143,10 @@ void rtlil_emit_instances(FILE *out, const IR_Design *design, const IR_Module *m
  * -------------------------------------------------------------------------
  */
 
-/* Emit $memrd_v2/$memwr_v2 cells for memory accesses. */
+/* Emit $meminit_v2/$memwr_v2 cells for memory accesses and init payloads. */
 void rtlil_emit_memory_cells(FILE *out, const IR_Module *mod);
+void rtlil_reset_memory_emit_errors(void);
+int rtlil_memory_emit_errors(void);
 
 /* -------------------------------------------------------------------------
  * Project wrapper emission (emit_wrapper.c)

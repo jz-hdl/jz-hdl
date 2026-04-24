@@ -1,0 +1,34 @@
+// ASYNC_ALIAS_IN_CONDITIONAL: Alias (=) inside nested IF body is forbidden in ASYNC.
+// Tests alias inside a nested IF (IF within IF) in ASYNCHRONOUS block.
+// Valid receive (<=) in nested IF verifies no false positive.
+
+@project ASYNC_ALIAS_IN_CONDITIONAL_nested_if_alias
+    @top TopMod {
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        IF (sel_a) {
+            IF (sel_b) {
+                // Trigger: nested IF body
+                dout = din;
+            } ELSE {
+                // Valid: receive (<=) in nested IF — no diagnostic
+                dout <= din;
+            }
+        } ELSE {
+            dout <= 8'h00;
+        }
+    }
+@endmod

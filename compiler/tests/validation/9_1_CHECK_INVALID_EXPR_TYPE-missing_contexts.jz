@@ -1,0 +1,95 @@
+// CHECK_INVALID_EXPR_TYPE: runtime-only operands used in @check across
+// async-derived, sync-derived, @new-bound, and @feature-declared contexts.
+// Valid @check directives with CONST and CONFIG are included to verify no
+// false positives.
+
+@project CHECK_INVALID_EXPR_TYPE_missing_contexts
+    CONFIG {
+        WIDTH = 1;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module ChildMod
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    CONST { LOCAL_OK = 1; }
+
+    // Valid: module CONST in @check.
+    @check (LOCAL_OK == 1, "child const ok");
+
+    // Trigger 1 (new-binding): child input receives an instance binding value.
+    @check (din == 1'b0, "bound input in check");
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST {
+        FEATURE_ON = 1;
+        TOP_OK = 1;
+    }
+
+    // Valid: CONFIG and CONST in @check.
+    @check (CONFIG.WIDTH == 1, "config ok");
+    @check (TOP_OK == 1, "top const ok");
+
+    @feature FEATURE_ON == 1
+        WIRE {
+            feature_sig [1];
+        }
+    @else
+        WIRE {
+            feature_sig [1];
+        }
+    @endfeat
+
+    WIRE {
+        async_sig [1];
+        child_out [1];
+    }
+
+    REGISTER {
+        sync_sig [1] = 1'b0;
+    }
+
+    @new inst_child ChildMod {
+        IN  [1] din = async_sig;
+        OUT [1] dout = child_out;
+    };
+
+    // Trigger 2 (async-expr): wire driven in ASYNCHRONOUS logic.
+    @check (async_sig == 1'b0, "async signal in check");
+
+    // Trigger 3 (sync-expr): register driven in SYNCHRONOUS logic.
+    @check (sync_sig == 1'b0, "sync signal in check");
+
+    // Trigger 4 (feature-cond): wire declared under a @feature branch.
+    @check (feature_sig == 1'b0, "feature signal in check");
+
+    ASYNCHRONOUS {
+        async_sig = din;
+        feature_sig = child_out;
+        data = sync_sig;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        sync_sig <= async_sig;
+    }
+@endmod

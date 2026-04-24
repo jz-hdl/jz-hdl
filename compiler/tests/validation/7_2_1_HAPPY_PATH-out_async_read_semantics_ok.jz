@@ -1,0 +1,76 @@
+// HAPPY_PATH: Valid OUT ASYNC read-port usage for §7.2.1 produces no diagnostics.
+// Exercises the combinational address->data path, same-cycle ASYNC reads,
+// and structurally valid cross-module usage.
+
+@project HAPPY_PATH_out_async_read_semantics_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        IN  [DATA_W] wdata = _;
+        OUT [DATA_W] helper_data = _;
+        OUT [DATA_W] top_data = _;
+    }
+@endproj
+
+// Helper: ASYNC read feeds combinational logic directly.
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_h [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_h.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_h.wr[addr] <= wdata;
+    }
+@endmod
+
+// Top: direct ASYNC read and helper instantiation in the same valid design.
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] helper_data;
+        OUT [8] top_data;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        top_data = mem_t.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_t.wr[addr] <= wdata;
+    }
+@endmod

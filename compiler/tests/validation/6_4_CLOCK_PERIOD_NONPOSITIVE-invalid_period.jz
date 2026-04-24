@@ -34,6 +34,7 @@
 
     @top TopMod {
         IN  [1] clk = good_clk;
+        IN  [1] fast_in = fast_clk;
         OUT [1] data = _;
     }
 @endproj
@@ -41,6 +42,7 @@
 @module TopMod
     PORT {
         IN  [1] clk;
+        IN  [1] fast_in;
         OUT [1] data;
     }
 
@@ -49,7 +51,7 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = r ^ fast_in;
     }
 
     SYNCHRONOUS(CLK=clk) {

@@ -1,0 +1,110 @@
+// DIV_UNGUARDED_RUNTIME_ZERO: additional guard patterns for division safety.
+// Existing test covers unguarded div/mod plus guards: != 0, > 0, == nonzero.
+// This adds missing guard patterns: >= N (N>=1), != N ELSE (N!=0),
+// < N ELSE (N>=1), and literal-on-left-side (IF (8'd0 != d)).
+
+@project DIV_UNGUARDED_RUNTIME_ZERO_additional_guard_patterns
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] num = _;
+        IN  [8] den = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+        OUT [8] out_c = _;
+        OUT [8] out_d = _;
+        OUT [8] out_e = _;
+    }
+@endproj
+
+// Helper module: guard patterns >= N and literal-on-left
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] num;
+        IN  [8] den;
+        OUT [8] out_a;
+        OUT [8] out_b;
+        OUT [8] out_c;
+    }
+    REGISTER {
+        r_gte [8] = 8'd0;
+        r_lhs [8] = 8'd0;
+        r_ung [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        out_a = r_gte;
+        out_b = r_lhs;
+        out_c = r_ung;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: unguarded division (one trigger for the warning)
+        r_ung <= num / den;
+        // Valid: guard via >= N where N >= 1 (no false positive)
+        IF (den >= 8'd1) {
+            r_gte <= num / den;
+        } ELSE {
+            r_gte <= 8'd0;
+        }
+        // Valid: guard with literal on left side (no false positive)
+        IF (8'd0 != den) {
+            r_lhs <= num % den;
+        } ELSE {
+            r_lhs <= 8'd0;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] num;
+        IN  [8] den;
+        OUT [8] out_a;
+        OUT [8] out_b;
+        OUT [8] out_c;
+        OUT [8] out_d;
+        OUT [8] out_e;
+    }
+    WIRE {
+        ha_a [8];
+        ha_b [8];
+        ha_c [8];
+    }
+    REGISTER {
+        r_neq_else [8] = 8'd0;
+        r_lt_else  [8] = 8'd0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] num = num;
+        IN  [8] den = den;
+        OUT [8] out_a = ha_a;
+        OUT [8] out_b = ha_b;
+        OUT [8] out_c = ha_c;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_a;
+        out_b = ha_b;
+        out_c = ha_c;
+        out_d = r_neq_else;
+        out_e = r_lt_else;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: guard via != N ELSE where N != 0 (no false positive)
+        // ELSE branch proves den == 5, which is nonzero
+        IF (den != 8'd5) {
+            r_neq_else <= 8'd0;
+        } ELSE {
+            r_neq_else <= num / den;
+        }
+        // Valid: guard via < N ELSE where N >= 1 (no false positive)
+        // ELSE branch proves den >= 1, which is nonzero
+        IF (den < 8'd1) {
+            r_lt_else <= 8'd0;
+        } ELSE {
+            r_lt_else <= num % den;
+        }
+    }
+@endmod

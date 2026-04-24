@@ -1,0 +1,69 @@
+// TYPE_BINOP_WIDTH_MISMATCH: Arithmetic binary operators reject mismatched operand widths.
+// Tests width mismatch for -, *, /, % operators
+// across SYNCHRONOUS blocks in multiple modules.
+// Valid same-width operations included to verify no false positives.
+
+@project TYPE_BINOP_WIDTH_MISMATCH_arithmetic_ops
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [4] b = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// Helper: width mismatch in subtraction and multiplication
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [4] b;
+        OUT [8] data;
+    }
+    REGISTER {
+        r1 [8] = 8'd0;
+        r2 [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        // Valid: same-width addition (no false positive)
+        data <= r1 + r2;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: subtraction with mismatched widths (8 vs 4)
+        r1 <= a - b;
+        // Trigger: multiplication with mismatched widths (8 vs 4)
+        r2 <= a * b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [4] b;
+        OUT [8] result;
+    }
+    WIRE {
+        h_data [8];
+    }
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        IN  [4] b = b;
+        OUT [8] data = h_data;
+    };
+    REGISTER {
+        r1 [8] = 8'd0;
+        r2 [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        // Valid: same-width addition (no false positive)
+        result <= r1 + r2;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: division with mismatched widths (8 vs 4)
+        r1 <= a / b;
+        // Trigger: modulo with mismatched widths (8 vs 4)
+        r2 <= a % b;
+    }
+@endmod

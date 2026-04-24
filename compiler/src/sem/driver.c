@@ -71,7 +71,8 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
                                      char **out_expanded,
-                                     int depth);
+                                     int depth,
+                                     JZLocation loc);
 int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           const JZModuleScope *scope,
                                           const JZBuffer *project_symbols,
@@ -103,9 +104,21 @@ static int sem_is_reserved_keyword(const char *name)
         !strcmp(name, "OVERRIDE") || !strcmp(name, "CONFIG") ||
         !strcmp(name, "CLOCKS") || !strcmp(name, "IN_PINS") ||
         !strcmp(name, "OUT_PINS") || !strcmp(name, "INOUT_PINS") ||
-        !strcmp(name, "MAP") ||
+        !strcmp(name, "MAP") || !strcmp(name, "CLOCK_GEN") ||
+        !strcmp(name, "BUS") || !strcmp(name, "SOURCE") || !strcmp(name, "TARGET") ||
         !strcmp(name, "IDX") ||
         !strcmp(name, "VCC") || !strcmp(name, "GND")) {
+        return 1;
+    }
+
+    /* Reserved identifiers from spec §1.1 — clock types, CDC types,
+     * memory types/ports, and template/array keywords. */
+    if (!strcmp(name, "PLL") || !strcmp(name, "DLL") || !strcmp(name, "CLKDIV") ||
+        !strcmp(name, "BIT") || !strcmp(name, "BUS") || !strcmp(name, "FIFO") ||
+        !strcmp(name, "HANDSHAKE") || !strcmp(name, "PULSE") || !strcmp(name, "MCP") ||
+        !strcmp(name, "RAW") || !strcmp(name, "BLOCK") || !strcmp(name, "DISTRIBUTED") ||
+        !strcmp(name, "ASYNC") || !strcmp(name, "SYNC") || !strcmp(name, "WRITE_FIRST") ||
+        !strcmp(name, "READ_FIRST") || !strcmp(name, "NO_CHANGE")) {
         return 1;
     }
 
@@ -260,7 +273,8 @@ int module_scope_add_symbol_featured(JZModuleScope *scope,
             }
             return 0;
         }
-        if (existing->kind == JZ_SYM_INSTANCE || kind == JZ_SYM_INSTANCE) {
+        if ((existing->kind == JZ_SYM_INSTANCE || kind == JZ_SYM_INSTANCE) &&
+            existing->kind != JZ_SYM_MUX && kind != JZ_SYM_MUX) {
             if (diagnostics) {
                 char msg[512];
                 snprintf(msg, sizeof(msg),
@@ -279,8 +293,7 @@ int module_scope_add_symbol_featured(JZModuleScope *scope,
          * dedicated rule so that MUX namespace conflicts are reported with
          * MUX-specific context instead of the generic ID_DUP_IN_MODULE.
          */
-        if ((existing->kind == JZ_SYM_MUX && kind != JZ_SYM_INSTANCE) ||
-            (kind == JZ_SYM_MUX && existing->kind != JZ_SYM_INSTANCE)) {
+        if (existing->kind == JZ_SYM_MUX || kind == JZ_SYM_MUX) {
             if (diagnostics) {
                 char msg[512];
                 snprintf(msg, sizeof(msg),
@@ -359,6 +372,54 @@ const JZSymbol *module_scope_lookup(const JZModuleScope *scope,
     const JZSymbol *syms = (const JZSymbol *)scope->symbols.data;
     for (size_t i = 0; i < count; ++i) {
         if (syms[i].name && strcmp(syms[i].name, name) == 0) {
+            return &syms[i];
+        }
+    }
+    return NULL;
+}
+
+static int jz_loc_is_visible_at_use(JZLocation decl_loc, JZLocation use_loc)
+{
+    if (use_loc.line <= 0 || use_loc.column <= 0) return 1;
+    if (!decl_loc.filename || !use_loc.filename) return 1;
+    if (strcmp(decl_loc.filename, use_loc.filename) != 0) return 1;
+    if (decl_loc.line < use_loc.line) return 1;
+    if (decl_loc.line > use_loc.line) return 0;
+    return decl_loc.column <= use_loc.column;
+}
+
+const JZSymbol *module_scope_lookup_visible(const JZModuleScope *scope,
+                                            const char *name,
+                                            JZLocation use_loc)
+{
+    if (!scope || !name) return NULL;
+    size_t count = scope->symbols.len / sizeof(JZSymbol);
+    const JZSymbol *syms = (const JZSymbol *)scope->symbols.data;
+    for (size_t i = 0; i < count; ++i) {
+        if (!syms[i].name || strcmp(syms[i].name, name) != 0) {
+            continue;
+        }
+        if (!syms[i].node || jz_loc_is_visible_at_use(syms[i].node->loc, use_loc)) {
+            return &syms[i];
+        }
+    }
+    return NULL;
+}
+
+const JZSymbol *module_scope_lookup_kind_visible(const JZModuleScope *scope,
+                                                 const char *name,
+                                                 JZSymbolKind kind,
+                                                 JZLocation use_loc)
+{
+    if (!scope || !name) return NULL;
+    size_t count = scope->symbols.len / sizeof(JZSymbol);
+    const JZSymbol *syms = (const JZSymbol *)scope->symbols.data;
+    for (size_t i = 0; i < count; ++i) {
+        if (!syms[i].name || syms[i].kind != kind ||
+            strcmp(syms[i].name, name) != 0) {
+            continue;
+        }
+        if (!syms[i].node || jz_loc_is_visible_at_use(syms[i].node->loc, use_loc)) {
             return &syms[i];
         }
     }
@@ -620,7 +681,11 @@ int sem_resolve_bus_access(const JZASTNode *expr,
     int is_array = 0;
     if (port_sym->node->width) {
         unsigned tmp = 0;
-        if (sem_eval_width_expr(port_sym->node->width, mod_scope, project_symbols, &tmp) != 0) {
+        if (sem_eval_width_expr_at_loc(port_sym->node->width,
+                                       mod_scope,
+                                       project_symbols,
+                                       &tmp,
+                                       port_sym->node->loc) != 0) {
             if (diagnostics) {
                 char msg[512];
                 snprintf(msg, sizeof(msg),
@@ -736,6 +801,263 @@ JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
 
     (void)jz_buf_append(&scope->bus_signal_decls, &node, sizeof(node));
     return node;
+}
+
+static int sem_eval_instance_array_count(const JZASTNode *inst,
+                                         const JZModuleScope *mod_scope,
+                                         const JZBuffer *project_symbols,
+                                         unsigned *out)
+{
+    if (!inst || !out) return 0;
+    *out = 1;
+    if (!inst->width || !*inst->width) return 1;
+
+    long long v = 0;
+    if (sem_eval_const_expr_in_module(inst->width, mod_scope, project_symbols, &v) == 0 &&
+        v > 0 && (unsigned long long)v <= (unsigned long long)UINT_MAX) {
+        *out = (unsigned)v;
+        return 1;
+    }
+
+    unsigned simple = 0;
+    if (eval_simple_positive_decl_int(inst->width, &simple) == 1) {
+        *out = simple;
+        return 1;
+    }
+
+    return 0;
+}
+
+static int sem_eval_instance_access_index(const JZASTNode *idx,
+                                          const JZModuleScope *mod_scope,
+                                          const JZBuffer *project_symbols,
+                                          unsigned *out)
+{
+    if (!idx || !out) return 0;
+
+    if (idx->type == JZ_AST_EXPR_LITERAL && idx->text) {
+        return parse_literal_unsigned_value(idx->text, out);
+    }
+
+    long v = 0;
+    if (sem_try_const_eval_ast_expr(idx, &v) && v >= 0 &&
+        (unsigned long)v <= (unsigned long)UINT_MAX) {
+        *out = (unsigned)v;
+        return 1;
+    }
+
+    if ((idx->type == JZ_AST_EXPR_IDENTIFIER ||
+         idx->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
+        idx->name) {
+        long long cval = 0;
+        if (sem_eval_const_expr_in_module(idx->name, mod_scope, project_symbols, &cval) == 0 &&
+            cval >= 0 && (unsigned long long)cval <= (unsigned long long)UINT_MAX) {
+            *out = (unsigned)cval;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static const JZASTNode *sem_find_child_port_decl(const JZASTNode *child_mod,
+                                                 const char *port_name)
+{
+    if (!child_mod || !port_name) return NULL;
+    for (size_t i = 0; i < child_mod->child_count; ++i) {
+        JZASTNode *blk = child_mod->children[i];
+        if (!blk || blk->type != JZ_AST_PORT_BLOCK) continue;
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *pd = blk->children[j];
+            if (pd && pd->type == JZ_AST_PORT_DECL && pd->name &&
+                strcmp(pd->name, port_name) == 0) {
+                return pd;
+            }
+        }
+    }
+    return NULL;
+}
+
+static int sem_child_has_internal_decl(const JZASTNode *child_mod,
+                                       const char *name)
+{
+    if (!child_mod || !name) return 0;
+    for (size_t i = 0; i < child_mod->child_count; ++i) {
+        JZASTNode *blk = child_mod->children[i];
+        if (!blk) continue;
+        if (blk->type != JZ_AST_WIRE_BLOCK &&
+            blk->type != JZ_AST_REGISTER_BLOCK &&
+            blk->type != JZ_AST_LATCH_BLOCK) {
+            continue;
+        }
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *decl = blk->children[j];
+            if (decl && decl->name && strcmp(decl->name, name) == 0) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+int sem_resolve_instance_port_access(const JZASTNode *expr,
+                                     const JZModuleScope *mod_scope,
+                                     const JZBuffer *project_symbols,
+                                     JZInstancePortAccessInfo *out,
+                                     JZDiagnosticList *diagnostics)
+{
+    if (!expr || !mod_scope || !out) return 0;
+    memset(out, 0, sizeof(*out));
+
+    const char *inst_name = NULL;
+    const char *port_name = NULL;
+    const JZASTNode *index_expr = NULL;
+
+    if (expr->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS ||
+        expr->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS) {
+        inst_name = expr->name;
+        port_name = expr->text;
+        if (expr->child_count > 0) index_expr = expr->children[0];
+    } else if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER && expr->name) {
+        const char *dot = strchr(expr->name, '.');
+        if (!dot || dot == expr->name || !*(dot + 1) ||
+            strchr(dot + 1, '.') != NULL) {
+            return 0;
+        }
+        size_t inst_len = (size_t)(dot - expr->name);
+        if (inst_len >= sizeof(out->instance_name)) inst_len = sizeof(out->instance_name) - 1;
+        memcpy(out->instance_name, expr->name, inst_len);
+        out->instance_name[inst_len] = '\0';
+        inst_name = out->instance_name;
+        port_name = dot + 1;
+    } else {
+        return 0;
+    }
+
+    if (!inst_name || !*inst_name || !port_name || !*port_name) return 0;
+
+    const JZSymbol *inst_sym = module_scope_lookup_kind(mod_scope, inst_name, JZ_SYM_INSTANCE);
+    if (!inst_sym || !inst_sym->node || inst_sym->node->type != JZ_AST_MODULE_INSTANCE) {
+        return 0;
+    }
+
+    out->instance_decl = inst_sym->node;
+    if (inst_name != out->instance_name) {
+        strncpy(out->instance_name, inst_name, sizeof(out->instance_name) - 1u);
+        out->instance_name[sizeof(out->instance_name) - 1u] = '\0';
+    }
+    strncpy(out->port_name, port_name, sizeof(out->port_name) - 1u);
+    out->port_name[sizeof(out->port_name) - 1u] = '\0';
+
+    unsigned count = 1;
+    (void)sem_eval_instance_array_count(inst_sym->node, mod_scope, project_symbols, &count);
+    out->count = count;
+    out->is_array = (count > 1);
+    out->has_index = (index_expr != NULL);
+
+    if (expr->block_kind && strcmp(expr->block_kind, "WILDCARD") == 0) {
+        if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_ARRAY_INDEX_INVALID",
+                            "wildcard indexing is valid for BUS ports only, not instance arrays");
+        }
+        return 1;
+    }
+
+    if (out->is_array && !out->has_index && diagnostics) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "instance '%s' is an array of %u elements; use %s[index].%s",
+                 inst_name, count, inst_name, port_name);
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "INSTANCE_ARRAY_INDEX_REQUIRED",
+                        msg);
+    }
+
+    if (!out->is_array && out->has_index && diagnostics) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "instance '%s' is not an array; use %s.%s",
+                 inst_name, inst_name, port_name);
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "INSTANCE_ARRAY_INDEX_NOT_ARRAY",
+                        msg);
+    }
+
+    if (index_expr) {
+        unsigned idx = 0;
+        if (sem_eval_instance_access_index(index_expr, mod_scope, project_symbols, &idx)) {
+            out->index_known = 1;
+            out->index_value = idx;
+            if (out->is_array && idx >= count && diagnostics) {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "%s[%u] is out of range; '%s' has %u elements (valid indices: 0..%u)",
+                         inst_name, idx, inst_name, count, count - 1);
+                sem_report_rule(diagnostics,
+                                expr->loc,
+                                "INSTANCE_ARRAY_INDEX_OUT_OF_RANGE",
+                                msg);
+            }
+        } else if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_ARRAY_INDEX_INVALID",
+                            "instance array port index must be a nonnegative constant expression");
+        }
+    }
+
+    const char *child_mod_name = inst_sym->node->text;
+    const JZSymbol *child_sym = project_lookup_module_or_blackbox(project_symbols, child_mod_name);
+    if (!child_sym || !child_sym->node) {
+        if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_UNDEFINED_MODULE",
+                            "instance references undefined module/blackbox");
+        }
+        return 1;
+    }
+
+    const JZASTNode *child_port = sem_find_child_port_decl(child_sym->node, port_name);
+    if (child_port) {
+        out->child_port_decl = child_port;
+        const char *dir = child_port->block_kind ? child_port->block_kind : "";
+        if (strcmp(dir, "IN") == 0 && diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "UNDECLARED_IDENTIFIER",
+                            "instance input port is not readable from parent module");
+        }
+    } else if (sem_child_has_internal_decl(child_sym->node, port_name)) {
+        if (diagnostics) {
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "INSTANCE_INTERNAL_ACCESS",
+                            "cannot access internal signal of instance; "
+                            "only PORT members are accessible via inst.name "
+                            "(internal access is allowed in simulation only)");
+        }
+    } else if (diagnostics) {
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "UNDECLARED_IDENTIFIER",
+                        "reference to undefined instance port");
+    }
+
+    for (size_t i = 0; i < inst_sym->node->child_count; ++i) {
+        JZASTNode *bind = inst_sym->node->children[i];
+        if (bind && bind->type == JZ_AST_PORT_DECL && bind->name &&
+            strcmp(bind->name, port_name) == 0) {
+            out->binding_decl = bind;
+            break;
+        }
+    }
+
+    return 1;
 }
 
 
@@ -922,10 +1244,11 @@ int parse_simple_signed_int(const char *s, long long *out)
  *
  * Return values:
  *   1  -> successfully parsed a positive integer > 0 into *out.
- *   0  -> expression is non-simple (contains non-digits) or empty; caller
- *         should treat the value as unknown and avoid emitting errors.
- *  -1  -> expression consists only of digits but is invalid (e.g. 0 or
- *         overflow); callers should report MEM_*_INVALID style errors.
+ *   0  -> expression is non-simple (contains non-digits beyond an optional
+ *         sign) or empty; caller should treat the value as unknown and avoid
+ *         emitting errors.
+ *  -1  -> expression is a simple integer but invalid (e.g. <= 0 or overflow);
+ *         callers should report MEM_*_INVALID style errors.
  */
 int eval_simple_positive_decl_int(const char *s, unsigned *out)
 {
@@ -933,11 +1256,28 @@ int eval_simple_positive_decl_int(const char *s, unsigned *out)
 
     int saw_digit = 0;
     int saw_nondigit = 0;
+    int saw_sign = 0;
+    int negative = 0;
+    int overflow = 0;
+    unsigned value = 0;
+
     for (const char *p = s; *p; ++p) {
         if (isspace((unsigned char)*p) || *p == '_') continue;
+        if (!saw_digit && !saw_sign && (*p == '-' || *p == '+')) {
+            saw_sign = 1;
+            negative = (*p == '-');
+            continue;
+        }
         if (*p < '0' || *p > '9') {
             saw_nondigit = 1;
             break;
+        }
+        unsigned d = (unsigned)(*p - '0');
+        if (value > (unsigned)(~0u) / 10u ||
+            (value == (unsigned)(~0u) / 10u && d > (unsigned)(~0u) % 10u)) {
+            overflow = 1;
+        } else {
+            value = value * 10u + d;
         }
         saw_digit = 1;
     }
@@ -948,11 +1288,10 @@ int eval_simple_positive_decl_int(const char *s, unsigned *out)
         return 0; /* complex expression (CONST/CONFIG/etc.), defer */
     }
 
-    unsigned tmp = 0;
-    if (!parse_simple_positive_int(s, &tmp)) {
-        return -1; /* digits-only but <= 0 or overflow */
+    if (negative || value == 0u || overflow) {
+        return -1; /* simple integer but <= 0 or overflow */
     }
-    if (out) *out = tmp;
+    if (out) *out = value;
     return 1;
 }
 
@@ -1131,38 +1470,48 @@ void sem_check_module_const_blocks(const JZModuleScope *scope,
                 memset(&batch_opts, 0, sizeof(batch_opts));
                 int batch_rc = jz_const_eval_all(batch_defs, bc, &batch_opts, batch_vals);
                 if (batch_rc == -2) {
-                    /* Circular dependency detected.  Mark all CONSTs involved
-                     * (those whose batch eval did NOT complete) and report
-                     * CONST_CIRCULAR_DEP with the correct source location.
-                     * We rely on the fact that jz_const_eval_all stops at the
-                     * first cycle, so we check which CONSTs didn't get a value.
-                     * Re-run to identify each one individually.
+                    /* Circular dependency detected.  Identify all CONSTs
+                     * that participate in cycles (including transitive chains
+                     * like A→B→C→A) using Floyd-Warshall reachability.
+                     *
+                     * 1. Build adjacency matrix: adj[i][j] = 1 when expr
+                     *    of decl[i] textually references name of decl[j].
+                     * 2. Compute transitive closure (Floyd-Warshall).
+                     * 3. Any CONST reachable from itself (adj[i][i]) is in
+                     *    a cycle — mark ok[i] = -1.
                      */
-                    /* Identify which CONSTs are part of cycles by checking
-                     * if they can be evaluated without the others. Simple
-                     * approach: any CONST whose expression references another
-                     * CONST in the same block that also failed is circular.
-                     * For simplicity, mark any CONST that failed batch eval
-                     * and whose name appears in another failed CONST's expr.
-                     */
-                    for (size_t di2 = 0; di2 < decl_count; ++di2) {
-                        if (!decls[di2]) continue;
-                        if (decls[di2]->block_kind && strcmp(decls[di2]->block_kind, "STRING") == 0) continue;
-                        const char *dname = decls[di2]->name;
-                        const char *dexpr = decls[di2]->text ? decls[di2]->text : "0";
-                        /* Check if this CONST's expression references any other
-                         * CONST that also references it back (simple cycle check). */
-                        for (size_t di3 = 0; di3 < decl_count; ++di3) {
-                            if (di3 == di2 || !decls[di3]) continue;
-                            if (decls[di3]->block_kind && strcmp(decls[di3]->block_kind, "STRING") == 0) continue;
-                            const char *oname = decls[di3]->name;
-                            const char *oexpr = decls[di3]->text ? decls[di3]->text : "0";
-                            if (strstr(dexpr, oname) && strstr(oexpr, dname)) {
-                                /* Mutual reference — mark as circular. */
-                                ok[di2] = -1; /* -1 = circular dep */
-                                break;
+                    int *adj = (int *)calloc(decl_count * decl_count, sizeof(int));
+                    if (adj) {
+                        /* Build adjacency matrix. */
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            if (!decls[di2]) continue;
+                            if (decls[di2]->block_kind && strcmp(decls[di2]->block_kind, "STRING") == 0) continue;
+                            const char *dexpr = decls[di2]->text ? decls[di2]->text : "0";
+                            for (size_t di3 = 0; di3 < decl_count; ++di3) {
+                                if (di3 == di2 || !decls[di3]) continue;
+                                if (decls[di3]->block_kind && strcmp(decls[di3]->block_kind, "STRING") == 0) continue;
+                                if (strstr(dexpr, decls[di3]->name)) {
+                                    adj[di2 * decl_count + di3] = 1;
+                                }
                             }
                         }
+                        /* Floyd-Warshall transitive closure. */
+                        for (size_t k = 0; k < decl_count; ++k) {
+                            for (size_t i = 0; i < decl_count; ++i) {
+                                for (size_t j = 0; j < decl_count; ++j) {
+                                    if (adj[i * decl_count + k] && adj[k * decl_count + j]) {
+                                        adj[i * decl_count + j] = 1;
+                                    }
+                                }
+                            }
+                        }
+                        /* Mark diagonal entries (self-reachable = in a cycle). */
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            if (adj[di2 * decl_count + di2]) {
+                                ok[di2] = -1; /* circular dep */
+                            }
+                        }
+                        free(adj);
                     }
                 }
             }
@@ -1638,6 +1987,15 @@ int sem_resolve_string_const(const char *name,
                 }
             }
         }
+        if (diagnostics) {
+            char msg[512];
+            snprintf(msg, sizeof(msg),
+                     "CONFIG.%s is not declared in the project CONFIG block",
+                     cfg_name);
+            sem_report_rule(diagnostics, loc,
+                            "CONFIG_USE_UNDECLARED",
+                            msg);
+        }
         return 0;
     }
 
@@ -1670,6 +2028,15 @@ int sem_resolve_string_const(const char *name,
         }
     }
 
+    if (diagnostics) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "'%s' is not declared in this module",
+                 name);
+        sem_report_rule(diagnostics, loc,
+                        "UNDECLARED_IDENTIFIER",
+                        msg);
+    }
     return 0;
 }
 
@@ -1732,7 +2099,8 @@ int sem_eval_const_expr_in_module(const char *expr,
                                              scope,
                                              project_symbols,
                                              &expanded,
-                                             0) != 0) {
+                                             0,
+                                             (JZLocation){0}) != 0) {
             if (expanded) free(expanded);
             return -1;
         }
@@ -2013,7 +2381,8 @@ int sem_eval_const_expr_in_module(const char *expr,
                                          scope,
                                          project_symbols,
                                          &expanded,
-                                         0) != 0) {
+                                         0,
+                                         (JZLocation){0}) != 0) {
         for (size_t fi = 0; fi < total; ++fi) { if (owned_exprs[fi]) free(owned_exprs[fi]); }
         free(owned_exprs);
         free(defs);
@@ -2302,6 +2671,7 @@ int sem_expr_has_lit_call(const char *expr_text)
  */
 void sem_check_mux_selectors_recursive(JZASTNode *node,
                                        const JZModuleScope *mod_scope,
+                                       const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics);
 
 
@@ -2470,11 +2840,25 @@ static int sem_mux_compute_element_count(const JZModuleScope *scope,
     return 0;
 }
 
-/* Check constant MUX selector indices against the number of elements inferred
- * from the MUX declaration. Only literal indices are handled here.
+static unsigned sem_mux_required_selector_width(unsigned elem_count)
+{
+    unsigned width = 1u;
+    unsigned representable = 2u;
+
+    if (elem_count <= 1u) return 1u;
+    while (representable < elem_count && width < 31u) {
+        ++width;
+        representable <<= 1u;
+    }
+    return width;
+}
+
+/* Check runtime MUX selector width and constant out-of-range indices against
+ * the number of elements inferred from the MUX declaration.
  */
 static void sem_check_mux_selector_expr(JZASTNode *expr,
                                         const JZModuleScope *mod_scope,
+                                        const JZBuffer *project_symbols,
                                         JZDiagnosticList *diagnostics)
 {
     if (!expr || !mod_scope) return;
@@ -2487,19 +2871,37 @@ static void sem_check_mux_selector_expr(JZASTNode *expr,
     if (!mux_sym || !mux_sym->node) return;
     JZASTNode *mux_decl = mux_sym->node;
 
-    /* Only handle literal selector indices. */
     JZASTNode *idx_node = expr->children[1];
-    if (!idx_node || idx_node->type != JZ_AST_EXPR_LITERAL || !idx_node->text) return;
-
-    unsigned idx_val = 0;
-    if (!parse_literal_unsigned_value(idx_node->text, &idx_val)) return;
+    if (!idx_node) return;
 
     unsigned elem_count = 0;
     if (!sem_mux_compute_element_count(mod_scope, mux_decl, &elem_count) || elem_count == 0u) {
         return; /* unable to determine element count statically */
     }
 
-    if (idx_val >= elem_count) {
+    unsigned selector_width = sem_mux_required_selector_width(elem_count);
+
+    JZBitvecType idx_type;
+    idx_type.width = 0;
+    idx_type.is_signed = 0;
+    infer_expr_type(idx_node, mod_scope, project_symbols, diagnostics, &idx_type);
+    if (idx_type.width > 0 && idx_type.width != selector_width) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "MUX selector width is %u but %s requires %u-bit selector",
+                 idx_type.width, base->name, selector_width);
+        sem_report_rule(diagnostics,
+                        expr->loc,
+                        "MUX_SELECTOR_WIDTH_MISMATCH",
+                        msg);
+        return;
+    }
+
+    if (idx_node->type == JZ_AST_EXPR_LITERAL && idx_node->text) {
+        unsigned idx_val = 0;
+        if (!parse_literal_unsigned_value(idx_node->text, &idx_val)) return;
+        if (idx_val < elem_count) return;
+
         char msg[512];
         snprintf(msg, sizeof(msg),
                  "%s[%u] is out of range; MUX '%s' has %u element%s (valid indices: 0..%u)",
@@ -2516,12 +2918,13 @@ static void sem_check_mux_selector_expr(JZASTNode *expr,
 
 void sem_check_mux_selectors_recursive(JZASTNode *node,
                                        const JZModuleScope *mod_scope,
+                                       const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics)
 {
     if (!node) return;
-    sem_check_mux_selector_expr(node, mod_scope, diagnostics);
+    sem_check_mux_selector_expr(node, mod_scope, project_symbols, diagnostics);
     for (size_t i = 0; i < node->child_count; ++i) {
-        sem_check_mux_selectors_recursive(node->children[i], mod_scope, diagnostics);
+        sem_check_mux_selectors_recursive(node->children[i], mod_scope, project_symbols, diagnostics);
     }
 }
 
@@ -2696,7 +3099,7 @@ int jz_sem_run(JZASTNode *root,
 
     /* 8. Dead-code analysis (WARN_DEAD_CODE_UNREACHABLE, MEM_WARN_DEAD_CODE_ACCESS). */
     st0 = clock();
-    sem_check_dead_code(root, &module_scopes, diagnostics);
+    sem_check_dead_code(root, &module_scopes, &project_symbols, diagnostics);
     if (verbose) fprintf(stderr, "[verbose]   sem: dead_code: %.1f ms\n",
                          (double)(clock() - st0) / CLOCKS_PER_SEC * 1000.0);
 

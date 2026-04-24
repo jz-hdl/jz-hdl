@@ -106,6 +106,7 @@ typedef struct JZAssignTargetEntry {
     int           is_register;
     JZAssignRange range;
     int           is_nested;
+    int           can_drive_z;
 } JZAssignTargetEntry;
 
 typedef struct JZBusAccessInfo {
@@ -125,6 +126,19 @@ typedef struct JZBusAccessInfo {
     char signal_name[128];
 } JZBusAccessInfo;
 
+typedef struct JZInstancePortAccessInfo {
+    const JZASTNode *instance_decl;
+    const JZASTNode *binding_decl;
+    const JZASTNode *child_port_decl;
+    int has_index;
+    int index_known;
+    unsigned index_value;
+    unsigned count;
+    int is_array;
+    char instance_name[128];
+    char port_name[128];
+} JZInstancePortAccessInfo;
+
 /* Shared helpers implemented across driver*.c. */
 void sem_report_rule(JZDiagnosticList *diagnostics,
                      JZLocation loc,
@@ -142,6 +156,11 @@ int sem_resolve_bus_access(const JZASTNode *expr,
                            const JZBuffer *project_symbols,
                            JZBusAccessInfo *out,
                            JZDiagnosticList *diagnostics);
+int sem_resolve_instance_port_access(const JZASTNode *expr,
+                                     const JZModuleScope *mod_scope,
+                                     const JZBuffer *project_symbols,
+                                     JZInstancePortAccessInfo *out,
+                                     JZDiagnosticList *diagnostics);
 JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
                                              const char *bus_port_name,
                                              int has_index,
@@ -150,10 +169,10 @@ JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
                                              const JZASTNode *signal_decl);
 
 /* CONFIG usage helpers shared between module and project semantic checks. */
-void sem_check_undeclared_config_in_width(const char *expr,
-                                          JZLocation loc,
-                                          const JZBuffer *project_symbols,
-                                          JZDiagnosticList *diagnostics);
+int sem_check_undeclared_config_in_width(const char *expr,
+                                         JZLocation loc,
+                                         const JZBuffer *project_symbols,
+                                         JZDiagnosticList *diagnostics);
 
 /* GLOBAL usage helpers shared between module and project semantic checks. */
 int sem_expr_has_global_ref(const char *expr,
@@ -193,11 +212,18 @@ int sem_eval_width_expr(const char *expr,
                         const JZBuffer *project_symbols,
                         unsigned *out_width);
 
+int sem_eval_width_expr_at_loc(const char *expr,
+                               const JZModuleScope *scope,
+                               const JZBuffer *project_symbols,
+                               unsigned *out_width,
+                               JZLocation loc);
+
 int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
                                      char **out_expanded,
-                                     int depth);
+                                     int depth,
+                                     JZLocation loc);
 
 int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           const JZModuleScope *scope,
@@ -240,6 +266,15 @@ int module_scope_add_symbol_featured(JZModuleScope *scope,
 const JZSymbol *module_scope_lookup(const JZModuleScope *scope,
                                     const char *name);
 
+const JZSymbol *module_scope_lookup_visible(const JZModuleScope *scope,
+                                            const char *name,
+                                            JZLocation use_loc);
+
+const JZSymbol *module_scope_lookup_kind_visible(const JZModuleScope *scope,
+                                                 const char *name,
+                                                 JZSymbolKind kind,
+                                                 JZLocation use_loc);
+
 const JZSymbol *module_scope_lookup_kind(const JZModuleScope *scope,
                                          const char *name,
                                          JZSymbolKind kind);
@@ -254,10 +289,21 @@ int sem_match_mem_port_qualified_ident(JZASTNode *expr,
                                        JZDiagnosticList *diagnostics,
                                        JZMemPortRef *out);
 
+typedef struct JZExprReadRulesContext {
+    int is_sync_context;
+    int is_instance_binding;
+    int check_bus_rules;
+} JZExprReadRulesContext;
+
 /* MEM declaration/access/usage helpers implemented in driver_mem.c. */
 void sem_check_mem_access_expr(JZASTNode *expr,
                                const JZModuleScope *mod_scope,
                                const JZBuffer *project_symbols,
+                               JZDiagnosticList *diagnostics);
+void sem_check_expr_read_rules(JZASTNode *expr,
+                               const JZModuleScope *mod_scope,
+                               const JZBuffer *project_symbols,
+                               const JZExprReadRulesContext *ctx,
                                JZDiagnosticList *diagnostics);
 void sem_check_mem_addr_assign(const JZMemPortRef *ref,
                                JZASTNode *addr_expr,
@@ -413,6 +459,7 @@ void sem_excl_collect_targets_from_lhs(JZASTNode *lhs,
 
 void sem_check_dead_code(JZASTNode *root,
                          JZBuffer *module_scopes,
+                         const JZBuffer *project_symbols,
                          JZDiagnosticList *diagnostics);
 
 void sem_check_sync_clock_domains(JZBuffer *module_scopes,
@@ -424,6 +471,7 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
 /* driver.c helpers shared with new files */
 void sem_check_mux_selectors_recursive(JZASTNode *node,
                                        const JZModuleScope *mod_scope,
+                                       const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics);
 
 int sem_expr_contains_x_literal_anywhere(const JZASTNode *expr);
@@ -431,7 +479,8 @@ int sem_expr_contains_x_literal_anywhere(const JZASTNode *expr);
 void sem_lhs_observable_classify(JZASTNode *lhs,
                                  const JZModuleScope *mod_scope,
                                  int *out_has_register,
-                                 int *out_has_out_inout);
+                                 int *out_has_out_inout,
+                                 int *out_has_mem);
 
 int sem_expr_has_latch_identifier(const JZASTNode *expr,
                                   const JZModuleScope *mod_scope);
@@ -542,11 +591,29 @@ int sem_block_reads_name(const JZASTNode *node, const char *name);
 JZNetBinding *sem_net_find_binding(JZBuffer *bindings,
                                    JZASTNode *decl);
 
+/* Build a complete net graph for a single module: declarations, aliases, usage,
+ * CDC clock sinks, and instance bindings. On success, *nets and *bindings are
+ * populated and owned by the caller (must free via sem_net_free_module_graph).
+ * Returns 0 on success, non-zero on failure (buffers are freed on failure).
+ */
+int sem_net_build_module_graph(const JZModuleScope *scope,
+                               const JZBuffer *project_symbols,
+                               JZBuffer *nets_out,
+                               JZBuffer *bindings_out);
+
+/* Free a net graph populated by sem_net_build_module_graph. */
+void sem_net_free_module_graph(JZBuffer *nets, JZBuffer *bindings);
+
 /* driver_comb.c */
 void sem_check_combinational_loops_for_module(const JZModuleScope *scope,
                                               JZBuffer *nets,
                                               JZBuffer *bindings,
+                                              JZBuffer *module_scopes,
+                                              const JZBuffer *project_symbols,
+                                              JZBuffer *module_comb_cache,
                                               JZDiagnosticList *diagnostics);
+
+void sem_comb_free_module_comb_cache(JZBuffer *cache);
 
 void sem_comb_collect_targets_from_lhs(JZASTNode *lhs,
                                        const JZModuleScope *scope,

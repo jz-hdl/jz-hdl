@@ -1,0 +1,41 @@
+// PROJECT_NAME_NOT_UNIQUE: Project name conflicts with a blackbox name.
+// Context: project name matches a @blackbox name in the same project.
+
+// Trigger: project name vs blackbox name
+@project SharedName
+    @blackbox SharedName {
+        PORT {
+            IN  [1] din;
+            OUT [1] dout;
+        }
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_bb SharedName {
+        IN  [1] din = r;
+        OUT [1] dout = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

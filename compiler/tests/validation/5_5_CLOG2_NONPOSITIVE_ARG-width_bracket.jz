@@ -1,0 +1,65 @@
+// CLOG2_NONPOSITIVE_ARG: clog2() argument must be positive (> 0).
+// Tests clog2(0) in declaration width brackets across modules.
+// Valid clog2() width brackets included to verify no false positives.
+
+@project CLOG2_NONPOSITIVE_ARG_width_bracket
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] data_in = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper module: clog2(0) in WIRE width bracket
+@module HelperMod
+    PORT {
+        IN  [1] val;
+        OUT [1] out_a;
+    }
+    WIRE {
+        // Trigger 1: clog2(0) in helper WIRE width bracket
+        bad_w [clog2(0)];
+        // Valid: clog2(2) = 1 (no false positive)
+        good_w [clog2(2)];
+    }
+    ASYNCHRONOUS {
+        bad_w = val;
+        good_w = val;
+        out_a = good_w;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] data_in;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        h_a [1];
+        // Trigger 2: clog2(0) in top WIRE width bracket
+        bad_top [clog2(0)];
+        // Valid: clog2(2) = 1 (no false positive)
+        good_top [clog2(2)];
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] val = data_in;
+        OUT [1] out_a = h_a;
+    };
+
+    ASYNCHRONOUS {
+        bad_top = data_in;
+        good_top = h_a;
+        out_a = good_top;
+        out_b = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= data_in;
+    }
+@endmod

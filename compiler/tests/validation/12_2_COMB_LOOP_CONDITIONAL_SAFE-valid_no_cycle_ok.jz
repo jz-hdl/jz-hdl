@@ -1,0 +1,32 @@
+// COMB_LOOP_CONDITIONAL_SAFE: Valid IF/ELSE branches with no cycles.
+// Verifies that branch analysis does not warn when every branch is feed-forward.
+
+@project COMB_LOOP_CONDITIONAL_SAFE_valid_no_cycle_ok
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    WIRE {
+        next [1];
+    }
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            next <= din;
+            data <= next;
+        } ELSE {
+            next <= ~din;
+            data <= next;
+        }
+    }
+@endmod

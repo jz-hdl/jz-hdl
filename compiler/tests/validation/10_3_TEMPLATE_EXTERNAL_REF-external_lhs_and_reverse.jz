@@ -1,0 +1,78 @@
+// TEMPLATE_EXTERNAL_REF: Tests missing contexts — external signals on
+// LHS of <=, in => assignment, and on alias LHS (=).
+
+@project TEMPLATE_EXTERNAL_REF_external_lhs_and_reverse
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] dout = _;
+        OUT [8] dout2 = _;
+    }
+@endproj
+
+// Valid: only params (no error)
+@template valid_assign(a, b)
+    a <= b;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    WIRE {
+        ext_w [8];
+        w1 [8];
+    }
+
+    // Trigger: alias LHS (external on LHS of =)
+    @template ext_alias_lhs(a)
+        ext_w = a;
+    @endtemplate
+
+    ASYNCHRONOUS {
+        w1 <= din;
+        @apply ext_alias_lhs(w1);
+        dout <= ext_w;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+        OUT [8] dout2;
+    }
+
+    WIRE {
+        ext_w [8];
+        w1 [8];
+        w2 [8];
+    }
+
+    // Trigger: LHS of <= (external as assignment target)
+    @template ext_lhs_assign(a)
+        ext_w <= a;
+    @endtemplate
+
+    // Trigger: => assignment (reverse directional)
+    @template ext_drive(a)
+        ext_w => a;
+    @endtemplate
+
+    @new inst_a HelperMod {
+        IN  [8] din = din;
+        OUT [8] dout = dout;
+    };
+
+    ASYNCHRONOUS {
+        @apply ext_lhs_assign(din);
+        @apply ext_drive(w2);
+        @apply valid_assign(w1, din);
+        dout2 <= w1;
+    }
+@endmod

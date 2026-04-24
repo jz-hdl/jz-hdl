@@ -1,0 +1,66 @@
+// INSTANCE_NAME_CONFLICT: Instance names that do not collide with other
+// identifiers in the parent module compile cleanly.
+
+@project INSTANCE_NAME_CONFLICT_unique_instance_names_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        DATA_CONST = 1;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        child_a_data [1];
+        child_b_data [1];
+    }
+
+    REGISTER {
+        reg_q [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        sample_mem [8] [4] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    @new child_a HelperMod {
+        IN  [1] din = din;
+        OUT [1] dout = child_a_data;
+    };
+
+    @new child_b HelperMod {
+        IN  [1] din = child_a_data;
+        OUT [1] dout = child_b_data;
+    };
+
+    ASYNCHRONOUS {
+        data = reg_q ^ sample_mem.rd[2'b00];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        reg_q <= {6'b000000, child_a_data, child_b_data};
+    }
+@endmod

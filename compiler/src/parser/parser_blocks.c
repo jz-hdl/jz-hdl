@@ -93,6 +93,122 @@ static int parse_synchronous_header(Parser *p, JZASTNode *block) {
     return 0;
 }
 
+static int filter_decl_block_apply_tokens(Parser *p,
+                                          const char *kind,
+                                          JZToken **out_tokens,
+                                          size_t *out_count,
+                                          size_t *out_original_pos)
+{
+    size_t start = p->pos;
+    size_t cap = (p->count > start) ? (p->count - start + 1) : 1;
+    JZToken *filtered = (JZToken *)malloc(cap * sizeof(JZToken));
+    size_t out_len = 0;
+    size_t pos = start;
+    int depth = 1;
+    int found_apply = 0;
+
+    if (!filtered) return -1;
+
+    while (pos < p->count) {
+        const JZToken *t = &p->tokens[pos];
+
+        if (t->type == JZ_TOK_KW_APPLY) {
+            char msg[256];
+            const char *block_kind = kind ? kind : "declaration";
+
+            found_apply = 1;
+            snprintf(msg, sizeof(msg),
+                     "@apply found inside %s block; @apply may only appear "
+                     "inside ASYNCHRONOUS or SYNCHRONOUS blocks",
+                     block_kind);
+            parser_report_rule(p, t, "TEMPLATE_APPLY_OUTSIDE_BLOCK", msg);
+
+            pos++;
+            while (pos < p->count &&
+                   p->tokens[pos].type != JZ_TOK_EOF &&
+                   p->tokens[pos].type != JZ_TOK_SEMICOLON &&
+                   p->tokens[pos].type != JZ_TOK_RBRACE &&
+                   p->tokens[pos].type != JZ_TOK_KW_FEATURE_ELSE &&
+                   p->tokens[pos].type != JZ_TOK_KW_ENDFEAT) {
+                pos++;
+            }
+            if (pos < p->count && p->tokens[pos].type == JZ_TOK_SEMICOLON) {
+                pos++;
+            }
+            continue;
+        }
+
+        filtered[out_len++] = *t;
+
+        if (t->type == JZ_TOK_LBRACE) {
+            depth++;
+        } else if (t->type == JZ_TOK_RBRACE) {
+            depth--;
+            pos++;
+            if (depth == 0) break;
+            continue;
+        } else if (t->type == JZ_TOK_EOF) {
+            pos++;
+            break;
+        }
+
+        pos++;
+    }
+
+    if (!found_apply) {
+        free(filtered);
+        *out_tokens = NULL;
+        *out_count = 0;
+        *out_original_pos = start;
+        return 0;
+    }
+
+    if (out_len == 0 || filtered[out_len - 1].type != JZ_TOK_EOF) {
+        if (p->count > 0) {
+            filtered[out_len++] = p->tokens[p->count - 1];
+        }
+    }
+
+    *out_tokens = filtered;
+    *out_count = out_len;
+    *out_original_pos = pos;
+    return 0;
+}
+
+static int parse_decl_block_body_with_apply_recovery(Parser *p,
+                                                     JZASTNode *parent,
+                                                     const char *kind,
+                                                     int (*body_fn)(Parser *p, JZASTNode *parent))
+{
+    JZToken *filtered_tokens = NULL;
+    size_t filtered_count = 0;
+    size_t original_pos_after_body = p->pos;
+
+    if (filter_decl_block_apply_tokens(p, kind, &filtered_tokens, &filtered_count,
+                                       &original_pos_after_body) != 0) {
+        return -1;
+    }
+
+    if (!filtered_tokens) {
+        return body_fn(p, parent);
+    }
+
+    const JZToken *saved_tokens = p->tokens;
+    size_t saved_count = p->count;
+    p->tokens = filtered_tokens;
+    p->count = filtered_count;
+    p->pos = 0;
+
+    int rc = body_fn(p, parent);
+
+    p->tokens = saved_tokens;
+    p->count = saved_count;
+    p->pos = original_pos_after_body;
+    free(filtered_tokens);
+
+    return rc;
+}
+
 /**
  * @brief Parse a generic braced block as raw text items.
  *
@@ -260,22 +376,26 @@ JZASTNode *parse_block(Parser *p, const JZToken *block_kw, const char *kind, JZA
     }
 
     if (node_type == JZ_AST_CONST_BLOCK) {
-        if (parse_const_block_body(p, node) != 0) {
+        if (parse_decl_block_body_with_apply_recovery(p, node, kind,
+                                                      parse_const_block_body) != 0) {
             jz_ast_free(node);
             return NULL;
         }
     } else if (node_type == JZ_AST_PORT_BLOCK) {
-        if (parse_port_block_body(p, node) != 0) {
+        if (parse_decl_block_body_with_apply_recovery(p, node, kind,
+                                                      parse_port_block_body) != 0) {
             jz_ast_free(node);
             return NULL;
         }
     } else if (node_type == JZ_AST_WIRE_BLOCK) {
-        if (parse_wire_block_body(p, node) != 0) {
+        if (parse_decl_block_body_with_apply_recovery(p, node, kind,
+                                                      parse_wire_block_body) != 0) {
             jz_ast_free(node);
             return NULL;
         }
     } else if (node_type == JZ_AST_REGISTER_BLOCK) {
-        if (parse_register_block_body(p, node) != 0) {
+        if (parse_decl_block_body_with_apply_recovery(p, node, kind,
+                                                      parse_register_block_body) != 0) {
             jz_ast_free(node);
             return NULL;
         }

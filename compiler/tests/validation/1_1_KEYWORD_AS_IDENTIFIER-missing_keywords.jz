@@ -1,0 +1,109 @@
+// KEYWORD_AS_IDENTIFIER: Reserved keywords not previously tested.
+// Tests keywords IN_PINS, OUT_PINS, INOUT_PINS, CLOCK_GEN, BUS, SOURCE,
+// TARGET in multiple declaration contexts: module-name, port-name, wire-name,
+// register-name, const-name, instance-name, latch-name, mem-name, mux-name.
+
+@project KEYWORD_AS_IDENTIFIER_missing_keywords
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger 1: keyword IN_PINS as module name
+@module IN_PINS
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Helper module for instantiation tests
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        // Trigger 2: keyword OUT_PINS as port name
+        OUT [1] OUT_PINS;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        OUT_PINS = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    // Trigger 3: keyword INOUT_PINS as wire name
+    WIRE {
+        INOUT_PINS [1];
+    }
+
+    // Trigger 4: keyword BUS as const name
+    // Trigger 5: keyword SOURCE as const name
+    // Trigger 6: keyword TARGET as const name
+    CONST {
+        BUS = 1;
+        SOURCE = 2;
+        TARGET = 3;
+    }
+
+    // Trigger 7: keyword CLOCK_GEN as register name
+    REGISTER {
+        CLOCK_GEN [1] = 1'b0;
+    }
+
+    // Trigger 8: keyword IN_PINS as latch name
+    LATCH {
+        IN_PINS [1] D;
+    }
+
+    // Trigger 9: keyword OUT_PINS as MEM name
+    MEM {
+        OUT_PINS [1] [4] = 1'b0 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Trigger 10: keyword INOUT_PINS as MUX name
+    MUX {
+        INOUT_PINS = a, b;
+    }
+
+    // Trigger 11: keyword SOURCE as instance name
+    @new SOURCE HelperA {
+        IN  [1] clk = clk;
+        OUT [1] OUT_PINS = _;
+    };
+
+    ASYNCHRONOUS {
+        INOUT_PINS = clk;
+        data = CLOCK_GEN;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        CLOCK_GEN <= ~CLOCK_GEN;
+    }
+@endmod

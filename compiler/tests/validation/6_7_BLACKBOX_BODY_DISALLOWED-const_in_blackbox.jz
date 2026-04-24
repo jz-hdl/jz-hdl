@@ -1,10 +1,9 @@
-// BLACKBOX_BODY_DISALLOWED: Blackbox with CONST block triggers forbidden body error.
-// NOTE: The parser rejects ASYNCHRONOUS/SYNCHRONOUS/WIRE/REGISTER/MEM with PARSE000
-// before semantic analysis runs. CONST is the only block the parser allows but
-// semantics rejects. See issues.md for the parser inconsistency.
+// HAPPY_PATH: CONST blocks are valid inside @blackbox declarations.
+// Regression for S6.7/S7.11: blackbox CONST values are allowed and lower to
+// Verilog localparam declarations.
 
 @project BLACKBOX_BODY_DISALLOWED_const_in_blackbox
-    // Trigger 1: CONST block with single entry in blackbox
+    // Valid: CONST block with single entry in blackbox
     @blackbox bb_with_const {
         CONST { VAL = 42; }
         PORT {
@@ -13,7 +12,7 @@
         }
     }
 
-    // Trigger 2: CONST block with multiple entries in blackbox
+    // Valid: CONST block with multiple entries in blackbox
     @blackbox bb_multi_const {
         CONST {
             WIDTH = 8;
@@ -25,7 +24,7 @@
         }
     }
 
-    // Trigger 3: CONST before PORT in different blackbox
+    // Valid: CONST before PORT in different blackbox
     @blackbox bb_const_first {
         CONST {
             MODE = 1;

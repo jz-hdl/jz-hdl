@@ -1,0 +1,95 @@
+// CDC_DEST_ALIAS_DUP: CDC destination alias name conflicts with existing const.
+// Tests dest alias conflicting with a CONST name in multiple modules.
+// Valid unique alias names included to verify no false positives.
+
+@project CDC_DEST_ALIAS_DUP_conflict_with_const
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST {
+        MY_CONST = 1;
+    }
+
+    REGISTER {
+        src_reg [1] = 1'b0;
+        ok_src [1] = 1'b0;
+    }
+
+    CDC {
+        // Trigger: dest alias conflicts with const name 'MY_CONST'
+        BIT src_reg (clk_a) => MY_CONST (clk_b);
+        // Valid: unique alias name
+        BIT ok_src (clk_a) => ok_alias (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        data = ok_alias;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        src_reg <= din;
+        ok_src <= din;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // no-op
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    CONST {
+        TOP_CONST = 42;
+    }
+
+    REGISTER {
+        top_src [1] = 1'b0;
+        top_ok [1] = 1'b0;
+    }
+
+    CDC {
+        // Trigger: dest alias conflicts with const name 'TOP_CONST'
+        BIT top_src (clk_a) => TOP_CONST (clk_b);
+        // Valid: unique alias name
+        BIT top_ok (clk_a) => top_ok_sync (clk_b);
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk_a = clk_a;
+        IN  [1] clk_b = clk_b;
+        IN  [1] din = din;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = top_ok_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        top_src <= din;
+        top_ok <= din;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // no-op
+    }
+@endmod

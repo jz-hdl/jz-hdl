@@ -1,0 +1,71 @@
+// SLICE_INDEX_INVALID / CONST_UNDEFINED_IN_WIDTH_OR_SLICE: Slice index inside
+// an @new port-binding expression is not a valid non-negative integer/CONST.
+// Triggers sized-literal and undefined-CONST indices in the new-binding
+// context. Valid slice binding included to verify no false positives.
+
+@project SLICE_INDEX_INVALID_new_binding
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] out_a = _;
+        OUT [4] out_b = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [4] nib;
+        OUT [4] out_a;
+    }
+    REGISTER {
+        r [4] = 4'h0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= nib;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] out_a;
+        OUT [4] out_b;
+    }
+    WIRE {
+        ha_out_a [4];
+        ha_out_b [4];
+    }
+    REGISTER {
+        r [16] = 16'h0000;
+    }
+
+    // Trigger 1: sized literal used as slice index in new-binding expression
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [4] nib = r[8'd7:4];
+        OUT [4] out_a = ha_out_a;
+    };
+
+    // Trigger 2: undefined CONST used as slice index in new-binding expression
+    @new inst_b HelperA {
+        IN  [1] clk = clk;
+        IN  [4] nib = r[UNDEF_HI:0];
+        OUT [4] out_a = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

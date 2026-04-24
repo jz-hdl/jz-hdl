@@ -1,0 +1,62 @@
+// LIT_INVALID_DIGIT_FOR_BASE: binary literal containing invalid digits (2-9)
+// across new-binding, check-expr, and feature-cond contexts.
+
+@project LIT_INVALID_DIGIT_FOR_BASE_binary_contexts
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger 1 (check-expr): binary literal with invalid digit '3' inside @check
+    @check (VAL == 8'b0000_0030, "bad binary digit in check");
+
+    // Trigger 2 (feature-cond): binary literal with invalid digit '4' inside @feature
+    @feature VAL == 8'b0000_0040
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // Trigger 3 (new-binding): binary literal with invalid digit '7' in @new binding
+    @new inst_a HelperA {
+        IN  [8] din = 8'b0000_0070;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

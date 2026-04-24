@@ -1,0 +1,2 @@
+File: 4_6_MUX_NAME_DUPLICATE-dup_mux.jz
+      34:9    error MUX_NAME_DUPLICATE S4.6 MUX identifier duplicates another identifier in module

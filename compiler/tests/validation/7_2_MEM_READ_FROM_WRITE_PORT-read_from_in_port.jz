@@ -23,6 +23,10 @@
         r [8] = 8'h00;
     }
 
+    WIRE {
+        rd_used [8];
+    }
+
     MEM {
         mem_a [8] [16] = 8'h00 {
             OUT rd ASYNC;
@@ -32,6 +36,7 @@
 
     ASYNCHRONOUS {
         // Trigger 1: read from IN (write) port in ASYNC block
+        rd_used = mem_a.rd[addr];
         data = mem_a.wr[addr];
     }
 
@@ -53,6 +58,10 @@
         r [8] = 8'h00;
     }
 
+    WIRE {
+        rd_used [8];
+    }
+
     MEM {
         mem_b [8] [16] = 8'h00 {
             OUT rd ASYNC;
@@ -69,6 +78,7 @@
 
     ASYNCHRONOUS {
         // Trigger 2: read from IN (write) port in top module ASYNC block
+        rd_used = mem_b.rd[addr];
         data = mem_b.wr[addr];
     }
 

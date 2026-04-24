@@ -1,0 +1,36 @@
+// NET_MULTIPLE_ACTIVE_DRIVERS: Two ASYNCHRONOUS blocks in the same module
+// both drive the same wire. Per spec §1.6.4, multi-driver analysis must
+// cover assignments in different ASYNCHRONOUS blocks within one module.
+
+@project NET_MULTIPLE_ACTIVE_DRIVERS_dual_async_block
+    @top TopMod {
+        IN  [1] a = _;
+        IN  [1] b = _;
+        OUT [1] o = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] o;
+    }
+
+    WIRE {
+        // Trigger: w is driven by two separate ASYNCHRONOUS blocks
+        w [1];
+    }
+
+    ASYNCHRONOUS {
+        w <= a;
+    }
+
+    ASYNCHRONOUS {
+        w <= b;
+    }
+
+    ASYNCHRONOUS {
+        o <= w;
+    }
+@endmod

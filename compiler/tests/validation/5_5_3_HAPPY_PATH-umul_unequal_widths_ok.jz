@@ -1,0 +1,54 @@
+// HAPPY_PATH: §5.5.3 umul(a, b) accepts operands of unequal widths and
+// zero-extends the narrower operand to max_bits before multiplication.
+// max_bits = MAX(width(a), width(b)); result_width = 2 * max_bits.
+// Narrower operand is zero-extended (unsigned) to max_bits before multiply.
+// No diagnostics expected.
+
+@project HAPPY_PATH_umul_unequal_widths_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [4]  a4  = _;
+        IN  [8]  b8  = _;
+        IN  [3]  c3  = _;
+        IN  [5]  d5  = _;
+        OUT [16] prod_a4_b8 = _;
+        OUT [10] prod_c3_d5 = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [4]  a4;
+        IN  [8]  b8;
+        IN  [3]  c3;
+        IN  [5]  d5;
+        OUT [16] prod_a4_b8;
+        OUT [10] prod_c3_d5;
+    }
+
+    REGISTER {
+        r_a4b8 [16] = 16'd0;
+        r_c3d5 [10] = 10'd0;
+    }
+
+    ASYNCHRONOUS {
+        // umul with a narrower LHS operand: width(a4)=4, width(b8)=8
+        // max_bits = 8; a4 zero-extended from 4 to 8 bits.
+        // result_width = 2 * 8 = 16.
+        prod_a4_b8 = r_a4b8;
+        // umul with a narrower RHS operand: width(c3)=3, width(d5)=5
+        // max_bits = 5; c3 zero-extended from 3 to 5 bits.
+        // result_width = 2 * 5 = 10.
+        prod_c3_d5 = r_c3d5;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_a4b8 <= umul(a4, b8);
+        r_c3d5 <= umul(c3, d5);
+    }
+@endmod

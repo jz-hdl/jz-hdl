@@ -1,0 +1,57 @@
+// HAPPY_PATH: Wildcard fanout on an arrayed BUS port with an N-bit RHS matching
+// the array count elaborates to element-wise pairing. Covers Req #24.
+
+@project HAPPY_PATH_wildcard_element_wise_ok
+    BUS MY_BUS {
+        OUT [1] tx;
+        IN  [1] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [1] dout_a = _;
+    }
+@endproj
+
+@module ElementWiseMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        BUS MY_BUS SOURCE [4] abus;
+        OUT [1] data_out;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: wildcard with RHS width == count (4) -> element-wise pairing
+        // Each abus[i].tx gets din[i]
+        abus[*].tx <= din;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= abus[0].rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [1] dout_a;
+    }
+
+    @new inst_e ElementWiseMod {
+        IN  [1] clk = clk;
+        IN  [4] din = din;
+        BUS MY_BUS SOURCE [4] abus = _;
+        OUT [1] data_out = dout_a;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

@@ -1,0 +1,67 @@
+// SELECT_CASE_WIDTH_MISMATCH: x-wildcard CASE value width must match selector width.
+// Tests that width mismatch is detected even when CASE value contains x bits.
+// Valid matching-width x-wildcard included to verify no false positive.
+
+@project SELECT_CASE_WIDTH_MISMATCH_xwild_width_mismatch
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] sel = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [4] sel;
+        OUT [1] out_a;
+    }
+    ASYNCHRONOUS {
+        // Trigger: x-wildcard CASE wider than selector (8-bit vs 4-bit)
+        SELECT (sel) {
+            CASE 8'b1010_xxxx {
+                out_a <= VCC;
+            }
+            // Valid: matching 4-bit x-wildcard (no false positive)
+            CASE 4'bxx10 {
+                out_a <= GND;
+            }
+            DEFAULT {
+                out_a <= GND;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] sel;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    @new inst_h HelperMod {
+        IN  [4] sel = sel;
+        OUT [1] out_a = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+        out_b = sel[0];
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: x-wildcard CASE narrower than selector (2-bit vs 4-bit) in SYNC
+        SELECT (sel) {
+            CASE 2'bx1 {
+                r <= VCC;
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

@@ -18,6 +18,8 @@
         OUT [8] out_e = _;
         OUT [8] out_f = _;
         OUT [8] out_g = _;
+        OUT [8] out_h = _;
+        OUT [8] out_i = _;
     }
 @endproj
 
@@ -64,6 +66,8 @@
         OUT [8] out_e;
         OUT [8] out_f;
         OUT [8] out_g;
+        OUT [8] out_h;
+        OUT [8] out_i;
     }
     REGISTER {
         r_zext   [8] = 8'h00;
@@ -71,6 +75,10 @@
         r_slice  [8] = 8'h00;
         r_ca     [4] = 4'h0;
         r_cb     [4] = 4'h0;
+        r_zca    [4] = 4'h0;
+        r_zcb    [4] = 4'h0;
+        r_sca    [4] = 4'h0;
+        r_scb    [4] = 4'h0;
         r_sel    [8] = 8'h00;
         r_ifelse [8] = 8'h00;
         r_nested [8] = 8'h00;
@@ -92,6 +100,10 @@
         out_e = r_sel;
         out_f = r_ifelse;
         out_g = r_nested;
+        out_h[7:4] <= r_zca;
+        out_h[3:0] <= r_zcb;
+        out_i[7:4] <= r_sca;
+        out_i[3:0] <= r_scb;
     }
     SYNCHRONOUS(CLK=clk) {
         // Valid: zero-extend
@@ -103,6 +115,10 @@
         r_slice[3:0] <= din[7:4];
         // Valid: concat decomposition
         {r_ca, r_cb} <= din;
+        // Valid: concat decomposition with zero-extend from a narrower RHS
+        {r_zca, r_zcb} <=z narrow;
+        // Valid: concat decomposition with sign-extend from a narrower RHS
+        {r_sca, r_scb} <=s narrow;
         // Valid: SELECT-based assignment with DEFAULT
         SELECT (state) {
             CASE (2'b00) {

@@ -1,0 +1,43 @@
+// MEM_INIT_FILE_NOT_FOUND: @file(CONST_NAME) string path that does not exist.
+// Target diagnostic: MEM_INIT_FILE_NOT_FOUND.
+// Non-target diagnostics expected: none.
+
+@project MEM_INIT_FILE_NOT_FOUND_const_path
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        ROM_FILE = "missing_const_path.hex";
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        rom [8] [4] = @file(ROM_FILE) {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = rom.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        rom.wr[addr] <= 8'h00;
+    }
+@endmod

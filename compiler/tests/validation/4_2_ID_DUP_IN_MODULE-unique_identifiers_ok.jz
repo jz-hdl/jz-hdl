@@ -1,0 +1,84 @@
+// ID_DUP_IN_MODULE: Valid module-local identifiers remain unique across
+// module, port, wire, register, CONST, MEM, LATCH, MUX, and instance names.
+
+@project ID_DUP_IN_MODULE_unique_identifiers_ok
+    CONFIG {
+        DATA_WIDTH = 8;
+        DEPTH = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [1] sel = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module ChildMod
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        LOCAL_WIDTH = CONFIG.DATA_WIDTH;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [LOCAL_WIDTH] a;
+        IN  [LOCAL_WIDTH] b;
+        IN  [1] sel;
+        IN  [2] addr;
+        OUT [LOCAL_WIDTH] data;
+    }
+
+    WIRE {
+        mux_src_a [LOCAL_WIDTH];
+        mux_src_b [LOCAL_WIDTH];
+        child_data [1];
+    }
+
+    REGISTER {
+        reg_q [1] = 1'b0;
+    }
+
+    LATCH {
+        gate_q [1] D;
+    }
+
+    MUX {
+        mux_val = mux_src_a, mux_src_b;
+    }
+
+    MEM {
+        sample_mem [LOCAL_WIDTH] [CONFIG.DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    @new child_inst ChildMod {
+        IN  [1] din = gate_q;
+        OUT [1] dout = child_data;
+    };
+
+    ASYNCHRONOUS {
+        mux_src_a = a;
+        mux_src_b = b;
+        gate_q <= clk : sel;
+        data = mux_val[reg_q] ^ sample_mem.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        reg_q <= child_data;
+    }
+@endmod

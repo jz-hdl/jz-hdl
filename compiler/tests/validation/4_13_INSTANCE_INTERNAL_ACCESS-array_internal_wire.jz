@@ -1,0 +1,42 @@
+// INSTANCE_INTERNAL_ACCESS: array syntax still cannot access child internals.
+// Target diagnostic: INSTANCE_INTERNAL_ACCESS.
+// Non-target diagnostics expected: none. The array index is valid and the child
+// output binding is complete; only the internal wire member is invalid.
+
+@project INSTANCE_INTERNAL_ACCESS_array_internal_wire
+    @top TopMod {
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Child
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    WIRE {
+        temp [1];
+    }
+    ASYNCHRONOUS {
+        temp = din;
+        data = temp;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    WIRE {
+        child_data [2];
+    }
+    @new inst_arr[2] Child {
+        IN  [1] din = din;
+        OUT [1] data = child_data[IDX];
+    };
+    ASYNCHRONOUS {
+        data = inst_arr[0].temp;
+    }
+@endmod

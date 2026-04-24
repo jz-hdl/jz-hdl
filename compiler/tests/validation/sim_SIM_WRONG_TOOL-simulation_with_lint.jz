@@ -1,5 +1,6 @@
-// SIM_WRONG_TOOL: File contains @simulation blocks but is run with --lint.
+// SIM_WRONG_TOOL: File containing @simulation blocks run via --lint.
 // The compiler should detect @simulation and direct the user to use --simulate.
+// Two @simulation blocks test whether the error fires per-block or per-file.
 
 @module sim_dut
     PORT {
@@ -39,4 +40,24 @@
         data <= 1'b0;
     }
     @run(ns=100)
+@endsim
+
+// Trigger 2: second @simulation block in same file
+@simulation sim_dut
+    CLOCK {
+        clk = { period=20.0 };
+    }
+    WIRE {
+        data [1];
+        out  [1];
+    }
+    @new dut2 sim_dut {
+        clk  [1] = clk;
+        data [1] = data;
+        out  [1] = out;
+    }
+    @setup {
+        data <= 1'b1;
+    }
+    @run(ns=50)
 @endsim

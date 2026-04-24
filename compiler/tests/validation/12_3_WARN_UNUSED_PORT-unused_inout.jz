@@ -1,0 +1,68 @@
+// WARN_UNUSED_PORT: INOUT port declared but never used inside the module.
+// Tests unused INOUT port detection. Valid: used ports included for no false positives.
+
+@project WARN_UNUSED_PORT_unused_inout
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module with an unused INOUT port
+@module HelperMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] sel;
+        // Trigger: unused INOUT port
+        INOUT [8] unused_bus;
+        OUT   [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (sel) {
+            r <= ~r;
+        } ELSE {
+            r <= r;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        OUT [1] data;
+    }
+
+    @new inst_h HelperMod {
+        IN    [1] clk = clk;
+        IN    [1] sel = sel;
+        INOUT [8] unused_bus = _;
+        OUT   [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (sel) {
+            r <= ~r;
+        } ELSE {
+            r <= r;
+        }
+    }
+@endmod

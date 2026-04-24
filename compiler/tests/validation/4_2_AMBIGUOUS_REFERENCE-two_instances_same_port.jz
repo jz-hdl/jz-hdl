@@ -1,0 +1,62 @@
+// AMBIGUOUS_REFERENCE: Two instances expose same-named OUT port.
+// Bare reference to that port name is ambiguous without instance prefix.
+
+@project AMBIGUOUS_REFERENCE_two_instances_same_port
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+// Child module with OUT port named "val"
+@module ChildA
+    PORT {
+        IN  [8] din;
+        OUT [8] val;
+    }
+    ASYNCHRONOUS {
+        val = din;
+    }
+@endmod
+
+// Another child module with OUT port also named "val"
+@module ChildB
+    PORT {
+        IN  [8] din;
+        OUT [8] val;
+    }
+    ASYNCHRONOUS {
+        val = din;
+    }
+@endmod
+
+// Top module: two instances both have "val" OUT port
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] result;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_a ChildA {
+        IN  [8] din = r;
+        OUT [8] val = _;
+    };
+
+    @new inst_b ChildB {
+        IN  [8] din = r;
+        OUT [8] val = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: bare 'val' is ambiguous — both inst_a and inst_b have OUT val
+        result = val;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

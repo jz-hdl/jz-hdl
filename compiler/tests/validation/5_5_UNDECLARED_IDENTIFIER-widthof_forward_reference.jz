@@ -1,0 +1,35 @@
+// UNDECLARED_IDENTIFIER: widthof() requires point-of-use visibility.
+// Target diagnostic: UNDECLARED_IDENTIFIER on a forward reference in CONST.
+
+@project UNDECLARED_IDENTIFIER_widthof_forward_reference
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] data_in = _;
+        OUT [8] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        // Trigger 1: later_w is declared after this widthof() use.
+        EARLY_W = widthof(later_w);
+    }
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] out_a;
+    }
+    WIRE {
+        later_w [8];
+    }
+    REGISTER {
+        r [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        later_w = data_in;
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= later_w;
+    }
+@endmod

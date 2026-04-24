@@ -1,0 +1,58 @@
+// TOP_PORT_WIDTH_MISMATCH: INOUT port width in @top doesn't match module port width.
+// Tests INOUT port width mismatch.
+// Valid IN/OUT width matches included for no false positives.
+
+@project TOP_PORT_WIDTH_MISMATCH_inout_width
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+        // Trigger: INOUT port width mismatch (4 vs 8 in module)
+        INOUT [4] bidir = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [1] result;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        result = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        INOUT [8] bidir;
+    }
+
+    @new helper_inst Helper {
+        IN  [1] clk = clk;
+        OUT [1] result = _;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r[0:0];
+        IF (clk) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 8'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

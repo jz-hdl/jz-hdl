@@ -1,0 +1,38 @@
+// COMMENT_IN_TOKEN: Comment inside a template parameter name.
+// Valid template parameters included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_template_param
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Valid: comment between tokens in template header
+@template valid_tmpl(a /* ok */, b)
+    a <= b;
+@endtemplate
+
+// Trigger: comment inside template parameter name
+@template bad_tmpl(ds/**/t, src)
+    dst <= src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        @apply valid_tmpl(r, ~r);
+    }
+@endmod

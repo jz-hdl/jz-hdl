@@ -1,0 +1,59 @@
+// ASYNC_ALIAS_IN_CONDITIONAL: Alias = inside SELECT branch is forbidden.
+// Trigger is alias operator inside SELECT CASE. Valid <= inside SELECT for no false positives.
+// COMB_LOOP_UNCONDITIONAL co-fires because alias inside SELECT creates a loop path.
+
+@project ASYNC_ALIAS_IN_CONDITIONAL_alias_in_select
+    @top TopMod {
+        IN  [2] sel = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [2] sel;
+        IN  [8] din;
+        OUT [8] data_out;
+    }
+
+    ASYNCHRONOUS {
+        SELECT (sel) {
+            CASE (2'b00) {
+                // Trigger: alias inside SELECT CASE
+                data_out = din;
+            }
+            DEFAULT {
+                data_out <= din;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [2] sel;
+        IN  [8] din;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+    }
+
+    @new inst_h HelperMod {
+        IN  [2] sel = sel;
+        IN  [8] din = din;
+        OUT [8] data_out = dout_a;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: receive-assign inside SELECT (not alias)
+        SELECT (sel) {
+            CASE (2'b00) {
+                dout_b <= din;
+            }
+            DEFAULT {
+                dout_b <= 8'h00;
+            }
+        }
+    }
+@endmod

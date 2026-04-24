@@ -1,0 +1,63 @@
+// MODULE_PORT_IN_ONLY: Happy path — every module declares at least one OUT
+// port alongside its IN ports, so the "input-only" warning is never raised.
+// No diagnostics expected.
+
+@project MODULE_PORT_IN_ONLY_has_outputs_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper with IN + OUT ports
+@module HelperInOut
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+// Helper with multiple IN ports plus OUT
+@module HelperMultiInOut
+    PORT {
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] y;
+    }
+    ASYNCHRONOUS {
+        y = a & b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_io HelperInOut {
+        IN  [1] din  = r;
+        OUT [1] dout = _;
+    };
+
+    @new inst_multi HelperMultiInOut {
+        IN  [1] a = r;
+        IN  [1] b = r;
+        OUT [1] y = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -38,19 +38,20 @@ static int test_all_defs(void)
     JZConstDef defs[] = {
         { "WIDTH", "8" },
         { "DEPTH", "16" },
+        { "ONE",   "clog2(1)" },
         { "ADDR",  "clog2(DEPTH)" },
     };
-    long long values[3] = {0, 0, 0};
+    long long values[4] = {0, 0, 0, 0};
     JZConstEvalOptions opts = { 0 };
 
-    int rc = jz_const_eval_all(defs, 3, &opts, values);
+    int rc = jz_const_eval_all(defs, 4, &opts, values);
     if (rc != 0) {
         fprintf(stderr, "jz_const_eval_all failed (rc=%d)\n", rc);
         return 1;
     }
-    if (values[0] != 8 || values[1] != 16 || values[2] != 4) {
-        fprintf(stderr, "unexpected values: WIDTH=%lld DEPTH=%lld ADDR=%lld\n",
-                values[0], values[1], values[2]);
+    if (values[0] != 8 || values[1] != 16 || values[2] != 1 || values[3] != 4) {
+        fprintf(stderr, "unexpected values: WIDTH=%lld DEPTH=%lld ONE=%lld ADDR=%lld\n",
+                values[0], values[1], values[2], values[3]);
         return 1;
     }
 
@@ -92,7 +93,7 @@ int main(void)
     int failures = 0;
     failures += test_single_expr("1 + 2 * 3", 7);
     failures += test_single_expr("(1 + 2) * 3", 9);
-    failures += test_single_expr("clog2(1)", 0);
+    failures += test_single_expr("clog2(1)", 1);
     failures += test_single_expr("clog2(2)", 1);
     failures += test_single_expr("clog2(3)", 2);
     failures += test_single_expr("clog2(16)", 4);

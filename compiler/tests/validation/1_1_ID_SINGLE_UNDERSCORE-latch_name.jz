@@ -1,0 +1,31 @@
+// ID_SINGLE_UNDERSCORE: Single underscore `_` used as LATCH name.
+// Tests _ in LATCH declaration context (outside no-connect).
+// Valid latch name included to verify no false positives.
+
+@project ID_SINGLE_UNDERSCORE_latch_name
+    @top TopMod {
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    LATCH {
+        // Valid: multi-char latch name (should NOT trigger)
+        valid_lat [1] D;
+        // Trigger: _ used as LATCH name
+        _ [1] D;
+    }
+
+    ASYNCHRONOUS {
+        valid_lat <= enable : din;
+        data <= valid_lat;
+    }
+@endmod

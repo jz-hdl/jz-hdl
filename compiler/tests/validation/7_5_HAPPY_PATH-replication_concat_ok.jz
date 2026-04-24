@@ -1,0 +1,44 @@
+// HAPPY_PATH: Valid MEM initialization with replication and concatenation.
+// No diagnostics expected.
+
+@project HAPPY_PATH_replication_concat_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_rep [8] [4] = {8{1'b0}} {
+            OUT rd_rep ASYNC;
+            IN  wr_rep;
+        };
+
+        mem_cat [8] [4] = {4'hF, 4'h0} {
+            OUT rd_cat ASYNC;
+            IN  wr_cat;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = mem_rep.rd_rep[addr] ^ mem_cat.rd_cat[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        mem_rep.wr_rep[addr] <= 8'h00;
+        mem_cat.wr_cat[addr] <= 8'h00;
+    }
+@endmod

@@ -1,0 +1,54 @@
+// HAPPY_PATH: lit(width, value) used inside a @feature condition.
+// Exercises §5.5.11 lit syntax, sized-literal result, width, value, and
+// CONST/inline-integer operand forms (Reqs #1-#4, #7) in the
+// feature-cond declaration context. No diagnostics expected.
+// new-binding and check-expr are inapplicable: @new instance bindings
+// reject function-call expressions (parser_instance.c restricts the RHS
+// to signal-like forms) and @check rejects lit() with
+// CHECK_INVALID_EXPR_TYPE before §5.5.11 rules can fire.
+// See audit/runner.log.
+
+@project HAPPY_PATH_lit_feature_cond_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        WIDTH = 8;
+        VAL   = 42;
+    }
+
+    // Trigger 1: lit() with inline-integer operands inside @feature condition
+    @feature WIDTH == lit(8, 8)
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2: lit() with CONST-referenced operands inside @feature condition
+    @feature VAL == lit(WIDTH, VAL)
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'd0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

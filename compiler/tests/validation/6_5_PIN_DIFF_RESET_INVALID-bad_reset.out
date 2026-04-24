@@ -1,0 +1,2 @@
+File: 6_5_PIN_DIFF_RESET_INVALID-bad_reset.jz
+      21:9    error PIN_DIFF_RESET_INVALID S6.5/S6.9 Differential pin reset must reference a declared pin, clock, or CLOCK_GEN signal

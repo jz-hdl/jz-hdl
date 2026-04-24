@@ -103,8 +103,8 @@
         mem_inout.rw.addr <= addr;
         mem_inout.rw.wdata <= wdata;
         // Valid edge: constant addr 0 (first entry)
-        mem_sync.wr_zero[0] <= 8'hAA;
+        mem_sync.wr_zero[4'b0000] <= 8'hAA;
         // Valid edge: constant addr 15 (depth-1 = last entry)
-        mem_sync.wr_last[15] <= 8'hBB;
+        mem_sync.wr_last[4'b1111] <= 8'hBB;
     }
 @endmod

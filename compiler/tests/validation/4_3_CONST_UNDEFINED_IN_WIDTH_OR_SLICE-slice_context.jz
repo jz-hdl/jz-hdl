@@ -1,0 +1,57 @@
+// CONST_UNDEFINED_IN_WIDTH_OR_SLICE: Undefined CONST in slice expression.
+// Tests that an undeclared CONST name used as a slice bound is caught.
+// Valid CONST-based slice included to verify no false positives.
+
+@project CONST_UNDEFINED_IN_WIDTH_OR_SLICE_slice_context
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+        OUT [1] out_h = _;
+    }
+@endproj
+
+@module HelperMod
+    CONST {
+        TOP_HI = 7;
+    }
+
+    PORT {
+        IN  [8] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: declared CONST in MSB slice bound
+        data = din[TOP_HI];
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        GOOD_HI = 7;
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+        OUT [1] out_h;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] din = r;
+        OUT [1] data = out_h;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: undefined CONST in LSB slice bound
+        data = r[GOOD_HI:UNDEF_LO];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

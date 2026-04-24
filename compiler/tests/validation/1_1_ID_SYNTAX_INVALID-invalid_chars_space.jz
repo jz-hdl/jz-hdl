@@ -1,0 +1,33 @@
+// ID_SYNTAX_INVALID: Space in identifier violates the regex
+// ^[A-Za-z_][A-Za-z0-9_]{0,254}$.
+// The lexer treats space as whitespace, splitting "foo bar" into two
+// separate identifier tokens. The parser rejects the unexpected second
+// identifier as a syntax error.
+// This file tests the REGISTER declaration context.
+
+@project ID_SYNTAX_INVALID_invalid_chars_space
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Trigger: space in identifier
+    REGISTER {
+        foo bar [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = foo;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        foo <= ~foo;
+    }
+@endmod

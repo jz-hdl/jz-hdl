@@ -1,0 +1,39 @@
+// HAPPY_PATH: §5.5.28 reduce_xor(source) on a SYNCHRONOUS RHS.
+// Exercises Req #4 with plain and expression sources in a SYNCHRONOUS block.
+
+@project HAPPY_PATH_reduce_xor_sync_rhs_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] src8 = _;
+        IN  [8] mask8 = _;
+        OUT [1] out_plain = _;
+        OUT [1] out_expr = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src8;
+        IN  [8] mask8;
+        OUT [1] out_plain;
+        OUT [1] out_expr;
+    }
+
+    REGISTER {
+        r_plain [1] = 1'b0;
+        r_expr  [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        out_plain = r_plain;
+        out_expr = r_expr;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Req #4: reduce_xor() is allowed directly on a SYNCHRONOUS RHS.
+        r_plain <= reduce_xor(src8);
+        // Req #4: expression sources are also valid on a SYNCHRONOUS RHS.
+        r_expr <= reduce_xor(src8 ^ mask8);
+    }
+@endmod

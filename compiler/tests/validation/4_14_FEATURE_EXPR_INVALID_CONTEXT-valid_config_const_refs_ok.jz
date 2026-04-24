@@ -1,0 +1,59 @@
+// FEATURE_EXPR_INVALID_CONTEXT: happy-path counterpart.
+// Exercises @feature conditions that reference only CONFIG, CONST identifiers,
+// literals, and logical operators. Confirms no false positives are raised.
+
+@project FEATURE_EXPR_INVALID_CONTEXT_valid_config_const_refs_ok
+    CONFIG {
+        DEBUG = 1;
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    CONST {
+        ENABLE = 1;
+        LEVEL  = 16;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: CONST reference only
+        @feature ENABLE == 1
+            dout = r;
+        @else
+            dout = din;
+        @endfeat
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: CONFIG reference only
+        @feature CONFIG.DEBUG == 1
+            r <= din;
+        @endfeat
+
+        // Valid: literal-only
+        @feature 1'b1
+            r <= din;
+        @endfeat
+
+        // Valid: CONFIG and CONST combined with logical operators
+        @feature (CONFIG.DEBUG == 1 && ENABLE == 1) || !(LEVEL < 8)
+            r <= din;
+        @endfeat
+    }
+@endmod

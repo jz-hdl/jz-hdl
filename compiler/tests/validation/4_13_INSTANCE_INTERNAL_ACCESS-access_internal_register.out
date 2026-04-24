@@ -1,0 +1,2 @@
+File: 4_13_INSTANCE_INTERNAL_ACCESS-access_internal_register.jz
+      39:18   error INSTANCE_INTERNAL_ACCESS S4.13 Cannot access internal signals (WIRE/REGISTER/LATCH) of an instance; only PORT members are accessible

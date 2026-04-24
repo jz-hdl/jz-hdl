@@ -1,0 +1,64 @@
+// ASSIGN_SHADOWING: Happy-path. Confirms the compiler accepts assignments
+// that obey Sequential Shadowing rules — root-only assignments and
+// branch-only assignments are both legal in ASYNCHRONOUS and SYNCHRONOUS
+// blocks. No diagnostic should fire because no nested branch overwrites
+// a prior root assignment to the same bits.
+
+@project ASSIGN_SHADOWING_no_shadow_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+        OUT [1] out_c = _;
+        OUT [4] out_d = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        OUT [1] out_a;
+        OUT [1] out_b;
+        OUT [1] out_c;
+        OUT [4] out_d;
+    }
+    REGISTER {
+        r [4] = 4'b0000;
+        rb [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // Valid: root-only assignment, no nested override.
+        out_a = sel_a;
+        // Valid: branch-only assignment, no root statement.
+        IF (sel_a) {
+            out_b <= VCC;
+        } ELSE {
+            out_b <= GND;
+        }
+        // Valid: root assignment to disjoint bits than what nested IF touches
+        // (out_c is a single bit, so the nested IF assigns a different signal).
+        out_c = sel_b;
+        IF (sel_a) {
+            // Touches a different signal entirely; no shadowing.
+        } ELSE {
+            // Empty.
+        }
+        out_d = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: root-only register update.
+        rb <= ~rb;
+        // Valid: branch-only register update on disjoint register.
+        IF (sel_a) {
+            r[1:0] <= 2'b11;
+        } ELSE {
+            r[1:0] <= 2'b00;
+        }
+        // Valid: root assignment to a slice that the conditional does not touch.
+        r[3:2] <= 2'b10;
+    }
+@endmod

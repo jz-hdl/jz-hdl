@@ -1,0 +1,65 @@
+// SPECIAL_DRIVER_SLICED: Happy-path - GND/VCC used as standalone drivers
+// only; slicing is applied to ordinary signals, not to GND/VCC tokens.
+// Demonstrates that legal uses do NOT trigger SPECIAL_DRIVER_SLICED.
+// Covers async-expr and sync-expr contexts.
+
+@project SPECIAL_DRIVER_SLICED_valid_standalone_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [4] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+// Helper: standalone GND/VCC + slicing applied to plain signals
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [4] out_a;
+        OUT [8] out_b;
+    }
+    REGISTER {
+        r [8] = VCC;
+    }
+    ASYNCHRONOUS {
+        // Valid: slicing applied to a plain signal (not to GND/VCC)
+        out_a <= din[3:0];
+        out_b <= r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: VCC as atomic standalone sync assignment (sync-expr)
+        r <= VCC;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [4] out_a;
+        OUT [8] out_b;
+    }
+    WIRE {
+        ha_out_a [4];
+        ha_out_b [8];
+    }
+    REGISTER {
+        din [8] = GND;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [4] out_a = ha_out_a;
+        OUT [8] out_b = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: GND as atomic standalone sync assignment (sync-expr)
+        din <= GND;
+    }
+@endmod

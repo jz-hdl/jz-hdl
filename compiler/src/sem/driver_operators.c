@@ -290,6 +290,22 @@ static int sem_lit_eval_const_expr(const JZASTNode *expr,
     return rc;
 }
 
+static int sem_sbit_source_is_valid(const JZASTNode *expr,
+                                    const JZModuleScope *mod_scope)
+{
+    if (!expr || !mod_scope) return 0;
+    if (expr->type != JZ_AST_EXPR_IDENTIFIER || !expr->name) {
+        return 0;
+    }
+
+    const JZSymbol *sym = module_scope_lookup(mod_scope, expr->name);
+    if (!sym) {
+        return 1;
+    }
+
+    return sym->kind == JZ_SYM_WIRE || sym->kind == JZ_SYM_REGISTER;
+}
+
 static void infer_identifier_type(JZASTNode *node,
                                   const JZModuleScope *mod_scope,
                                   const JZBuffer *project_symbols,
@@ -309,11 +325,134 @@ static void infer_identifier_type(JZASTNode *node,
         return; /* unknown width */
     }
 
-    if (sem_eval_width_expr(width_text, mod_scope, project_symbols, &w) != 0) {
+    if (sem_eval_width_expr_at_loc(width_text,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   sym->node->loc) != 0) {
         return; /* expression not yet resolvable; leave width unknown */
     }
 
     jz_type_scalar(w, 0, out);
+}
+
+static char *sem_mux_type_normalize_name_segment(const char *start, size_t len)
+{
+    if (!start || len == 0) return NULL;
+
+    size_t out_len = 0;
+    for (size_t i = 0; i < len; ++i) {
+        if (!isspace((unsigned char)start[i])) {
+            out_len++;
+        }
+    }
+    if (out_len == 0) return NULL;
+
+    char *buf = (char *)malloc(out_len + 1);
+    if (!buf) return NULL;
+
+    size_t pos = 0;
+    for (size_t i = 0; i < len; ++i) {
+        if (!isspace((unsigned char)start[i])) {
+            buf[pos++] = start[i];
+        }
+    }
+    buf[pos] = '\0';
+    return buf;
+}
+
+static int sem_mux_type_resolve_source_width(const char *name,
+                                             const JZModuleScope *mod_scope,
+                                             const JZBuffer *project_symbols,
+                                             unsigned *out_width)
+{
+    if (out_width) *out_width = 0;
+    if (!name || !mod_scope) return 0;
+
+    const JZSymbol *sym = module_scope_lookup(mod_scope, name);
+    if (!sym || !sym->node) return 0;
+
+    if (sym->kind != JZ_SYM_PORT &&
+        sym->kind != JZ_SYM_WIRE &&
+        sym->kind != JZ_SYM_REGISTER) {
+        return 0;
+    }
+
+    unsigned w = 0;
+    if (sym->node->width &&
+        sem_eval_width_expr_at_loc(sym->node->width,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   sym->node->loc) == 0 &&
+        w > 0) {
+        if (out_width) *out_width = w;
+        return 1;
+    }
+
+    return 0;
+}
+
+static int sem_mux_type_compute_element_width(const JZASTNode *mux_decl,
+                                              const JZModuleScope *mod_scope,
+                                              const JZBuffer *project_symbols,
+                                              unsigned *out_width)
+{
+    if (out_width) *out_width = 0;
+    if (!mux_decl || !mod_scope || !mux_decl->block_kind) return 0;
+
+    if (strcmp(mux_decl->block_kind, "SLICE") == 0) {
+        unsigned elem_w = 0;
+        if (mux_decl->width &&
+            sem_eval_width_expr_at_loc(mux_decl->width,
+                                       mod_scope,
+                                       project_symbols,
+                                       &elem_w,
+                                       mux_decl->loc) == 0 &&
+            elem_w > 0) {
+            if (out_width) *out_width = elem_w;
+            return 1;
+        }
+        return 0;
+    }
+
+    if (strcmp(mux_decl->block_kind, "AGGREGATE") == 0) {
+        if (mux_decl->child_count == 0) return 0;
+        JZASTNode *rhs = mux_decl->children[0];
+        if (!rhs || rhs->type != JZ_AST_RAW_TEXT || !rhs->text) return 0;
+
+        const char *p = rhs->text;
+        while (*p) {
+            const char *seg_start = p;
+            const char *comma = strchr(p, ',');
+            size_t seg_len = 0;
+            if (comma) {
+                seg_len = (size_t)(comma - seg_start);
+                p = comma + 1;
+            } else {
+                seg_len = strlen(seg_start);
+                p = seg_start + seg_len;
+            }
+
+            char *name = sem_mux_type_normalize_name_segment(seg_start, seg_len);
+            if (!name) {
+                continue;
+            }
+
+            unsigned w = 0;
+            int resolved = sem_mux_type_resolve_source_width(name,
+                                                             mod_scope,
+                                                             project_symbols,
+                                                             &w);
+            free(name);
+            if (resolved && w > 0) {
+                if (out_width) *out_width = w;
+                return 1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 static void infer_qualified_identifier_type(JZASTNode *node,
@@ -337,13 +476,33 @@ static void infer_qualified_identifier_type(JZASTNode *node,
                 }
                 return;
             }
-            if (sem_eval_width_expr(info.signal_decl->width,
-                                    mod_scope,
-                                    project_symbols,
-                                    &w) == 0) {
+            if (sem_eval_width_expr_at_loc(info.signal_decl->width,
+                                           mod_scope,
+                                           project_symbols,
+                                           &w,
+                                           info.signal_decl->loc) == 0) {
                 jz_type_scalar(w, 0, out);
                 return;
             }
+        }
+
+        JZInstancePortAccessInfo inst_info;
+        if (sem_resolve_instance_port_access(node, mod_scope, project_symbols,
+                                             &inst_info, NULL)) {
+            const JZASTNode *width_source = inst_info.binding_decl
+                ? inst_info.binding_decl
+                : inst_info.child_port_decl;
+            if (width_source && width_source->width) {
+                unsigned w = 0;
+                if (sem_eval_width_expr_at_loc(width_source->width,
+                                               mod_scope,
+                                               project_symbols,
+                                               &w,
+                                               width_source->loc) == 0) {
+                    jz_type_scalar(w, 0, out);
+                }
+            }
+            return;
         }
     }
 
@@ -463,10 +622,39 @@ static void infer_bus_access_type(JZASTNode *node,
     }
 
     unsigned w = 0;
-    if (sem_eval_width_expr(info.signal_decl->width,
-                            mod_scope,
-                            project_symbols,
-                            &w) == 0) {
+    if (sem_eval_width_expr_at_loc(info.signal_decl->width,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   info.signal_decl->loc) == 0) {
+        jz_type_scalar(w, 0, out);
+    }
+}
+
+static void infer_instance_port_access_type(JZASTNode *node,
+                                            const JZModuleScope *mod_scope,
+                                            const JZBuffer *project_symbols,
+                                            JZBitvecType *out)
+{
+    if (!out) return;
+    out->width = 0;
+    out->is_signed = 0;
+    if (!node || !mod_scope || !project_symbols) return;
+
+    JZInstancePortAccessInfo info;
+    if (!sem_resolve_instance_port_access(node, mod_scope, project_symbols, &info, NULL)) {
+        return;
+    }
+
+    const JZASTNode *width_source = info.binding_decl ? info.binding_decl : info.child_port_decl;
+    if (!width_source || !width_source->width) return;
+
+    unsigned w = 0;
+    if (sem_eval_width_expr_at_loc(width_source->width,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   width_source->loc) == 0) {
         jz_type_scalar(w, 0, out);
     }
 }
@@ -506,6 +694,10 @@ void infer_expr_type(JZASTNode *expr,
 
     case JZ_AST_EXPR_BUS_ACCESS:
         infer_bus_access_type(expr, mod_scope, project_symbols, out);
+        return;
+
+    case JZ_AST_EXPR_INSTANCE_PORT_ACCESS:
+        infer_instance_port_access_type(expr, mod_scope, project_symbols, out);
         return;
 
     case JZ_AST_EXPR_UNARY: {
@@ -867,6 +1059,14 @@ void infer_expr_type(JZASTNode *expr,
         if (strcmp(fname, "sbit") == 0) {
             if (expr->child_count < 3) return;
             JZBitvecType src_t, idx_t, set_t;
+
+            if (diagnostics && !sem_sbit_source_is_valid(expr->children[0], mod_scope)) {
+                sem_report_rule(diagnostics,
+                                expr->children[0]->loc,
+                                "SBIT_INVALID_SOURCE",
+                                "sbit() first argument (source) must be a readable WIRE or REGISTER");
+            }
+
             infer_expr_type(expr->children[0], mod_scope, project_symbols, diagnostics, &src_t);
             infer_expr_type(expr->children[1], mod_scope, project_symbols, diagnostics, &idx_t);
             infer_expr_type(expr->children[2], mod_scope, project_symbols, diagnostics, &set_t);
@@ -1216,6 +1416,22 @@ void infer_expr_type(JZASTNode *expr,
         int skip_slice_width = 0;
         if (mod_scope && expr->child_count >= 1) {
             JZASTNode *base = expr->children[0];
+            if (base && base->type == JZ_AST_EXPR_IDENTIFIER && base->name) {
+                const JZSymbol *mux_sym = module_scope_lookup_kind(mod_scope,
+                                                                    base->name,
+                                                                    JZ_SYM_MUX);
+                if (mux_sym && mux_sym->node) {
+                    unsigned elem_w = 0;
+                    if (sem_mux_type_compute_element_width(mux_sym->node,
+                                                           mod_scope,
+                                                           project_symbols,
+                                                           &elem_w)) {
+                        jz_type_scalar(elem_w, 0, out);
+                    }
+                    return;
+                }
+            }
+
             /* Exact MEM port match (valid port name). */
             JZMemPortRef mem_ref;
             memset(&mem_ref, 0, sizeof(mem_ref));

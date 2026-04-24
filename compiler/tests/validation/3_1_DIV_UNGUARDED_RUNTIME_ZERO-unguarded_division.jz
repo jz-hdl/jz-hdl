@@ -1,10 +1,10 @@
 // DIV_UNGUARDED_RUNTIME_ZERO: Runtime divisor without nonzero guard.
-// Tests unguarded division and modulus in sync blocks across modules.
-// Guarded division included to verify no false positives.
-// All divisions in SYNCHRONOUS blocks since ASYNC IF triggers ASYNC_ALIAS_IN_CONDITIONAL,
-// and DIV_UNGUARDED_RUNTIME_ZERO only fires when no errors exist (IR pass).
+// Focuses on divisor expressions that can still evaluate to runtime zero.
+// Guarded division and modulus are included to verify no false positives.
+// These triggers stay in SYNCHRONOUS blocks because the warning is IR-based.
+// Runtime zero can flow through simple arithmetic and bitwise expressions.
 
-@project DIV_UNGUARDED_RUNTIME_ZERO_unguarded_division
+@project DIV_UNGUARDED_RUNTIME_ZERO_runtime_expr_divisor
     @top TopMod {
         IN  [1] clk = _;
         IN  [8] num = _;
@@ -17,8 +17,8 @@
     }
 @endproj
 
-// Helper module with unguarded division in sync
-@module HelperMod
+// Helper module with unguarded runtime divisor expressions
+@module HelperRuntimeDiv
     PORT {
         IN  [1] clk;
         IN  [8] num;
@@ -38,10 +38,10 @@
         out_c = r_ok;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 1: unguarded division in sync
-        r_div <= num / den;
-        // Trigger 2: unguarded modulus in sync
-        r_mod <= num % den;
+        // Trigger 1: unguarded division by runtime expression
+        r_div <= num / (den | 8'd0);
+        // Trigger 2: unguarded modulus by runtime expression
+        r_mod <= num % (den ^ 8'd0);
         // Valid: guarded division (no false positive)
         IF (den != 8'd0) {
             r_ok <= num / den;
@@ -75,7 +75,7 @@
         r_eq  [8] = 8'd0;
     }
 
-    @new inst_a HelperMod {
+    @new inst_runtime_div HelperRuntimeDiv {
         IN  [1] clk = clk;
         IN  [8] num = num;
         IN  [8] den = den;
@@ -92,10 +92,10 @@
         out_e = r_eq;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 3: unguarded division in top sync
-        r_div <= num / den;
-        // Trigger 4: unguarded modulus in top sync
-        r_mod <= num % den;
+        // Trigger 3: unguarded division by top-level expression
+        r_div <= num / (den + 8'd0);
+        // Trigger 4: unguarded modulus by top-level expression
+        r_mod <= num % (den & 8'hff);
         // Valid: guarded with != 0 (no false positive)
         IF (den != 8'd0) {
             r_grd <= num / den;

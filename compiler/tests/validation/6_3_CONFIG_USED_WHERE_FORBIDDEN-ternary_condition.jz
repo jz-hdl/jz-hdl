@@ -1,0 +1,65 @@
+// CONFIG_USED_WHERE_FORBIDDEN: CONFIG used as ternary condition in runtime expression.
+// Tests CONFIG.WIDTH used as condition in ternary (CONFIG.WIDTH ? a : b) in runtime block.
+// Valid compile-time CONFIG uses included to verify no false positives.
+
+@project CONFIG_USED_WHERE_FORBIDDEN_ternary_condition
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [CONFIG.WIDTH] din = _;
+        OUT [CONFIG.WIDTH] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        IN  [CONFIG.WIDTH] a;
+        IN  [CONFIG.WIDTH] b;
+        OUT [CONFIG.WIDTH] dout;
+    }
+    REGISTER {
+        r [CONFIG.WIDTH] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Trigger: CONFIG as ternary condition in async expression
+        dout = CONFIG.WIDTH ? r : b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [CONFIG.WIDTH] din;
+        OUT [CONFIG.WIDTH] data;
+    }
+
+    WIRE {
+        h_out [CONFIG.WIDTH];
+    }
+
+    @new inst_h Helper {
+        IN  [1] clk = clk;
+        IN  [CONFIG.WIDTH] a = din;
+        IN  [CONFIG.WIDTH] b = 8'hFF;
+        OUT [CONFIG.WIDTH] dout = h_out;
+    };
+
+    REGISTER {
+        r [CONFIG.WIDTH] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= h_out;
+    }
+@endmod

@@ -1,0 +1,65 @@
+// §1.6.8 Req #3: Valid use case — conditional read of an INOUT port on
+// the path where this module has released its driver to z (so the bus
+// is driven elsewhere):
+//   IF (!wr_en) { register <= inout_port; }
+// Happy-path test: the module both releases the INOUT (when !wr_en) and
+// reads it on the same branch.
+
+@project HAPPY_PATH_inout_port_conditional_read_ok
+    @top TopMod {
+        IN    [1] clk        = _;
+        IN    [1] wr_en      = _;
+        IN    [8] data       = _;
+        INOUT [8] inout_port = _;
+        OUT   [8] rdata      = _;
+    }
+@endproj
+
+// Trigger 1: conditional read of INOUT port under !wr_en, the same
+// branch on which this module releases its tri-state driver.
+@module BiDir
+    PORT {
+        IN    [1] clk;
+        IN    [1] wr_en;
+        IN    [8] data;
+        INOUT [8] inout_port;
+        OUT   [8] rdata;
+    }
+
+    REGISTER {
+        captured [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Release bus when !wr_en; drive `data` otherwise.
+        inout_port <= wr_en ? data : 8'bzzzz_zzzz;
+        rdata = captured;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (!wr_en) {
+            // Conditional read when driven elsewhere
+            captured <= inout_port;
+        } ELSE {
+            captured <= captured;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] wr_en;
+        IN    [8] data;
+        INOUT [8] inout_port;
+        OUT   [8] rdata;
+    }
+
+    @new inst BiDir {
+        IN    [1] clk        = clk;
+        IN    [1] wr_en      = wr_en;
+        IN    [8] data       = data;
+        INOUT [8] inout_port = inout_port;
+        OUT   [8] rdata      = rdata;
+    };
+@endmod

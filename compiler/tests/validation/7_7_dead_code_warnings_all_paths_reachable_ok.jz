@@ -1,0 +1,100 @@
+// HAPPY_PATH: reachable MEM accesses and live branches should not warn.
+// Verifies no MEM_WARN_DEAD_CODE_ACCESS or WARN_DEAD_CODE_UNREACHABLE diagnostics.
+
+@project dead_code_warnings_all_paths_reachable_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        hold [8] = 8'h00;
+    }
+
+    MEM {
+        mem_h [8] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr_then;
+            IN  wr_else;
+        };
+    }
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            data <= mem_h.rd[addr];
+        } ELSE {
+            data <= hold;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (sel) {
+            mem_h.wr_then[addr] <= wdata;
+            hold <= wdata;
+        } ELSE {
+            mem_h.wr_else[addr] <= hold;
+            hold <= mem_h.rd[addr];
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        top_hold [8] = 8'h00;
+    }
+
+    MEM {
+        mem_t [8] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr_then;
+            IN  wr_else;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] sel = sel;
+        IN  [2] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            data <= mem_t.rd[addr];
+        } ELSE {
+            data <= top_hold;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (sel) {
+            mem_t.wr_then[addr] <= wdata;
+            top_hold <= wdata;
+        } ELSE {
+            mem_t.wr_else[addr] <= top_hold;
+            top_hold <= mem_t.rd[addr];
+        }
+    }
+@endmod

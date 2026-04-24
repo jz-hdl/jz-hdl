@@ -1,0 +1,70 @@
+// ASSIGN_CONCAT_WIDTH_MISMATCH/ASSIGN_WIDTH_NO_MODIFIER: RHS wider than
+// register or concat is a compile error in SYNCHRONOUS assignments, even
+// with `<=z`/`<=s` modifiers (no truncation is performed).
+
+@project ASSIGN_CONCAT_WIDTH_MISMATCH_rhs_wider_than_register_sync
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk  = _;
+        IN  [8] din  = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+// Helper: RHS wider than single register with `<=z` and `<=s`.
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [4] dout_a;
+        OUT [4] dout_b;
+    }
+    REGISTER {
+        r_a [4] = 4'h0;
+        r_b [4] = 4'h0;
+    }
+    ASYNCHRONOUS {
+        dout_a = r_a;
+        dout_b = r_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: `<=z` with RHS (8) wider than register (4)
+        r_a <=z din;
+        // Trigger 2: `<=s` with RHS (8) wider than register (4)
+        r_b <=s din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    REGISTER {
+        r_ca [2] = 2'h0;
+        r_cb [2] = 2'h0;
+        r_na [4] = 4'h0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [4] dout_a = _;
+        OUT [4] dout_b = _;
+    };
+
+    ASYNCHRONOUS {
+        dout[3:0] = {r_ca, r_cb};
+        dout[7:4] = r_na;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 3: `<=z` with RHS (8) wider than concat sum (4)
+        {r_ca, r_cb} <=z din;
+        // Trigger 4: `<=` with RHS (8) wider than register (4), bare no-modifier
+        r_na <= din;
+    }
+@endmod

@@ -1,0 +1,44 @@
+// TYPE_BINOP_WIDTH_MISMATCH: Binary add/sub with mismatched operand widths
+// in the feature-cond context (@feature condition expression). Covers §3.1
+// Req #2 binary arithmetic (+, -). The new-binding and check-expr contexts
+// are categorically inapplicable for this rule (see audit/runner.log).
+
+@project TYPE_BINOP_WIDTH_MISMATCH_add_sub_feature_cond
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    // Trigger 1 (feature-cond): binary `+` with mismatched widths (8 vs 4)
+    @feature (8'd1 + 4'd1) == 8'd2
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger 2 (feature-cond): binary `-` with mismatched widths (8 vs 4)
+    @feature (8'd5 - 4'd1) == 8'd4
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

@@ -1,0 +1,2 @@
+File: 1_5_4_SCOPE-single_block_w_le_a_w_le_b.jz
+      27:9    error ASSIGN_MULTIPLE_SAME_BITS S1.5/S5.2 Same bits assigned more than once on a single execution path (exclusive assignment violation)

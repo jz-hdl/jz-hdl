@@ -1,0 +1,81 @@
+// MEM_WARN_DEAD_CODE_ACCESS: Dead MEM read in ASYNCHRONOUS block.
+// Reachable MEM reads included to verify no false positives.
+
+@project MEM_WARN_DEAD_CODE_ACCESS_dead_async_read
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_h [8] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        // Valid: reachable async read (no warning)
+        data = mem_h.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_h.wr[addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w_live [8];
+        w_dead [8];
+    }
+
+    MEM {
+        mem_a [8] [4] = 8'h00 {
+            OUT rd_a ASYNC;
+            OUT rd_dead ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: reachable async read (no warning)
+        w_live = mem_a.rd_a[addr];
+        // Trigger: dead read in ASYNCHRONOUS block
+        IF (1'b0) {
+            w_dead <= mem_a.rd_dead[addr];
+        } ELSE {
+            w_dead <= 8'h00;
+        }
+        data = w_live;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_a.wr[addr] <= wdata;
+    }
+@endmod

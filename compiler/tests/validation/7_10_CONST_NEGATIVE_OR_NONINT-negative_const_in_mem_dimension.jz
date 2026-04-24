@@ -1,0 +1,116 @@
+// CONST_NEGATIVE_OR_NONINT: Negative CONST actually used as MEM dimension.
+// Tests negative CONST in MEM depth (helper) and negative CONST in MEM word_width (helper2).
+// Valid positive CONST MEM dimensions included in top to verify no false positives.
+
+@project CONST_NEGATIVE_OR_NONINT_negative_const_in_mem_dimension
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] rdata = _;
+    }
+@endproj
+
+// Trigger: negative CONST used as MEM depth dimension
+@module HelperMod
+    CONST {
+        VALID_WIDTH = 8;
+        NEG_DEPTH = -4;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] rdata;
+    }
+
+    MEM {
+        mem_a [VALID_WIDTH] [NEG_DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        rdata = mem_a.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_a.wr[addr] <= wdata;
+    }
+@endmod
+
+// Trigger: negative CONST used as MEM word_width dimension
+@module HelperMod2
+    CONST {
+        NEG_WIDTH = -2;
+        VALID_DEPTH = 16;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] rdata;
+    }
+
+    MEM {
+        mem_b [NEG_WIDTH] [VALID_DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        rdata = mem_b.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_b.wr[addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        VALID_WIDTH = 8;
+        VALID_DEPTH = 16;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] rdata;
+    }
+
+    // Valid: positive CONST values in MEM (no error expected)
+    MEM {
+        mem_ok [VALID_WIDTH] [VALID_DEPTH] = 8'h00 {
+            OUT rd_ok ASYNC;
+            IN  wr_ok;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] rdata = _;
+    };
+
+    @new inst_h2 HelperMod2 {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] rdata = _;
+    };
+
+    ASYNCHRONOUS {
+        rdata = mem_ok.rd_ok[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_ok.wr_ok[addr] <= wdata;
+    }
+@endmod

@@ -1,0 +1,57 @@
+// SLICE_INDEX_OUT_OF_RANGE: Slice bound exceeds signal width via CONST name.
+// When a slice bound is a named constant whose value is >= the signal width
+// (bus[BIG:0] with BIG >= bus width), the compiler must resolve the CONST
+// value and fire the same rule that triggers on literal out-of-range indices.
+
+@project SLICE_INDEX_OUT_OF_RANGE_const_out_of_range
+    @top TopMod {
+        IN  [8] bus   = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] bus;
+        OUT [8] out_a;
+    }
+
+    CONST {
+        // BIG equals signal width (8) — valid indices are 0..7
+        BIG = 8;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: CONST-based MSB equals width — out of range
+        out_a = bus[BIG:0];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] bus;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+
+    CONST {
+        // TOP_BIG far exceeds signal width (8)
+        TOP_BIG = 15;
+    }
+
+    WIRE {
+        ha_out [8];
+    }
+
+    @new inst_a HelperA {
+        IN  [8] bus   = bus;
+        OUT [8] out_a = ha_out;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: CONST-based MSB far exceeds width
+        out_a = bus[TOP_BIG:0];
+        out_b = ha_out;
+    }
+@endmod

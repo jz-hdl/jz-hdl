@@ -1,0 +1,76 @@
+// ASSIGN_MULTIPLE_SAME_BITS: expanded template code is checked by normal semantics.
+// The template assignment and a following callsite assignment target the same wire
+// on the same execution path, so expansion must still trigger exclusive assignment.
+
+@project EXPANDED_CODE_SEMANTICS_post_expand_semantic_check
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template drive_high(dst)
+    dst <= VCC;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    WIRE {
+        helper_w [1];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: a single expansion remains legal.
+        @apply drive_high(helper_w);
+        data = helper_w;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    WIRE {
+        w_conflict [1];
+        w_ok [1];
+        helper_data [1];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        OUT [1] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 1: expanded template assignment and callsite assignment conflict.
+        @apply drive_high(w_conflict);
+        w_conflict = GND;
+
+        // Valid: expansion with no second assignment.
+        @apply drive_high(w_ok);
+
+        data = w_ok | helper_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

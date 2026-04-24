@@ -1,0 +1,96 @@
+// CLOG2_INVALID_CONTEXT: happy-path coverage for clog2() in new-binding
+// and mem-name compile-time constant contexts. Valid uses should produce
+// no diagnostics.
+
+@project CLOG2_INVALID_CONTEXT_contexts_ok
+    CONFIG {
+        ENTRIES = 64;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] data_in = _;
+        OUT [8] data_out = _;
+    }
+@endproj
+
+// Helper: receives compile-time width and exposes a storage path
+@module HelperMem
+    CONST {
+        DEPTH = 32;
+        // Valid (const-name): clog2() in CONST initializer
+        AW = clog2(DEPTH);
+    }
+
+    PORT {
+        IN  [1]  clk;
+        IN  [AW] addr;
+        IN  [8]  wdata;
+        OUT [8]  rdata;
+    }
+
+    // Valid (mem-name): clog2() exercised via MEM address-related widths.
+    // The DEPTH expression uses a CONST computed from clog2() and the
+    // port width uses clog2(DEPTH) directly.
+    MEM {
+        store [8] [DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        rdata = store.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        store.wr[addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        // Valid (const-name): clog2() in CONST initializer
+        TOTAL     = 32;
+        ADDR_W    = clog2(TOTAL);
+        CFG_AW    = clog2(CONFIG.ENTRIES);
+        NESTED    = clog2(clog2(256) + 1);
+    }
+
+    // Valid (check-expr): clog2() in @check expression
+    @check (ADDR_W == 5, "clog2(32) should equal 5");
+
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    WIRE {
+        // Valid (wire-name): clog2() in WIRE width
+        addr_w [clog2(TOTAL)];
+        h_rdata [8];
+    }
+
+    REGISTER {
+        // Valid (register-name): clog2() in REGISTER width
+        addr_r [clog2(TOTAL)] = 5'd0;
+    }
+
+    // Valid (new-binding): clog2() in @new port-binding width expressions
+    @new inst_m HelperMem {
+        IN  [1]             clk   = clk;
+        IN  [clog2(TOTAL)]  addr  = addr_r;
+        IN  [8]             wdata = data_in;
+        OUT [8]             rdata = h_rdata;
+    };
+
+    ASYNCHRONOUS {
+        addr_w = addr_r;
+        data_out = h_rdata;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        addr_r <= data_in[ADDR_W-1:0];
+    }
+@endmod

@@ -107,6 +107,8 @@ typedef enum JZASTNodeType {
     JZ_AST_EXPR_IDENTIFIER,         /**< Simple identifier reference. */
     JZ_AST_EXPR_QUALIFIED_IDENTIFIER, /**< Qualified identifier (a.b). */
     JZ_AST_EXPR_BUS_ACCESS,         /**< Bus access expression. */
+    JZ_AST_EXPR_INDEXED_MEMBER_ACCESS, /**< Parser-level x[i].member before symbol resolution. */
+    JZ_AST_EXPR_INSTANCE_PORT_ACCESS, /**< Instance port access expression. */
     JZ_AST_EXPR_UNARY,              /**< Unary operator expression. */
     JZ_AST_EXPR_BINARY,             /**< Binary operator expression. */
     JZ_AST_EXPR_TERNARY,            /**< Ternary (? :) expression. */
@@ -165,6 +167,7 @@ struct JZASTNode {
     char *block_kind;          /**< Block kind string (e.g., "CONST", "PORT"). */
     char *text;                /**< Optional text payload (imports, diagnostics). */
     char *width;               /**< Optional width expression string. */
+    int is_imported;           /**< Nonzero when this node came from an @import. */
 
     JZASTNode **children;      /**< Array of child node pointers. */
     size_t child_count;        /**< Number of children. */

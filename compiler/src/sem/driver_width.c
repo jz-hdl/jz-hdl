@@ -15,7 +15,57 @@ static int sem_eval_width_expr_internal(const char *expr,
                                         const JZModuleScope *scope,
                                         const JZBuffer *project_symbols,
                                         unsigned *out_width,
-                                        int depth);
+                                        int depth,
+                                        JZLocation loc);
+
+static const JZSymbol *project_lookup_any(const JZBuffer *symbols,
+                                          const char *name)
+{
+    if (!symbols || !name) return NULL;
+    size_t count = symbols->len / sizeof(JZSymbol);
+    const JZSymbol *syms = (const JZSymbol *)symbols->data;
+    for (size_t i = 0; i < count; ++i) {
+        if (syms[i].name && strcmp(syms[i].name, name) == 0) {
+            return &syms[i];
+        }
+    }
+    return NULL;
+}
+
+static int sem_register_init_literal_overflows(const char *lit)
+{
+    if (!lit) return 0;
+
+    const char *tick = strchr(lit, '\'');
+    if (!tick || tick <= lit) return 0;
+
+    char wbuf[32];
+    size_t wlen = (size_t)(tick - lit);
+    if (wlen == 0 || wlen >= sizeof(wbuf)) return 0;
+    memcpy(wbuf, lit, wlen);
+    wbuf[wlen] = '\0';
+
+    unsigned declared_width = 0;
+    if (!parse_simple_positive_int(wbuf, &declared_width)) return 0;
+
+    char base_ch = tick[1];
+    JZNumericBase base = JZ_NUM_BASE_NONE;
+    if (base_ch == 'b' || base_ch == 'B') base = JZ_NUM_BASE_BIN;
+    else if (base_ch == 'd' || base_ch == 'D') base = JZ_NUM_BASE_DEC;
+    else if (base_ch == 'h' || base_ch == 'H') base = JZ_NUM_BASE_HEX;
+    else return 0;
+
+    const char *value_lexeme = tick + 2;
+    if (!value_lexeme || !*value_lexeme) return 0;
+
+    unsigned intrinsic = 0;
+    JZLiteralExtKind ext = JZ_LITERAL_EXT_NONE;
+    return jz_literal_analyze(base,
+                              value_lexeme,
+                              declared_width,
+                              &intrinsic,
+                              &ext) != 0;
+}
 
 int sem_instance_width_expr_is_invalid(const char *expr,
                                               const JZModuleScope *parent_scope,
@@ -130,17 +180,18 @@ int sem_instance_width_expr_is_invalid(const char *expr,
  * project CONFIG symbol table.
  */
 
-void sem_check_undeclared_config_in_width(const char *expr,
-                                          JZLocation loc,
-                                          const JZBuffer *project_symbols,
-                                          JZDiagnosticList *diagnostics)
+int sem_check_undeclared_config_in_width(const char *expr,
+                                         JZLocation loc,
+                                         const JZBuffer *project_symbols,
+                                         JZDiagnosticList *diagnostics)
 {
     if (!expr || !project_symbols || !project_symbols->data || !diagnostics) {
-        return;
+        return 0;
     }
 
     const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
     size_t count = project_symbols->len / sizeof(JZSymbol);
+    int emitted = 0;
 
     const char *p = expr;
     int expecting_dot = 0;
@@ -184,11 +235,13 @@ void sem_check_undeclared_config_in_width(const char *expr,
                                     loc,
                                     "CONST_STRING_IN_NUMERIC_CONTEXT",
                                     "string CONFIG value used where a numeric expression is expected");
+                    emitted = 1;
                 } else if (!found) {
                     sem_report_rule(diagnostics,
                                     loc,
                                     "CONFIG_USE_UNDECLARED",
                                     "Use of CONFIG.<name> not declared in project CONFIG");
+                    emitted = 1;
                 }
             }
             continue;
@@ -206,6 +259,7 @@ void sem_check_undeclared_config_in_width(const char *expr,
                                 loc,
                                 "CONFIG_USE_UNDECLARED",
                                 "Use of CONFIG.<name> not declared in project CONFIG");
+                emitted = 1;
             }
             continue;
         }
@@ -215,6 +269,8 @@ void sem_check_undeclared_config_in_width(const char *expr,
             continue;
         }
     }
+
+    return emitted;
 }
 
 
@@ -405,7 +461,8 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
                                      char **out_expanded,
-                                     int depth)
+                                     int depth,
+                                     JZLocation loc)
 {
     /* project_symbols is used below for BUS signal CONFIG width resolution */
     if (!expr || !scope || !out_expanded) {
@@ -498,12 +555,14 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                  * symbol table. BUS support replaces the legacy bwidth()
                  * intrinsic.
                  */
-                const JZSymbol *sym = module_scope_lookup_kind(scope, ident, JZ_SYM_WIRE);
-                if (!sym) {
-                    sym = module_scope_lookup_kind(scope, ident, JZ_SYM_REGISTER);
-                }
-                if (!sym) {
-                    sym = module_scope_lookup_kind(scope, ident, JZ_SYM_PORT);
+                const JZSymbol *visible_sym =
+                    module_scope_lookup_visible(scope, ident, loc);
+                const JZSymbol *sym = NULL;
+                if (visible_sym &&
+                    (visible_sym->kind == JZ_SYM_WIRE ||
+                     visible_sym->kind == JZ_SYM_REGISTER ||
+                     visible_sym->kind == JZ_SYM_PORT)) {
+                    sym = visible_sym;
                 }
 
                 unsigned target_width = 0u;
@@ -512,7 +571,8 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                                                      scope,
                                                      project_symbols,
                                                      &target_width,
-                                                     depth + 1) != 0) {
+                                                     depth + 1,
+                                                     sym->node->loc) != 0) {
                         free(buf);
                         return -1;
                     }
@@ -702,12 +762,14 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
                 memcpy(ident, id_start, id_len);
                 ident[id_len] = '\0';
 
-                const JZSymbol *sym = module_scope_lookup_kind(scope, ident, JZ_SYM_WIRE);
-                if (!sym) {
-                    sym = module_scope_lookup_kind(scope, ident, JZ_SYM_REGISTER);
-                }
-                if (!sym) {
-                    sym = module_scope_lookup_kind(scope, ident, JZ_SYM_PORT);
+                const JZSymbol *visible_sym =
+                    module_scope_lookup_visible(scope, ident, loc);
+                const JZSymbol *sym = NULL;
+                if (visible_sym &&
+                    (visible_sym->kind == JZ_SYM_WIRE ||
+                     visible_sym->kind == JZ_SYM_REGISTER ||
+                     visible_sym->kind == JZ_SYM_PORT)) {
+                    sym = visible_sym;
                 }
 
                 unsigned target_width = 0u;
@@ -716,7 +778,8 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                                      scope,
                                                      project_symbols,
                                                      &target_width,
-                                                     depth + 1) != 0) {
+                                                     depth + 1,
+                                                     sym->node->loc) != 0) {
                         if (diagnostics) {
                             char msg[384];
                             snprintf(msg, sizeof(msg),
@@ -729,14 +792,24 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
                         return -1;
                     }
                 } else {
+                    const JZSymbol *project_sym =
+                        project_lookup_any(project_symbols, ident);
                     if (!project_symbols || !project_symbols->data) {
                         if (diagnostics) {
                             char msg[384];
-                            snprintf(msg, sizeof(msg),
-                                     "widthof(%s) does not resolve to a WIRE, REGISTER, PORT, or BUS",
-                                     ident);
-                            sem_report_rule(diagnostics, loc,
-                                            "WIDTHOF_INVALID_TARGET", msg);
+                            if (visible_sym || project_sym) {
+                                snprintf(msg, sizeof(msg),
+                                         "widthof(%s) does not resolve to a WIRE, REGISTER, PORT, or BUS",
+                                         ident);
+                                sem_report_rule(diagnostics, loc,
+                                                "WIDTHOF_INVALID_TARGET", msg);
+                            } else {
+                                snprintf(msg, sizeof(msg),
+                                         "use of undeclared identifier '%s'",
+                                         ident);
+                                sem_report_rule(diagnostics, loc,
+                                                "UNDECLARED_IDENTIFIER", msg);
+                            }
                         }
                         free(buf);
                         return -1;
@@ -755,11 +828,19 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
                     if (!bus_sym || !bus_sym->node || bus_sym->node->type != JZ_AST_BUS_BLOCK) {
                         if (diagnostics) {
                             char msg[384];
-                            snprintf(msg, sizeof(msg),
-                                     "widthof(%s) does not resolve to a WIRE, REGISTER, PORT, or BUS",
-                                     ident);
-                            sem_report_rule(diagnostics, loc,
-                                            "WIDTHOF_INVALID_TARGET", msg);
+                            if (visible_sym || project_sym) {
+                                snprintf(msg, sizeof(msg),
+                                         "widthof(%s) does not resolve to a WIRE, REGISTER, PORT, or BUS",
+                                         ident);
+                                sem_report_rule(diagnostics, loc,
+                                                "WIDTHOF_INVALID_TARGET", msg);
+                            } else {
+                                snprintf(msg, sizeof(msg),
+                                         "use of undeclared identifier '%s'",
+                                         ident);
+                                sem_report_rule(diagnostics, loc,
+                                                "UNDECLARED_IDENTIFIER", msg);
+                            }
                         }
                         free(buf);
                         return -1;
@@ -839,7 +920,8 @@ static int sem_eval_width_expr_internal(const char *expr,
                                         const JZModuleScope *scope,
                                         const JZBuffer *project_symbols,
                                         unsigned *out_width,
-                                        int depth)
+                                        int depth,
+                                        JZLocation loc)
 {
     if (!expr || !scope || !out_width) {
         return -1;
@@ -854,7 +936,8 @@ static int sem_eval_width_expr_internal(const char *expr,
                                          scope,
                                          project_symbols,
                                          &expanded,
-                                         depth) != 0) {
+                                         depth,
+                                         loc) != 0) {
         if (expanded) free(expanded);
         return -1;
     }
@@ -881,7 +964,25 @@ int sem_eval_width_expr(const char *expr,
                         const JZBuffer *project_symbols,
                         unsigned *out_width)
 {
-    return sem_eval_width_expr_internal(expr, scope, project_symbols, out_width, 0);
+    return sem_eval_width_expr_at_loc(expr,
+                                      scope,
+                                      project_symbols,
+                                      out_width,
+                                      scope && scope->node ? scope->node->loc : (JZLocation){0});
+}
+
+int sem_eval_width_expr_at_loc(const char *expr,
+                               const JZModuleScope *scope,
+                               const JZBuffer *project_symbols,
+                               unsigned *out_width,
+                               JZLocation loc)
+{
+    return sem_eval_width_expr_internal(expr,
+                                        scope,
+                                        project_symbols,
+                                        out_width,
+                                        0,
+                                        loc);
 }
 
 void sem_check_module_decl_widths(const JZModuleScope *scope,
@@ -1015,10 +1116,11 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                     /* BUS array count (optional). */
                     if (decl->width) {
                         unsigned count = 0;
-                        if (sem_eval_width_expr(decl->width,
-                                                scope,
-                                                project_symbols,
-                                                &count) != 0) {
+                        if (sem_eval_width_expr_at_loc(decl->width,
+                                                       scope,
+                                                       project_symbols,
+                                                       &count,
+                                                       decl->loc) != 0) {
                             sem_report_rule(diagnostics,
                                             decl->loc,
                                             "BUS_PORT_ARRAY_COUNT_INVALID",
@@ -1049,6 +1151,17 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                     decl->child_count >= 1 && decl->children[0] &&
                     decl->children[0]->type == JZ_AST_EXPR_LITERAL &&
                     decl->children[0]->text &&
+                    !strchr(decl->children[0]->text, '\'')) {
+                    sem_report_rule(diagnostics,
+                                    decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,
+                                    "LIT_BARE_INTEGER",
+                                    "bare integer literal is not permitted in register initialization; use a sized literal or lit(width, value)");
+                }
+
+                if (decl->type == JZ_AST_REGISTER_DECL &&
+                    decl->child_count >= 1 && decl->children[0] &&
+                    decl->children[0]->type == JZ_AST_EXPR_LITERAL &&
+                    decl->children[0]->text &&
                     sem_literal_has_x_bits(decl->children[0]->text)) {
                     sem_report_rule(diagnostics,
                                     decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,
@@ -1068,6 +1181,21 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                                     decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,
                                     "REG_INIT_CONTAINS_Z",
                                     "register initialization literal must not contain z bits");
+                }
+
+                /* LIT_OVERFLOW: register initialization literals still need
+                 * the normal sized-literal value check, even though register
+                 * initialization itself has stricter width-match rules below.
+                 */
+                if (decl->type == JZ_AST_REGISTER_DECL &&
+                    decl->child_count >= 1 && decl->children[0] &&
+                    decl->children[0]->type == JZ_AST_EXPR_LITERAL &&
+                    decl->children[0]->text &&
+                    sem_register_init_literal_overflows(decl->children[0]->text)) {
+                    sem_report_rule(diagnostics,
+                                    decl->children[0]->loc.line ? decl->children[0]->loc : decl->loc,
+                                    "LIT_OVERFLOW",
+                                    "literal numeric value exceeds declared width");
                 }
 
                 /* REG_INIT_WIDTH_MISMATCH: register initialization literal
@@ -1114,12 +1242,12 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                     }
                 }
 
+                if (!decl->width) continue;
+
                 /* LATCH_WIDTH_INVALID: latch width must be a positive integer.
-                 * Defense-in-depth: WIDTH_NONPOSITIVE_OR_NONINT (below) also
-                 * catches this for all declaration types. This latch-specific
-                 * check provides a more targeted diagnostic message. */
-                if (decl->type == JZ_AST_LATCH_DECL &&
-                    decl->width) {
+                 * Use the latch-specific rule instead of the generic width
+                 * diagnostic so S4.8 coverage remains reachable. */
+                if (decl->type == JZ_AST_LATCH_DECL) {
                     unsigned lw = 0;
                     int lrc = eval_simple_positive_decl_int(decl->width, &lw);
                     if (lrc == -1) {
@@ -1127,16 +1255,19 @@ void sem_check_module_decl_widths(const JZModuleScope *scope,
                                         decl->loc,
                                         "LATCH_WIDTH_INVALID",
                                         "LATCH width must be a positive integer");
+                        continue;
                     }
                 }
-
-                if (!decl->width) continue;
 
                 if (sem_expr_has_lit_call(decl->width)) {
                     sem_report_rule(diagnostics,
                                     decl->loc,
                                     "LIT_INVALID_CONTEXT",
                                     "lit() may not be used in width declarations");
+                    continue;
+                }
+
+                if (sem_check_clog2_expr_simple(decl->width, decl->loc, diagnostics)) {
                     continue;
                 }
 

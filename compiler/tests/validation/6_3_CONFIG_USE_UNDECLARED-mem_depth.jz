@@ -1,0 +1,31 @@
+// CONFIG_USE_UNDECLARED: Undeclared CONFIG reference in MEM depth context.
+// Target diagnostic: CONFIG_USE_UNDECLARED.
+// Non-target diagnostics before the fix: MEM_UNDEFINED_CONST_IN_WIDTH.
+
+@project CONFIG_USE_UNDECLARED_mem_depth
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [4] addr = _;
+        OUT [CONFIG.WIDTH] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [4] addr;
+        OUT [CONFIG.WIDTH] data;
+    }
+
+    MEM {
+        mem_a [CONFIG.WIDTH] [CONFIG.MISSING_DEPTH] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_a.rd[addr];
+    }
+@endmod

@@ -1,0 +1,102 @@
+// Req #7: Happy-path for PARSE000-adjacent cases. Valid identifiers that
+// are near-miss for leading-digit and character-class violations: digits
+// appear only in non-leading positions, leading underscores are allowed,
+// and only ASCII [A-Za-z0-9_] characters are used across all contexts.
+
+@project ID_SYNTAX_INVALID_valid_near_parse000_ok
+    CONFIG {
+        _leading_us = 8;
+        trailing_9  = 4;
+        mix_0a_1b_2 = 16;
+    }
+
+    @top Top0a {
+        IN  [1] clk   = _;
+        OUT [1] dout0 = _;
+    }
+@endproj
+
+// module-name with trailing digits and underscores
+@module Helper_9a
+    PORT {
+        IN  [1] clk;
+        // port-name: leading underscore and internal digits
+        IN  [1] _in0;
+        OUT [1] out9;
+    }
+
+    CONST {
+        // const-name: digits non-leading
+        K9       = 5;
+        _leading = 3;
+    }
+
+    WIRE {
+        // wire-name: digits in tail and leading underscore
+        _w0  [1];
+        mux0 [8];
+        mux1 [8];
+    }
+
+    REGISTER {
+        // register-name: letters/digits/underscores mixed
+        r_123 [1] = 1'b0;
+    }
+
+    LATCH {
+        // latch-name: trailing digit
+        lat9 [1] D;
+    }
+
+    MEM {
+        // mem-name: underscore+digit combo
+        m_0 [1] [4] = 1'b0 {
+            OUT rd0 ASYNC;
+            IN  wr0;
+        };
+    }
+
+    MUX {
+        // mux-name: digits after letters
+        sel0 = mux0, mux1;
+    }
+
+    ASYNCHRONOUS {
+        _w0  = _in0;
+        out9 = r_123;
+        mux0 <= 8'b00000000;
+        mux1 <= 8'b11111111;
+        lat9 <= _in0 : m_0.rd0[2'b00];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_123 <= ~r_123;
+        m_0.wr0[2'b00] <= _in0;
+    }
+@endmod
+
+@module Top0a
+    PORT {
+        IN  [1] clk;
+        OUT [1] dout0;
+    }
+
+    REGISTER {
+        r0 [1] = 1'b0;
+    }
+
+    // instance-name: letter + digit + underscore
+    @new i_9a Helper_9a {
+        IN  [1] clk  = clk;
+        IN  [1] _in0 = r0;
+        OUT [1] out9 = _;
+    };
+
+    ASYNCHRONOUS {
+        dout0 = r0;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r0 <= ~r0;
+    }
+@endmod

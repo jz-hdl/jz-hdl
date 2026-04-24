@@ -1,0 +1,26 @@
+// HAPPY_PATH: Simple ROM read path is combinational from address to output (S7.6.1).
+// Valid uses are included to verify the ROM output is driven in ASYNCHRONOUS logic.
+
+@project HAPPY_PATH_combinational_address_to_output_ok
+    @top TopMod {
+        IN  [5] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [5] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        rom [8] [32] = 8'hC3 {
+            OUT rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = rom.rd[addr];
+    }
+@endmod

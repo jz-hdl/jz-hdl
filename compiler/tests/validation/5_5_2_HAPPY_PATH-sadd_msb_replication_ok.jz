@@ -1,0 +1,52 @@
+// HAPPY_PATH: §5.5.2 sadd(a, b) sign-extends operands by replicating the MSB
+// to fill the extended (max_bits + 1) width. Exercise constructs where MSB
+// replication is semantically required: narrow operands (including 1-bit,
+// whose only bit is the MSB) combined with wider operands. No diagnostics
+// expected.
+
+@project SADD_MSB_REPLICATION_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sign_bit = _;
+        IN  [8] wide     = _;
+        IN  [2] narrow2  = _;
+        IN  [6] mid6     = _;
+        OUT [9] sum_1_8  = _;
+        OUT [7] sum_2_6  = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sign_bit;
+        IN  [8] wide;
+        IN  [2] narrow2;
+        IN  [6] mid6;
+        OUT [9] sum_1_8;
+        OUT [7] sum_2_6;
+    }
+
+    REGISTER {
+        r1 [9] = 9'd0;
+        r2 [7] = 7'd0;
+    }
+
+    ASYNCHRONOUS {
+        sum_1_8 = r1;
+        sum_2_6 = r2;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // 1-bit operand: its only bit IS the MSB and must be replicated
+        // across the (max_bits + 1) = 9-bit extended width.
+        r1 <= sadd(sign_bit, wide);
+        // 2-bit operand: MSB (bit 1) is replicated to fill the 7-bit
+        // extended width alongside the 6-bit operand.
+        r2 <= sadd(narrow2, mid6);
+    }
+@endmod

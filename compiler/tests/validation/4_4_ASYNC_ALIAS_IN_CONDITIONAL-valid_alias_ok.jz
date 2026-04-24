@@ -1,0 +1,81 @@
+// ASYNC_ALIAS_IN_CONDITIONAL: Valid alias = at ASYNC root (not in conditional).
+// Alias = is only forbidden inside IF/SELECT; at ASYNC root it is valid.
+// Exercises alias =, =z, =s at root level in helper and top modules.
+// Valid <= inside IF included for contrast (not alias, always allowed).
+
+@project ASYNC_ALIAS_IN_CONDITIONAL_valid_alias_ok
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [8] din = _;
+        IN  [1] narrow = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+        OUT [8] dout_d = _;
+        OUT [8] dout_e = _;
+    }
+@endproj
+
+// Helper module: alias = at ASYNC root
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: alias = at ASYNC root
+        dout = din;
+    }
+@endmod
+
+// Helper module: extension aliases at ASYNC root
+@module ExtAliasMod
+    PORT {
+        IN  [1] narrow;
+        OUT [8] zext_out;
+        OUT [8] sext_out;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: zero-extend alias at ASYNC root
+        zext_out =z narrow;
+        // Valid: sign-extend alias at ASYNC root
+        sext_out =s narrow;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] din;
+        IN  [1] narrow;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+        OUT [8] dout_d;
+        OUT [8] dout_e;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] din = din;
+        OUT [8] dout = dout_a;
+    };
+
+    @new inst_e ExtAliasMod {
+        IN  [1] narrow = narrow;
+        OUT [8] zext_out = dout_b;
+        OUT [8] sext_out = dout_c;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: alias = at ASYNC root in top module
+        dout_d = din;
+        // Valid: <= inside IF (not alias, always allowed)
+        IF (sel) {
+            dout_e <= din;
+        } ELSE {
+            dout_e <= 8'h00;
+        }
+    }
+@endmod

@@ -1,0 +1,44 @@
+// ID_SYNTAX_INVALID: Identifier exceeds 255-char limit used as MEM name.
+// Tests 256-char identifier in MEM declaration context.
+// Valid MEM name included to verify no false positives.
+
+@project ID_SYNTAX_INVALID_mem_name
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        IN  [1] we = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        IN  [1] we;
+        OUT [1] data;
+    }
+
+    MEM {
+        // Valid: short MEM name (should NOT trigger)
+        valid_mem [1] [4] = 1'b0 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+        // Trigger: 256-char identifier as MEM name
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa [1] [4] = 1'b0 {
+            OUT rd2 ASYNC;
+            IN  wr2;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = valid_mem.rd[2'b00];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (we) {
+            valid_mem.wr[2'b00] <= din;
+        }
+    }
+@endmod

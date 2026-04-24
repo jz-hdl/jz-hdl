@@ -1,0 +1,4 @@
+File: 2_4_SPECIAL_DRIVER_IN_CONCAT-mux_block.jz
+      39:31   error SPECIAL_DRIVER_IN_CONCAT S2.3 GND/VCC may not appear in concatenations
+      83:35   error SPECIAL_DRIVER_IN_CONCAT S2.3 GND/VCC may not appear in concatenations
+      88:32   error SPECIAL_DRIVER_IN_CONCAT S2.3 GND/VCC may not appear in concatenations

@@ -1,0 +1,104 @@
+// LATCH_IS_NOT: A latch is NOT combinational logic, NOT edge-triggered
+// storage, NOT a clock-domain crossing mechanism, NOT a memory/FIFO/
+// register file, and NOT a procedural or sequential construct. Latches
+// do not define cycles, steps, or execution order. This test contrasts
+// a latch with each alternative construct side-by-side in the same
+// module so the distinct declarations and usages remain compilable and
+// the compiler enforces that each plays only its own role.
+// No diagnostics expected.
+
+@project LATCH_IS_NOT_distinct_constructs_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [1] wr_en = _;
+        IN  [4] addr = _;
+        IN  [8] din = _;
+        OUT [8] comb_out = _;
+        OUT [8] reg_out = _;
+        OUT [8] latch_out = _;
+        OUT [8] mem_out = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] wr_en;
+        IN  [4] addr;
+        IN  [8] din;
+        OUT [8] comb_out;
+        OUT [8] reg_out;
+        OUT [8] latch_out;
+        OUT [8] mem_out;
+    }
+
+    // A latch is NOT a register: distinct storage construct, no clock.
+    LATCH {
+        lat_q [8] D;
+    }
+
+    // Edge-triggered storage uses REGISTER, not LATCH.
+    REGISTER {
+        r_q [8] = 8'h00;
+    }
+
+    // Memory / register-file is MEM, not LATCH — MEM is a distinct
+    // storage class with its own read/write ports.
+    MEM {
+        mem_bank [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Combinational logic is expressed in an ASYNCHRONOUS block
+    // without any storage declaration — latches are not combinational.
+    ASYNCHRONOUS {
+        // Pure combinational expression, no storage involved.
+        comb_out <= din ^ 8'hA5;
+
+        // Latch write — distinct from the combinational statement
+        // above. The latch is storage, not a mux.
+        lat_q <= enable : din;
+
+        latch_out <= lat_q;
+        reg_out   <= r_q;
+        mem_out   <= mem_bank.rd[addr];
+    }
+
+    // Edge-triggered storage — distinct from latch.
+    SYNCHRONOUS(CLK=clk) {
+        r_q <= din;
+        IF (wr_en) {
+            mem_bank.wr[addr] <= din;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] wr_en;
+        IN  [4] addr;
+        IN  [8] din;
+        OUT [8] comb_out;
+        OUT [8] reg_out;
+        OUT [8] latch_out;
+        OUT [8] mem_out;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] enable = enable;
+        IN  [1] wr_en = wr_en;
+        IN  [4] addr = addr;
+        IN  [8] din = din;
+        OUT [8] comb_out = comb_out;
+        OUT [8] reg_out = reg_out;
+        OUT [8] latch_out = latch_out;
+        OUT [8] mem_out = mem_out;
+    };
+@endmod

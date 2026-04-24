@@ -1,0 +1,148 @@
+// NET_TRI_STATE_ALL_Z_READ: BUS signal all-z.
+// Tests that the compiler detects when BUS signal drivers all assign z
+// and the signal is still read.
+// Valid: a second BUS with real data included for negative testing.
+
+@project NET_TRI_STATE_ALL_Z_READ_bus_all_z
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    BUS DATA_BUS {
+        INOUT [8] data;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en  = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// SOURCE module: assigns all-z to BUS INOUT signal
+@module ZBusSource
+    PORT {
+        IN  [1] en;
+        BUS DATA_BUS SOURCE bus;
+        OUT [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: BUS INOUT signal all-z from SOURCE
+        IF (en) {
+            bus.data <= 8'bzzzz_zzzz;
+        } ELSE {
+            bus.data <= 8'bzzzz_zzzz;
+        }
+        ack <= en;
+    }
+@endmod
+
+// TARGET module: reads BUS INOUT signal, also assigns z
+@module ZBusTarget
+    PORT {
+        IN  [1] en;
+        BUS DATA_BUS TARGET bus;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: BUS INOUT signal all-z from TARGET side
+        IF (en) {
+            bus.data <= 8'bzzzz_zzzz;
+        } ELSE {
+            bus.data <= 8'bzzzz_zzzz;
+        }
+        data <= bus.data;
+    }
+@endmod
+
+// Valid SOURCE: assigns real data to BUS INOUT signal
+@module OkBusSource
+    PORT {
+        IN  [1] en;
+        BUS DATA_BUS SOURCE bus;
+        OUT [1] ack;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            bus.data <= 8'hAA;
+        } ELSE {
+            bus.data <= 8'h55;
+        }
+        ack <= en;
+    }
+@endmod
+
+// Valid TARGET: reads BUS INOUT signal with real data
+@module OkBusTarget
+    PORT {
+        IN  [1] en;
+        BUS DATA_BUS TARGET bus;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            bus.data <= 8'hFF;
+        } ELSE {
+            bus.data <= 8'h00;
+        }
+        data <= bus.data;
+    }
+@endmod
+
+// Top module: connects all-z BUS pair and valid BUS pair
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    WIRE {
+        z_out  [8];
+        ok_out [8];
+    }
+
+    @new inst_zs ZBusSource {
+        IN  [1] en = en;
+        BUS DATA_BUS SOURCE bus = _;
+        OUT [1] ack = _;
+    };
+
+    @new inst_zt ZBusTarget {
+        IN  [1] en = en;
+        BUS DATA_BUS TARGET bus = _;
+        OUT [8] data = z_out;
+    };
+
+    @new inst_os OkBusSource {
+        IN  [1] en = en;
+        BUS DATA_BUS SOURCE bus = _;
+        OUT [1] ack = _;
+    };
+
+    @new inst_ot OkBusTarget {
+        IN  [1] en = en;
+        BUS DATA_BUS TARGET bus = _;
+        OUT [8] data = ok_out;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: all-z BUS connection
+        inst_zs.bus = inst_zt.bus;
+        // Valid: real-data BUS connection — no error expected
+        inst_os.bus = inst_ot.bus;
+        data <= z_out | ok_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

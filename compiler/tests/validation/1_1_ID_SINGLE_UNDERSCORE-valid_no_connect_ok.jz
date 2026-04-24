@@ -1,0 +1,103 @@
+// ID_SINGLE_UNDERSCORE: Happy-path test for valid `_` uses.
+// `_` is reserved as a no-connect placeholder in module-instantiation port
+// bindings (project-level @top and module-level @new). This file exercises
+// every allowed context to verify no false positives.
+// Also includes LATCH, MEM, MUX, and CONFIG with valid (non-underscore) names
+// to verify those contexts do not produce false positives.
+// No diagnostics expected.
+
+@project ID_SINGLE_UNDERSCORE_valid_no_connect_ok
+    CONFIG {
+        // Valid: multi-char CONFIG entry name (config-name context)
+        valid_cfg = 8;
+    }
+
+    // Valid: _ as no-connect on @top input and output bindings
+    @top TopMod {
+        IN  [1] clk  = _;
+        IN  [1] din  = _;
+        OUT [1] dout = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] dout;
+        OUT [1] aux;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        dout = r;
+        aux  = ~r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    WIRE {
+        sig_a [8];
+        sig_b [8];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    // Valid: LATCH with multi-char name (latch-name context)
+    LATCH {
+        valid_lat [1] D;
+    }
+
+    // Valid: MEM with multi-char name (mem-name context)
+    MEM {
+        valid_mem [1] [4] = 1'b0 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Valid: MUX with multi-char name (mux-name context)
+    MUX {
+        valid_mux = sig_a, sig_b;
+    }
+
+    // Valid: _ on @new OUT port binding (ignore unused output)
+    @new inst_a Helper {
+        IN  [1] clk  = clk;
+        IN  [1] din  = din;
+        OUT [1] dout = r;
+        OUT [1] aux  = _;
+    };
+
+    // Valid: _ on @new IN port binding (leave input unconnected)
+    @new inst_b Helper {
+        IN  [1] clk  = clk;
+        IN  [1] din  = _;
+        OUT [1] dout = _;
+        OUT [1] aux  = _;
+    };
+
+    ASYNCHRONOUS {
+        sig_a <= 8'b00000000;
+        sig_b <= 8'b11111111;
+        valid_lat <= din : valid_mem.rd[2'b00];
+        dout <= valid_lat;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+        valid_mem.wr[2'b00] <= r;
+    }
+@endmod

@@ -1,0 +1,48 @@
+// HAPPY_PATH: S9.5 OVERRIDE evaluation for @check in the specialized top module.
+// The @top OVERRIDE must be applied before module-scope @check resolves CONSTs.
+
+@project HAPPY_PATH_check_top_override_order_ok
+    CONFIG {
+        TOP_WIDTH = 4;
+    }
+
+    @top TopMod {
+        OVERRIDE {
+            WIDTH = CONFIG.TOP_WIDTH;
+        }
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [4] data = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        WIDTH = 1;
+        DOUBLE_W = WIDTH * 2;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [WIDTH] din;
+        OUT [WIDTH] data;
+    }
+
+    // Trigger 1: @top OVERRIDE updates WIDTH before @check evaluates.
+    @check (WIDTH == 4, "top override width visible");
+
+    // Trigger 2: derived CONST also resolves after the OVERRIDE is applied.
+    @check (DOUBLE_W == 8, "top override derived const visible");
+
+    REGISTER {
+        r [WIDTH] = WIDTH'h0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

@@ -1,0 +1,42 @@
+// MEM_INVALID_PORT_TYPE: Unknown MEM port qualifier or direction triggers error.
+// Valid ports are accessed so this fixture isolates the invalid keyword diagnostics.
+
+@project MEM_INVALID_PORT_TYPE_unknown_keyword
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_bad [8] [16] = 8'h00 {
+            OUT rd BLAH;
+            GARBAGE bogus;
+            OUT rd_ok ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_bad.rd[addr] ^ mem_bad.rd_ok[addr] ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        mem_bad.wr[addr] <= wdata;
+    }
+@endmod

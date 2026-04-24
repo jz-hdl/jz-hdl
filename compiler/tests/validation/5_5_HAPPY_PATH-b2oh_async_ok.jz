@@ -1,0 +1,43 @@
+// HAPPY_PATH: b2oh(index, width) used on an ASYNCHRONOUS RHS.
+// Exercises the allowed async-expr context for §5.5.13. No diagnostics
+// expected.
+
+@project HAPPY_PATH_b2oh_async_ok
+    @top TopMod {
+        IN  [3] idx = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [3] idx;
+        OUT [8] data;
+    }
+
+    WIRE {
+        onehot [8];
+        h_data  [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] din = onehot;
+        OUT [8] dout = h_data;
+    };
+
+    ASYNCHRONOUS {
+        onehot <=z b2oh(idx, 8);
+        data = h_data;
+    }
+@endmod

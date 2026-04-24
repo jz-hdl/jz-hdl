@@ -1,0 +1,74 @@
+// REG_MULTI_DIMENSIONAL: Happy path — single-dimensional REGISTER declarations
+// across multiple widths and modules. Verifies REG_MULTI_DIMENSIONAL does not
+// fire for valid `reg_name [width] = <literal>;` syntax.
+
+@project REG_MULTI_DIMENSIONAL_single_dim_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [1] dout_1 = _;
+        OUT [8] dout_8 = _;
+        OUT [16] dout_16 = _;
+        OUT [8] dout_h = _;
+    }
+@endproj
+
+// Helper module: single-dimensional register of differing widths
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        // Single-dimensional register, 8 bits
+        r_h [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data_out = r_h;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_h <= data_in;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [1] dout_1;
+        OUT [8] dout_8;
+        OUT [16] dout_16;
+        OUT [8] dout_h;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] data_in = din;
+        OUT [8] data_out = dout_h;
+    };
+
+    REGISTER {
+        // Single-dimensional, 1-bit
+        r_flag [1] = 1'b0;
+        // Single-dimensional, 8-bit
+        r_byte [8] = 8'hAA;
+        // Single-dimensional, 16-bit
+        r_word [16] = 16'h0000;
+    }
+
+    ASYNCHRONOUS {
+        dout_1 = r_flag;
+        dout_8 = r_byte;
+        dout_16 = r_word;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_flag <= ~r_flag;
+        r_byte <= din;
+        r_word <= r_word + 16'd1;
+    }
+@endmod

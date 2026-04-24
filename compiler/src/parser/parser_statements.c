@@ -29,20 +29,22 @@
  */
 static JZASTNode *parse_lvalue_primary(Parser *p) {
     const JZToken *t = peek(p);
-    if (t->type != JZ_TOK_IDENTIFIER && t->type != JZ_TOK_KW_CONFIG) {
+    if (!is_decl_identifier_token(t) && t->type != JZ_TOK_KW_CONFIG) {
         parser_error(p, "expected identifier in assignment left-hand side");
         return NULL;
     }
 
     /* Reuse the qualified-identifier logic from parse_primary_expr but
-     * restricted to identifier-like tokens (IDENTIFIER or CONFIG).
+     * restricted to identifier-like tokens (IDENTIFIER, CONFIG, or
+     * reserved keywords so semantic analysis can report
+     * KEYWORD_AS_IDENTIFIER precisely).
      */
     JZLocation loc = t->loc;
     char *buf = NULL;
     size_t buf_sz = 0;
     for (;;) {
         const JZToken *id = peek(p);
-        if ((id->type != JZ_TOK_IDENTIFIER && id->type != JZ_TOK_KW_CONFIG) ||
+        if ((!is_decl_identifier_token(id) && id->type != JZ_TOK_KW_CONFIG) ||
             !id->lexeme) {
             break;
         }
@@ -183,19 +185,19 @@ static JZASTNode *parse_lvalue(Parser *p) {
                 return NULL;
             }
 
-            JZASTNode *bus = jz_ast_new(JZ_AST_EXPR_BUS_ACCESS, base->loc);
-            if (!bus) {
+            JZASTNode *member = jz_ast_new(JZ_AST_EXPR_INDEXED_MEMBER_ACCESS, base->loc);
+            if (!member) {
                 jz_ast_free(base);
                 if (msb) jz_ast_free(msb);
                 return NULL;
             }
-            jz_ast_set_name(bus, base->name);
-            jz_ast_set_text(bus, member_tok->lexeme);
+            jz_ast_set_name(member, base->name);
+            jz_ast_set_text(member, member_tok->lexeme);
             if (is_wildcard) {
-                jz_ast_set_block_kind(bus, "WILDCARD");
+                jz_ast_set_block_kind(member, "WILDCARD");
             } else if (msb) {
-                if (jz_ast_add_child(bus, msb) != 0) {
-                    jz_ast_free(bus);
+                if (jz_ast_add_child(member, msb) != 0) {
+                    jz_ast_free(member);
                     jz_ast_free(msb);
                     jz_ast_free(base);
                     return NULL;
@@ -203,7 +205,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
             }
             advance(p); /* consume member identifier */
             jz_ast_free(base);
-            base = bus;
+            base = member;
             continue;
         }
 
@@ -700,6 +702,23 @@ static int parse_feature_guard_body(Parser *p,
             advance(p);
             return -1;
         }
+        if (t->type == JZ_TOK_KW_NEW ||
+            t->type == JZ_TOK_KW_PROJECT ||
+            t->type == JZ_TOK_KW_ENDPROJ ||
+            t->type == JZ_TOK_KW_MODULE ||
+            t->type == JZ_TOK_KW_ENDMOD ||
+            t->type == JZ_TOK_KW_BLACKBOX ||
+            t->type == JZ_TOK_KW_IMPORT ||
+            t->type == JZ_TOK_KW_GLOBAL ||
+            t->type == JZ_TOK_KW_ENDGLOB) {
+            /* Structural directives are not allowed inside @feature bodies. */
+            parser_report_rule(p, t,
+                               "DIRECTIVE_INVALID_CONTEXT",
+                               "structural directive is not allowed inside a @feature guard body;\n"
+                               "move @new and other structural directives to module scope");
+            advance(p);
+            return -1;
+        }
 
         if (t->type == JZ_TOK_KW_IF) {
             if (parse_if_chain(p, parent, is_sync) != 0) {
@@ -1020,7 +1039,54 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
                                "DIRECTIVE_INVALID_CONTEXT",
                                "@check is not allowed inside ASYNCHRONOUS/SYNCHRONOUS blocks;\n"
                                "move it to module scope (directly inside @module...@endmod)");
+            /* Skip past the semicolon to avoid cascading parse errors from
+             * the @check argument list (e.g. "(1, \"msg\");"). */
             advance(p);
+            while (peek(p)->type != JZ_TOK_EOF &&
+                   peek(p)->type != JZ_TOK_SEMICOLON &&
+                   peek(p)->type != terminator) {
+                advance(p);
+            }
+            if (peek(p)->type == JZ_TOK_SEMICOLON) advance(p);
+            continue;
+        }
+        if (t->type == JZ_TOK_KW_NEW ||
+            t->type == JZ_TOK_KW_PROJECT ||
+            t->type == JZ_TOK_KW_ENDPROJ ||
+            t->type == JZ_TOK_KW_MODULE ||
+            t->type == JZ_TOK_KW_ENDMOD ||
+            t->type == JZ_TOK_KW_BLACKBOX ||
+            t->type == JZ_TOK_KW_IMPORT ||
+            t->type == JZ_TOK_KW_GLOBAL ||
+            t->type == JZ_TOK_KW_ENDGLOB) {
+            /* Structural directives are not allowed inside blocks. */
+            parser_report_rule(p, t,
+                               "DIRECTIVE_INVALID_CONTEXT",
+                               "structural directive is not allowed inside ASYNCHRONOUS/SYNCHRONOUS blocks;\n"
+                               "move @new and other structural directives to module scope");
+            JZTokenType kw = t->type;
+            advance(p);
+            /* @new has "name Type { ... };" syntax; skip past its trailing
+             * semicolon (respecting brace nesting) to avoid cascading parse
+             * errors. Other structural directives are single tokens or
+             * terminators that the main parser recovers from naturally. */
+            if (kw == JZ_TOK_KW_NEW) {
+                int depth = 0;
+                while (peek(p)->type != JZ_TOK_EOF) {
+                    if (depth == 0 && peek(p)->type == terminator) {
+                        break;
+                    }
+                    if (peek(p)->type == JZ_TOK_LBRACE) {
+                        depth++;
+                    } else if (peek(p)->type == JZ_TOK_RBRACE) {
+                        depth--;
+                    } else if (peek(p)->type == JZ_TOK_SEMICOLON && depth <= 0) {
+                        advance(p);
+                        break;
+                    }
+                    advance(p);
+                }
+            }
             continue;
         }
 

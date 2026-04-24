@@ -1,0 +1,50 @@
+// MODULE_CANONICAL_FORM: Happy path for §4.1 Reqs #26-28 — module-scoped
+// @template block in canonical form.
+// Exercises:
+//   #26: @template <template_id> (<params>)
+//   #27: <template_body>
+//   #28: @endtemplate
+
+@project MODULE_CANONICAL_FORM_template_block_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    // Req #26-28: module-scoped template with parameters and a body.
+    @template assign_reg(dst, src)
+        dst <= src;
+    @endtemplate
+
+    // A second template to exercise multiple @template blocks in the same module.
+    @template toggle(dst, src)
+        dst <= ~src;
+    @endtemplate
+
+    REGISTER {
+        r1 [1] = 1'b0;
+        r2 [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r1 ^ r2;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        @apply assign_reg(r1, din);
+        @apply toggle(r2, din);
+    }
+@endmod

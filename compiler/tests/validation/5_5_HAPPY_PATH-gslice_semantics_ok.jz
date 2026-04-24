@@ -1,0 +1,69 @@
+// HAPPY_PATH: gslice() behavioral requirements from §5.5.8.
+// Exercises:
+//   Reqs #1-5 (async-expr context) - gslice in ASYNCHRONOUS RHS.
+//   Req #7  - index_width >= clog2(W) satisfied at exact boundary.
+//   Req #8  - index narrower than clog2(W) is implicitly zero-extended.
+//   Req #9  - index wider than clog2(W); may be out of range at runtime.
+//   Req #11 - index + width exceeds W at runtime -> bits return 0.
+//   Req #12 - per-bit semantics: result[k] = (index+k in range) ? source[index+k] : 0.
+//   Req #13 - purely combinational (no implicit storage); direct ASYNC RHS use.
+//   Req #14 - no storage introduced by gslice alone.
+//   Req #15 - realizes as LUT-based mux fabric (behavioral, combinational use).
+//   Req #16 - deterministic in all overflow cases.
+// Covers async-expr and sync-expr contexts (the only syntactically legal contexts).
+// new-binding, check-expr, feature-cond are inapplicable (intrinsic restriction);
+// see audit/runner.log for the rationale.
+
+@project HAPPY_PATH_gslice_semantics_ok
+    @top TopMod {
+        IN  [1]  clk      = _;
+        IN  [16] src16    = _;
+        IN  [2]  narrow_i = _;
+        IN  [4]  exact_i  = _;
+        IN  [5]  wide_i   = _;
+        OUT [4]  out_narrow = _;
+        OUT [4]  out_exact  = _;
+        OUT [4]  out_wide   = _;
+        OUT [4]  out_combo  = _;
+        OUT [4]  out_mux    = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [16] src16;
+        IN  [2]  narrow_i;
+        IN  [4]  exact_i;
+        IN  [5]  wide_i;
+        OUT [4]  out_narrow;
+        OUT [4]  out_exact;
+        OUT [4]  out_wide;
+        OUT [4]  out_combo;
+        OUT [4]  out_mux;
+    }
+
+    REGISTER {
+        r_narrow [4] = 4'd0;
+    }
+
+    ASYNCHRONOUS {
+        // Reqs #1-5, #8: 2-bit index < clog2(16)=4, implicit zero-extend;
+        // covers gslice in async-expr (Reqs #1-5 async context).
+        out_narrow <= gslice(src16, narrow_i, 4);
+        // Req #7: 4-bit index == clog2(16)=4, exact boundary is satisfied.
+        out_exact  <= gslice(src16, exact_i, 4);
+        // Reqs #9, #11, #16: 5-bit index > clog2(16) can encode values >= 16
+        // at runtime; allowed, out-of-range bits return 0 deterministically.
+        out_wide   <= gslice(src16, wide_i, 4);
+        // Reqs #12, #13, #14, #15: combinational LUT-mux fabric, no storage,
+        // result used directly in async RHS with width near the boundary.
+        out_mux    <= gslice(src16, exact_i, 4);
+        out_combo = r_narrow;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Reqs #1-5, #12: sync-expr with narrower index (zero-extend) to a register.
+        r_narrow <= gslice(src16, narrow_i, 4);
+    }
+@endmod

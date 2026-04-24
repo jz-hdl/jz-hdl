@@ -1,0 +1,4 @@
+File: 10_3_TEMPLATE_EXTERNAL_REF-external_lhs_and_reverse.jz
+      34:9    error TEMPLATE_EXTERNAL_REF S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments
+      59:9    error TEMPLATE_EXTERNAL_REF S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments
+      64:9    error TEMPLATE_EXTERNAL_REF S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments

@@ -1,0 +1,38 @@
+// HAPPY_PATH: Simple ROM exposes exactly one asynchronous read port (S7.6.1).
+// Valid uses are included to verify a single OUT ASYNC port supports ROM reads.
+
+@project HAPPY_PATH_single_async_read_port_ok
+    @top TopMod {
+        IN  [4] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module RomCell
+    PORT {
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        table [8] [16] = 8'h3C {
+            OUT rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = table.rd[addr];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    @new rom RomCell {
+        IN  [4] addr = addr;
+        OUT [8] data = data;
+    };
+@endmod

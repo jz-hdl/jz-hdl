@@ -63,9 +63,15 @@
         r [16] = 16'h0000;
     }
 
+    CONST {
+        HI = 15;
+        LO = 0;
+    }
+
     @new inst_a HelperA {
         IN  [1] clk = clk;
-        IN  [16] bus = r;
+        // Slice in @new port binding (new-binding context) — full-width slice
+        IN  [16] bus = r[HI:LO];
         OUT [8] out_a = ha_out_a;
         OUT [1] out_b = ha_out_b;
         OUT [1] out_c = ha_out_c;

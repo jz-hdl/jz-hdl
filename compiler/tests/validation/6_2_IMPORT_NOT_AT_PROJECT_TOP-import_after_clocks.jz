@@ -1,0 +1,37 @@
+// IMPORT_NOT_AT_PROJECT_TOP: @import appears after CLOCKS block.
+// Tests @import placed after CLOCKS block inside @project.
+
+@project IMPORT_NOT_AT_PROJECT_TOP_import_after_clocks
+
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    CLOCKS {
+        sys_clk = { period=10.0 };
+    }
+
+    // Trigger: @import after CLOCKS block (must come before CONFIG/CLOCKS)
+    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-import_after_clocks_lib.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

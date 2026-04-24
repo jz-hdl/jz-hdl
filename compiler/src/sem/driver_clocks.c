@@ -246,6 +246,63 @@ static void sem_check_cdc_alias_lhs_in_block(const JZASTNode *node,
     }
 }
 
+static const char *sem_cdc_symbol_kind_name(JZSymbolKind kind)
+{
+    switch (kind) {
+    case JZ_SYM_REGISTER: return "REGISTER";
+    case JZ_SYM_PORT:     return "PORT";
+    case JZ_SYM_CONST:    return "CONST";
+    case JZ_SYM_WIRE:     return "WIRE";
+    case JZ_SYM_LATCH:    return "LATCH";
+    case JZ_SYM_MEM:      return "MEM";
+    case JZ_SYM_MUX:      return "MUX";
+    case JZ_SYM_INSTANCE: return "INSTANCE";
+    default:              return "identifier";
+    }
+}
+
+static const JZASTNode *sem_find_prior_cdc_alias(const JZCdcAliasDomainInfo *aliases,
+                                                 size_t alias_count,
+                                                 const JZASTNode *dst_id)
+{
+    if (!aliases || !dst_id || !dst_id->name) return NULL;
+    for (size_t i = 0; i < alias_count; ++i) {
+        const JZASTNode *decl = aliases[i].decl;
+        if (decl == dst_id) {
+            return NULL;
+        }
+        if (decl && decl->name && strcmp(decl->name, dst_id->name) == 0) {
+            return decl;
+        }
+    }
+    return NULL;
+}
+
+static const JZSymbol *sem_find_cdc_alias_scope_conflict(const JZModuleScope *scope,
+                                                         const JZASTNode *dst_id)
+{
+    if (!scope || !dst_id || !dst_id->name) return NULL;
+
+    size_t existing_count = scope->symbols.len / sizeof(JZSymbol);
+    const JZSymbol *existing_syms = (const JZSymbol *)scope->symbols.data;
+    for (size_t ei = 0; ei < existing_count; ++ei) {
+        const JZSymbol *existing = &existing_syms[ei];
+        if (!existing->name || strcmp(existing->name, dst_id->name) != 0) {
+            continue;
+        }
+        if (existing->node == dst_id) {
+            continue;
+        }
+        if (existing->node &&
+            existing->node->type == JZ_AST_EXPR_IDENTIFIER) {
+            continue;
+        }
+        return existing;
+    }
+
+    return NULL;
+}
+
 void sem_check_sync_clock_domains(JZBuffer *module_scopes,
                                   JZDiagnosticList *diagnostics)
 {
@@ -546,19 +603,29 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
                 if (cdc->child_count >= 3) {
                     JZASTNode *dst_id = cdc->children[2];
                     if (dst_id && dst_id->type == JZ_AST_EXPR_IDENTIFIER && dst_id->name) {
-                        const JZSymbol *existing = module_scope_lookup(scope, dst_id->name);
-                        if (existing && existing->kind != JZ_SYM_WIRE) {
-                            /* A non-wire symbol already exists with that name. */
-                            const char *kind_str = "identifier";
-                            if (existing->kind == JZ_SYM_REGISTER) kind_str = "REGISTER";
-                            else if (existing->kind == JZ_SYM_PORT) kind_str = "PORT";
-                            else if (existing->kind == JZ_SYM_CONST) kind_str = "CONST";
-                            else if (existing->kind == JZ_SYM_LATCH) kind_str = "LATCH";
+                        const JZASTNode *prior_alias =
+                            sem_find_prior_cdc_alias(aliases, alias_count, dst_id);
+                        if (prior_alias) {
+                            char explain[256];
+                            snprintf(explain, sizeof(explain),
+                                     "CDC destination alias '%s' conflicts with a previous CDC\n"
+                                     "destination alias of the same name. Choose a different alias name.",
+                                     dst_id->name);
+                            sem_report_rule(diagnostics,
+                                            dst_id->loc,
+                                            "CDC_DEST_ALIAS_DUP",
+                                            explain);
+                        }
+
+                        const JZSymbol *existing =
+                            sem_find_cdc_alias_scope_conflict(scope, dst_id);
+                        if (existing) {
                             char explain[256];
                             snprintf(explain, sizeof(explain),
                                      "CDC destination alias '%s' conflicts with an existing %s\n"
                                      "of the same name. Choose a different alias name.",
-                                     dst_id->name, kind_str);
+                                     dst_id->name,
+                                     sem_cdc_symbol_kind_name(existing->kind));
                             sem_report_rule(diagnostics,
                                             dst_id->loc,
                                             "CDC_DEST_ALIAS_DUP",
@@ -572,6 +639,8 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
         /* CDC_DEST_ALIAS_ASSIGNED: scan blocks for assignments to CDC alias names. */
         for (size_t ai = 0; ai < alias_count; ++ai) {
             if (!aliases[ai].decl || !aliases[ai].decl->name) continue;
+            if (sem_find_prior_cdc_alias(aliases, alias_count, aliases[ai].decl)) continue;
+            if (sem_find_cdc_alias_scope_conflict(scope, aliases[ai].decl)) continue;
             const char *alias_name = aliases[ai].decl->name;
             for (size_t ci = 0; ci < mod->child_count; ++ci) {
                 JZASTNode *blk = mod->children[ci];

@@ -1,0 +1,37 @@
+// Scratch wires are expansion-local and must not be sliceable outside the
+// template body that declared them.
+
+@project scratch_slice_outside_template
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [1] dout = _;
+    }
+@endproj
+
+@template use_scratch(src, dst)
+    @scratch tmp [WIDTH];
+    tmp <= src;
+    dst <= tmp[0:0];
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [1] dout;
+    }
+
+    WIRE {
+        w1 [1];
+    }
+
+    ASYNCHRONOUS {
+        @apply use_scratch(din, w1);
+
+        // Trigger: scratch identifier is not visible for slicing after expansion.
+        dout <= tmp[0:0];
+    }
+@endmod

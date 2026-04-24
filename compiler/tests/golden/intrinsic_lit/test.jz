@@ -44,18 +44,18 @@
 @endproj
 
 @module LitCore
-    CONST {
-        DEPTH = 200;
-        ADDR_W = clog2(DEPTH);
-        DATA_W = widthof(data);
-    }
-
     PORT {
         IN  [1] clk;
         IN  [1] rst_n;
         IN  [8] data;
         OUT [8] dout;
         OUT [1] match;
+    }
+
+    CONST {
+        DEPTH = 200;
+        ADDR_W = clog2(DEPTH);
+        DATA_W = widthof(data);
     }
 
     WIRE {

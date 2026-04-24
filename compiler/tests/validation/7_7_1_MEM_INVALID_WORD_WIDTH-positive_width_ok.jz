@@ -1,0 +1,38 @@
+// MEM_INVALID_WORD_WIDTH: positive integer word widths compile cleanly.
+
+@project MEM_INVALID_WORD_WIDTH_positive_width_ok
+    CONFIG {
+        WORD_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [CONFIG.WORD_W] wdata = _;
+        OUT [CONFIG.WORD_W] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [CONFIG.WORD_W] wdata;
+        OUT [CONFIG.WORD_W] data;
+    }
+
+    MEM {
+        mem_ok [CONFIG.WORD_W] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_ok.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_ok.wr[addr] <= wdata;
+    }
+@endmod

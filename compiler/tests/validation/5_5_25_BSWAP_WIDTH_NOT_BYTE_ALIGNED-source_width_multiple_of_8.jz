@@ -1,0 +1,83 @@
+// BSWAP_WIDTH_NOT_BYTE_ALIGNED: bswap() source width must be a multiple of 8.
+// Exercises:
+//   Req #1 - non-byte-aligned sources are rejected at compile time.
+
+@project BSWAP_WIDTH_NOT_BYTE_ALIGNED_source_width_multiple_of_8
+    CONFIG {
+        WIDTH = 16;
+    }
+
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [7]  src7 = _;
+        IN  [15] src15 = _;
+        IN  [16] src16 = _;
+        OUT [16] out_async = _;
+        OUT [16] out_sync = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1]  clk;
+        IN  [7]  src7;
+        IN  [16] src16;
+        OUT [16] out_async;
+        OUT [16] out_sync;
+    }
+
+    REGISTER {
+        r_sync [16] = 16'd0;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: 7-bit source is not a multiple of 8.
+        out_async = bswap(src7);
+        // Valid: 16-bit source is byte-aligned.
+        out_sync = r_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: 16-bit source is byte-aligned.
+        r_sync <= bswap(src16);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [7]  src7;
+        IN  [15] src15;
+        IN  [16] src16;
+        OUT [16] out_async;
+        OUT [16] out_sync;
+    }
+
+    WIRE {
+        h_async [16];
+        h_sync  [16];
+    }
+
+    REGISTER {
+        r_sync [16] = 16'd0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1]  clk = clk;
+        IN  [7]  src7 = src7;
+        IN  [16] src16 = src16;
+        OUT [16] out_async = h_async;
+        OUT [16] out_sync = h_sync;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: 16-bit source is byte-aligned.
+        out_async = bswap(src16);
+        out_sync = r_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: 15-bit source is not a multiple of 8.
+        r_sync <= bswap(src15);
+    }
+@endmod

@@ -1,5 +1,5 @@
 // HAPPY_PATH: Valid @repeat usage compiles without diagnostics.
-// Tests @repeat with count > 0, nested @repeat, count=1, and IDX substitution.
+// Tests @repeat with count = 1 (single expansion, equivalent to no repeat).
 // No diagnostics expected.
 
 @project HAPPY_PATH_repeat_ok
@@ -9,23 +9,23 @@
 
     @top TopMod {
         IN  [1] clk = _;
-        OUT [8] data = _;
+        OUT [1] data = _;
     }
 @endproj
 
 @module TopMod
     PORT {
         IN  [1] clk;
-        OUT [8] data;
+        OUT [1] data;
     }
     REGISTER {
-        r [8] = 8'b0;
+        r [1] = 1'b0;
     }
     ASYNCHRONOUS {
         data = r;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Valid: @repeat 1 — equivalent to no repeat
+        // Valid: @repeat 1 — single expansion, no multi-assign
         @repeat 1
             r <= ~r;
         @end

@@ -422,6 +422,8 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
                             m->array_index = (array_count > 1) ? (int)elem : -1;
                             m->ir_signal_id = sig->id;
                             m->width = sig->width;
+                            m->parent_msb = -1;
+                            m->parent_lsb = -1;
                         }
 
                         idx++;
@@ -455,7 +457,11 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
 
             unsigned width = 0;
             if (sym->node && sym->node->width) {
-                if (sem_eval_width_expr(sym->node->width, scope, project_symbols, &width) == 0) {
+                if (sem_eval_width_expr_at_loc(sym->node->width,
+                                               scope,
+                                               project_symbols,
+                                               &width,
+                                               sym->node->loc) == 0) {
                     sig->width = (int)width;
                 }
             }
@@ -557,10 +563,11 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
          */
         unsigned width = 0;
         if (sym->node && sym->node->width) {
-            if (sem_eval_width_expr(sym->node->width,
-                                    scope,
-                                    project_symbols,
-                                    &width) == 0) {
+            if (sem_eval_width_expr_at_loc(sym->node->width,
+                                           scope,
+                                           project_symbols,
+                                           &width,
+                                           sym->node->loc) == 0) {
                 sig->width = (int)width;
             }
         }

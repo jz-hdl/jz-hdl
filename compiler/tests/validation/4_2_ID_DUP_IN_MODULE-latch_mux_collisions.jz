@@ -1,0 +1,73 @@
+// ID_DUP_IN_MODULE: Duplicate identifier extending coverage to LATCH and MUX
+// name-space collisions. LATCH names share the module namespace and trigger
+// ID_DUP_IN_MODULE; MUX names trigger the companion MUX_NAME_DUPLICATE rule.
+
+@project ID_DUP_IN_MODULE_latch_mux_collisions
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module — exercises latch-name and mux-name duplicates
+@module DupLatchMux
+    PORT {
+        IN  [1] pclk;
+        IN  [1] enable;
+        IN  [8] src0;
+        IN  [8] src1;
+        OUT [1] out_a;
+        OUT [8] out_b;
+    }
+
+    REGISTER {
+        r_val [1] = 1'b0;
+    }
+
+    LATCH {
+        // Trigger 1: latch-name duplicates register name r_val
+        r_val [1] D;
+    }
+
+    MUX {
+        // Trigger 2: mux-name duplicates port name out_b
+        out_b = src0, src1;
+    }
+
+    ASYNCHRONOUS {
+        out_a = r_val;
+        out_b = src0;
+    }
+
+    SYNCHRONOUS(CLK=pclk) {
+        r_val <= enable;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    @new inst_dlm DupLatchMux {
+        IN  [1] pclk   = clk;
+        IN  [1] enable = r;
+        IN  [8] src0   = 8'h00;
+        IN  [8] src1   = 8'hFF;
+        OUT [1] out_a  = _;
+        OUT [8] out_b  = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

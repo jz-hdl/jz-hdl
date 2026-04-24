@@ -1,0 +1,90 @@
+// INSTANCE_HAPPY_PATH: Happy path for OVERRIDE evaluation in arrayed @new.
+// Per §4.13.1 Validation Workflow step 2, OVERRIDE values are computed once
+// for the whole array and apply to every instance. This test exercises:
+//   - OVERRIDE with a literal constant that changes child port widths
+//   - OVERRIDE driven by a parent CONFIG reference
+//   - OVERRIDE driven by a parent CONST reference
+// All three arrayed instantiations must elaborate cleanly.
+
+@project INSTANCE_HAPPY_PATH_array_override_evaluation_ok
+    CONFIG {
+        PARENT_WIDTH = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [4] dout = _;
+    }
+@endproj
+
+@module ConfigurableChild
+    CONST {
+        CHILD_WIDTH = 1;
+    }
+    PORT {
+        IN  [1] clk;
+        IN  [CHILD_WIDTH] din;
+        OUT [CHILD_WIDTH] data;
+    }
+    REGISTER {
+        r [CHILD_WIDTH] = CHILD_WIDTH'h0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        LOCAL_WIDTH = 1;
+    }
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [4] dout;
+    }
+
+    WIRE {
+        outbus_lit [4];
+        outbus_cfg [4];
+        outbus_const [4];
+    }
+
+    // Trigger 1: OVERRIDE with a literal — CHILD_WIDTH becomes 1 for all 4 instances
+    @new inst_lit[4] ConfigurableChild {
+        OVERRIDE {
+            CHILD_WIDTH = 1;
+        }
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX];
+        OUT [1] data = outbus_lit[IDX];
+    };
+
+    // Trigger 2: OVERRIDE from parent CONFIG — computed once for the whole array
+    @new inst_cfg[4] ConfigurableChild {
+        OVERRIDE {
+            CHILD_WIDTH = PARENT_WIDTH / 4;
+        }
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX];
+        OUT [1] data = outbus_cfg[IDX];
+    };
+
+    // Trigger 3: OVERRIDE from parent CONST — computed once for the whole array
+    @new inst_const[4] ConfigurableChild {
+        OVERRIDE {
+            CHILD_WIDTH = LOCAL_WIDTH;
+        }
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX];
+        OUT [1] data = outbus_const[IDX];
+    };
+
+    ASYNCHRONOUS {
+        dout = outbus_lit ^ outbus_cfg ^ outbus_const;
+    }
+@endmod

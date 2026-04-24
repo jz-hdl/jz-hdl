@@ -1,0 +1,49 @@
+// TEMPLATE_SCRATCH_WIDTH_INVALID: template parameters may not represent widths.
+// Tests a template parameter used as an @scratch width in the 10.4 forbidden-content context.
+// Valid literal-width template included to verify no false positives.
+
+@project TEMPLATE_SCRATCH_WIDTH_INVALID_template_param_width
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Valid: literal width is allowed.
+@template literal_width_ok(dst, src)
+    @scratch tmp [1];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+// Trigger: template parameter used as a width.
+@template param_width_bad(dst, src, w)
+    @scratch tmp [w];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        @apply literal_width_ok(data, r);
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

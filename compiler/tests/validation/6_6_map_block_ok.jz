@@ -1,0 +1,43 @@
+// HAPPY_PATH: Valid differential MAP block syntax.
+// Covers MAP { ... } with both single-ended and differential entries.
+
+@project map_block_ok
+    IN_PINS {
+        clk = { standard=LVCMOS33 };
+        diff_in = { mode=DIFFERENTIAL, standard=LVDS25 };
+    }
+
+    OUT_PINS {
+        led = { standard=LVCMOS33, drive=8 };
+    }
+
+    MAP {
+        clk = 1;
+        diff_in = { P=10, N=11 };
+        led = 12;
+    }
+
+    @top TopMod {
+        IN  [1] clk = clk;
+        OUT [1] data = led;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

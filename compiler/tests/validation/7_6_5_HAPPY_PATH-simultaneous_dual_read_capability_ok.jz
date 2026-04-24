@@ -1,0 +1,69 @@
+// HAPPY_PATH: Triple-port memory supports simultaneous dual reads (S7.6.5).
+// Exercises both asynchronous read ports in the same combinational evaluation path.
+
+@project HAPPY_PATH_simultaneous_dual_read_capability_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] rd_addr_0 = _;
+        IN  [8] rd_addr_1 = _;
+        IN  [8] wr_addr = _;
+        IN  [16] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [16] rd_data_0 = _;
+        OUT [16] rd_data_1 = _;
+        OUT [16] dual_read_mix = _;
+    }
+@endproj
+
+@module DualReadConsumer
+    PORT {
+        IN  [16] left;
+        IN  [16] right;
+        OUT [16] merged;
+    }
+
+    ASYNCHRONOUS {
+        merged = left + right;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] rd_addr_0;
+        IN  [8] rd_addr_1;
+        IN  [8] wr_addr;
+        IN  [16] wr_data;
+        IN  [1] wr_en;
+        OUT [16] rd_data_0;
+        OUT [16] rd_data_1;
+        OUT [16] dual_read_mix;
+    }
+
+    MEM {
+        mem [16] [256] = 16'h0000 {
+            OUT rd_0 ASYNC;
+            OUT rd_1 ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new consumer DualReadConsumer {
+        IN  [16] left = rd_data_0;
+        IN  [16] right = rd_data_1;
+        OUT [16] merged = dual_read_mix;
+    };
+
+    ASYNCHRONOUS {
+        // Valid use 1: first asynchronous read participates in dual-read evaluation.
+        rd_data_0 = mem.rd_0[rd_addr_0];
+        // Valid use 2: second asynchronous read participates in the same evaluation cycle.
+        rd_data_1 = mem.rd_1[rd_addr_1];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (wr_en) {
+            mem.wr[wr_addr] <= wr_data;
+        }
+    }
+@endmod

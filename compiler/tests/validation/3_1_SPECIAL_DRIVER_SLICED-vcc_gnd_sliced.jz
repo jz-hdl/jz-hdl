@@ -1,24 +1,22 @@
 // SPECIAL_DRIVER_SLICED: VCC/GND may not be sliced or indexed.
-// Tests slicing VCC and GND in async RHS and sync RHS across modules.
-// Valid uses of VCC/GND without slicing included to verify no false positives.
+// Exercises sliced special drivers as operands inside operator-category
+// expressions, plus valid unsliced standalone uses for false-positive guards.
 
 @project SPECIAL_DRIVER_SLICED_vcc_gnd_sliced
-    CONFIG {
-        WIDTH = 8;
-    }
-
     @top TopMod {
         IN  [1] clk = _;
+        IN  [1] flag = _;
         OUT [1] out_a = _;
         OUT [1] out_b = _;
         OUT [1] out_c = _;
     }
 @endproj
 
-// Helper: VCC and GND sliced in async RHS and sync RHS
-@module HelperA
+// Helper: sliced VCC/GND inside expression contexts
+@module HelperSlice
     PORT {
         IN  [1] clk;
+        IN  [1] flag;
         OUT [1] out_a;
         OUT [1] out_b;
         OUT [1] out_c;
@@ -27,51 +25,53 @@
         r [1] = 1'b0;
     }
     ASYNCHRONOUS {
-        // Trigger 1: VCC sliced in async RHS
-        out_a = VCC[0:0];
-        // Trigger 2: GND sliced in async RHS
-        out_b = GND[0:0];
-        // Valid: unsliced VCC (no false positive)
-        out_c = r;
+        // Trigger 1: VCC slice used in bitwise expression
+        out_a = VCC[0:0] & flag;
+        // Trigger 2: GND slice used in logical expression
+        out_b = GND[0:0] || flag;
+        // Valid: unsliced VCC as standalone RHS (no false positive)
+        out_c = VCC;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 3: VCC sliced in sync RHS
-        r <= VCC[0:0];
+        // Trigger 3: VCC slice used in SYNCHRONOUS expression
+        r <= VCC[0:0] ^ r;
     }
 @endmod
 
 @module TopMod
     PORT {
         IN  [1] clk;
+        IN  [1] flag;
         OUT [1] out_a;
         OUT [1] out_b;
         OUT [1] out_c;
     }
     WIRE {
-        ha_out_a [1];
-        ha_out_b [1];
-        ha_out_c [1];
+        h_out_a [1];
+        h_out_b [1];
+        h_out_c [1];
     }
     REGISTER {
         r [1] = 1'b0;
     }
 
-    @new inst_a HelperA {
+    @new inst_slice HelperSlice {
         IN  [1] clk = clk;
-        OUT [1] out_a = ha_out_a;
-        OUT [1] out_b = ha_out_b;
-        OUT [1] out_c = ha_out_c;
+        IN  [1] flag = flag;
+        OUT [1] out_a = h_out_a;
+        OUT [1] out_b = h_out_b;
+        OUT [1] out_c = h_out_c;
     };
 
     ASYNCHRONOUS {
-        // Valid: VCC without slice (no false positive)
-        out_a = ha_out_a;
-        out_b = ha_out_b;
-        out_c = r;
+        out_a = h_out_a;
+        out_b = h_out_b | r;
+        // Valid: unsliced GND as standalone RHS (no false positive)
+        out_c = GND;
     }
 
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 4: GND sliced in sync RHS
-        r <= GND[0:0];
+        // Trigger 4: GND slice used in top-level SYNCHRONOUS expression
+        r <= GND[0:0] ^ flag;
     }
 @endmod

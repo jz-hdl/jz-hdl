@@ -1,0 +1,58 @@
+// TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL: Three non-exclusive drivers on the
+// same tri-state wire. Verifies that the compiler detects non-mutually-exclusive
+// enable conditions when more than two instances drive the same signal.
+
+@project TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL_three_drivers
+    @top TopMod {
+        IN  [1] en = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Driver module with conditional tri-state output via INOUT
+@module DriverMod
+    PORT {
+        IN    [1] en;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'hAA;
+        } ELSE {
+            data <= 8'bzzzz_zzzz;
+        }
+    }
+@endmod
+
+// Top module: three instances drive same wire with same enable (non-exclusive)
+@module TopMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    WIRE {
+        bus [8];
+    }
+
+    // Trigger: three non-exclusive drivers on same wire
+    @new inst_a DriverMod {
+        IN    [1] en = en;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_b DriverMod {
+        IN    [1] en = en;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_c DriverMod {
+        IN    [1] en = en;
+        INOUT [8] data = bus;
+    };
+
+    ASYNCHRONOUS {
+        data <= bus;
+    }
+@endmod

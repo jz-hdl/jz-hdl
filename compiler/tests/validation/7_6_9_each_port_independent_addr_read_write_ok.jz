@@ -1,0 +1,96 @@
+// HAPPY_PATH: Valid §7.6.9 dual-port memory with independent per-port paths.
+// Covers Req #2: each INOUT port has its own address, read data, and write data.
+
+@project each_port_independent_addr_read_write_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr_a = _;
+        IN  [ADDR_W] addr_b = _;
+        IN  [DATA_W] wdata_a = _;
+        IN  [DATA_W] wdata_b = _;
+        IN  [1] we_a = _;
+        IN  [1] we_b = _;
+        OUT [DATA_W] rdata_a = _;
+        OUT [DATA_W] rdata_b = _;
+        OUT [DATA_W] path_mix = _;
+    }
+@endproj
+
+@module PathMixer
+    PORT {
+        IN  [8] read_a;
+        IN  [8] read_b;
+        IN  [8] write_a;
+        IN  [8] write_b;
+        OUT [8] mixed;
+    }
+
+    ASYNCHRONOUS {
+        mixed = read_a ^ read_b ^ write_a ^ write_b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr_a;
+        IN  [4] addr_b;
+        IN  [8] wdata_a;
+        IN  [8] wdata_b;
+        IN  [1] we_a;
+        IN  [1] we_b;
+        OUT [8] rdata_a;
+        OUT [8] rdata_b;
+        OUT [8] path_mix;
+    }
+
+    REGISTER {
+        rd_hold_a [8] = 8'h00;
+        rd_hold_b [8] = 8'h00;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [8] [16] = 8'h00 {
+            INOUT port_a;
+            INOUT port_b;
+        };
+    }
+
+    @new mixer PathMixer {
+        IN  [8] read_a = rd_hold_a;
+        IN  [8] read_b = rd_hold_b;
+        IN  [8] write_a = wdata_a;
+        IN  [8] write_b = wdata_b;
+        OUT [8] mixed = path_mix;
+    };
+
+    ASYNCHRONOUS {
+        rdata_a = rd_hold_a;
+        rdata_b = rd_hold_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Port A and port B use distinct address paths.
+        mem.port_a.addr <= addr_a;
+        mem.port_b.addr <= addr_b;
+
+        // Port A and port B capture distinct read-data paths.
+        rd_hold_a <= mem.port_a.data;
+        rd_hold_b <= mem.port_b.data;
+
+        IF (we_a) {
+            // Port A uses its own write-data path.
+            mem.port_a.wdata <= wdata_a;
+        }
+
+        IF (we_b) {
+            // Port B uses its own write-data path.
+            mem.port_b.wdata <= wdata_b;
+        }
+    }
+@endmod

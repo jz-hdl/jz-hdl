@@ -1,0 +1,104 @@
+// SBIT_INVALID_SOURCE: sbit() source must be a readable WIRE or REGISTER.
+// Tests non-wire/register sources in ASYNC and SYNC blocks across modules.
+// Valid sbit() on a wire and register are included to verify no false positives.
+
+@project SBIT_INVALID_SOURCE_non_wire_register_source
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] data = _;
+        IN  [3] idx = _;
+        IN  [1] bitval = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+        OUT [8] out_c = _;
+        OUT [8] out_d = _;
+    }
+@endproj
+
+// Helper module: sbit() with invalid and valid source kinds.
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        IN  [3] idx;
+        IN  [1] bitval;
+        OUT [8] out_a;
+        OUT [8] out_b;
+        OUT [8] out_c;
+        OUT [8] out_d;
+    }
+
+    WIRE {
+        src_w [8];
+    }
+
+    REGISTER {
+        src_r [8] = 8'h00;
+        r_bad [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        src_w = data;
+        // Trigger 1: input port is readable but not a wire/register source.
+        out_a <= sbit(data, idx, bitval);
+        // Read written registers and valid sources to avoid non-target warnings.
+        out_b = r_bad;
+        out_c = sbit(src_r, idx, bitval);
+        out_d = sbit(src_w, idx, bitval);
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        src_r <= data;
+        // Trigger 2: literal source is not a wire/register.
+        r_bad <= sbit(8'hAA, idx, bitval);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        IN  [3] idx;
+        IN  [1] bitval;
+        OUT [8] out_a;
+        OUT [8] out_b;
+        OUT [8] out_c;
+        OUT [8] out_d;
+    }
+
+    WIRE {
+        src_w [8];
+    }
+
+    REGISTER {
+        src_r [8] = 8'h00;
+        r_bad [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] data = data;
+        IN  [3] idx = idx;
+        IN  [1] bitval = bitval;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+        OUT [8] out_c = _;
+        OUT [8] out_d = _;
+    };
+
+    ASYNCHRONOUS {
+        src_w = data;
+        // Trigger 3: input port is readable but not a wire/register source.
+        out_a <= sbit(data, idx, bitval);
+        // Read written registers and valid sources to avoid non-target warnings.
+        out_b = r_bad;
+        out_c = sbit(src_r, idx, bitval);
+        out_d = sbit(src_w, idx, bitval);
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        src_r <= data;
+        // Trigger 4: literal source is not a wire/register.
+        r_bad <= sbit(8'h55, idx, bitval);
+    }
+@endmod

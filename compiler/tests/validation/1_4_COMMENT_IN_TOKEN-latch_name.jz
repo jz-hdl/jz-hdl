@@ -1,0 +1,31 @@
+// COMMENT_IN_TOKEN: Comment inside a LATCH name.
+// Valid latch names included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_latch_name
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    LATCH {
+        // Trigger: comment inside latch name
+        my/**/lat [1] D;
+    }
+
+    ASYNCHRONOUS {
+        mylat.D = din;
+        mylat.G = enable;
+        data = mylat.Q;
+    }
+@endmod

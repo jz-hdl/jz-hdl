@@ -1,0 +1,25 @@
+// Req #11: --sandbox-root adds an additional permitted root directory.
+// The validation runner enables traversal and adds compiler/tests as an extra
+// sandbox root so this import is allowed.
+
+@project REQ11_additional_sandbox_root_ok
+
+    @import "../path_security_escape_target.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_ext OutsideSandboxTarget {
+        IN  [1] din = clk;
+        OUT [1] dout = data;
+    };
+@endmod

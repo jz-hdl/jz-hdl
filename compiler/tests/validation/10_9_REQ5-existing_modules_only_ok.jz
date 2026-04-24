@@ -1,0 +1,58 @@
+// Req #5 (10.9 Rationale): Templates expand inside existing modules rather
+// than creating new module boundaries.
+
+@project REQ5_existing_modules_only_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template pass(src, dst)
+    @scratch tmp [1];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        @apply pass(din, dout);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        stage [1];
+    }
+
+    @new helper HelperMod {
+        IN  [1] din = r;
+        OUT [1] dout = stage;
+    };
+
+    ASYNCHRONOUS {
+        @apply pass(stage, data);
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

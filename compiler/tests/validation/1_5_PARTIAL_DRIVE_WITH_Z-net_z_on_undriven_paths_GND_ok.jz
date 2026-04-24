@@ -1,0 +1,84 @@
+// §1.5.3 Req #7 (Note): To drive a net in only some execution paths, assign
+// High-Impedance (z) on the undriven paths. This happy-path test exercises
+// the idiom across IF/ELSE, IF/ELIF/ELSE, SELECT, and nested IF, showing that
+// the compiler accepts partial drive when z covers the otherwise-undriven
+// branches. Uses --tristate-default=GND (via the _GND_ filename hint).
+
+@project PARTIAL_DRIVE_WITH_Z_net_z_on_undriven_paths_GND
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] en = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [2] sel2 = _;
+        OUT [8] out_if = _;
+        OUT [8] out_elif = _;
+        OUT [8] out_select = _;
+        OUT [8] out_nested = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [2] sel2;
+        OUT [8] out_if;
+        OUT [8] out_elif;
+        OUT [8] out_select;
+        OUT [8] out_nested;
+    }
+    WIRE {
+        w_if [8];
+        w_elif [8];
+        w_select [8];
+        w_nested [8];
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Happy 1: IF active path, ELSE releases with z
+        IF (en) {
+            w_if <= 8'hA5;
+        } ELSE {
+            w_if <= 8'bzzzz_zzzz;
+        }
+        out_if = w_if;
+
+        // Happy 2: IF/ELIF active, ELSE releases with z
+        IF (sel_a) {
+            w_elif <= 8'h11;
+        } ELIF (sel_b) {
+            w_elif <= 8'h22;
+        } ELSE {
+            w_elif <= 8'bzzzz_zzzz;
+        }
+        out_elif = w_elif;
+
+        // Happy 3: SELECT active cases, DEFAULT releases with z
+        SELECT (sel2) {
+            CASE 2'b00 { w_select <= 8'h01; }
+            CASE 2'b01 { w_select <= 8'h02; }
+            DEFAULT    { w_select <= 8'bzzzz_zzzz; }
+        }
+        out_select = w_select;
+
+        // Happy 4: nested IF — inner ELSE and outer ELSE release with z
+        IF (sel_a) {
+            IF (sel_b) {
+                w_nested <= 8'hF0;
+            } ELSE {
+                w_nested <= 8'bzzzz_zzzz;
+            }
+        } ELSE {
+            w_nested <= 8'bzzzz_zzzz;
+        }
+        out_nested = w_nested;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,0 +1,43 @@
+// §1.5.3 Req #1: Zero-assignment path behavior differs by identifier type.
+// Same syntactic pattern (IF without ELSE) is:
+//   - valid for REGISTER inside SYNCHRONOUS (clock gating holds previous value)
+//   - invalid for WIRE/PORT inside ASYNCHRONOUS (undriven path is an error)
+// This test exercises both sides of the contrast in a single project.
+
+@project ZERO_ASSIGNMENT_PATH_register_vs_net_contrast
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel = _;
+        OUT [1] out_w = _;
+        OUT [8] out_r = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        OUT [1] out_w;
+        OUT [8] out_r;
+    }
+    WIRE {
+        w [1];
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Trigger 1: zero-assignment path on a WIRE — ERROR (undriven path)
+        IF (sel) {
+            w <= VCC;
+        }
+        out_w = w;
+        out_r = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid contrast: zero-assignment path on a REGISTER — OK (clock gating)
+        IF (sel) {
+            r <= r + 8'h01;
+        }
+    }
+@endmod

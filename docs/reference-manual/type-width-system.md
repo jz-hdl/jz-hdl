@@ -137,7 +137,7 @@ Important notes:
 - umul(a,b): unsigned multiply; result width = 2 * max(width(a),width(b)) (zero‑extend)
 - smul(a,b): signed multiply; result width = 2 * max(width(a),width(b)) (sign‑extend)
 - gbit(source,index): returns 1 bit; index must be wide enough (>= clog2(width(source))); out‑of‑range at runtime → returns 0
-- sbit(source,index,set): returns full source width with one bit updated
+- sbit(source,index,set): returns full source width with one bit updated; source must be a wire or register
 - gslice/sslice: dynamic slice/overwrite with compile‑time constant slice width; index bounds behavior defined (out‑of‑range bits → 0 / ignored)
 
 Use intrinsics when you need automatic, safe extension or dynamic indexing semantics.
@@ -194,13 +194,14 @@ CONST { X = lit(4,3); } // ERROR: not a compile-time integer
 ### clog2(value)
 - Usage: `clog2(expr)`
 - Evaluated at compile time; returns smallest bit count >= value (ceil(log2(value)))
+- `clog2(1)` evaluates to `1`
 - Argument must be a positive integer constant (CONST, CONFIG, or literal)
 - Typical use: address widths for memories, selector widths for MUX
 
 ### widthof(identifier)
 - Usage: `widthof(identifier)`
 - Returns the declared static bit width of a BUS or local WIRE or REGISTER
-- Compile‑time only; name must be module‑local and resolvable
+- Compile‑time only; name must be module‑local, visible, and resolvable at the point of use
 - Not usable at run time inside ASYNCHRONOUS/SYNCHRONOUS expressions
 
 ### CONST vs CONFIG vs @global

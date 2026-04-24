@@ -1,0 +1,53 @@
+// HAPPY_PATH (S1.6.3 Reqs #2, #3, #4): Tri-state resolution table rows
+// `0`/`z` -> `0`, `1`/`z` -> `1`, and `z`/`z` -> `z`. Each branch of the
+// IF/ELIF/ELSE chain exercises one row by pairing two direct drivers on the
+// same INOUT bus. Row #4 (`z`/`z` -> `z`) is exercised on the ELSE branch
+// where the bus carries all-z; the bus is gated so that path is not read.
+// All combinations are structurally valid and must compile cleanly.
+
+@project TRI_STATE_RESOLUTION_table_rows_ok
+    @top TopMod {
+        IN    [1] sel_zero = _;
+        IN    [1] sel_one = _;
+        INOUT [8] bus = _;
+        OUT   [8] observed = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] sel_zero;
+        IN    [1] sel_one;
+        INOUT [8] bus;
+        OUT   [8] observed;
+    }
+
+    ASYNCHRONOUS {
+        // Two drivers per branch, mutually exclusive across branches via
+        // IF/ELIF/ELSE. Each branch realises one resolution-table row.
+        IF (sel_zero) {
+            // Row #2: `0` resolved with `z` -> `0`.
+            bus <= 8'b0000_0000;
+            bus <= 8'bzzzz_zzzz;
+        } ELIF (sel_one) {
+            // Row #3: `1` resolved with `z` -> `1`.
+            bus <= 8'b1111_1111;
+            bus <= 8'bzzzz_zzzz;
+        } ELSE {
+            // Row #4: `z` resolved with `z` -> `z`. Path is not read
+            // because the read below is gated to active-driver branches.
+            bus <= 8'bzzzz_zzzz;
+            bus <= 8'bzzzz_zzzz;
+        }
+
+        // Read only on paths that have an active driver, so the all-z
+        // ELSE path does not trip NET_TRI_STATE_ALL_Z_READ.
+        IF (sel_zero) {
+            observed <= bus;
+        } ELIF (sel_one) {
+            observed <= bus;
+        } ELSE {
+            observed <= 8'h00;
+        }
+    }
+@endmod

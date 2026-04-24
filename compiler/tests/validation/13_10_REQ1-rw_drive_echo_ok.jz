@@ -1,0 +1,77 @@
+// Req #1: when rw = 1, the transceiver drives write_data onto the shared bus
+// and captures the same driven value back into its receive buffer.
+
+@project REQ1_rw_drive_echo_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] observed = _;
+    }
+@endproj
+
+@module TristateTransceiver
+    PORT {
+        IN    [1] clk;
+        IN    [1] rw;
+        IN    [8] write_data;
+        OUT   [8] rx_data;
+        INOUT [8] data_bus;
+    }
+
+    REGISTER {
+        rx_buffer [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: rw = 1 drives write_data onto the shared bus.
+        data_bus <= (rw == 1'b1) ? write_data : 8'bzzzz_zzzz;
+        rx_data <= rx_buffer;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: rx_buffer captures the bus value, echoing the write.
+        rx_buffer <= data_bus;
+    }
+@endmod
+
+@module ExternalBusDriver
+    PORT {
+        IN    [1] drive_en;
+        IN    [8] drive_data;
+        INOUT [8] data_bus;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: external driver is disabled while the transceiver owns the bus.
+        data_bus <= (drive_en == 1'b1) ? drive_data : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] observed;
+    }
+
+    WIRE {
+        shared_bus [8];
+        rx_sample [8];
+    }
+
+    @new transceiver TristateTransceiver {
+        IN    [1] clk = clk;
+        IN    [1] rw = 1'b1;
+        IN    [8] write_data = 8'hA5;
+        OUT   [8] rx_data = rx_sample;
+        INOUT [8] data_bus = shared_bus;
+    };
+
+    @new ext_driver ExternalBusDriver {
+        IN    [1] drive_en = 1'b0;
+        IN    [8] drive_data = 8'h3C;
+        INOUT [8] data_bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        observed <= rx_sample;
+    }
+@endmod

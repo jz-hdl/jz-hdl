@@ -1,0 +1,43 @@
+// ID_SYNTAX_INVALID: Identifier exceeds 255-char limit used as instance name.
+// Tests 256-char identifier in @new instance name context.
+// Valid instance with short name included to verify no false positives.
+
+@project ID_SYNTAX_INVALID_instance_name
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Valid: short instance name (should NOT trigger)
+    @new inst_ok HelperA {
+        IN  [1] din = clk;
+        OUT [1] data = _;
+    };
+
+    // Trigger: 256-char identifier as instance name
+    @new aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa HelperA {
+        IN  [1] din = clk;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

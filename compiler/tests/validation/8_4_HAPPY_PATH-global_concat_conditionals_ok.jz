@@ -1,0 +1,68 @@
+// HAPPY_PATH: Global constants used in concatenations and conditionals.
+// Exercises §8.4 Req #5 with globals embedded in concatenation expressions and
+// ternary conditionals in both ASYNCHRONOUS and SYNCHRONOUS value contexts.
+// No diagnostics expected.
+
+@global PARTS
+    HI4   = 4'hA;
+    LO4   = 4'h3;
+    ALT4  = 4'hC;
+    SEL1  = 1'b1;
+@endglob
+
+@project HAPPY_PATH_global_concat_conditionals_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [8] out_concat = _;
+        OUT [4] out_cond = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [4] din;
+        OUT [8] out_concat;
+        OUT [4] out_cond;
+    }
+    ASYNCHRONOUS {
+        // Valid: global as part of a concatenation expression.
+        out_concat = {PARTS.HI4, din};
+        // Valid: globals used in ternary condition and branch values.
+        out_cond = PARTS.SEL1 ? PARTS.LO4 : PARTS.ALT4;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [8] out_concat;
+        OUT [4] out_cond;
+    }
+
+    WIRE {
+        helper_concat [8];
+    }
+
+    REGISTER {
+        r_cond [4] = 4'h0;
+    }
+
+    @new inst_h Helper {
+        IN  [4] din = din;
+        OUT [8] out_concat = helper_concat;
+        OUT [4] out_cond = _;
+    };
+
+    ASYNCHRONOUS {
+        out_concat = helper_concat;
+        out_cond = r_cond;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: globals mixed with signals inside a concatenation.
+        // Valid: global used in a ternary branch value.
+        r_cond <= din[0] ? PARTS.ALT4 : PARTS.HI4;
+    }
+@endmod

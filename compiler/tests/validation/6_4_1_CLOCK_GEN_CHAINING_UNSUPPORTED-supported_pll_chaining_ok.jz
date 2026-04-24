@@ -1,0 +1,66 @@
+// CLOCK_GEN_CHAINING_UNSUPPORTED: valid PLL chaining on a chip that explicitly supports it.
+// Exercises a first PLL output feeding a second PLL input on xc7a35t-2fgg484.
+
+@project(CHIP="xc7a35t-2fgg484") CLOCK_GEN_CHAINING_UNSUPPORTED_supported_pll_chaining_ok
+    CLOCKS {
+        ext_clk = { period=10 };
+        mid_clk;
+        out_clk;
+    }
+
+    IN_PINS {
+        ext_clk = { standard=LVCMOS33 };
+    }
+
+    MAP {
+        ext_clk = E3;
+    }
+
+    CLOCK_GEN {
+        PLL {
+            IN REF_CLK ext_clk;
+            OUT BASE mid_clk;
+
+            CONFIG {
+                DIVCLK_DIVIDE = 1;
+                CLKFBOUT_MULT = 10;
+                CLKOUT0_DIVIDE = 10;
+            };
+        };
+
+        PLL {
+            IN REF_CLK mid_clk;
+            OUT BASE out_clk;
+
+            CONFIG {
+                DIVCLK_DIVIDE = 1;
+                CLKFBOUT_MULT = 10;
+                CLKOUT0_DIVIDE = 10;
+            };
+        };
+    }
+
+    @top TopMod {
+        IN  [1] clk = ext_clk;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

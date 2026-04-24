@@ -1,0 +1,56 @@
+// SPECIAL_DRIVER_IN_INDEX: VCC used as bit-select index in SYNCHRONOUS context.
+// Existing test covers GND as index in ASYNC only; this adds VCC + SYNC coverage.
+
+@project SPECIAL_DRIVER_IN_INDEX_vcc_sync_index
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        OUT [8] out_a;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Valid: normal bit-select with signal index (no false positive)
+        out_a = data;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: VCC as bit-select index in SYNCHRONOUS context
+        r <= r[VCC];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+    }
+    WIRE {
+        ha_out [8];
+    }
+    REGISTER {
+        s [8] = 8'h00;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] data = s;
+        OUT [8] out_a = ha_out;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: normal register assignment (no false positive)
+        s <= ha_out;
+    }
+@endmod

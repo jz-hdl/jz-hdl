@@ -1,0 +1,29 @@
+// COMMENT_IN_TOKEN: Comment inside a MUX name.
+// Valid mux names included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_mux_name
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [1] data;
+    }
+
+    MUX {
+        // Trigger: comment inside mux name
+        my/**/mux = a, b;
+    }
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

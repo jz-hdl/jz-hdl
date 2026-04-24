@@ -1,0 +1,74 @@
+// MEM_ASYNC_PORT_FIELD_DATA: ASYNC OUT port `.data` misuse across contexts.
+// Valid bracket indexing is included for the intended ASYNC form.
+
+@project MEM_ASYNC_PORT_FIELD_DATA_contexts
+    CONFIG {
+        ADDR_W = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module SinkMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    // Trigger 1 (new-binding): `.data` on ASYNC read port in @new binding.
+    @new inst_sink SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rd.data;
+        OUT [8] dout = _;
+    };
+
+    // Trigger 2 (check-expr): `.data` on ASYNC read port in @check.
+    @check (mem_t.rd.data == 8'h00, "async data in check");
+
+    // Trigger 3 (feature-cond): `.data` on ASYNC read port in @feature.
+    @feature mem_t.rd.data == 8'h00
+        CONST { MODE = 1; }
+    @else
+        CONST { MODE = 0; }
+    @endfeat
+
+    ASYNCHRONOUS {
+        // Valid: ASYNC read port uses bracket syntax.
+        data = mem_t.rd[addr] ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 4 (sync-expr): `.data` on ASYNC read port in SYNCHRONOUS block.
+        r <= mem_t.rd.data;
+    }
+@endmod

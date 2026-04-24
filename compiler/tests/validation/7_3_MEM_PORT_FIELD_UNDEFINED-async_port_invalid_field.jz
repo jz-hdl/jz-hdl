@@ -1,0 +1,80 @@
+// MEM_PORT_FIELD_UNDEFINED: Invalid field on ASYNC OUT port.
+// ASYNC OUT ports use bracket syntax; .bogus is not a valid field.
+// Valid bracket read included for no false positives.
+
+@project MEM_PORT_FIELD_UNDEFINED_async_port_invalid_field
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        OUT [8] data = _;
+        OUT [8] extra = _;
+    }
+@endproj
+
+// Helper: invalid field on ASYNC OUT port
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+        OUT [8] extra;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_a [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        // Valid: bracket read on ASYNC port
+        data = mem_a.rd[addr];
+        extra = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: invalid field .bogus on ASYNC OUT port
+        r <= mem_a.rd.bogus;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+        OUT [8] extra;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_b [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        OUT [8] data = _;
+        OUT [8] extra = _;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: bracket read on ASYNC port in top
+        data = mem_b.rd[addr];
+        extra = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: invalid field .bogus on ASYNC OUT port in top
+        r <= mem_b.rd.bogus;
+    }
+@endmod

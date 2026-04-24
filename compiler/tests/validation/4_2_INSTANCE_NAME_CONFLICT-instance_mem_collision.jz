@@ -1,0 +1,90 @@
+// INSTANCE_NAME_CONFLICT: Instance name matches MEM name in parent module.
+// Tests that an instance sharing a name with a MEM is detected.
+
+@project INSTANCE_NAME_CONFLICT_instance_mem_collision
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module (structurally valid, used as instantiation target)
+@module HelperMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+// Module with instance-MEM name collision
+@module MemInstMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [8] data;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        my_mem [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    // Trigger: instance name 'my_mem' matches MEM name 'my_mem'
+    @new my_mem HelperMod {
+        IN  [1] din = din;
+        OUT [1] data = _;
+    };
+
+    // Valid: unique instance name (no trigger)
+    @new inst_ok HelperMod {
+        IN  [1] din = din;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    WIRE {
+        addr [4];
+    }
+
+    ASYNCHRONOUS {
+        addr =z din;
+        data = my_mem.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod
+
+// Top module — structurally valid, no triggers
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_m MemInstMod {
+        IN  [1] clk = clk;
+        IN  [1] din = clk;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

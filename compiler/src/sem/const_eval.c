@@ -247,6 +247,18 @@ static void parser_diag(Parser *p, const char *msg)
     }
 }
 
+static long long eval_clog2_positive(unsigned long long u)
+{
+    /* Spec §5.5.5 defines clog2(1) as 1 instead of the usual 0. */
+    unsigned result = 1;
+    unsigned long long v = u - 1;
+    while (v > 1) {
+        v >>= 1;
+        result++;
+    }
+    return (long long)result;
+}
+
 static void advance(Parser *p)
 {
     if (p->cur.kind != TK_EOF) {
@@ -287,15 +299,7 @@ static long long parse_primary(Parser *p)
                 parser_diag(p, "clog2 argument must be positive");
                 return 0;
             }
-            /* Integer ceil(log2(arg)). */
-            unsigned long long u = (unsigned long long)arg;
-            unsigned result = 0;
-            unsigned long long v = u - 1;
-            while (v > 0) {
-                v >>= 1;
-                result++;
-            }
-            return (long long)result;
+            return eval_clog2_positive((unsigned long long)arg);
         }
 
         /* For now, identifiers other than clog2 are not resolved here; they
@@ -605,14 +609,7 @@ static long long env_parse_primary(EnvParser *p)
                 env_parser_diag(p, "clog2 argument must be positive");
                 return 0;
             }
-            unsigned long long u = (unsigned long long)arg;
-            unsigned result = 0;
-            unsigned long long v = u - 1;
-            while (v > 0) {
-                v >>= 1;
-                result++;
-            }
-            return (long long)result;
+            return eval_clog2_positive((unsigned long long)arg);
         }
 
         int idx = find_def_index(p->env, p->cur.ident);

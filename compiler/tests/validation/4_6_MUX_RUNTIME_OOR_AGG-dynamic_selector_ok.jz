@@ -1,0 +1,53 @@
+// MUX §4.6 Req #8 and Req #24 happy-path:
+// "If runtime out-of-range indices return 0."
+// A dynamic selector with the exact required width is accepted even though
+// some runtime values remain out of range. Runtime out-of-range values yield
+// zero; this test verifies the construct compiles cleanly.
+// No diagnostics expected.
+
+@project MUX_RUNTIME_OOR_AGG_dynamic_selector_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        IN  [2] sel = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        IN  [2] sel;
+        OUT [8] data;
+    }
+
+    // Aggregation with N = 3 sources. Valid indices are 0..2.
+    MUX {
+        agg_mux = a, b, c;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: exact-width 2-bit selector can carry values 0..3. Value 3
+        // is runtime-out-of-range for the 3-element mux, so runtime OOR
+        // yields zero at simulation time.
+        data = agg_mux[sel] | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: same runtime-OOR scenario in SYNC context.
+        r <= agg_mux[sel];
+    }
+@endmod

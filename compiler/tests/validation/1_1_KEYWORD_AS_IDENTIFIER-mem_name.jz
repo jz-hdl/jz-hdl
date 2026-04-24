@@ -1,0 +1,44 @@
+// KEYWORD_AS_IDENTIFIER: Reserved keyword used as MEM name.
+// Tests keyword SELECT as a memory name in MEM declaration context.
+// Valid MEM name included to verify no false positives.
+
+@project KEYWORD_AS_IDENTIFIER_mem_name
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        IN  [1] we = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        IN  [1] we;
+        OUT [1] data;
+    }
+
+    MEM {
+        // Valid: non-keyword MEM name (should NOT trigger)
+        valid_mem [1] [4] = 1'b0 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+        // Trigger: keyword SELECT used as MEM name
+        SELECT [1] [4] = 1'b0 {
+            OUT rd2 ASYNC;
+            IN  wr2;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = valid_mem.rd[2'b00];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (we) {
+            valid_mem.wr[2'b00] <= din;
+        }
+    }
+@endmod

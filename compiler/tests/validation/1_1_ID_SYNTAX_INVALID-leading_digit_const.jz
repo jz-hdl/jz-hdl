@@ -1,0 +1,34 @@
+// ID_SYNTAX_INVALID: Leading-digit identifier in CONST declaration context.
+// The lexer splits "2val" into number "2" + identifier "val", so the parser
+// rejects it as a syntax error.
+
+@project ID_SYNTAX_INVALID_leading_digit_const
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Trigger: leading-digit const name
+    CONST {
+        2val = 8;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

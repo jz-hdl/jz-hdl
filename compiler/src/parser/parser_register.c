@@ -98,7 +98,14 @@ int parse_register_block_body(Parser *p, JZASTNode *parent) {
             } else {
                 parser_error_rule(p, "REG_MISSING_INIT_LITERAL");
             }
-            return -1;
+            /* Error recovery: skip to next ';' or end of block */
+            while (peek(p)->type != JZ_TOK_EOF &&
+                   peek(p)->type != JZ_TOK_SEMICOLON &&
+                   peek(p)->type != JZ_TOK_RBRACE) {
+                advance(p);
+            }
+            if (peek(p)->type == JZ_TOK_SEMICOLON) advance(p);
+            continue;
         }
 
         /* Parse the initializer as a real expression and require that it is a

@@ -1,0 +1,84 @@
+// MEM_INOUT_ADDR_IN_ASYNC: valid INOUT .addr usage only in SYNCHRONOUS blocks.
+// Includes helper and top modules to verify no false positives for legal reads
+// and writes through an INOUT memory port.
+
+@project MEM_INOUT_ADDR_IN_ASYNC_addr_sync_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        IN  [DATA_W] wdata = _;
+        OUT [DATA_W] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h11;
+    }
+
+    MEM {
+        mem_h [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_h.rw.data ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_h.rw.addr <= addr;
+        mem_h.rw.wdata <= wdata;
+        r <= mem_h.rw.data;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h22;
+        helper_data [8] = 8'h00;
+    }
+
+    MEM {
+        mem_t [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_t.rw.data ^ helper_data ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_t.rw.addr <= addr;
+        mem_t.rw.wdata <= wdata;
+        r <= mem_t.rw.data;
+        helper_data <= helper_data;
+    }
+@endmod

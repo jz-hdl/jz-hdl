@@ -1,0 +1,36 @@
+// OBS_X_TO_OBSERVABLE_SINK: x-valued literal bits propagating to MEM INOUT
+// port field writes (.wdata and .addr). The IN-port bracket form
+// (mem.wr[addr] <= ...) is covered by x_bits_to_mem.jz; this case covers
+// the qualified-identifier INOUT form, which previously slipped through
+// observable-sink classification.
+
+@project OBS_X_TO_OBSERVABLE_SINK_x_to_mem
+    @top TopMod {
+        IN  [1] clk  = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    MEM {
+        m [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = m.rw.data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: x-valued literal written to INOUT .addr
+        m.rw.addr  <= 4'bxx00;
+        // Trigger 2: x-valued literal written to INOUT .wdata
+        m.rw.wdata <= 8'bxxxx_0000;
+    }
+@endmod

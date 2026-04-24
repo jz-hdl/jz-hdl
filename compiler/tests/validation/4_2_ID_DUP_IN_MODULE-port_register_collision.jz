@@ -1,0 +1,161 @@
+// ID_DUP_IN_MODULE: Port and wire names colliding with register and CONST names.
+// Tests port-register, port-CONST, wire-register, and wire-CONST contexts.
+
+@project ID_DUP_IN_MODULE_port_register_collision
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module: port-register collision
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        // Trigger: port-register collision — 'data' is both a port and register
+        data [1] = 1'b0;
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+// Module with port-CONST collision
+@module PortConstMod
+    CONST {
+        // Trigger: port-CONST collision — 'aux' is both port and CONST
+        aux = 1;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [1] aux;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+// Module with wire-CONST collision
+@module WireConstMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    WIRE {
+        mid [1];
+    }
+
+    CONST {
+        // Trigger: wire-CONST collision — 'mid' is both wire and CONST
+        mid = 3;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        mid = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+// Module with wire-register collision
+@module WireRegMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    WIRE {
+        wr [1];
+    }
+
+    REGISTER {
+        // Trigger: wire-register collision — 'wr' is both wire and register
+        wr [1] = 1'b0;
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        wr = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+// Top module — structurally valid, no triggers
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    @new inst_p PortConstMod {
+        IN  [1] clk = clk;
+        IN  [1] aux = r;
+        OUT [1] data = _;
+    };
+
+    @new inst_wc WireConstMod {
+        IN  [1] clk = clk;
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    @new inst_wr WireRegMod {
+        IN  [1] clk = clk;
+        IN  [1] din = r;
+        OUT [1] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

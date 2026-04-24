@@ -1,0 +1,60 @@
+// CDC_DEST_ALIAS_DUP: CDC destination alias name conflicts with existing wire.
+
+@project CDC_DEST_ALIAS_DUP_conflict_with_wire
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module LeafMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    WIRE {
+        existing_wire [1];
+    }
+
+    REGISTER {
+        src_reg [1] = 1'b0;
+    }
+
+    CDC {
+        // Trigger: dest alias conflicts with wire name 'existing_wire'
+        BIT src_reg (clk_a) => existing_wire (clk_b);
+    }
+
+    @new wire_driver LeafMod {
+        IN  [1] din = din;
+        OUT [1] data = existing_wire;
+    };
+
+    ASYNCHRONOUS {
+        data = existing_wire;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        src_reg <= din;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        // no-op
+    }
+@endmod

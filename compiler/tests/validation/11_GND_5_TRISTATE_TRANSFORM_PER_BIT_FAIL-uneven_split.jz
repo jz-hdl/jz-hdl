@@ -1,0 +1,73 @@
+// TRISTATE_TRANSFORM_PER_BIT_FAIL: Uneven split pattern (7+1) where different
+// bit slices of the same wire have different enable conditions.
+// Contexts: helper module with uneven per-bit tristate, top module with same.
+
+@project TRISTATE_TRANSFORM_PER_BIT_FAIL_uneven_split
+    @top TopMod {
+        IN  [1] en_a = _;
+        IN  [1] en_b = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module with uneven per-bit tri-state: 7+1 split
+@module HelperMod
+    PORT {
+        IN  [1] en_a;
+        IN  [1] en_b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w [8];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: uneven split (7-bit upper slice)
+        IF (en_a) {
+            w[7:1] <= 7'h55;
+        } ELSE {
+            w[7:1] <= 7'bzzz_zzzz;
+        }
+        IF (en_b) {
+            w[0] <= 1'b1;
+        } ELSE {
+            w[0] <= 1'bz;
+        }
+        data <= w;
+    }
+@endmod
+
+// Top module with uneven per-bit tri-state pattern
+@module TopMod
+    PORT {
+        IN  [1] en_a;
+        IN  [1] en_b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        w_top [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en_a = en_a;
+        IN  [1] en_b = en_b;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: uneven split in top module (7+1)
+        IF (en_a) {
+            w_top[7:1] <= 7'h33;
+        } ELSE {
+            w_top[7:1] <= 7'bzzz_zzzz;
+        }
+        IF (en_b) {
+            w_top[0] <= 1'b0;
+        } ELSE {
+            w_top[0] <= 1'bz;
+        }
+        data <= w_top;
+    }
+@endmod

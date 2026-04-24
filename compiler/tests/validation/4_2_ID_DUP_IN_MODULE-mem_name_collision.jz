@@ -1,0 +1,68 @@
+// ID_DUP_IN_MODULE: MEM name collides with other identifier types.
+// Tests MEM name duplicating a wire name within the same module.
+
+@project ID_DUP_IN_MODULE_mem_name_collision
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: MEM name collides with wire name
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        storage [1];
+    }
+
+    // Trigger: MEM name 'storage' collides with wire name 'storage'
+    MEM(type=DISTRIBUTED) {
+        storage [8] [16] = 8'h00 {
+            IN wr;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        storage = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod
+
+// Top module — structurally valid, no triggers
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] din = clk;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

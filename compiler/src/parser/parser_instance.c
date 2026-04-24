@@ -17,6 +17,35 @@
 
 #include "parser_internal.h"
 
+static const char *instance_binding_op_kind_from_token_type(JZTokenType type) {
+    switch (type) {
+    case JZ_TOK_OP_ASSIGN:
+        return "ALIAS";
+    case JZ_TOK_OP_ASSIGN_Z:
+        return "ALIAS_Z";
+    case JZ_TOK_OP_ASSIGN_S:
+        return "ALIAS_S";
+    default:
+        return NULL;
+    }
+}
+
+static int parse_instance_binding_operator(Parser *p,
+                                           const char *context,
+                                           const char **out_op_kind) {
+    const JZToken *tok = peek(p);
+    const char *op_kind = instance_binding_op_kind_from_token_type(tok->type);
+    if (!op_kind) {
+        parser_error(p, context);
+        return -1;
+    }
+    advance(p);
+    if (out_op_kind) {
+        *out_op_kind = op_kind;
+    }
+    return 0;
+}
+
 static JZASTNode *clone_expr_tree(const JZASTNode *src) {
     if (!src) return NULL;
     JZASTNode *copy = jz_ast_new(src->type, src->loc);
@@ -219,19 +248,19 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
             return NULL;
         }
 
-        JZASTNode *bus = jz_ast_new(JZ_AST_EXPR_BUS_ACCESS, base->loc);
-        if (!bus) {
+        JZASTNode *member = jz_ast_new(JZ_AST_EXPR_INDEXED_MEMBER_ACCESS, base->loc);
+        if (!member) {
             jz_ast_free(base);
             if (msb) jz_ast_free(msb);
             return NULL;
         }
-        jz_ast_set_name(bus, base->name);
-        jz_ast_set_text(bus, member_tok->lexeme);
+        jz_ast_set_name(member, base->name);
+        jz_ast_set_text(member, member_tok->lexeme);
         if (is_wildcard) {
-            jz_ast_set_block_kind(bus, "WILDCARD");
+            jz_ast_set_block_kind(member, "WILDCARD");
         } else if (msb) {
-            if (jz_ast_add_child(bus, msb) != 0) {
-                jz_ast_free(bus);
+            if (jz_ast_add_child(member, msb) != 0) {
+                jz_ast_free(member);
                 jz_ast_free(msb);
                 jz_ast_free(base);
                 return NULL;
@@ -239,7 +268,7 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
         }
         advance(p); /* consume member identifier */
         jz_ast_free(base);
-        base = bus;
+        base = member;
 
         /* Optional slice after BUS member access. */
         if (!match(p, JZ_TOK_LBRACKET)) {
@@ -429,9 +458,11 @@ static int parse_instance_binding_list(Parser *p, JZASTNode *inst) {
             }
             advance(p);
 
-            if (!match(p, JZ_TOK_OP_ASSIGN)) {
+            const char *op_kind = NULL;
+            if (parse_instance_binding_operator(p,
+                                                "expected '=', '=z', or '=s' after BUS port name in @new instance body",
+                                                &op_kind) != 0) {
                 if (array_width) free(array_width);
-                parser_error(p, "expected '=' after BUS port name in @new instance body");
                 return -1;
             }
 
@@ -457,12 +488,16 @@ static int parse_instance_binding_list(Parser *p, JZASTNode *inst) {
             jz_ast_set_name(decl, port_name_tok->lexeme);
             jz_ast_set_block_kind(decl, "BUS");
 
-            /* Encode "bus_id ROLE" into the text field for semantic passes. */
+            /* Encode "bus_id ROLE [op]" into the text field for semantic passes. */
             const char *bus_name = bus_id_tok->lexeme ? bus_id_tok->lexeme : "";
             const char *role_name = role_tok->lexeme ? role_tok->lexeme : "";
             size_t bus_len = strlen(bus_name);
             size_t role_len = strlen(role_name);
-            char *meta = (char *)malloc(bus_len + 1 + role_len + 1);
+            size_t meta_len = bus_len + 1 + role_len;
+            if (op_kind && strcmp(op_kind, "ALIAS") != 0) {
+                meta_len += 1 + strlen(op_kind);
+            }
+            char *meta = (char *)malloc(meta_len + 1);
             if (!meta) {
                 if (array_width) free(array_width);
                 jz_ast_free(rhs);
@@ -472,7 +507,14 @@ static int parse_instance_binding_list(Parser *p, JZASTNode *inst) {
             memcpy(meta, bus_name, bus_len);
             meta[bus_len] = ' ';
             memcpy(meta + bus_len + 1, role_name, role_len);
-            meta[bus_len + 1 + role_len] = '\0';
+            size_t meta_pos = bus_len + 1 + role_len;
+            if (op_kind && strcmp(op_kind, "ALIAS") != 0) {
+                meta[meta_pos++] = ' ';
+                size_t op_len = strlen(op_kind);
+                memcpy(meta + meta_pos, op_kind, op_len);
+                meta_pos += op_len;
+            }
+            meta[meta_pos] = '\0';
             jz_ast_set_text(decl, meta);
             free(meta);
 
@@ -556,9 +598,11 @@ static int parse_instance_binding_list(Parser *p, JZASTNode *inst) {
         }
         advance(p);
 
-        if (!match(p, JZ_TOK_OP_ASSIGN)) {
+        const char *op_kind = NULL;
+        if (parse_instance_binding_operator(p,
+                                            "expected '=', '=z', or '=s' after port name in @new instance body",
+                                            &op_kind) != 0) {
             if (width_text) free(width_text);
-            parser_error(p, "expected '=' after port name in @new instance body");
             return -1;
         }
 
@@ -585,6 +629,9 @@ static int parse_instance_binding_list(Parser *p, JZASTNode *inst) {
         }
         jz_ast_set_name(decl, name_tok->lexeme);
         jz_ast_set_block_kind(decl, dir_str);
+        if (op_kind && strcmp(op_kind, "ALIAS") != 0) {
+            jz_ast_set_text(decl, op_kind);
+        }
         if (width_text) {
             jz_ast_set_width(decl, width_text);
             free(width_text);

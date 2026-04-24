@@ -1,0 +1,77 @@
+// ASYNC_UNDEFINED_PATH_NO_DRIVER: Nested IF without ELSE inside a branch
+// body of an outer IF that otherwise has full coverage leaves some paths
+// undriven. Example: outer IF has ELSE, but inner IF-only path inside the
+// outer THEN body means `sel_a=1, sel_b=0` never assigns the signal.
+// Valid fully-covered nesting is included to verify no false positives.
+
+@project ASYNC_UNDEFINED_PATH_NO_DRIVER_nested_partial
+    @top TopMod {
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+        OUT [1] out_c = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        OUT [1] out_a;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: nested IF without ELSE inside outer IF that has ELSE.
+        // Path sel_a=1, sel_b=0 leaves out_a undriven.
+        IF (sel_a) {
+            IF (sel_b) {
+                out_a <= VCC;
+            }
+        } ELSE {
+            out_a <= GND;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        OUT [1] out_a;
+        OUT [1] out_b;
+        OUT [1] out_c;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] sel_a = sel_a;
+        IN  [1] sel_b = sel_b;
+        OUT [1] out_a = out_a;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: nested IF/ELIF without final ELSE, inside covered outer
+        IF (sel_a) {
+            IF (sel_b) {
+                out_b <= VCC;
+            } ELIF (~sel_b) {
+                out_b <= GND;
+            }
+            // No ELSE on the inner — but ELIF(~sel_b) is not structurally
+            // exhaustive: compiler treats branches as independent paths.
+        } ELSE {
+            out_b <= GND;
+        }
+
+        // Valid: fully-covered nested IF inside outer IF with ELSE
+        IF (sel_a) {
+            IF (sel_b) {
+                out_c <= VCC;
+            } ELSE {
+                out_c <= GND;
+            }
+        } ELSE {
+            out_c <= GND;
+        }
+    }
+@endmod

@@ -98,6 +98,8 @@ static const char *node_type_name(JZASTNodeType t) {
     case JZ_AST_EXPR_IDENTIFIER:       return "Identifier";
     case JZ_AST_EXPR_QUALIFIED_IDENTIFIER: return "QualifiedIdentifier";
     case JZ_AST_EXPR_BUS_ACCESS:       return "BusAccess";
+    case JZ_AST_EXPR_INDEXED_MEMBER_ACCESS: return "IndexedMemberAccess";
+    case JZ_AST_EXPR_INSTANCE_PORT_ACCESS: return "InstancePortAccess";
     case JZ_AST_EXPR_UNARY:            return "Unary";
     case JZ_AST_EXPR_BINARY:           return "Binary";
     case JZ_AST_EXPR_TERNARY:          return "Ternary";

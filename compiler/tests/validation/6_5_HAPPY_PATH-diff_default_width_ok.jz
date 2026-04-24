@@ -1,0 +1,55 @@
+// HAPPY_PATH: Differential pins without width= bind as width-1 signals.
+// Exercises scalar and array differential pins with omitted width so the
+// validation suite covers the default logical width of 1.
+
+@project(CHIP=GENERIC) HAPPY_PATH_diff_default_width_ok
+    CLOCKS {
+        sys_clk = { period=10.0 };
+    }
+
+    IN_PINS {
+        sys_clk = { standard=LVCMOS33 };
+        diff_in = { mode=DIFFERENTIAL, standard=LVDS25 };
+        diff_bus[2] = { mode=DIFFERENTIAL, standard=LVDS25 };
+    }
+
+    OUT_PINS {
+        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=8, fclk=sys_clk, pclk=sys_clk, reset=sys_clk };
+    }
+
+    MAP {
+        sys_clk = 1;
+        diff_in = { P=2, N=3 };
+        diff_bus[0] = { P=4, N=5 };
+        diff_bus[1] = { P=6, N=7 };
+        diff_out = { P=8, N=9 };
+    }
+
+    @top TopMod {
+        IN  [1] clk      = sys_clk;
+        IN  [1] din      = diff_in;
+        IN  [2] din_bus  = diff_bus;
+        OUT [1] status   = diff_out;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        IN  [2] din_bus;
+        OUT [1] status;
+    }
+
+    REGISTER {
+        sample [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        status = sample;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        sample <= din ^ din_bus[0] ^ din_bus[1];
+    }
+@endmod

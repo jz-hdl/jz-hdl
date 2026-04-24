@@ -1,0 +1,61 @@
+// COMB_LOOP_UNCONDITIONAL: Cycle involving MEM async read path.
+// Tests that the compiler detects a combinational loop when a wire
+// drives a MEM ASYNC read address and the MEM output feeds back to
+// that wire. Valid MEM read paths included to verify no false positives.
+
+@project COMB_LOOP_UNCONDITIONAL_mem_read_path
+    @top TopMod {
+        IN  [4] addr_in = _;
+        IN  [1] clk = _;
+        IN  [1] wr_en = _;
+        IN  [8] wr_data = _;
+        OUT [8] data_out = _;
+        OUT [8] data_valid = _;
+        OUT [1] wr_done = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [4] addr_in;
+        IN  [1] clk;
+        IN  [1] wr_en;
+        IN  [8] wr_data;
+        OUT [8] data_out;
+        OUT [8] data_valid;
+        OUT [1] wr_done;
+    }
+
+    WIRE {
+        loop_addr [4];
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    REGISTER {
+        wr_flag [1] = 1'b0;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (wr_en) {
+            mem.wr[addr_in] <= wr_data;
+            wr_flag <= 1'b1;
+        } ELSE {
+            wr_flag <= 1'b0;
+        }
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: cycle through MEM read path
+        loop_addr <= mem.rd[loop_addr][3:0];
+        data_out = mem.rd[loop_addr];
+        // Valid: feed-forward MEM read (no loop)
+        data_valid = mem.rd[addr_in];
+        wr_done = wr_flag;
+    }
+@endmod

@@ -1,0 +1,76 @@
+// TERNARY_BRANCH_WIDTH_MISMATCH: Nested ternary with mismatched branch widths.
+// Tests width mismatch in inner ternary within outer ternary branch.
+// Valid same-width nested ternary included to verify no false positives.
+
+@project TERNARY_BRANCH_WIDTH_MISMATCH_nested_ternary
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel1 = _;
+        IN  [1] sel2 = _;
+        IN  [8] a = _;
+        IN  [4] b = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module: valid nested ternary (no false positive)
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel1;
+        IN  [1] sel2;
+        IN  [8] a;
+        IN  [8] c;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: nested ternary with matching widths (8 vs 8 inner, 8 vs 8 outer)
+        data = sel1 ? (sel2 ? a : c) : r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sel1 ? a : c;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel1;
+        IN  [1] sel2;
+        IN  [8] a;
+        IN  [4] b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        h_data [8];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] sel1 = sel1;
+        IN  [1] sel2 = sel2;
+        IN  [8] a = a;
+        IN  [8] c = a;
+        OUT [8] data = h_data;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: nested ternary — inner branches mismatch (8 vs 4)
+        data = sel1 ? (sel2 ? a : b) : (h_data ^ r);
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= h_data;
+    }
+@endmod

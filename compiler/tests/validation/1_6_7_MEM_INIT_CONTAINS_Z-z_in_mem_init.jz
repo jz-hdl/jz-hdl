@@ -1,0 +1,50 @@
+// §1.6.7 Req #5: MEM initialization values must not carry unknown bits
+// (x or z). Structural masking must eliminate all unknown bits before a
+// value reaches the MEM init sink. Negative test: MEM init literal
+// contains z bits.
+
+@project OBS_Z_IN_MEM_INIT
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Trigger: z bits in MEM initialization literal
+    MEM {
+        mem_z [8] [16] = 8'bzzzz_0000 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Valid: no unknown bits in init — no error expected
+    MEM {
+        mem_ok [8] [16] = 8'h00 {
+            OUT rd_ok ASYNC;
+            IN  wr_ok;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data <= mem_z.rd[addr] ^ mem_ok.rd_ok[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        mem_z.wr[addr] <= 8'h00;
+        mem_ok.wr_ok[addr] <= 8'h00;
+    }
+@endmod

@@ -610,14 +610,19 @@ static void json_write_memories(FILE *out, const IR_Module *mod)
         fprintf(out, "            \"depth\": %d,\n", m->depth);
         fprintf(out, "            \"address_width\": %d", m->address_width);
 
-        if (m->init_is_file && m->init.file_path) {
+        if (m->init_kind == MEM_INIT_FILE && m->init.file_path) {
             fprintf(out, ",\n            \"init_file_path\": ");
             json_write_string(out, m->init.file_path);
-        } else if (!m->init_is_file && m->init.literal.width > 0) {
+        } else if (m->init_kind == MEM_INIT_LITERAL &&
+                   m->init.literal.width > 0) {
             fprintf(out,
                     ",\n            \"init_literal\": { \"value\": %llu, \"width\": %d }",
                     (unsigned long long)m->init.literal.words[0],
                     m->init.literal.width);
+        } else if (m->init_kind == MEM_INIT_BLOB && m->init.blob) {
+            fprintf(out,
+                    ",\n            \"init_blob\": { \"num_bytes\": %d }",
+                    m->init.blob->num_bytes);
         }
 
         fprintf(out, ",\n            \"ports\": [\n");

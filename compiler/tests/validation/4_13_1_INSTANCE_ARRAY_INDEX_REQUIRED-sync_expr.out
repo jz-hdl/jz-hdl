@@ -1,0 +1,2 @@
+File: 4_13_1_INSTANCE_ARRAY_INDEX_REQUIRED-sync_expr.jz
+      49:20   error INSTANCE_ARRAY_INDEX_REQUIRED S4.13.1 Instance array port access requires an explicit element index

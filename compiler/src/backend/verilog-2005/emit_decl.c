@@ -407,7 +407,9 @@ void emit_memory_declarations(FILE *out, const IR_Module *mod)
         const char *raw_name = (m->name && m->name[0] != '\0') ? m->name : "jz_mem";
         char mem_safe_buf[256];
         const char *name = verilog_memory_name(raw_name, mod->name, mem_safe_buf, sizeof(mem_safe_buf));
-        bool needs_literal_init = !m->init_is_file && m->init.literal.width > 0 && m->depth > 0;
+        bool needs_literal_init = m->init_kind == MEM_INIT_LITERAL &&
+                                  m->init.literal.width > 0 &&
+                                  m->depth > 0;
         char init_i_name[64];
 
         /* Declare implicit address registers for SYNC read ports.
@@ -457,76 +459,97 @@ void emit_memory_declarations(FILE *out, const IR_Module *mod)
  * -------------------------------------------------------------------------
  */
 
-/* Extract file extension from a path (pointer into original string). */
-static const char *mem_init_get_ext(const char *path)
+static void mem_init_sanitize_fragment(const char *src,
+                                       char *dst,
+                                       size_t dst_size)
 {
-    if (!path) return NULL;
-    const char *last_slash = strrchr(path, '/');
-#ifdef _WIN32
-    const char *last_bslash = strrchr(path, '\\');
-    if (!last_slash || (last_bslash && last_bslash > last_slash))
-        last_slash = last_bslash;
-#endif
-    const char *name = last_slash ? last_slash + 1 : path;
-    const char *dot = strrchr(name, '.');
-    if (!dot || !*(dot + 1)) return NULL;
-    return dot + 1;
-}
-
-/* Case-insensitive extension comparison. */
-static int mem_init_ext_eq(const char *ext, const char *want)
-{
-    if (!ext || !want) return 0;
-    for (; *ext && *want; ++ext, ++want) {
-        char c1 = (*ext >= 'A' && *ext <= 'Z') ? (char)(*ext + 32) : *ext;
-        char c2 = (*want >= 'A' && *want <= 'Z') ? (char)(*want + 32) : *want;
-        if (c1 != c2) return 0;
+    if (!dst || dst_size == 0) {
+        return;
     }
-    return *ext == '\0' && *want == '\0';
-}
-
-/* Convert a raw binary file to a $readmemh-compatible hex text file.
- * The output file is written alongside the input with a ".hex" suffix
- * appended (e.g. "out/sample.bin" -> "out/sample.bin.hex").
- * Returns the path to the hex file (static buffer), or NULL on failure.
- */
-static const char *mem_init_convert_bin_to_hex(const char *bin_path,
-                                               int word_width,
-                                               int depth)
-{
-    static char hex_path[1024];
-    int n = snprintf(hex_path, sizeof(hex_path), "%s.hex", bin_path);
-    if (n <= 0 || (size_t)n >= sizeof(hex_path)) return NULL;
-
-    FILE *fin = fopen(bin_path, "rb");
-    if (!fin) return NULL;
-
-    FILE *fout = fopen(hex_path, "w");
-    if (!fout) { fclose(fin); return NULL; }
-
-    int bytes_per_word = (word_width + 7) / 8;
-    int hex_chars = (word_width + 3) / 4;
-    unsigned char buf[16]; /* max 128-bit words */
-    if (bytes_per_word > (int)sizeof(buf)) bytes_per_word = (int)sizeof(buf);
-
-    for (int addr = 0; addr < depth; ++addr) {
-        size_t got = fread(buf, 1, (size_t)bytes_per_word, fin);
-
-        /* Zero-pad if file is shorter than memory depth. */
-        for (size_t j = got; j < (size_t)bytes_per_word; ++j)
-            buf[j] = 0;
-
-        /* Build big-endian hex value from bytes. */
-        unsigned long long val = 0;
-        for (int b = 0; b < bytes_per_word; ++b)
-            val = (val << 8) | buf[b];
-
-        fprintf(fout, "%0*llX\n", hex_chars, val);
+    if (!src || !src[0]) {
+        snprintf(dst, dst_size, "jz");
+        return;
     }
 
-    fclose(fin);
-    fclose(fout);
-    return hex_path;
+    size_t di = 0;
+    for (size_t si = 0; src[si] && di + 1 < dst_size; ++si) {
+        unsigned char ch = (unsigned char)src[si];
+        if ((ch >= 'a' && ch <= 'z') ||
+            (ch >= 'A' && ch <= 'Z') ||
+            (ch >= '0' && ch <= '9')) {
+            dst[di++] = (char)ch;
+        } else {
+            dst[di++] = '_';
+        }
+    }
+    dst[di] = '\0';
+}
+
+static unsigned mem_init_word_bit(const uint8_t *word_bytes,
+                                  int bytes_per_word,
+                                  int word_width,
+                                  int bit_from_msb)
+{
+    int target_bit = word_width - 1 - bit_from_msb;
+    int byte_in_word = bytes_per_word - 1 - (target_bit / 8);
+    int bit_in_byte = target_bit % 8;
+    return (unsigned)((word_bytes[byte_in_word] >> bit_in_byte) & 1u);
+}
+
+static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
+                                           const IR_Memory *mem,
+                                           char *path_buf,
+                                           size_t path_buf_size)
+{
+    if (!mod || !mem || !mem->init.blob || !path_buf || path_buf_size == 0) {
+        return -1;
+    }
+
+    char mod_name[256];
+    char mem_name[256];
+    mem_init_sanitize_fragment(mod->name ? mod->name : "jz_module",
+                               mod_name, sizeof(mod_name));
+    mem_init_sanitize_fragment(mem->name ? mem->name : "jz_mem",
+                               mem_name, sizeof(mem_name));
+
+    int n = snprintf(path_buf, path_buf_size,
+                     "jz_mem_init__%s__%s.hex",
+                     mod_name, mem_name);
+    if (n <= 0 || (size_t)n >= path_buf_size) {
+        return -1;
+    }
+
+    FILE *fout = fopen(path_buf, "w");
+    if (!fout) {
+        return -1;
+    }
+
+    int bytes_per_word = (mem->word_width + 7) / 8;
+    int hex_chars = (mem->word_width + 3) / 4;
+    const uint8_t *bytes = mem->init.blob->bytes;
+
+    for (int addr = 0; addr < mem->depth; ++addr) {
+        const uint8_t *word = bytes + ((size_t)addr * (size_t)bytes_per_word);
+        for (int nib = 0; nib < hex_chars; ++nib) {
+            unsigned value = 0;
+            for (int bit = 0; bit < 4; ++bit) {
+                value <<= 1;
+                int bit_from_msb = nib * 4 + bit;
+                if (bit_from_msb < mem->word_width) {
+                    value |= mem_init_word_bit(word, bytes_per_word,
+                                               mem->word_width, bit_from_msb);
+                }
+            }
+            fputc("0123456789ABCDEF"[value & 0xF], fout);
+        }
+        fputc('\n', fout);
+    }
+
+    if (fflush(fout) != 0 || ferror(fout)) {
+        fclose(fout);
+        return -1;
+    }
+    return fclose(fout) == 0 ? 0 : -1;
 }
 
 int emit_memory_initialization(FILE *out, const IR_Module *mod)
@@ -542,49 +565,36 @@ int emit_memory_initialization(FILE *out, const IR_Module *mod)
         char mem_safe_buf[256];
         const char *name = verilog_memory_name(raw_name, mod->name, mem_safe_buf, sizeof(mem_safe_buf));
 
-        if (!m->init_is_file && m->init.literal.width <= 0) {
+        if (m->init_kind == MEM_INIT_NONE) {
             continue;
         }
 
-        if (m->init_is_file) {
-            if (!m->init.file_path || m->init.file_path[0] == '\0') {
-                continue;
-            }
+        if (m->init_kind == MEM_INIT_FILE) {
+            fprintf(stderr,
+                    "error: unresolved file-based memory init for memory %s in module %s\n",
+                    name, mod->name ? mod->name : "?");
+            errors++;
+            continue;
+        }
 
-            const char *ext = mem_init_get_ext(m->init.file_path);
-
-            if (ext && mem_init_ext_eq(ext, "mem")) {
-                /* .mem: Verilog binary text format -> $readmemb */
-                fprintf(out, "    initial begin\n");
-                fprintf(out, "        $readmemb(\"%s\", %s);\n",
-                        m->init.file_path, name);
-                fprintf(out, "    end\n");
-            } else if (ext && mem_init_ext_eq(ext, "hex")) {
-                /* .hex: hex text format -> $readmemh */
+        if (m->init_kind == MEM_INIT_BLOB) {
+            char hex_path[1024];
+            if (mem_init_write_blob_sidecar_hex(mod, m,
+                                                hex_path, sizeof(hex_path)) == 0) {
                 fprintf(out, "    initial begin\n");
                 fprintf(out, "        $readmemh(\"%s\", %s);\n",
-                        m->init.file_path, name);
+                        hex_path, name);
                 fprintf(out, "    end\n");
             } else {
-                /* .bin or unknown: raw binary -> convert to hex text file */
-                const char *hex_path = mem_init_convert_bin_to_hex(
-                    m->init.file_path, m->word_width, m->depth);
-                if (hex_path) {
-                    fprintf(out, "    initial begin\n");
-                    fprintf(out, "        $readmemh(\"%s\", %s);\n",
-                            hex_path, name);
-                    fprintf(out, "    end\n");
-                } else {
-                    fprintf(stderr, "error: failed to load binary file "
-                            "\"%s\" for memory %s in module %s\n",
-                            m->init.file_path, name, mod->name ? mod->name : "?");
-                    errors++;
-                }
+                fprintf(stderr,
+                        "error: failed to write memory init sidecar for memory %s in module %s\n",
+                        name, mod->name ? mod->name : "?");
+                errors++;
             }
             continue;
         }
 
-        if (m->depth <= 0) {
+        if (m->depth <= 0 || m->init_kind != MEM_INIT_LITERAL) {
             continue;
         }
 

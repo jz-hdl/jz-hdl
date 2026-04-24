@@ -1,0 +1,14 @@
+// Library file for 6_2_1_HAPPY_PATH-project_import_syntax_ok.jz
+// Defines the imported top module used by the project.
+
+@module ImportedTop
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_helper ImportedHelper {
+        IN  [1] din = clk;
+        OUT [1] dout = data;
+    };
+@endmod

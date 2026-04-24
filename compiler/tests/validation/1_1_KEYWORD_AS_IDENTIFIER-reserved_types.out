@@ -1,0 +1,18 @@
+File: 1_1_KEYWORD_AS_IDENTIFIER-reserved_types.jz
+      20:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      21:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      22:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      25:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      26:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      27:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      28:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      29:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      30:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      31:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      34:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      35:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      38:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      39:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      40:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      41:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      42:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier

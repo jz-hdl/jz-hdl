@@ -1,0 +1,29 @@
+// CONST_UNDEFINED_IN_WIDTH_OR_SLICE: truly-undefined identifier used as slice
+// bound (not declared as WIRE/REGISTER/PORT/CONST/CONFIG anywhere).
+//
+// Slice bounds are compile-time constant contexts (S3.2). Undefined identifiers
+// in slice bounds are reported as CONST_UNDEFINED_IN_WIDTH_OR_SLICE by the
+// slice-specific check, not as UNDECLARED_IDENTIFIER from general name resolution.
+
+@project CONST_UNDEFINED_IN_WIDTH_OR_SLICE_truly_undefined
+    @top TopMod {
+        IN  [8] bus   = _;
+        OUT [4] out_a = _;
+        OUT [4] out_b = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [8] bus;
+        OUT [4] out_a;
+        OUT [4] out_b;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: UNDEF_MSB is not declared anywhere
+        out_a = bus[UNDEF_MSB:0];
+        // Trigger 2: both bounds undeclared
+        out_b = bus[UNDEF_HI:UNDEF_LO];
+    }
+@endmod

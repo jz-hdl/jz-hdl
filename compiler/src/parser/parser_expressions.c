@@ -128,20 +128,20 @@ static JZASTNode *parse_postfix_expr(Parser *p) {
                 return NULL;
             }
 
-            JZASTNode *bus = jz_ast_new(JZ_AST_EXPR_BUS_ACCESS, expr->loc);
-            if (!bus) {
+            JZASTNode *member = jz_ast_new(JZ_AST_EXPR_INDEXED_MEMBER_ACCESS, expr->loc);
+            if (!member) {
                 if (lsb) jz_ast_free(lsb);
                 if (msb) jz_ast_free(msb);
                 jz_ast_free(expr);
                 return NULL;
             }
-            jz_ast_set_name(bus, expr->name);
-            jz_ast_set_text(bus, member_tok->lexeme);
+            jz_ast_set_name(member, expr->name);
+            jz_ast_set_text(member, member_tok->lexeme);
             if (is_wildcard) {
-                jz_ast_set_block_kind(bus, "WILDCARD");
+                jz_ast_set_block_kind(member, "WILDCARD");
             } else if (msb) {
-                if (jz_ast_add_child(bus, msb) != 0) {
-                    jz_ast_free(bus);
+                if (jz_ast_add_child(member, msb) != 0) {
+                    jz_ast_free(member);
                     jz_ast_free(msb);
                     jz_ast_free(expr);
                     return NULL;
@@ -149,7 +149,7 @@ static JZASTNode *parse_postfix_expr(Parser *p) {
             }
             advance(p); /* consume member identifier */
             jz_ast_free(expr);
-            expr = bus;
+            expr = member;
             continue;
         }
 
@@ -1066,16 +1066,14 @@ JZASTNode *parse_simple_index_expr(Parser *p) {
         t->type == JZ_TOK_OP_MINUS ||
         t->type == JZ_TOK_NUMBER ||
         t->type == JZ_TOK_SIZED_NUMBER ||
+        t->type == JZ_TOK_KW_GND ||
+        t->type == JZ_TOK_KW_VCC ||
         t->type == JZ_TOK_IDENTIFIER ||
         t->type == JZ_TOK_KW_CONFIG) {
         return parse_expression(p);
     }
 
-    if (t->type == JZ_TOK_KW_GND || t->type == JZ_TOK_KW_VCC) {
-        parser_error_rule(p, "SPECIAL_DRIVER_IN_INDEX");
-    } else {
-        parser_error(p, "expected expression in index");
-    }
+    parser_error(p, "expected expression in index");
     return NULL;
 }
 

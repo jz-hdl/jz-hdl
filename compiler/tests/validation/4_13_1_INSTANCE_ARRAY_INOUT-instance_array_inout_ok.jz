@@ -1,0 +1,52 @@
+// INSTANCE_ARRAY_INOUT: Happy path for arrayed @new INOUT port bindings.
+
+@project INSTANCE_ARRAY_INOUT_instance_array_inout_ok
+    @top TopMod {
+        OUT [16] observed = _;
+    }
+@endproj
+
+@module BusMonitor
+    PORT {
+        INOUT [8] data_bus;
+        OUT   [8] sample;
+    }
+    ASYNCHRONOUS {
+        sample = data_bus;
+    }
+@endmod
+
+@module BusDriver
+    PORT {
+        INOUT [8] data_bus;
+        OUT   [1] ready;
+    }
+    ASYNCHRONOUS {
+        data_bus <= 8'hA5;
+        ready = data_bus[0];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        OUT [16] observed;
+    }
+
+    WIRE {
+        shared_bus [8];
+    }
+
+    @new monitors[2] BusMonitor {
+        INOUT [8] data_bus = shared_bus;
+        OUT   [8] sample = _;
+    };
+
+    @new driver BusDriver {
+        INOUT [8] data_bus = shared_bus;
+        OUT   [1] ready = _;
+    };
+
+    ASYNCHRONOUS {
+        observed = {monitors[1].sample, monitors[0].sample};
+    }
+@endmod

@@ -1,0 +1,54 @@
+// PRECEDENCE: §3.3 Req #1 — Parentheses are the highest precedence and
+// can be used to override any lower-precedence grouping.
+// Exercises parentheses overriding add/mul, logical, bitwise, and ternary
+// grouping in both async and sync contexts. No diagnostics expected.
+
+@project PRECEDENCE_parens_override_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        IN  [1] p = _;
+        IN  [1] q = _;
+        OUT [8] out_arith = _;
+        OUT [8] out_bit = _;
+        OUT [1] out_log = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        IN  [1] p;
+        IN  [1] q;
+        OUT [8] out_arith;
+        OUT [8] out_bit;
+        OUT [1] out_log;
+    }
+    REGISTER {
+        r_a [8] = 8'h00;
+        r_b [8] = 8'h00;
+        r_l [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // Parentheses force add before mul: (a + b) * c
+        out_arith = ((a + b) * c)[7:0] | r_a;
+        // Parentheses force OR before AND: (a | b) & c
+        out_bit   = ((a | b) & c) | r_b;
+        // Parentheses group logical OR before AND: (p || q) && p
+        out_log   = ((p || q) && p) | r_l;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Parenthesized expressions in sync-expr as well
+        r_a <= ((a - b) + c);
+        r_b <= ((a ^ b) | c);
+        r_l <= ((p && q) || p);
+    }
+@endmod

@@ -1,0 +1,35 @@
+// ID_SYNTAX_INVALID: Dollar sign in identifier violates the regex
+// ^[A-Za-z_][A-Za-z0-9_]{0,254}$.
+// The lexer reports unrecognized character '$' as a PARSE000 error.
+// This file tests the CONST declaration context.
+
+@project ID_SYNTAX_INVALID_invalid_chars_dollar
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Trigger: dollar sign in identifier
+    CONST {
+        foo$val = 1;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

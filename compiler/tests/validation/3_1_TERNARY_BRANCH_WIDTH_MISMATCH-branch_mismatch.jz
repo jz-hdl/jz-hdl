@@ -1,6 +1,6 @@
-// TERNARY_BRANCH_WIDTH_MISMATCH: Ternary true/false branches must have matching widths.
-// Tests mismatched branch widths in async and sync blocks across modules.
-// Valid matching branch widths included to verify no false positives.
+// TERNARY_BRANCH_WIDTH_MISMATCH: Ternary branches must have matching widths.
+// Focuses on operator-category forms where concat and slice branches differ.
+// Valid matching ternary branches are included to verify no false positives.
 
 @project TERNARY_BRANCH_WIDTH_MISMATCH_branch_mismatch
     @top TopMod {
@@ -29,15 +29,15 @@
         r [8] = 8'd0;
     }
     ASYNCHRONOUS {
-        // Trigger 1: 8-bit vs 4-bit branches in async
-        out_a = sel ? val8 : val4;
+        // Trigger 1: concat branch is 8 bits, false branch is 4 bits
+        out_a = sel ? {val4, val4} : val4;
         // Valid: matching widths (no false positive)
         out_b = sel ? val8 : val8;
         out_c = r;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 2: 8-bit vs 4-bit branches in sync
-        r <= sel ? val8 : val4;
+        // Trigger 2: true branch is 8 bits, slice branch is 4 bits
+        r <= sel ? val8 : val8[3:0];
     }
 @endmod
 
@@ -71,13 +71,13 @@
     };
 
     ASYNCHRONOUS {
-        // Trigger 3: 4-bit vs 8-bit branches in top async
-        out_a = sel ? val4 : val8;
+        // Trigger 3: slice branch is 4 bits, false branch is 8 bits
+        out_a = sel ? val8[7:4] : val8;
         out_b = ha_b;
         out_c = r;
     }
     SYNCHRONOUS(CLK=clk) {
-        // Trigger 4: mismatched branches in top sync
-        r <= sel ? val4 : val8;
+        // Trigger 4: true branch is 4 bits, concat branch is 8 bits
+        r <= sel ? val4 : {val4, val4};
     }
 @endmod

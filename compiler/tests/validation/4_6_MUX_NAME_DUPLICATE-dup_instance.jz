@@ -1,0 +1,151 @@
+// MUX_NAME_DUPLICATE: MUX identifier duplicates an instance name.
+// Tests both declaration orders (instance before MUX, MUX before instance).
+// Each conflict is in a separate module to avoid cascading errors.
+
+@project MUX_NAME_DUPLICATE_dup_instance
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Helper module (structurally valid, used as instantiation target)
+@module HelperMod
+    PORT {
+        IN  [8] din;
+        OUT [8] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+// Module A: instance declared first, then MUX with same name
+@module ModInstFirst
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        h_out [8];
+    }
+
+    @new foo HelperMod {
+        IN  [8] din = a;
+        OUT [8] data = h_out;
+    };
+
+    // Trigger 1: MUX name 'foo' duplicates instance name 'foo'
+    MUX {
+        foo = a, b;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = h_out | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod
+
+// Module B: MUX declared first, then instance with same name
+@module ModMuxFirst
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        h_out [8];
+    }
+
+    // Trigger 2: MUX name 'bar' will conflict with instance name 'bar'
+    MUX {
+        bar = a, b;
+    }
+
+    @new bar HelperMod {
+        IN  [8] din = a;
+        OUT [8] data = h_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = h_out | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod
+
+// Top module: valid MUX and instance with unique names (no trigger)
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] data;
+    }
+
+    WIRE {
+        if_out [8];
+        mf_out [8];
+        h_out [8];
+    }
+
+    // Valid: MUX and instance have different names
+    MUX {
+        ok_mux = a, b;
+    }
+
+    @new inst_if ModInstFirst {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        IN  [8] b = b;
+        OUT [8] data = if_out;
+    };
+
+    @new inst_mf ModMuxFirst {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        IN  [8] b = b;
+        OUT [8] data = mf_out;
+    };
+
+    @new inst_ok HelperMod {
+        IN  [8] din = a;
+        OUT [8] data = h_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = if_out | mf_out | h_out | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ok_mux[1'b0];
+    }
+@endmod

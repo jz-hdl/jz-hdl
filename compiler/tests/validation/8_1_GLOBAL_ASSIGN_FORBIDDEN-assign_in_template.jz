@@ -1,0 +1,72 @@
+// GLOBAL_ASSIGN_FORBIDDEN: Assignment to a global constant inside a @template body.
+// Valid global reads in templates are included to verify no false positives.
+
+@global CMD
+    READ  = 4'b0001;
+    WRITE = 4'b0010;
+@endglob
+
+@project GLOBAL_ASSIGN_FORBIDDEN_assign_in_template
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [4] data = _;
+    }
+@endproj
+
+// Template with valid global read on RHS (should NOT trigger)
+@template valid_global_read(dst, src)
+    dst <= src + CMD.READ;
+@endtemplate
+
+// Trigger: @template body — assignment to global constant
+@template bad_global_assign(src)
+    CMD.WRITE = src;
+@endtemplate
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [4] data;
+    }
+
+    REGISTER {
+        r [4] = 4'b0000;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        @apply valid_global_read(r, din);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [4] data;
+    }
+
+    @new inst_a HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] din = din;
+        OUT [4] data = _;
+    };
+
+    REGISTER {
+        r [4] = 4'b0000;
+    }
+
+    ASYNCHRONOUS {
+        @apply bad_global_assign(r);
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

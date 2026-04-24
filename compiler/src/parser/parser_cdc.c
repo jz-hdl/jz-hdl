@@ -93,81 +93,14 @@ int parse_cdc_block_body(Parser *p, JZASTNode *parent) {
             }
         }
 
-        /* <source_reg> identifier */
-        const JZToken *src_tok = peek(p);
-        if (!is_decl_identifier_token(src_tok) || !src_tok->lexeme) {
+        /* <source_reg> expression. Semantic analysis rejects anything other
+         * than a plain register identifier with CDC_SOURCE_NOT_PLAIN_REG.
+         */
+        JZASTNode *src_id = parse_expression(p);
+        if (!src_id) {
             jz_ast_free(decl);
             parser_error(p, "expected source REGISTER name in CDC entry");
             return -1;
-        }
-        JZASTNode *src_id = jz_ast_new(JZ_AST_EXPR_IDENTIFIER, src_tok->loc);
-        if (!src_id) { jz_ast_free(decl); return -1; }
-        jz_ast_set_name(src_id, src_tok->lexeme);
-        advance(p);
-
-        /* Optional bit-select: source_reg[index] or source_reg[msb:lsb] */
-        if (peek(p)->type == JZ_TOK_LBRACKET) {
-            advance(p); /* consume '[' */
-            JZASTNode *msb = parse_simple_index_expr(p);
-            if (!msb) {
-                jz_ast_free(src_id);
-                jz_ast_free(decl);
-                parser_error(p, "expected index expression in CDC source bit-select");
-                return -1;
-            }
-            JZASTNode *lsb = NULL;
-            if (match(p, JZ_TOK_OP_COLON)) {
-                lsb = parse_simple_index_expr(p);
-                if (!lsb) {
-                    jz_ast_free(msb);
-                    jz_ast_free(src_id);
-                    jz_ast_free(decl);
-                    parser_error(p, "expected lsb expression in CDC source bit-select");
-                    return -1;
-                }
-            }
-            if (!match(p, JZ_TOK_RBRACKET)) {
-                if (lsb) jz_ast_free(lsb);
-                jz_ast_free(msb);
-                jz_ast_free(src_id);
-                jz_ast_free(decl);
-                parser_error(p, "expected ']' after CDC source bit-select");
-                return -1;
-            }
-            /* Build slice node: children = [base_id, msb, lsb] */
-            /* For single index [idx], duplicate msb as lsb */
-            if (!lsb) {
-                /* Create a duplicate of msb for lsb (single-bit select [n] => [n:n]) */
-                lsb = jz_ast_new(msb->type, msb->loc);
-                if (!lsb) {
-                    jz_ast_free(msb);
-                    jz_ast_free(src_id);
-                    jz_ast_free(decl);
-                    return -1;
-                }
-                if (msb->name) jz_ast_set_name(lsb, msb->name);
-                if (msb->width) jz_ast_set_width(lsb, msb->width);
-                if (msb->text) jz_ast_set_text(lsb, msb->text);
-            }
-            JZASTNode *slice = jz_ast_new(JZ_AST_EXPR_SLICE, src_id->loc);
-            if (!slice) {
-                jz_ast_free(lsb);
-                jz_ast_free(msb);
-                jz_ast_free(src_id);
-                jz_ast_free(decl);
-                return -1;
-            }
-            if (jz_ast_add_child(slice, src_id) != 0 ||
-                jz_ast_add_child(slice, msb) != 0 ||
-                jz_ast_add_child(slice, lsb) != 0) {
-                jz_ast_free(slice);
-                jz_ast_free(lsb);
-                jz_ast_free(msb);
-                jz_ast_free(src_id);
-                jz_ast_free(decl);
-                return -1;
-            }
-            src_id = slice; /* replace bare identifier with slice node */
         }
 
         /* (<src_clk>) */

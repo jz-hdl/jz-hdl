@@ -1,0 +1,68 @@
+// Two BUS ports of the same role produce exclusive-assignment / direction
+// errors when the module tries to drive the same writable BUS signal on both
+// ports (§4.4.1 Role Consistency and Bus-to-Bus Connectivity). Covers Req #44.
+
+@project ASSIGN_MULTIPLE_SAME_BITS_bus_same_role_conflict
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout_a = _;
+    }
+@endproj
+
+// Module with two SOURCE-role BUS ports of the same BUS id.
+// Attempting to alias src_a.tx to src_b.tx (both writable) would merge two
+// drivers onto one net; the compiler reports a direction error first because
+// reading a writable signal (src_a.tx) on the RHS is not allowed under the
+// SOURCE role view. This illustrates that same-role bus aggregation is
+// incompatible per §4.4.1.
+@module DualSourceMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        BUS MY_BUS SOURCE src_a;
+        BUS MY_BUS SOURCE src_b;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        src_a.tx <= din;
+        // Trigger: aliasing two writable BUS signals together is an illegal
+        // read-from-writable plus creates a double-driver on src_b.tx.
+        src_b.tx = src_a.tx;
+        src_b.tx <= din;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= src_a.rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout_a;
+    }
+
+    @new inst_d DualSourceMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        BUS MY_BUS SOURCE src_a = _;
+        BUS MY_BUS SOURCE src_b = _;
+        OUT [8] data_out = dout_a;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

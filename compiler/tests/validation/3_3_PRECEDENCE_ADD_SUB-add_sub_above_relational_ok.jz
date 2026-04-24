@@ -1,0 +1,43 @@
+// PRECEDENCE: §3.3 Req #7 — Binary `+` and `-` bind tighter than
+// relational ops. `a + b < c` parses as `(a + b) < c`, and
+// `a - b >= c` parses as `(a - b) >= c`.
+// No diagnostics expected.
+
+@project PRECEDENCE_add_sub_above_relational_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        OUT [1] out_lt = _;
+        OUT [1] out_ge = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        OUT [1] out_lt;
+        OUT [1] out_ge;
+    }
+    REGISTER {
+        r_lt [1] = 1'b0;
+        r_ge [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // + binds tighter than < : (a + b) < c
+        out_lt = ((a + b) < c) | r_lt;
+        // - binds tighter than >= : (a - b) >= c
+        out_ge = ((a - b) >= c) | r_ge;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_lt <= (a + b) < c;
+        r_ge <= (a - b) >= c;
+    }
+@endmod

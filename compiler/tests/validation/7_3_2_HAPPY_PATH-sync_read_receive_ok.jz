@@ -1,0 +1,81 @@
+// HAPPY_PATH: Valid synchronous MEM read uses <= for both address sampling
+// and registered receive of mem.port.data (S7.3.2).
+
+@project HAPPY_PATH_sync_read_receive_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        OUT [DATA_W] data = _;
+        OUT [DATA_W] helper_data = _;
+    }
+@endproj
+
+@module SyncReaderHelper
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        sample [8] = 8'h00;
+    }
+
+    MEM(type=BLOCK) {
+        cache [8] [16] = 8'h00 {
+            OUT rd SYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = sample;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: synchronous read address sampled with <=.
+        cache.rd.addr <= addr;
+        // Valid: synchronous read data received with <=.
+        sample <= cache.rd.data;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+        OUT [8] helper_data;
+    }
+
+    REGISTER {
+        sample [8] = 8'h00;
+    }
+
+    MEM(type=BLOCK) {
+        cache [8] [16] = 8'h00 {
+            OUT rd SYNC;
+        };
+    }
+
+    @new helper SyncReaderHelper {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        data = sample;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: synchronous read address sampled with <= in top module.
+        cache.rd.addr <= addr;
+        // Valid: synchronous read data received with <= in top module.
+        sample <= cache.rd.data;
+    }
+@endmod

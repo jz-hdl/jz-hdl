@@ -1,0 +1,90 @@
+// NET_FLOATING_WITH_SINK: Signal is read but never driven (floating net).
+// Tests undriven wire read via @new port binding expression.
+// Properly driven signals included to verify no false positives.
+
+@project NET_FLOATING_WITH_SINK_instance_port_binding
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Simple pass-through module
+@module PassThru
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+// Helper module: undriven wire used in @new port binding
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        // Trigger: wire read via @new port binding expression
+        undriven [1];
+        // Valid: wire that IS driven
+        driven [1];
+    }
+
+    @new inst_pass PassThru {
+        IN  [1] din = undriven;
+        OUT [1] data = driven;
+    };
+
+    ASYNCHRONOUS {
+        data = driven;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        // Trigger: wire read via @new port binding in top module
+        floating [1];
+        // Valid: wire that IS driven
+        driven [1];
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    @new inst_b PassThru {
+        IN  [1] din = floating;
+        OUT [1] data = driven;
+    };
+
+    ASYNCHRONOUS {
+        data = driven;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

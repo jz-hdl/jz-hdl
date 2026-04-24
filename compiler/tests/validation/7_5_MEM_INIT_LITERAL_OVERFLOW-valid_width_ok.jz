@@ -1,0 +1,79 @@
+// MEM_INIT_LITERAL_OVERFLOW: Valid memory init expressions fit within word width.
+// Covers helper and top module literal initialization with exact-width expressions.
+// No diagnostics expected.
+
+@project MEM_INIT_LITERAL_OVERFLOW_valid_width_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        hold [8] = 8'h00;
+    }
+
+    // Valid: concatenation width is exactly 8 bits.
+    MEM {
+        mem_a [8] [4] = {4'hC, 4'h3} {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_a.rd[addr] ^ hold;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        hold <= 8'h0F;
+        mem_a.wr[addr] <= 8'h00;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    WIRE {
+        helper_data [8];
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    // Valid: replication width is exactly 8 bits.
+    MEM {
+        mem_b [8] [4] = {2{4'hA}} {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] addr = addr;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        data = helper_data ^ mem_b.rd[addr] ^ state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= 8'h55;
+        mem_b.wr[addr] <= 8'h00;
+    }
+@endmod

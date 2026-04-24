@@ -9,6 +9,322 @@
 #include "rules.h"
 #include "driver_internal.h"
 
+static const JZASTNode *sem_find_global_const_decl_for_observability(
+    const char *qname,
+    const JZBuffer *project_symbols)
+{
+    if (!qname || !project_symbols || !project_symbols->data) return NULL;
+
+    const char *dot = strchr(qname, '.');
+    if (!dot || dot == qname || dot[1] == '\0' || strchr(dot + 1, '.')) {
+        return NULL;
+    }
+
+    char ns[128];
+    size_t ns_len = (size_t)(dot - qname);
+    if (ns_len == 0 || ns_len >= sizeof(ns)) return NULL;
+    memcpy(ns, qname, ns_len);
+    ns[ns_len] = '\0';
+
+    const char *const_name = dot + 1;
+    const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+    size_t count = project_symbols->len / sizeof(JZSymbol);
+
+    for (size_t i = 0; i < count; ++i) {
+        const JZSymbol *sym = &syms[i];
+        if (!sym->name || sym->kind != JZ_SYM_GLOBAL ||
+            strcmp(sym->name, ns) != 0 || !sym->node ||
+            sym->node->type != JZ_AST_GLOBAL_BLOCK) {
+            continue;
+        }
+
+        for (size_t j = 0; j < sym->node->child_count; ++j) {
+            const JZASTNode *decl = sym->node->children[j];
+            if (decl && decl->type == JZ_AST_CONST_DECL && decl->name &&
+                strcmp(decl->name, const_name) == 0) {
+                return decl;
+            }
+        }
+        break;
+    }
+
+    return NULL;
+}
+
+static int sem_eval_const_expr_u64_for_observability(
+    const JZASTNode *expr,
+    const JZModuleScope *mod_scope,
+    const JZBuffer *project_symbols,
+    unsigned long long *out)
+{
+    if (!expr || !out) return 0;
+
+    switch (expr->type) {
+    case JZ_AST_EXPR_LITERAL: {
+        if (!expr->text) return 0;
+        unsigned value = 0;
+        if (!parse_literal_unsigned_value(expr->text, &value)) {
+            return 0;
+        }
+        *out = (unsigned long long)value;
+        return 1;
+    }
+
+    case JZ_AST_EXPR_IDENTIFIER: {
+        if (!expr->name || !mod_scope) return 0;
+        long long value = 0;
+        if (sem_eval_const_expr_in_module(expr->name,
+                                          mod_scope,
+                                          project_symbols,
+                                          &value) != 0 ||
+            value < 0) {
+            return 0;
+        }
+        *out = (unsigned long long)value;
+        return 1;
+    }
+
+    case JZ_AST_EXPR_QUALIFIED_IDENTIFIER: {
+        if (!expr->name) return 0;
+
+        const JZASTNode *decl =
+            sem_find_global_const_decl_for_observability(expr->name,
+                                                         project_symbols);
+        if (decl && decl->text) {
+            unsigned value = 0;
+            if (parse_literal_unsigned_value(decl->text, &value)) {
+                *out = (unsigned long long)value;
+                return 1;
+            }
+        }
+
+        if (project_symbols) {
+            long long value = 0;
+            if (sem_eval_const_expr_in_project(expr->name,
+                                               project_symbols,
+                                               &value) == 0 &&
+                value >= 0) {
+                *out = (unsigned long long)value;
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    case JZ_AST_EXPR_UNARY: {
+        if (!expr->block_kind || expr->child_count < 1 || !expr->children[0]) {
+            return 0;
+        }
+
+        unsigned long long operand = 0;
+        if (!sem_eval_const_expr_u64_for_observability(expr->children[0],
+                                                       mod_scope,
+                                                       project_symbols,
+                                                       &operand)) {
+            return 0;
+        }
+
+        if (strcmp(expr->block_kind, "LOG_NOT") == 0) {
+            *out = operand ? 0ull : 1ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_NOT") == 0) {
+            *out = ~operand;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "POS") == 0) {
+            *out = operand;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "NEG") == 0) {
+            *out = 0ull - operand;
+            return 1;
+        }
+        return 0;
+    }
+
+    case JZ_AST_EXPR_BINARY: {
+        if (!expr->block_kind || expr->child_count < 2 ||
+            !expr->children[0] || !expr->children[1]) {
+            return 0;
+        }
+
+        unsigned long long lhs = 0;
+        unsigned long long rhs = 0;
+        if (!sem_eval_const_expr_u64_for_observability(expr->children[0],
+                                                       mod_scope,
+                                                       project_symbols,
+                                                       &lhs) ||
+            !sem_eval_const_expr_u64_for_observability(expr->children[1],
+                                                       mod_scope,
+                                                       project_symbols,
+                                                       &rhs)) {
+            return 0;
+        }
+
+        if (strcmp(expr->block_kind, "ADD") == 0) {
+            *out = lhs + rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "SUB") == 0) {
+            *out = lhs - rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "MUL") == 0) {
+            *out = lhs * rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "DIV") == 0) {
+            if (rhs == 0ull) return 0;
+            *out = lhs / rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "MOD") == 0) {
+            if (rhs == 0ull) return 0;
+            *out = lhs % rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "SHL") == 0) {
+            if (rhs >= 64ull) return 0;
+            *out = lhs << rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "SHR") == 0) {
+            if (rhs >= 64ull) return 0;
+            *out = lhs >> rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "ASHR") == 0) {
+            if (rhs >= 64ull) return 0;
+            *out = (unsigned long long)(((long long)lhs) >> rhs);
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LT") == 0) {
+            *out = lhs < rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LE") == 0) {
+            *out = lhs <= rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "GT") == 0) {
+            *out = lhs > rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "GE") == 0) {
+            *out = lhs >= rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "EQ") == 0) {
+            *out = lhs == rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "NEQ") == 0) {
+            *out = lhs != rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_AND") == 0) {
+            *out = lhs & rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_OR") == 0) {
+            *out = lhs | rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_XOR") == 0) {
+            *out = lhs ^ rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LOG_AND") == 0) {
+            *out = (lhs && rhs) ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LOG_OR") == 0) {
+            *out = (lhs || rhs) ? 1ull : 0ull;
+            return 1;
+        }
+        return 0;
+    }
+
+    default:
+        return 0;
+    }
+}
+
+static int sem_expr_const_truthy_for_observability(
+    const JZASTNode *expr,
+    const JZModuleScope *mod_scope,
+    const JZBuffer *project_symbols,
+    int *out_known)
+{
+    unsigned long long value = 0;
+    if (out_known) *out_known = 0;
+
+    if (!sem_eval_const_expr_u64_for_observability(expr,
+                                                   mod_scope,
+                                                   project_symbols,
+                                                   &value)) {
+        return 0;
+    }
+
+    if (out_known) *out_known = 1;
+    return value != 0ull;
+}
+
+static int sem_expr_contains_observable_x_literal(
+    const JZASTNode *expr,
+    const JZModuleScope *mod_scope,
+    const JZBuffer *project_symbols)
+{
+    if (!expr) return 0;
+
+    if (expr->type == JZ_AST_EXPR_LITERAL && expr->text) {
+        return sem_literal_has_x_bits(expr->text);
+    }
+
+    if (expr->type == JZ_AST_EXPR_TERNARY && expr->child_count >= 3) {
+        if (sem_expr_contains_observable_x_literal(expr->children[0],
+                                                   mod_scope,
+                                                   project_symbols)) {
+            return 1;
+        }
+
+        int cond_known = 0;
+        int cond_truthy = sem_expr_const_truthy_for_observability(expr->children[0],
+                                                                  mod_scope,
+                                                                  project_symbols,
+                                                                  &cond_known);
+        if (cond_known) {
+            JZASTNode *live_branch = expr->children[cond_truthy ? 1 : 2];
+            return sem_expr_contains_observable_x_literal(live_branch,
+                                                          mod_scope,
+                                                          project_symbols);
+        }
+
+        return sem_expr_contains_observable_x_literal(expr->children[1],
+                                                      mod_scope,
+                                                      project_symbols) ||
+               sem_expr_contains_observable_x_literal(expr->children[2],
+                                                      mod_scope,
+                                                      project_symbols);
+    }
+
+    size_t end = expr->child_count;
+    if (expr->type == JZ_AST_EXPR_SLICE && expr->child_count >= 1) {
+        end = 1;
+    }
+
+    for (size_t i = 0; i < end; ++i) {
+        if (sem_expr_contains_observable_x_literal(expr->children[i],
+                                                   mod_scope,
+                                                   project_symbols)) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void sem_check_runtime_const_config_expr(const JZASTNode *node,
                                                 const JZModuleScope *mod_scope,
                                                 JZDiagnosticList *diagnostics)
@@ -123,6 +439,10 @@ static void sem_check_runtime_const_config_expr(const JZASTNode *node,
         return;
     }
 
+    if (node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
+        return;
+    }
+
     for (size_t i = 0; i < node->child_count; ++i) {
         if (node->children[i]) {
             sem_check_runtime_const_config_expr(node->children[i], mod_scope, diagnostics);
@@ -152,7 +472,8 @@ static void sem_check_bare_integer_in_expr(const JZASTNode *node,
     }
 
     /* Bus array indices (link[2].tx) are compile-time; skip children. */
-    if (node->type == JZ_AST_EXPR_BUS_ACCESS) {
+    if (node->type == JZ_AST_EXPR_BUS_ACCESS ||
+        node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
         return;
     }
 
@@ -214,6 +535,229 @@ static void sem_check_bare_integer_in_expr(const JZASTNode *node,
     }
 }
 
+static void sem_check_expr_read_rules_recursive(JZASTNode *expr,
+                                                const JZModuleScope *mod_scope,
+                                                const JZBuffer *project_symbols,
+                                                const JZExprReadRulesContext *ctx,
+                                                JZDiagnosticList *diagnostics)
+{
+    if (!expr || !mod_scope || !ctx || !diagnostics) return;
+    int matched_mem_slice = 0;
+
+    if (ctx->check_bus_rules &&
+        (expr->type == JZ_AST_EXPR_BUS_ACCESS ||
+         expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
+        project_symbols) {
+        JZBusAccessInfo info;
+        memset(&info, 0, sizeof(info));
+        if (sem_resolve_bus_access(expr, mod_scope, project_symbols, &info, NULL) &&
+            info.signal_decl && !info.readable) {
+            char explain[256];
+            snprintf(explain, sizeof(explain),
+                     "BUS signal '%s' is write-only (SOURCE direction) and\n"
+                     "cannot be read. Only TARGET or INOUT signals are readable.",
+                     info.signal_name[0] ? info.signal_name
+                                         : (expr->name ? expr->name : "?"));
+            sem_report_rule(diagnostics,
+                            expr->loc,
+                            "BUS_SIGNAL_READ_FROM_WRITABLE",
+                            explain);
+        }
+    }
+
+    if (expr->type == JZ_AST_EXPR_SLICE) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_slice(expr, mod_scope, NULL, &ref) &&
+            ref.port && ref.port->block_kind) {
+            matched_mem_slice = 1;
+            if (!ctx->is_instance_binding &&
+                strcmp(ref.port->block_kind, "IN") == 0) {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "%s.%s is an IN (write) port and cannot be read\n"
+                         "use an OUT port for read access",
+                         ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
+                         ref.port->name ? ref.port->name : "port");
+                sem_report_rule(diagnostics,
+                                expr->loc,
+                                "MEM_READ_FROM_WRITE_PORT",
+                                msg);
+            } else if (strcmp(ref.port->block_kind, "INOUT") == 0) {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "%s.%s is an INOUT port and may not be indexed directly\n"
+                         "use .addr, .data, or .wdata pseudo-fields instead",
+                         ref.mem_decl && ref.mem_decl->name ? ref.mem_decl->name : "mem",
+                         ref.port->name ? ref.port->name : "port");
+                sem_report_rule(diagnostics,
+                                expr->loc,
+                                "MEM_INOUT_INDEXED",
+                                msg);
+            }
+        }
+    } else if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_qualified_ident(expr, mod_scope, NULL, &ref) &&
+            ref.port && ref.port->block_kind) {
+            const char *mem_name = ref.mem_decl && ref.mem_decl->name
+                                   ? ref.mem_decl->name : "mem";
+            const char *port_name = ref.port->name ? ref.port->name : "port";
+            char msg[512];
+
+            if (strcmp(ref.port->block_kind, "IN") == 0) {
+                if (ctx->is_instance_binding) {
+                    goto recurse_children;
+                }
+                if (ref.field == MEM_PORT_FIELD_NONE) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s cannot be used directly as a signal\n"
+                             "use bracket syntax to write, or an OUT port to read",
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_USED_AS_SIGNAL",
+                                    msg);
+                } else {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s is an IN (write) port and cannot be read\n"
+                             "use an OUT port for read access",
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_READ_FROM_WRITE_PORT",
+                                    msg);
+                }
+            } else if (strcmp(ref.port->block_kind, "OUT") == 0) {
+                if (ctx->is_instance_binding) {
+                    goto recurse_children;
+                }
+                if (ref.field == MEM_PORT_FIELD_NONE) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s cannot be used directly as a signal\n"
+                             "use %s.%s.data to read or %s.%s.addr to set address",
+                             mem_name, port_name,
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_USED_AS_SIGNAL",
+                                    msg);
+                } else if (ref.field == MEM_PORT_FIELD_ADDR) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s.addr is a write-only input and cannot be read\n"
+                             "use %s.%s.data to read memory output",
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_ADDR_READ",
+                                    msg);
+                } else if (ref.field == MEM_PORT_FIELD_DATA &&
+                           ref.port->text && strcmp(ref.port->text, "ASYNC") == 0) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s is an ASYNC read port; use %s.%s[addr] indexed syntax instead of .data",
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_ASYNC_PORT_FIELD_DATA",
+                                    msg);
+                }
+            } else if (strcmp(ref.port->block_kind, "INOUT") == 0) {
+                if (ctx->is_instance_binding) {
+                    if (ref.field == MEM_PORT_FIELD_ADDR) {
+                        snprintf(msg, sizeof(msg),
+                                 "%s.%s.addr may only be assigned in SYNCHRONOUS blocks",
+                                 mem_name, port_name);
+                        sem_report_rule(diagnostics,
+                                        expr->loc,
+                                        "MEM_INOUT_ADDR_IN_ASYNC",
+                                        msg);
+                    }
+                    goto recurse_children;
+                }
+                if (ref.field == MEM_PORT_FIELD_NONE) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s cannot be used directly as a signal\n"
+                             "use %s.%s.data to read or %s.%s.addr/.wdata to write",
+                             mem_name, port_name,
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_USED_AS_SIGNAL",
+                                    msg);
+                } else if (ref.field == MEM_PORT_FIELD_ADDR) {
+                    if (ctx->is_instance_binding) {
+                        snprintf(msg, sizeof(msg),
+                                 "%s.%s.addr may only be assigned in SYNCHRONOUS blocks",
+                                 mem_name, port_name);
+                        sem_report_rule(diagnostics,
+                                        expr->loc,
+                                        "MEM_INOUT_ADDR_IN_ASYNC",
+                                        msg);
+                    } else {
+                        snprintf(msg, sizeof(msg),
+                                 "%s.%s.addr is a write-only input and cannot be read\n"
+                                 "use %s.%s.data to read memory output",
+                                 mem_name, port_name,
+                                 mem_name, port_name);
+                        sem_report_rule(diagnostics,
+                                        expr->loc,
+                                        "MEM_PORT_ADDR_READ",
+                                        msg);
+                    }
+                } else if (ref.field == MEM_PORT_FIELD_WDATA) {
+                    snprintf(msg, sizeof(msg),
+                             "%s.%s.wdata is a write-only input and cannot be read\n"
+                             "use %s.%s.data to read memory output",
+                             mem_name, port_name,
+                             mem_name, port_name);
+                    sem_report_rule(diagnostics,
+                                    expr->loc,
+                                    "MEM_PORT_ADDR_READ",
+                                    msg);
+                }
+            }
+        }
+    }
+
+recurse_children:
+    if (matched_mem_slice) {
+        for (size_t i = 1; i < expr->child_count; ++i) {
+            sem_check_expr_read_rules_recursive(expr->children[i],
+                                                mod_scope,
+                                                project_symbols,
+                                                ctx,
+                                                diagnostics);
+        }
+        return;
+    }
+
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        sem_check_expr_read_rules_recursive(expr->children[i],
+                                            mod_scope,
+                                            project_symbols,
+                                            ctx,
+                                            diagnostics);
+    }
+}
+
+void sem_check_expr_read_rules(JZASTNode *expr,
+                               const JZModuleScope *mod_scope,
+                               const JZBuffer *project_symbols,
+                               const JZExprReadRulesContext *ctx,
+                               JZDiagnosticList *diagnostics)
+{
+    sem_check_expr_read_rules_recursive(expr,
+                                        mod_scope,
+                                        project_symbols,
+                                        ctx,
+                                        diagnostics);
+}
+
 /*
  * Feature Guard helpers: validate @feature condition expressions and recursively
  * analyze their guarded bodies.
@@ -270,20 +814,31 @@ static void sem_check_feature_guard_cond(JZASTNode *feature,
                 break;
             }
             if (sym->kind != JZ_SYM_CONST) {
-                const char *kind_str = "identifier";
-                if (sym->kind == JZ_SYM_REGISTER) kind_str = "REGISTER";
-                else if (sym->kind == JZ_SYM_PORT) kind_str = "PORT";
-                else if (sym->kind == JZ_SYM_WIRE) kind_str = "WIRE";
-                else if (sym->kind == JZ_SYM_LATCH) kind_str = "LATCH";
-                char explain[256];
-                snprintf(explain, sizeof(explain),
-                         "'%s' is a %s, not a CONST. @feature conditions may only\n"
-                         "reference CONFIG.<name>, module CONST, and literals.",
-                         cur->name, kind_str);
-                sem_report_rule(diagnostics,
-                                cur->loc,
-                                "FEATURE_EXPR_INVALID_CONTEXT",
-                                explain);
+                if (sym->kind == JZ_SYM_LATCH) {
+                    char explain[256];
+                    snprintf(explain, sizeof(explain),
+                             "'%s' is a LATCH. LATCH identifiers may not be used in\n"
+                             "compile-time constant contexts (@check/@feature conditions).",
+                             cur->name);
+                    sem_report_rule(diagnostics,
+                                    cur->loc,
+                                    "LATCH_IN_CONST_CONTEXT",
+                                    explain);
+                } else {
+                    const char *kind_str = "identifier";
+                    if (sym->kind == JZ_SYM_REGISTER) kind_str = "REGISTER";
+                    else if (sym->kind == JZ_SYM_PORT) kind_str = "PORT";
+                    else if (sym->kind == JZ_SYM_WIRE) kind_str = "WIRE";
+                    char explain[256];
+                    snprintf(explain, sizeof(explain),
+                             "'%s' is a %s, not a CONST. @feature conditions may only\n"
+                             "reference CONFIG.<name>, module CONST, and literals.",
+                             cur->name, kind_str);
+                    sem_report_rule(diagnostics,
+                                    cur->loc,
+                                    "FEATURE_EXPR_INVALID_CONTEXT",
+                                    explain);
+                }
             }
             break;
         }
@@ -874,7 +1429,7 @@ static void sem_check_block_expressions_inner(JZASTNode *block,
         }
 
         /* Run MUX selector range checks on the full statement subtree. */
-        sem_check_mux_selectors_recursive(stmt, mod_scope, diagnostics);
+        sem_check_mux_selectors_recursive(stmt, mod_scope, project_symbols, diagnostics);
 
         /* Enforce CONFIG/CONST runtime scope restrictions on all expressions
          * in this executable statement subtree.
@@ -899,19 +1454,27 @@ static void sem_check_block_expressions_inner(JZASTNode *block,
              * If the RHS expression tree contains any binary literal with 'x'
              * bits, it may not directly feed these sinks.
              */
-            if (sem_expr_contains_x_literal_anywhere(rhs)) {
+            if (sem_expr_contains_observable_x_literal(rhs,
+                                                       mod_scope,
+                                                       project_symbols)) {
                 int has_reg = 0;
                 int has_out_inout = 0;
+                int has_mem = 0;
                 sem_lhs_observable_classify(lhs, mod_scope,
-                                            &has_reg, &has_out_inout);
+                                            &has_reg, &has_out_inout,
+                                            &has_mem);
 
-                if ((has_reg && is_sync) || has_out_inout) {
+                if ((has_reg && is_sync) || (has_mem && is_sync) ||
+                    has_out_inout) {
                     /* Point the diagnostic at the RHS expression for
                      * better usability when complex expressions are involved.
                      */
                     JZLocation loc = rhs->loc.line ? rhs->loc : stmt->loc;
                     char explain[256];
-                    const char *sink_type = has_out_inout ? "OUT/INOUT port" : "register";
+                    const char *sink_type =
+                        has_out_inout ? "OUT/INOUT port" :
+                        has_reg       ? "register" :
+                                        "MEM";
                     snprintf(explain, sizeof(explain),
                              "RHS expression contains x-valued literal bits that would\n"
                              "propagate to a %s. Mask or select away x bits\n"
@@ -1014,6 +1577,64 @@ static void sem_check_slice_expr(JZASTNode *slice,
         if (sem_try_const_eval_ast_expr(lsb_node, &v) && v >= 0) {
             lsb_val = (unsigned)v;
             lsb_valid = 1;
+        }
+    }
+
+    /* Identifier indices: resolve CONST or CONFIG names to their values so
+     * SLICE_MSB_LESS_THAN_LSB and SLICE_INDEX_OUT_OF_RANGE can fire on
+     * named-constant slices like bus[HIGH:LOW]. */
+    if (!msb_valid &&
+        msb_node->type == JZ_AST_EXPR_IDENTIFIER && msb_node->name &&
+        strcmp(msb_node->name, "IDX") != 0) {
+        const JZSymbol *c_sym = module_scope_lookup_kind(scope, msb_node->name, JZ_SYM_CONST);
+        const char *value_text = NULL;
+        if (c_sym && c_sym->node && c_sym->node->text) {
+            value_text = c_sym->node->text;
+        } else if (project_symbols && project_symbols->data) {
+            const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+            size_t count = project_symbols->len / sizeof(JZSymbol);
+            for (size_t i = 0; i < count; ++i) {
+                if (syms[i].kind == JZ_SYM_CONFIG && syms[i].name &&
+                    strcmp(syms[i].name, msb_node->name) == 0 &&
+                    syms[i].node && syms[i].node->text) {
+                    value_text = syms[i].node->text;
+                    break;
+                }
+            }
+        }
+        if (value_text) {
+            long long v = 0;
+            if (jz_const_eval_expr(value_text, NULL, &v) == 0 && v >= 0) {
+                msb_val = (unsigned)v;
+                msb_valid = 1;
+            }
+        }
+    }
+    if (!lsb_valid &&
+        lsb_node->type == JZ_AST_EXPR_IDENTIFIER && lsb_node->name &&
+        strcmp(lsb_node->name, "IDX") != 0) {
+        const JZSymbol *c_sym = module_scope_lookup_kind(scope, lsb_node->name, JZ_SYM_CONST);
+        const char *value_text = NULL;
+        if (c_sym && c_sym->node && c_sym->node->text) {
+            value_text = c_sym->node->text;
+        } else if (project_symbols && project_symbols->data) {
+            const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+            size_t count = project_symbols->len / sizeof(JZSymbol);
+            for (size_t i = 0; i < count; ++i) {
+                if (syms[i].kind == JZ_SYM_CONFIG && syms[i].name &&
+                    strcmp(syms[i].name, lsb_node->name) == 0 &&
+                    syms[i].node && syms[i].node->text) {
+                    value_text = syms[i].node->text;
+                    break;
+                }
+            }
+        }
+        if (value_text) {
+            long long v = 0;
+            if (jz_const_eval_expr(value_text, NULL, &v) == 0 && v >= 0) {
+                lsb_val = (unsigned)v;
+                lsb_valid = 1;
+            }
         }
     }
 
@@ -1343,6 +1964,51 @@ static void sem_check_feature_cond_recursive(JZASTNode *node,
     }
 }
 
+/* OBS_X_TO_OBSERVABLE_SINK at module instantiation boundary.
+ * Per-spec, a value crossing a module boundary via @new port binding is
+ * observable to the child module. An x-literal in any binding RHS is
+ * therefore an observable-sink violation regardless of binding direction.
+ * IN/INOUT bindings carry parent->child expressions where literals are
+ * common; OUT bindings normally bind to a wire/identifier and rarely
+ * contain x literals, but checking all directions is uniform and safe.
+ */
+static void sem_check_instance_bindings_for_x_taint(JZASTNode *mod,
+                                                    const JZModuleScope *mod_scope,
+                                                    const JZBuffer *project_symbols,
+                                                    JZDiagnosticList *diagnostics)
+{
+    if (!mod || !mod_scope || !diagnostics) return;
+    for (size_t i = 0; i < mod->child_count; ++i) {
+        JZASTNode *inst = mod->children[i];
+        if (!inst || inst->type != JZ_AST_MODULE_INSTANCE) continue;
+
+        for (size_t bi = 0; bi < inst->child_count; ++bi) {
+            JZASTNode *bind = inst->children[bi];
+            if (!bind || bind->type != JZ_AST_PORT_DECL) continue;
+            if (bind->child_count == 0) continue;
+            JZASTNode *rhs = bind->children[0];
+            if (!rhs) continue;
+            if (!sem_expr_contains_observable_x_literal(rhs,
+                                                        mod_scope,
+                                                        project_symbols)) {
+                continue;
+            }
+
+            JZLocation loc = rhs->loc.line ? rhs->loc : bind->loc;
+            char explain[320];
+            snprintf(explain, sizeof(explain),
+                     "RHS expression contains x-valued literal bits that would\n"
+                     "propagate to a child-instance port (observable across\n"
+                     "module boundary). Mask or select away x bits before they\n"
+                     "reach the instance binding.");
+            sem_report_rule(diagnostics,
+                            loc,
+                            "OBS_X_TO_OBSERVABLE_SINK",
+                            explain);
+        }
+    }
+}
+
 void sem_check_module_expressions(const JZModuleScope *scope,
                                          const JZBuffer *project_symbols,
                                          JZDiagnosticList *diagnostics)
@@ -1408,6 +2074,9 @@ void sem_check_module_expressions(const JZModuleScope *scope,
         /* CONTROL_FLOW_IF_SELECT: IF/ELIF conditions and SELECT/CASE structure. */
         sem_check_block_control_flow(child, scope, project_symbols, is_async, is_sync, diagnostics);
     }
+
+    /* OBS_X_TO_OBSERVABLE_SINK at @new instance port bindings. */
+    sem_check_instance_bindings_for_x_taint(mod, scope, project_symbols, diagnostics);
 }
 
 void sem_check_expressions(JZASTNode *root,

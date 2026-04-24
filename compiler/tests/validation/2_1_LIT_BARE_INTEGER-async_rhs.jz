@@ -1,0 +1,47 @@
+// LIT_BARE_INTEGER: Bare integer literal in runtime expression.
+// Tests bare integer in async RHS context.
+// Valid: sized literal in async RHS included to verify no false positives.
+
+@project LIT_BARE_INTEGER_async_rhs
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] sel;
+        OUT [8] data;
+    }
+    ASYNCHRONOUS {
+        // Trigger: async RHS bare integer in expression
+        data <= sel + 100;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+    WIRE {
+        helper_data [8];
+    }
+
+    @new inst_a HelperA {
+        IN  [8] sel = 8'h01;
+        OUT [8] data = helper_data;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Valid: sized literal in async expression (no false positive)
+        data <= helper_data + 8'h0F;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

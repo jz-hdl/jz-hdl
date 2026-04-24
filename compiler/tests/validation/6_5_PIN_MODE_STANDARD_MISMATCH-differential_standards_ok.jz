@@ -1,0 +1,74 @@
+// HAPPY_PATH: differential standards are accepted with mode=DIFFERENTIAL.
+// Covers the remaining listed differential standards for pin-mode compatibility.
+
+@project PIN_MODE_STANDARD_MISMATCH_differential_standards_ok
+    IN_PINS {
+        lvds33_in = { standard=LVDS33, mode=DIFFERENTIAL };
+        blvds25_in = { standard=BLVDS25, mode=DIFFERENTIAL };
+        ext_lvds25_in = { standard=EXT_LVDS25, mode=DIFFERENTIAL };
+        tmds33_in = { standard=TMDS33, mode=DIFFERENTIAL };
+        rsds_in = { standard=RSDS, mode=DIFFERENTIAL };
+        mini_lvds_in = { standard=MINI_LVDS, mode=DIFFERENTIAL };
+        ppds_in = { standard=PPDS, mode=DIFFERENTIAL };
+        sub_lvds_in = { standard=SUB_LVDS, mode=DIFFERENTIAL };
+        slvs_in = { standard=SLVS, mode=DIFFERENTIAL };
+        lvpecl33_in = { standard=LVPECL33, mode=DIFFERENTIAL };
+        diff_sstl25_i_in = { standard=DIFF_SSTL25_I, mode=DIFFERENTIAL };
+        diff_sstl25_ii_in = { standard=DIFF_SSTL25_II, mode=DIFFERENTIAL };
+        diff_sstl18_i_in = { standard=DIFF_SSTL18_I, mode=DIFFERENTIAL };
+        diff_sstl18_ii_in = { standard=DIFF_SSTL18_II, mode=DIFFERENTIAL };
+        diff_sstl15_in = { standard=DIFF_SSTL15, mode=DIFFERENTIAL };
+        diff_sstl135_in = { standard=DIFF_SSTL135, mode=DIFFERENTIAL };
+        diff_hstl18_i_in = { standard=DIFF_HSTL18_I, mode=DIFFERENTIAL };
+        diff_hstl18_ii_in = { standard=DIFF_HSTL18_II, mode=DIFFERENTIAL };
+        diff_hstl15_i_in = { standard=DIFF_HSTL15_I, mode=DIFFERENTIAL };
+        diff_hstl15_ii_in = { standard=DIFF_HSTL15_II, mode=DIFFERENTIAL };
+    }
+
+    MAP {
+        lvds33_in = { P=1, N=2 };
+        blvds25_in = { P=3, N=4 };
+        ext_lvds25_in = { P=5, N=6 };
+        tmds33_in = { P=7, N=8 };
+        rsds_in = { P=9, N=10 };
+        mini_lvds_in = { P=11, N=12 };
+        ppds_in = { P=13, N=14 };
+        sub_lvds_in = { P=15, N=16 };
+        slvs_in = { P=17, N=18 };
+        lvpecl33_in = { P=19, N=20 };
+        diff_sstl25_i_in = { P=21, N=22 };
+        diff_sstl25_ii_in = { P=23, N=24 };
+        diff_sstl18_i_in = { P=25, N=26 };
+        diff_sstl18_ii_in = { P=27, N=28 };
+        diff_sstl15_in = { P=29, N=30 };
+        diff_sstl135_in = { P=31, N=32 };
+        diff_hstl18_i_in = { P=33, N=34 };
+        diff_hstl18_ii_in = { P=35, N=36 };
+        diff_hstl15_i_in = { P=37, N=38 };
+        diff_hstl15_ii_in = { P=39, N=40 };
+    }
+
+    @top TopMod {
+        IN  [1] clk = lvds33_in;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

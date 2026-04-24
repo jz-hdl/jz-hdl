@@ -1,0 +1,75 @@
+// SELECT_DUP_CASE_VALUE: Duplicate CASE values resolved through @global constants.
+// Tests global/global duplicates and global/literal duplicates by numeric value.
+
+@global OPCODES
+    NOP  = 4'h0;
+    HALT = 4'h0;
+    ADD  = 4'h1;
+    SUB  = 4'h2;
+@endglob
+
+@project SELECT_DUP_CASE_VALUE_global_dup
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] opcode = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [4] opcode;
+        OUT [1] out_a;
+    }
+    ASYNCHRONOUS {
+        // Trigger 1: two @global constants with the same numeric value
+        SELECT (opcode) {
+            CASE OPCODES.NOP {
+                out_a <= VCC;
+            }
+            CASE OPCODES.HALT {
+                out_a <= GND;
+            }
+            DEFAULT {
+                out_a <= GND;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] opcode;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    @new inst_a HelperA {
+        IN  [4] opcode = opcode;
+        OUT [1] out_a = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+        out_b = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: @global constant duplicates a bare integer by numeric value
+        SELECT (opcode) {
+            CASE OPCODES.SUB {
+                r <= VCC;
+            }
+            CASE 2 {
+                r <= GND;
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

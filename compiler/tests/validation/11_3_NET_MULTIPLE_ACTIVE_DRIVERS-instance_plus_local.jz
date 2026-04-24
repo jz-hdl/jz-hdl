@@ -1,0 +1,49 @@
+// NET_MULTIPLE_ACTIVE_DRIVERS: A module instance OUT driver combined with a
+// local ASYNCHRONOUS drive on the same wire. Per spec §1.6.4, multi-driver
+// analysis includes instance port drivers as drivers of the parent net
+// alongside local assignments.
+
+@project NET_MULTIPLE_ACTIVE_DRIVERS_instance_plus_local
+    @top TopMod {
+        IN  [1] a = _;
+        IN  [1] b = _;
+        OUT [1] o = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+    ASYNCHRONOUS {
+        dout <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] o;
+    }
+
+    WIRE {
+        // Trigger: w is driven by both the instance (via its OUT binding)
+        // and a local ASYNCHRONOUS drive.
+        w [1];
+    }
+
+    @new inst_h Helper {
+        IN  [1] din  = a;
+        OUT [1] dout = w;
+    };
+
+    ASYNCHRONOUS {
+        w <= b;
+    }
+
+    ASYNCHRONOUS {
+        o <= w;
+    }
+@endmod

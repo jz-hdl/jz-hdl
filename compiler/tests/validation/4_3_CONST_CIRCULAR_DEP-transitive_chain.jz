@@ -1,0 +1,60 @@
+// CONST_CIRCULAR_DEP: Three-member transitive cycle in CONST definitions.
+// Tests A=B; B=C; C=A circular reference chain.
+// Valid CONST chain included to verify no false positives.
+
+@project CONST_CIRCULAR_DEP_transitive_chain
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+        OUT [1] out_h = _;
+    }
+@endproj
+
+// Helper module with transitive CONST cycle
+@module HelperMod
+    CONST {
+        GOOD = 1;
+        // Trigger: three-member transitive cycle
+        CA = CB;
+        CB = CC;
+        CC = CA;
+    }
+
+    PORT {
+        IN  [1] din;
+        OUT [GOOD] data;
+    }
+
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        OK = 1;
+    }
+
+    PORT {
+        IN  [1] clk;
+        OUT [OK] data;
+        OUT [OK] out_h;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] din = r;
+        OUT [1] data = out_h;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -451,6 +451,14 @@ static int project_add_module_like(JZBuffer *project_symbols,
     JZSymbol *syms = (JZSymbol *)project_symbols->data;
     for (size_t i = 0; i < count; ++i) {
         if (!syms[i].name || strcmp(syms[i].name, name) != 0) continue;
+        if (decl->is_imported ||
+            (syms[i].node && syms[i].node->is_imported)) {
+            sem_report_rule(diagnostics,
+                            decl->loc,
+                            "IMPORT_DUP_MODULE_OR_BLACKBOX",
+                            "imported module/blackbox name duplicates existing project definition");
+            return 0;
+        }
         if (syms[i].kind == JZ_SYM_MODULE && kind == JZ_SYM_MODULE) {
             sem_report_rule(diagnostics,
                             decl->loc,
@@ -1245,6 +1253,62 @@ static int sem_config_index_of(JZASTNode *config_block,
     return -1;
 }
 
+static int sem_config_expr_has_bare_ref(const char *expr,
+                                        const char *name)
+{
+    if (!expr || !name || !*name) return 0;
+
+    size_t name_len = strlen(name);
+    const char *p = expr;
+    while (*p) {
+        if (*p == '"') {
+            ++p;
+            while (*p && *p != '"') {
+                if (*p == '\\' && p[1]) ++p;
+                ++p;
+            }
+            if (*p == '"') ++p;
+            continue;
+        }
+
+        if (!((*p >= 'A' && *p <= 'Z') ||
+              (*p >= 'a' && *p <= 'z') ||
+              *p == '_')) {
+            ++p;
+            continue;
+        }
+
+        const char *start = p;
+        ++p;
+        while ((*p >= 'A' && *p <= 'Z') ||
+               (*p >= 'a' && *p <= 'z') ||
+               (*p >= '0' && *p <= '9') ||
+               *p == '_') {
+            ++p;
+        }
+
+        size_t len = (size_t)(p - start);
+        if (len != name_len || strncmp(start, name, len) != 0) {
+            continue;
+        }
+
+        const char *prev = start;
+        while (prev > expr) {
+            --prev;
+            if (!isspace((unsigned char)*prev)) {
+                break;
+            }
+        }
+        if (prev >= expr && *prev == '.') {
+            continue;
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
 void sem_check_project_config(JZASTNode *project,
                               JZDiagnosticList *diagnostics)
 {
@@ -1261,17 +1325,23 @@ void sem_check_project_config(JZASTNode *project,
     }
 
     unsigned char *edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
-    if (!edges) {
+    unsigned char *bare_edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
+    if (!edges || !bare_edges) {
+        free(edges);
+        free(bare_edges);
         return;
     }
 
     int *has_forward_ref = (int *)calloc(count, sizeof(int));
     int *has_cycle      = (int *)calloc(count, sizeof(int));
+    int *has_const_cycle = (int *)calloc(count, sizeof(int));
     int any_static_error = 0;
-    if (!has_forward_ref || !has_cycle) {
+    if (!has_forward_ref || !has_cycle || !has_const_cycle) {
         free(edges);
+        free(bare_edges);
         free(has_forward_ref);
         free(has_cycle);
+        free(has_const_cycle);
         return;
     }
 
@@ -1280,6 +1350,7 @@ void sem_check_project_config(JZASTNode *project,
         if (!decl || decl->type != JZ_AST_CONST_DECL) continue;
         const char *expr_text = decl->text;
         if (!expr_text) continue;
+        if (decl->block_kind && strcmp(decl->block_kind, "STRING") == 0) continue;
 
         if (sem_expr_has_lit_call(expr_text)) {
             sem_report_rule(diagnostics,
@@ -1348,6 +1419,36 @@ void sem_check_project_config(JZASTNode *project,
                 continue;
             }
         }
+
+        for (size_t j = 0; j < count; ++j) {
+            JZASTNode *dep = cfg->children[j];
+            if (!dep || dep->type != JZ_AST_CONST_DECL || !dep->name) continue;
+            if (sem_config_expr_has_bare_ref(expr_text, dep->name)) {
+                bare_edges[i * count + j] = 1u;
+            }
+        }
+    }
+
+    for (size_t k = 0; k < count; ++k) {
+        for (size_t i = 0; i < count; ++i) {
+            for (size_t j = 0; j < count; ++j) {
+                if (bare_edges[i * count + k] && bare_edges[k * count + j]) {
+                    bare_edges[i * count + j] = 1u;
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        if (!bare_edges[i * count + i]) continue;
+        JZASTNode *decl = cfg->children[i];
+        if (!decl || has_const_cycle[i]) continue;
+        sem_report_rule(diagnostics,
+                        decl->loc,
+                        "CONST_CIRCULAR_DEP",
+                        "circular dependency in CONST/CONFIG definitions");
+        has_const_cycle[i] = 1;
+        any_static_error = 1;
     }
 
     int *visit = (int *)calloc(count, sizeof(int));
@@ -1494,8 +1595,10 @@ void sem_check_project_config(JZASTNode *project,
     }
 
     free(edges);
+    free(bare_edges);
     free(has_forward_ref);
     free(has_cycle);
+    free(has_const_cycle);
 }
 
 JZASTNode *sem_find_project_top_new(JZASTNode *project)
@@ -1618,13 +1721,22 @@ void sem_check_project_blackboxes(JZASTNode *project,
         for (size_t j = 0; j < bb->child_count; ++j) {
             JZASTNode *child = bb->children[j];
             if (!child) continue;
-            if (child->type == JZ_AST_PORT_BLOCK) {
+            if (child->type == JZ_AST_PORT_BLOCK ||
+                child->type == JZ_AST_CONST_BLOCK) {
                 continue;
             }
-            sem_report_rule(diagnostics,
-                            child->loc,
-                            "BLACKBOX_BODY_DISALLOWED",
-                            "blackbox contains forbidden internal blocks");
+            if (child->type == JZ_AST_WIRE_BLOCK ||
+                child->type == JZ_AST_REGISTER_BLOCK ||
+                child->type == JZ_AST_MEM_BLOCK ||
+                (child->type == JZ_AST_BLOCK &&
+                 child->block_kind &&
+                 (strcmp(child->block_kind, "ASYNCHRONOUS") == 0 ||
+                  strcmp(child->block_kind, "SYNCHRONOUS") == 0))) {
+                sem_report_rule(diagnostics,
+                                child->loc,
+                                "BLACKBOX_BODY_DISALLOWED",
+                                "blackbox contains forbidden internal blocks");
+            }
         }
     }
 }
@@ -1819,6 +1931,16 @@ static void resolve_qualified_identifier_node(JZASTNode *node,
         return;
     }
 
+    if (head_sym->kind == JZ_SYM_INSTANCE) {
+        JZInstancePortAccessInfo info;
+        (void)sem_resolve_instance_port_access(node,
+                                               mod_scope,
+                                               project_symbols,
+                                               &info,
+                                               diagnostics);
+        return;
+    }
+
     char tail[256] = {0};
     if (rest && *rest) {
         size_t tail_len = second_dot ? (size_t)(second_dot - rest) : strlen(rest);
@@ -1925,10 +2047,39 @@ static void resolve_qualified_identifier_node(JZASTNode *node,
         }
 
         if (!found) {
-            sem_report_rule(diagnostics,
-                            node->loc,
-                            "UNDECLARED_IDENTIFIER",
-                            "reference to undefined instance port");
+            /* Check if the name matches an internal signal (WIRE, REGISTER,
+             * LATCH) in the child module. If so, give a specific error:
+             * internal signals are not accessible via inst.name in
+             * synthesizable code (only in simulation/TAP).
+             */
+            int is_internal = 0;
+            for (size_t i = 0; i < child_mod->child_count && !is_internal; ++i) {
+                JZASTNode *blk = child_mod->children[i];
+                if (!blk) continue;
+                if (blk->type != JZ_AST_WIRE_BLOCK &&
+                    blk->type != JZ_AST_REGISTER_BLOCK &&
+                    blk->type != JZ_AST_LATCH_BLOCK) continue;
+                for (size_t j = 0; j < blk->child_count; ++j) {
+                    JZASTNode *decl = blk->children[j];
+                    if (decl && decl->name && strcmp(decl->name, tail) == 0) {
+                        is_internal = 1;
+                        break;
+                    }
+                }
+            }
+            if (is_internal) {
+                sem_report_rule(diagnostics,
+                                node->loc,
+                                "INSTANCE_INTERNAL_ACCESS",
+                                "cannot access internal signal of instance; "
+                                "only PORT members are accessible via inst.name "
+                                "(internal access is allowed in simulation only)");
+            } else {
+                sem_report_rule(diagnostics,
+                                node->loc,
+                                "UNDECLARED_IDENTIFIER",
+                                "reference to undefined instance port");
+            }
         }
         return;
     }
@@ -1989,14 +2140,77 @@ void resolve_names_recursive(JZASTNode *node,
         return;
     }
 
+    if (node->type == JZ_AST_EXPR_IDENTIFIER &&
+        node->block_kind &&
+        strcmp(node->block_kind, "FILE_REF") == 0) {
+        return;
+    }
+
     if (node->type == JZ_AST_EXPR_IDENTIFIER) {
         resolve_identifier_node(node, current_scope, project_symbols, diagnostics);
     } else if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
         resolve_qualified_identifier_node(node, current_scope, project_symbols, diagnostics);
+    } else if (node->type == JZ_AST_EXPR_INDEXED_MEMBER_ACCESS) {
+        if (current_scope && node->name) {
+            const JZSymbol *head_sym = module_scope_lookup(current_scope, node->name);
+            if (head_sym && head_sym->kind == JZ_SYM_INSTANCE) {
+                node->type = JZ_AST_EXPR_INSTANCE_PORT_ACCESS;
+                if (project_symbols) {
+                    JZInstancePortAccessInfo info;
+                    (void)sem_resolve_instance_port_access(node, current_scope,
+                                                           project_symbols, &info,
+                                                           diagnostics);
+                }
+            } else {
+                node->type = JZ_AST_EXPR_BUS_ACCESS;
+                if (project_symbols) {
+                    JZBusAccessInfo info;
+                    (void)sem_resolve_bus_access(node, current_scope, project_symbols, &info, diagnostics);
+                }
+            }
+        }
+    } else if (node->type == JZ_AST_EXPR_INSTANCE_PORT_ACCESS) {
+        if (current_scope && project_symbols) {
+            JZInstancePortAccessInfo info;
+            (void)sem_resolve_instance_port_access(node, current_scope,
+                                                   project_symbols, &info,
+                                                   diagnostics);
+        }
     } else if (node->type == JZ_AST_EXPR_BUS_ACCESS) {
         if (current_scope && project_symbols) {
             JZBusAccessInfo info;
             (void)sem_resolve_bus_access(node, current_scope, project_symbols, &info, diagnostics);
+        }
+    }
+
+    /* Slice bounds (children[1], children[2]) are compile-time constant
+     * contexts where only CONST/CONFIG names and literals are valid (S3.2).
+     * Skip them here so that undefined identifiers in slice bounds are
+     * reported as CONST_UNDEFINED_IN_WIDTH_OR_SLICE by sem_check_slice_expr
+     * rather than as UNDECLARED_IDENTIFIER by the general name resolver.
+     *
+     * Exception: MUX selectors (mux_id[idx]) use runtime expressions as
+     * indices, so their bounds must go through normal name resolution.
+     */
+    if (node->type == JZ_AST_EXPR_SLICE && node->child_count >= 3) {
+        int is_mux_selector = 0;
+        JZASTNode *base = node->children[0];
+        if (base && base->type == JZ_AST_EXPR_IDENTIFIER && base->name &&
+            current_scope) {
+            const JZSymbol *mux_sym = module_scope_lookup_kind(current_scope,
+                                                                base->name,
+                                                                JZ_SYM_MUX);
+            if (mux_sym) {
+                is_mux_selector = 1;
+            }
+        }
+        if (!is_mux_selector) {
+            /* Signal slice: only recurse into base, not bounds. */
+            if (base) {
+                resolve_names_recursive(base, module_scopes, project_symbols,
+                                        current_scope, diagnostics);
+            }
+            return;
         }
     }
 

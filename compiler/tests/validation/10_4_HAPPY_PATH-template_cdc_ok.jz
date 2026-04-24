@@ -1,0 +1,53 @@
+// TEMPLATE_FORBIDDEN_DECL happy-path: valid template usage with a legal CDC block outside the template.
+// Verifies templates do not false-positive on CDC when the CDC block is declared in normal module scope.
+
+@project TEMPLATE_FORBIDDEN_DECL_template_cdc_ok
+    @top TopMod {
+        IN  [1] clk_src = _;
+        IN  [1] clk_dst = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Valid: file-scoped template contains only allowed statements.
+@template capture_tmpl(dst, src)
+    dst <= src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk_src;
+        IN  [1] clk_dst;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    // Valid: module-scoped template also contains only allowed statements.
+    @template drive_tmpl(dst, src)
+        dst <= src;
+    @endtemplate
+
+    REGISTER {
+        src_flag [1] = 1'b0;
+    }
+
+    CDC {
+        // Valid: CDC declared in module scope, not inside a template.
+        BIT src_flag (clk_src) => dst_flag (clk_dst);
+    }
+
+    ASYNCHRONOUS {
+        @apply drive_tmpl(data, dst_flag);
+    }
+
+    SYNCHRONOUS(CLK=clk_src) {
+        @apply capture_tmpl(src_flag, din);
+    }
+
+    SYNCHRONOUS(CLK=clk_dst) {
+        IF (dst_flag) {
+            // Valid: read CDC alias in its destination domain.
+        }
+    }
+@endmod

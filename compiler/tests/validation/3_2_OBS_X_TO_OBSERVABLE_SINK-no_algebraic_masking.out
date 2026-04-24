@@ -1,0 +1,4 @@
+File: 3_2_OBS_X_TO_OBSERVABLE_SINK-no_algebraic_masking.jz
+      40:31   error OBS_X_TO_OBSERVABLE_SINK S1.2/S2.1/S3.2 Expression containing `x` bits drives REGISTER, MEM, or output; mask `x` bits before use
+      43:30   error OBS_X_TO_OBSERVABLE_SINK S1.2/S2.1/S3.2 Expression containing `x` bits drives REGISTER, MEM, or output; mask `x` bits before use
+      46:31   error OBS_X_TO_OBSERVABLE_SINK S1.2/S2.1/S3.2 Expression containing `x` bits drives REGISTER, MEM, or output; mask `x` bits before use

@@ -1,0 +1,64 @@
+// MEM_ADDR_WIDTH_MISMATCH: narrower ASYNC read addresses are rejected.
+
+@project MEM_ADDR_WIDTH_MISMATCH_async_read_narrow_addr
+    CONFIG {
+        NARROW_W = 3;
+        ADDR_W = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [NARROW_W] narrow_addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module SinkMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [3] narrow_addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    // Trigger 1: narrower ASYNC read address in @new binding.
+    @new inst_sink SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rd[narrow_addr];
+        OUT [8] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: narrower ASYNC read address in ASYNCHRONOUS block.
+        data = mem_t.rd[narrow_addr] ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 3: narrower ASYNC read address in SYNCHRONOUS expression.
+        r <= mem_t.rd[narrow_addr];
+    }
+@endmod

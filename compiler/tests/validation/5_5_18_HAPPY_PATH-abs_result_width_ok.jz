@@ -1,0 +1,68 @@
+// HAPPY_PATH: abs() result width from §5.5.18.
+// Exercises:
+//   Req #2 - result width is `width(a) + 1`.
+
+@project HAPPY_PATH_abs_result_width_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] src8 = _;
+        IN  [1] src1 = _;
+        OUT [9] out_abs8 = _;
+        OUT [2] out_abs1 = _;
+    }
+@endproj
+
+@module HelperAbsWidth
+    PORT {
+        IN  [8] src8;
+        IN  [1] src1;
+        OUT [9] out_abs8;
+        OUT [2] out_abs1;
+    }
+
+    ASYNCHRONOUS {
+        // Req #2: 8-bit operand produces a 9-bit result.
+        out_abs8 = abs(src8);
+        // Req #2: 1-bit operand produces a 2-bit result.
+        out_abs1 = abs(src1);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src8;
+        IN  [1] src1;
+        OUT [9] out_abs8;
+        OUT [2] out_abs1;
+    }
+
+    WIRE {
+        h_abs8 [9];
+        h_abs1 [2];
+    }
+
+    REGISTER {
+        hold [1] = 1'b0;
+    }
+
+    @new inst_h HelperAbsWidth {
+        IN  [8] src8 = src8;
+        IN  [1] src1 = src1;
+        OUT [9] out_abs8 = h_abs8;
+        OUT [2] out_abs1 = h_abs1;
+    };
+
+    ASYNCHRONOUS {
+        out_abs8 = h_abs8;
+        out_abs1 = h_abs1;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        hold <= ~hold;
+    }
+@endmod

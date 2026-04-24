@@ -1,0 +1,66 @@
+// HAPPY_PATH: Triple-port memory provides one synchronous write port (S7.6.5).
+// Exercises one valid clocked write path with two asynchronous read ports observing memory contents.
+
+@project HAPPY_PATH_one_synchronous_write_port_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] rd_addr_0 = _;
+        IN  [8] rd_addr_1 = _;
+        IN  [8] wr_addr = _;
+        IN  [16] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [16] rd_data_0 = _;
+        OUT [16] rd_data_1 = _;
+        OUT [16] write_observed = _;
+    }
+@endproj
+
+@module WriteObserver
+    PORT {
+        IN  [16] sample;
+        OUT [16] echoed;
+    }
+
+    ASYNCHRONOUS {
+        echoed = sample;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] rd_addr_0;
+        IN  [8] rd_addr_1;
+        IN  [8] wr_addr;
+        IN  [16] wr_data;
+        IN  [1] wr_en;
+        OUT [16] rd_data_0;
+        OUT [16] rd_data_1;
+        OUT [16] write_observed;
+    }
+
+    MEM {
+        mem [16] [256] = 16'h0000 {
+            OUT rd_0 ASYNC;
+            OUT rd_1 ASYNC;
+            IN  wr;
+        };
+    }
+
+    @new observer WriteObserver {
+        IN  [16] sample = rd_data_0;
+        OUT [16] echoed = write_observed;
+    };
+
+    ASYNCHRONOUS {
+        rd_data_0 = mem.rd_0[rd_addr_0];
+        rd_data_1 = mem.rd_1[rd_addr_1];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid use: the memory's single write port is driven only from the synchronous block.
+        IF (wr_en) {
+            mem.wr[wr_addr] <= wr_data;
+        }
+    }
+@endmod

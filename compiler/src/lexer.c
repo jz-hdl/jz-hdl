@@ -920,10 +920,22 @@ static void lex_one_token(LexerState *st) {
         emit_token(st, JZ_TOK_OP_SLASH, &c, 1, loc);
         break;
 
-    default:
+    case '#':
+        /* Hash is used in MAP pin ID syntax (e.g. B#7); emit as fallback
+         * token without a lexer error so the parser/semantic layer can
+         * validate it contextually. */
         st->pos++; st->column++;
         emit_token(st, JZ_TOK_OTHER, &c, 1, loc);
         break;
+
+    default: {
+        char err_msg[64];
+        snprintf(err_msg, sizeof(err_msg), "unrecognized character '%c'", c);
+        lexer_report_parse_error(st, loc, "PARSE000", err_msg);
+        st->pos++; st->column++;
+        emit_token(st, JZ_TOK_OTHER, &c, 1, loc);
+        break;
+    }
     }
 }
 

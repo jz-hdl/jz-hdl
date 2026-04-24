@@ -1,0 +1,39 @@
+// PRECEDENCE: §3.3 Req #14 — Logical OR `||` binds tighter than the
+// ternary conditional `? :`. `p || q ? a : b` parses as `(p || q) ? a : b`,
+// not `p || (q ? a : b)`.
+// No diagnostics expected.
+
+@project PRECEDENCE_logical_or_above_ternary_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] p = _;
+        IN  [1] q = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        OUT [8] out_sel = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] p;
+        IN  [1] q;
+        IN  [8] a;
+        IN  [8] b;
+        OUT [8] out_sel;
+    }
+    REGISTER {
+        r_sel [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // || binds tighter than ?: : ((p || q) ? a : b)
+        out_sel = ((p || q) ? a : b) | r_sel;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_sel <= (p || q) ? a : b;
+    }
+@endmod

@@ -1,0 +1,61 @@
+// MUX §4.6 Req #40 happy-path:
+// "Each mux_id[sel] access is elaborated into combinational logic that
+// selects from existing drivers."
+// Exercises MUX reads in combinational contexts (ASYNCHRONOUS block,
+// feeding an OUT), confirming the access elaborates as combinational
+// selection logic over the existing drivers of the sources.
+// No diagnostics expected.
+
+@project MUX_HAPPY_PATH_combinational_elaboration_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [1] sel = _;
+        OUT [8] data = _;
+        OUT [8] direct = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [1] sel;
+        OUT [8] data;
+        OUT [8] direct;
+    }
+
+    WIRE {
+        src_a [8];
+        src_b [8];
+    }
+
+    MUX {
+        agg = src_a, src_b;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Drivers of the sources exist as normal combinational assignments.
+        src_a = a;
+        src_b = b;
+        // Trigger: MUX read inside a purely combinational ASYNC block.
+        // Must elaborate to combinational selection over src_a/src_b.
+        data = agg[sel] | r;
+        // Trigger: MUX read feeding an OUT port directly (combinational).
+        direct = agg[sel];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= agg[1'b1];
+    }
+@endmod

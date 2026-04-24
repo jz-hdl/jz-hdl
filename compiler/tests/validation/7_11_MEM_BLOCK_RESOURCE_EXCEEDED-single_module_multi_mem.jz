@@ -1,0 +1,134 @@
+// MEM_BLOCK_RESOURCE_EXCEEDED: Single module with multiple BLOCK MEMs exceeding chip BSRAM capacity.
+// Uses gw1nr-9 chip with 26 BSRAM blocks. A single top module declares multiple
+// BLOCK MEMs totaling 27 blocks, exceeding the 26-block limit.
+
+@project(CHIP="gw1nr-9-qn88-c6-i5") MEM_BLOCK_RESOURCE_EXCEEDED_single_module_multi_mem
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [11] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [11] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=BLOCK) {
+        ok_mem [8] [2048] = 8'h00 {
+            OUT rd SYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        ok_mem.rd.addr <= addr;
+        r <= ok_mem.rd.data;
+        ok_mem.wr[addr] <= wdata;
+    }
+@endmod
+
+// Trigger: single module with 27 BLOCK MEMs (1 block each) exceeding 26-block limit
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [11] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=BLOCK) {
+        m00 [8] [2048] = 8'h00 { OUT rd00 SYNC; IN wr00; };
+        m01 [8] [2048] = 8'h00 { OUT rd01 SYNC; IN wr01; };
+        m02 [8] [2048] = 8'h00 { OUT rd02 SYNC; IN wr02; };
+        m03 [8] [2048] = 8'h00 { OUT rd03 SYNC; IN wr03; };
+        m04 [8] [2048] = 8'h00 { OUT rd04 SYNC; IN wr04; };
+        m05 [8] [2048] = 8'h00 { OUT rd05 SYNC; IN wr05; };
+        m06 [8] [2048] = 8'h00 { OUT rd06 SYNC; IN wr06; };
+        m07 [8] [2048] = 8'h00 { OUT rd07 SYNC; IN wr07; };
+        m08 [8] [2048] = 8'h00 { OUT rd08 SYNC; IN wr08; };
+        m09 [8] [2048] = 8'h00 { OUT rd09 SYNC; IN wr09; };
+        m10 [8] [2048] = 8'h00 { OUT rd10 SYNC; IN wr10; };
+        m11 [8] [2048] = 8'h00 { OUT rd11 SYNC; IN wr11; };
+        m12 [8] [2048] = 8'h00 { OUT rd12 SYNC; IN wr12; };
+        m13 [8] [2048] = 8'h00 { OUT rd13 SYNC; IN wr13; };
+        m14 [8] [2048] = 8'h00 { OUT rd14 SYNC; IN wr14; };
+        m15 [8] [2048] = 8'h00 { OUT rd15 SYNC; IN wr15; };
+        m16 [8] [2048] = 8'h00 { OUT rd16 SYNC; IN wr16; };
+        m17 [8] [2048] = 8'h00 { OUT rd17 SYNC; IN wr17; };
+        m18 [8] [2048] = 8'h00 { OUT rd18 SYNC; IN wr18; };
+        m19 [8] [2048] = 8'h00 { OUT rd19 SYNC; IN wr19; };
+        m20 [8] [2048] = 8'h00 { OUT rd20 SYNC; IN wr20; };
+        m21 [8] [2048] = 8'h00 { OUT rd21 SYNC; IN wr21; };
+        m22 [8] [2048] = 8'h00 { OUT rd22 SYNC; IN wr22; };
+        m23 [8] [2048] = 8'h00 { OUT rd23 SYNC; IN wr23; };
+        m24 [8] [2048] = 8'h00 { OUT rd24 SYNC; IN wr24; };
+        m25 [8] [2048] = 8'h00 { OUT rd25 SYNC; IN wr25; };
+        m26 [8] [2048] = 8'h00 { OUT rd26 SYNC; IN wr26; };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [11] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        m00.rd00.addr <= addr; m00.wr00[addr] <= wdata;
+        m01.rd01.addr <= addr; m01.wr01[addr] <= wdata;
+        m02.rd02.addr <= addr; m02.wr02[addr] <= wdata;
+        m03.rd03.addr <= addr; m03.wr03[addr] <= wdata;
+        m04.rd04.addr <= addr; m04.wr04[addr] <= wdata;
+        m05.rd05.addr <= addr; m05.wr05[addr] <= wdata;
+        m06.rd06.addr <= addr; m06.wr06[addr] <= wdata;
+        m07.rd07.addr <= addr; m07.wr07[addr] <= wdata;
+        m08.rd08.addr <= addr; m08.wr08[addr] <= wdata;
+        m09.rd09.addr <= addr; m09.wr09[addr] <= wdata;
+        m10.rd10.addr <= addr; m10.wr10[addr] <= wdata;
+        m11.rd11.addr <= addr; m11.wr11[addr] <= wdata;
+        m12.rd12.addr <= addr; m12.wr12[addr] <= wdata;
+        m13.rd13.addr <= addr; m13.wr13[addr] <= wdata;
+        m14.rd14.addr <= addr; m14.wr14[addr] <= wdata;
+        m15.rd15.addr <= addr; m15.wr15[addr] <= wdata;
+        m16.rd16.addr <= addr; m16.wr16[addr] <= wdata;
+        m17.rd17.addr <= addr; m17.wr17[addr] <= wdata;
+        m18.rd18.addr <= addr; m18.wr18[addr] <= wdata;
+        m19.rd19.addr <= addr; m19.wr19[addr] <= wdata;
+        m20.rd20.addr <= addr; m20.wr20[addr] <= wdata;
+        m21.rd21.addr <= addr; m21.wr21[addr] <= wdata;
+        m22.rd22.addr <= addr; m22.wr22[addr] <= wdata;
+        m23.rd23.addr <= addr; m23.wr23[addr] <= wdata;
+        m24.rd24.addr <= addr; m24.wr24[addr] <= wdata;
+        m25.rd25.addr <= addr; m25.wr25[addr] <= wdata;
+        m26.rd26.addr <= addr; m26.wr26[addr] <= wdata;
+        r <= m00.rd00.data ^ m01.rd01.data ^ m02.rd02.data ^ m03.rd03.data ^
+             m04.rd04.data ^ m05.rd05.data ^ m06.rd06.data ^ m07.rd07.data ^
+             m08.rd08.data ^ m09.rd09.data ^ m10.rd10.data ^ m11.rd11.data ^
+             m12.rd12.data ^ m13.rd13.data ^ m14.rd14.data ^ m15.rd15.data ^
+             m16.rd16.data ^ m17.rd17.data ^ m18.rd18.data ^ m19.rd19.data ^
+             m20.rd20.data ^ m21.rd21.data ^ m22.rd22.data ^ m23.rd23.data ^
+             m24.rd24.data ^ m25.rd25.data ^ m26.rd26.data;
+    }
+@endmod

@@ -1,0 +1,71 @@
+// §1.6.7 Req #4: Structural masking must eliminate all unknown bits
+// before a z-carrying value reaches an OUT (or INOUT) port.
+// Negative test: a wire with only z drivers is fed into an OUT port in
+// a helper module and into an INOUT port in the top module.
+
+@project OBS_Z_TO_OUT_OR_INOUT_PORT
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en  = _;
+        OUT   [8] out_a = _;
+        INOUT [8] bus   = _;
+    }
+@endproj
+
+// Trigger 1: helper OUT port fed by an all-z wire
+@module HelperA
+    PORT {
+        IN  [1] en;
+        OUT [8] out_a;
+    }
+
+    WIRE {
+        w_allz_a [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_allz_a <= 8'bzzzz_zzzz;
+        } ELSE {
+            w_allz_a <= 8'bzzzz_zzzz;
+        }
+        // Trigger: z-carrying wire consumed by OUT port
+        out_a <= w_allz_a;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        OUT   [8] out_a;
+        INOUT [8] bus;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    WIRE {
+        w_allz_b [8];
+    }
+
+    @new inst_a HelperA {
+        IN  [1] en = en;
+        OUT [8] out_a = out_a;
+    };
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_allz_b <= 8'bzzzz_zzzz;
+        } ELSE {
+            w_allz_b <= 8'bzzzz_zzzz;
+        }
+        // Trigger: z-carrying wire consumed by INOUT port (not a release)
+        bus <= w_allz_b;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

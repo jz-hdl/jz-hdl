@@ -1,0 +1,62 @@
+// MUX §4.6 Req #13 happy-path:
+// "The compiler treats `mux_id[sel]` as a many-to-one mux, not as a true
+// array."
+// Multiple independent selectors and reads of the same MUX produce
+// independent many-to-one selection logic, not array-like storage.
+// Valid usage must compile cleanly.
+// No diagnostics expected.
+
+@project MUX_HAPPY_PATH_many_to_one_mux_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        IN  [8] d = _;
+        IN  [2] sel0 = _;
+        IN  [2] sel1 = _;
+        OUT [8] out0 = _;
+        OUT [8] out1 = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        IN  [8] d;
+        IN  [2] sel0;
+        IN  [2] sel1;
+        OUT [8] out0;
+        OUT [8] out1;
+    }
+
+    // Single 4-source aggregation MUX accessed from multiple contexts.
+    MUX {
+        shared_mux = a, b, c, d;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: two independent selectors reading the same MUX elaborate
+        // to two independent many-to-one multiplexers over the same sources,
+        // not a shared array element.
+        out0 = shared_mux[sel0];
+        out1 = shared_mux[sel1] | r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: constant-index read on the same MUX is another independent
+        // many-to-one selection; MUX is not storage.
+        r <= shared_mux[2'b10];
+    }
+@endmod

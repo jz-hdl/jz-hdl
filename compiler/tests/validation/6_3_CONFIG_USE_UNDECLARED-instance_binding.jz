@@ -1,0 +1,49 @@
+// CONFIG_USE_UNDECLARED: Undeclared CONFIG reference in instance binding width.
+// Target diagnostic: CONFIG_USE_UNDECLARED.
+// Non-target diagnostics before the fix: INSTANCE_PORT_WIDTH_EXPR_INVALID.
+
+@project CONFIG_USE_UNDECLARED_instance_binding
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [CONFIG.WIDTH] data = _;
+    }
+@endproj
+
+@module ChildMod
+    PORT {
+        IN  [CONFIG.WIDTH] din;
+        OUT [CONFIG.WIDTH] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [CONFIG.WIDTH] data;
+    }
+
+    @new inst_c ChildMod {
+        IN  [CONFIG.MISSING_WIDTH] din = _;
+        OUT [CONFIG.WIDTH] dout = _;
+    };
+
+    REGISTER {
+        r [CONFIG.WIDTH] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

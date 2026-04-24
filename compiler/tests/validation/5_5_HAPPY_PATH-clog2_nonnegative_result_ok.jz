@@ -1,0 +1,51 @@
+// HAPPY_PATH: Req #4 and Req #6 for §5.5.5 clog2().
+// Uses @check to assert the result is >= 0 across a range of positive
+// arguments including the smallest positive value, powers of two, and
+// non-power-of-two values, and that clog2(1) specifically evaluates to 1.
+
+@project HAPPY_PATH_clog2_nonnegative_result_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        W_1    = clog2(1);
+        W_2    = clog2(2);
+        W_3    = clog2(3);
+        W_8    = clog2(8);
+        W_255  = clog2(255);
+        W_256  = clog2(256);
+        W_1024 = clog2(1024);
+    }
+
+    // Req #4: result is a nonnegative integer (>= 0) for every positive input.
+    @check (W_1    >= 0, "clog2(1) must be nonnegative");
+    @check (W_2    >= 0, "clog2(2) must be nonnegative");
+    @check (W_3    >= 0, "clog2(3) must be nonnegative");
+    @check (W_8    >= 0, "clog2(8) must be nonnegative");
+    @check (W_255  >= 0, "clog2(255) must be nonnegative");
+    @check (W_256  >= 0, "clog2(256) must be nonnegative");
+    @check (W_1024 >= 0, "clog2(1024) must be nonnegative");
+    // Req #6: value == 1 must produce 1, not 0.
+    @check (W_1 == 1, "clog2(1) must equal 1");
+
+    PORT {
+        IN  [1] clk;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+    }
+@endmod

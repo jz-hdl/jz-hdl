@@ -1,0 +1,14 @@
+// Intermediate library for nested @import path-security validation.
+
+@import "../escape/generated_lib.jz";
+
+@module NestedHelper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod

@@ -1,0 +1,102 @@
+// HAPPY_PATH: Multiple OUT ports may coexist in one MEM with mixed ASYNC and SYNC kinds.
+// Exercises one ASYNC read port, one SYNC read port, and one IN write port in the same
+// memory declaration. Includes cross-module instantiation and valid access patterns.
+
+@project HAPPY_PATH_multiple_out_ports_mixed_modes_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr_async = _;
+        IN  [4] addr_sync = _;
+        IN  [4] wr_addr = _;
+        IN  [8] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [8] async_data = _;
+        OUT [8] sync_data = _;
+        OUT [8] helper_data = _;
+    }
+@endproj
+
+@module MixedReadHelper
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr_async;
+        IN  [4] addr_sync;
+        IN  [4] wr_addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] helper_data;
+    }
+
+    REGISTER {
+        sync_capture [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem [8] [16] = 8'h00 {
+            OUT rd_async ASYNC;
+            OUT rd_sync  SYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        helper_data = mem.rd_async[addr_async] ^ sync_capture;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem.rd_sync.addr <= addr_sync;
+        sync_capture <= mem.rd_sync.data;
+        IF (wr_en) {
+            mem.wr[wr_addr] <= wr_data;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr_async;
+        IN  [4] addr_sync;
+        IN  [4] wr_addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] async_data;
+        OUT [8] sync_data;
+        OUT [8] helper_data;
+    }
+
+    REGISTER {
+        sync_capture [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem [8] [16] = 8'h00 {
+            OUT rd_async ASYNC;
+            OUT rd_sync  SYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_helper MixedReadHelper {
+        IN  [1] clk = clk;
+        IN  [4] addr_async = addr_async;
+        IN  [4] addr_sync = addr_sync;
+        IN  [4] wr_addr = wr_addr;
+        IN  [8] wr_data = wr_data;
+        IN  [1] wr_en = wr_en;
+        OUT [8] helper_data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        async_data = mem.rd_async[addr_async];
+        sync_data = sync_capture;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem.rd_sync.addr <= addr_sync;
+        sync_capture <= mem.rd_sync.data;
+        IF (wr_en) {
+            mem.wr[wr_addr] <= wr_data;
+        }
+    }
+@endmod

@@ -3,7 +3,13 @@
 // Valid differential mapping with {P,N} included to verify no false positives.
 
 @project MAP_DIFF_EXPECTED_PAIR_diff_scalar_map
+    CLOCKS {
+        clk = { period=10 };
+    }
+
     IN_PINS {
+        clk = { standard=LVCMOS33 };
+        rst = { standard=LVCMOS33 };
         // Trigger 1: differential IN pin with scalar MAP
         diff_in = { mode=DIFFERENTIAL, standard=LVDS25 };
         // Valid: differential IN pin with proper {P,N} MAP
@@ -12,7 +18,7 @@
 
     OUT_PINS {
         // Trigger 2: differential OUT pin with scalar MAP
-        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=diff_in, pclk=diff_in, reset=diff_in };
+        diff_out = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, fclk=clk, pclk=clk, reset=rst };
     }
 
     INOUT_PINS {
@@ -21,6 +27,8 @@
     }
 
     MAP {
+        clk = 1;
+        rst = 2;
         diff_in = 10;
         valid_diff = { P=30, N=31 };
         diff_out = 12;
@@ -28,7 +36,7 @@
     }
 
     @top TopMod {
-        IN  [1] clk = _;
+        IN  [1] clk = clk;
         OUT [1] data = _;
     }
 @endproj

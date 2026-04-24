@@ -27,7 +27,40 @@ fail=0
 skip=0
 
 tmp_out="$(mktemp)"
-trap 'rm -f "${tmp_out}"' EXIT
+tmp_err="$(mktemp)"
+trap 'rm -f "${tmp_out}" "${tmp_err}"' EXIT
+
+copy_generated_mem_sidecars() {
+  local src_dir="$1"
+  local dst_dir="$2"
+  local sidecar
+
+  for sidecar in "${src_dir}"/jz_mem_init__*.hex; do
+    [[ -f "${sidecar}" ]] || continue
+    cp "${sidecar}" "${dst_dir}/"
+    printf '%s\n' "${dst_dir}/$(basename "${sidecar}")"
+  done
+}
+
+cleanup_generated_mem_sidecars() {
+  local sidecar
+  for sidecar in "$@"; do
+    [[ -n "${sidecar}" ]] || continue
+    rm -f "${sidecar}"
+  done
+}
+
+run_backend_emit() {
+  local mode="$1"
+  local file="$2"
+  local out_path="$3"
+
+  rm -f "${out_path}"
+  : > "${tmp_err}"
+
+  (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --"${mode}" -o "${out_path}" "$(basename "${file}")") \
+    >/dev/null 2>"${tmp_err}"
+}
 
 echo "Running validation lint tests..."
 
@@ -35,6 +68,9 @@ for file in "${validation_files[@]}"; do
   rel_path="${file#${ROOT_DIR}/}"
   base_no_ext="${file%.jz}"
   expected_out="${base_no_ext}.out"
+  input_file="${file}"
+  temp_input=""
+  temp_input_dir=""
 
   if [[ ! -f "${expected_out}" ]]; then
     echo "SKIP ${rel_path} (no $(basename "${expected_out}"))"
@@ -47,12 +83,63 @@ for file in "${validation_files[@]}"; do
   case "$(basename "${file}")" in
     *_GND_*) extra_flags+=(--tristate-default=GND) ;;
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
+    12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    12_4_HAPPY_PATH-textual_normalization_nonexistent_outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    12_4_REQ11-additional_sandbox_root_ok.jz) extra_flags+=(--allow-traversal "--sandbox-root=${ROOT_DIR}/tests") ;;
+    12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz)
+      extra_flags+=(--allow-absolute-paths)
+      temp_input_dir="$(mktemp -d "${VALIDATION_DIR}/.allow_absolute_still_sandboxed.XXXXXX")"
+      temp_input="${temp_input_dir}/$(basename "${file}")"
+      if ! sed "s|__JZ_COMPILER_TESTS_DIR__|${ROOT_DIR}/tests|g" "${file}" > "${temp_input}"; then
+        rm -rf "${temp_input_dir}"
+        echo "error: failed to materialize ${rel_path}" >&2
+        exit 1
+      fi
+      input_file="${temp_input}"
+      ;;
+    12_4_PATH_ABSOLUTE_FORBIDDEN-absolute_import_ok.jz)
+      extra_flags+=(--allow-absolute-paths)
+      temp_input="$(mktemp "${VALIDATION_DIR}/.absolute_import_ok.XXXXXX.jz")"
+      if ! sed "s|__JZ_VALIDATION_DIR__|${VALIDATION_DIR}|g" "${file}" > "${temp_input}"; then
+        rm -f "${temp_input}"
+        echo "error: failed to materialize ${rel_path}" >&2
+        exit 1
+      fi
+      input_file="${temp_input}"
+      ;;
+    12_4_PATH_TRAVERSAL_FORBIDDEN-traversal_import_ok.jz) extra_flags+=(--allow-traversal) ;;
   esac
 
-  # Run linter; capture both stdout and stderr. Many tests are expected to
-  # produce diagnostics and/or non-zero exit codes, so we do not treat a
-  # non-zero status as a test failure by itself.
-  "${JZ_HDL_BIN}" --info --lint ${extra_flags[@]+"${extra_flags[@]}"} "${file}" >"${tmp_out}" 2>&1 || true
+  # Run linter by default; serializer coverage needs backend emission because
+  # those diagnostics are produced while generating wrapper code.
+  cmd_flags=(--info --lint)
+  tmp_artifact=""
+  case "$(basename "${file}")" in
+    misc_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
+      cmd_flags=(--info --verilog)
+      tmp_artifact="$(mktemp)"
+      ;;
+    misc_SERIALIZER_WIDTH_EXCEEDS_RATIO-width_exceeds_ratio.jz)
+      cmd_flags=(--verilog)
+      tmp_artifact="$(mktemp)"
+      ;;
+  esac
+
+  # Capture both stdout and stderr. Many tests are expected to produce
+  # diagnostics and/or non-zero exit codes, so we do not treat a non-zero status
+  # as a test failure by itself.
+  if [[ -n "${tmp_artifact}" ]]; then
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_artifact}" "${input_file}" >"${tmp_out}" 2>&1 || true
+    rm -f "${tmp_artifact}"
+  else
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} "${input_file}" >"${tmp_out}" 2>&1 || true
+  fi
+  if [[ -n "${temp_input}" ]]; then
+    rm -f "${temp_input}"
+  fi
+  if [[ -n "${temp_input_dir}" ]]; then
+    rm -rf "${temp_input_dir}"
+  fi
 
   if diff -u "${expected_out}" "${tmp_out}" > /dev/null; then
     echo "PASS ${rel_path}"
@@ -108,7 +195,12 @@ if [[ -d "${GOLDEN_DIR}" ]]; then
         # filename, matching what the golden files contain.  Use -o so
         # that only the actual output (IR/Verilog/AST) ends up in the
         # file; diagnostics stay on stderr and are not compared.
-        (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --${mode} -o "${tmp_out}" "$(basename "${file}")") 2>/dev/null || true
+        if ! run_backend_emit "${mode}" "${file}" "${tmp_out}"; then
+          echo "FAIL ${rel_path} (--${mode})"
+          cat "${tmp_err}"
+          ((golden_fail++))
+          continue
+        fi
 
         # Filter out the version line before comparing so that golden
         # files are not invalidated by version string changes.
@@ -174,8 +266,15 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
       # Verify Verilog output
       verilog_file="${base_no_ext}.v"
       if [[ -f "${verilog_file}" ]]; then
+        copied_sidecars=""
         # Generate fresh Verilog output
-        (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --verilog -o "${tmp_out}" "$(basename "${file}")") 2>/dev/null || true
+        if ! run_backend_emit "verilog" "${file}" "${tmp_out}"; then
+          echo "FAIL ${rel_path} (yosys read_verilog)"
+          cat "${tmp_err}"
+          ((yosys_fail++))
+          continue
+        fi
+        copied_sidecars="$(copy_generated_mem_sidecars "$(dirname "${file}")" "$(dirname "${tmp_out}")")"
         if (cd "$(dirname "${file}")" && "${YOSYS_BIN}" -p "read_verilog ${tmp_out}") >/dev/null 2>&1; then
           echo "PASS ${rel_path} (yosys read_verilog)"
           ((yosys_pass++))
@@ -184,13 +283,23 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
           (cd "$(dirname "${file}")" && "${YOSYS_BIN}" -p "read_verilog ${tmp_out}") 2>&1 | grep -i error || true
           ((yosys_fail++))
         fi
+        if [[ -n "${copied_sidecars}" ]]; then
+          while IFS= read -r sidecar; do
+            cleanup_generated_mem_sidecars "${sidecar}"
+          done <<< "${copied_sidecars}"
+        fi
       fi
 
       # Verify RTLIL output
       rtlil_file="${base_no_ext}.il"
       if [[ -f "${rtlil_file}" ]]; then
         # Generate fresh RTLIL output
-        (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --rtlil -o "${tmp_out}" "$(basename "${file}")") 2>/dev/null || true
+        if ! run_backend_emit "rtlil" "${file}" "${tmp_out}"; then
+          echo "FAIL ${rel_path} (yosys read_rtlil)"
+          cat "${tmp_err}"
+          ((yosys_fail++))
+          continue
+        fi
         if (cd "$(dirname "${file}")" && "${YOSYS_BIN}" -p "read_rtlil ${tmp_out}") >/dev/null 2>&1; then
           echo "PASS ${rel_path} (yosys read_rtlil)"
           ((yosys_pass++))
@@ -226,7 +335,7 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
 
   tmp_v=$(mktemp "${TMPDIR:-/tmp}/jzhdl_equiv_v.XXXXXX")
   tmp_il=$(mktemp "${TMPDIR:-/tmp}/jzhdl_equiv_il.XXXXXX")
-  trap "rm -f '${tmp_out}' '${tmp_v}' '${tmp_il}'" EXIT
+  trap "rm -f '${tmp_out}' '${tmp_err}' '${tmp_v}' '${tmp_il}'" EXIT
 
   for dir in "${GOLDEN_DIR}"/*/; do
     golden_files=("${dir}"*.jz)
@@ -247,8 +356,20 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
       fi
 
       # Generate fresh outputs
-      (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --verilog -o "${tmp_v}" "$(basename "${file}")") 2>/dev/null || true
-      (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --rtlil -o "${tmp_il}" "$(basename "${file}")") 2>/dev/null || true
+      copied_sidecars=""
+      if ! run_backend_emit "verilog" "${file}" "${tmp_v}"; then
+        echo "FAIL ${rel_path} (equiv verilog<->rtlil)"
+        cat "${tmp_err}"
+        ((equiv_fail++))
+        continue
+      fi
+      if ! run_backend_emit "rtlil" "${file}" "${tmp_il}"; then
+        echo "FAIL ${rel_path} (equiv verilog<->rtlil)"
+        cat "${tmp_err}"
+        ((equiv_fail++))
+        continue
+      fi
+      copied_sidecars="$(copy_generated_mem_sidecars "$(dirname "${file}")" "$(dirname "${tmp_v}")")"
 
       # Run equivalence check via yosys
       # Each backend is loaded, elaborated, and stashed separately so that
@@ -277,13 +398,18 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
         equiv_status -assert
       " 2>&1) || true
 
-      if echo "${equiv_out}" | grep -q "Equivalence successfully proven"; then
+      if [[ "${equiv_out}" == *"Equivalence successfully proven"* ]]; then
         echo "PASS ${rel_path} (equiv verilog<->rtlil)"
         ((equiv_pass++))
       else
         echo "FAIL ${rel_path} (equiv verilog<->rtlil)"
         echo "${equiv_out}" | grep -iE '(error|equiv|assert|fail)' || true
         ((equiv_fail++))
+      fi
+      if [[ -n "${copied_sidecars}" ]]; then
+        while IFS= read -r sidecar; do
+          cleanup_generated_mem_sidecars "${sidecar}"
+        done <<< "${copied_sidecars}"
       fi
     done
   done

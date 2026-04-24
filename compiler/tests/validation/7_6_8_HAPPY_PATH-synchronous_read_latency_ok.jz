@@ -1,0 +1,75 @@
+// HAPPY_PATH: Valid §7.6.8 synchronous INOUT read latency.
+// Covers Req #3: INOUT reads are captured synchronously with one-cycle latency.
+
+@project HAPPY_PATH_synchronous_read_latency_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [5] addr = _;
+        IN  [8] wr_data = _;
+        IN  [1] wr_en = _;
+        OUT [8] current_cycle_view = _;
+        OUT [8] next_cycle_view = _;
+    }
+@endproj
+
+@module LatencyRam
+    PORT {
+        IN  [1] clk;
+        IN  [5] addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] current_cycle_view;
+        OUT [8] next_cycle_view;
+    }
+
+    REGISTER {
+        read_stage0 [8] = 8'h00;
+        read_stage1 [8] = 8'h00;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem [8] [32] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    ASYNCHRONOUS {
+        current_cycle_view = read_stage0;
+        next_cycle_view = read_stage1;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem.rw.addr <= addr;
+        // The memory output is observed after the synchronous address phase.
+        read_stage0 <= mem.rw.data;
+        read_stage1 <= read_stage0;
+        IF (wr_en) {
+            mem.rw.wdata <= wr_data;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [5] addr;
+        IN  [8] wr_data;
+        IN  [1] wr_en;
+        OUT [8] current_cycle_view;
+        OUT [8] next_cycle_view;
+    }
+
+    @new latency_ram LatencyRam {
+        IN  [1] clk = clk;
+        IN  [5] addr = addr;
+        IN  [8] wr_data = wr_data;
+        IN  [1] wr_en = wr_en;
+        OUT [8] current_cycle_view = current_cycle_view;
+        OUT [8] next_cycle_view = next_cycle_view;
+    };
+
+    ASYNCHRONOUS {
+        current_cycle_view = latency_ram.current_cycle_view;
+        next_cycle_view = latency_ram.next_cycle_view;
+    }
+@endmod

@@ -1,0 +1,43 @@
+// Req #2 (10.9 Rationale): Template expansion is valid when the body stays
+// purely combinational and storage-free.
+
+@project REQ2_storage_free_templates_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template xor_stage(a, b, dst)
+    @scratch tmp [1];
+    tmp <= a ^ b;
+    dst <= tmp;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    WIRE {
+        stage [1];
+    }
+
+    ASYNCHRONOUS {
+        @apply xor_stage(r, 1'b1, stage);
+        data = stage;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

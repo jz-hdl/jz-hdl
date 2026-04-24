@@ -1,0 +1,93 @@
+// COMB_LOOP_UNCONDITIONAL: Cycle within a SELECT/CASE branch.
+// Tests that the compiler detects a combinational loop when the cycle
+// exists within a single CASE branch (unconditional on that path).
+// Valid feed-forward paths included to verify no false positives.
+
+@project COMB_LOOP_UNCONDITIONAL_select_branch_cycle
+    @top TopMod {
+        IN  [2] sel = _;
+        IN  [1] in_a = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+        OUT [1] out_c = _;
+    }
+@endproj
+
+// Helper: cycle inside a SELECT/CASE branch
+@module HelperSelect
+    PORT {
+        IN  [2] sel;
+        IN  [1] in_a;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    WIRE {
+        a [1];
+        b [1];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: cycle a -> b -> a inside CASE 2'b00
+        SELECT (sel) {
+            CASE 2'b00 {
+                a <= b;
+                b <= a;
+            }
+            CASE 2'b01 {
+                a <= in_a;
+                b <= in_a;
+            }
+            DEFAULT {
+                a <= in_a;
+                b <= in_a;
+            }
+        }
+        out_a = a;
+        out_b = b;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [2] sel;
+        IN  [1] in_a;
+        OUT [1] out_a;
+        OUT [1] out_b;
+        OUT [1] out_c;
+    }
+
+    WIRE {
+        x [1];
+        y [1];
+    }
+
+    @new inst_sel HelperSelect {
+        IN  [2] sel = sel;
+        IN  [1] in_a = in_a;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: cycle x -> y -> x inside CASE 2'b10
+        SELECT (sel) {
+            CASE 2'b10 {
+                x <= y;
+                y <= x;
+            }
+            CASE 2'b11 {
+                x <= in_a;
+                y <= in_a;
+            }
+            DEFAULT {
+                x <= in_a;
+                y <= in_a;
+            }
+        }
+        out_a = x;
+        out_b = y;
+        // Valid: feed-forward (no loop)
+        out_c = in_a;
+    }
+@endmod

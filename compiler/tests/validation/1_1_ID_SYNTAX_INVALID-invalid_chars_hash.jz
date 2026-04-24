@@ -1,0 +1,37 @@
+// ID_SYNTAX_INVALID: Hash in identifier violates the regex
+// ^[A-Za-z_][A-Za-z0-9_]{0,254}$.
+// The lexer emits '#' as JZ_TOK_OTHER (used for MAP pin syntax),
+// so "foo#bar" becomes three tokens: identifier "foo", '#', identifier "bar".
+// The parser rejects the unexpected '#' as a syntax error.
+// This file tests the CONST declaration context.
+
+@project ID_SYNTAX_INVALID_invalid_chars_hash
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Trigger: hash in identifier
+    CONST {
+        foo#bar = 1;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

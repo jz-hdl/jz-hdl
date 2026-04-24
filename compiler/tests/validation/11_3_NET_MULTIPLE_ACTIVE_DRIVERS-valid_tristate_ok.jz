@@ -1,0 +1,36 @@
+// HAPPY_PATH: Valid multi-driver tri-state pattern.
+// Two direct drivers share an INOUT signal. On each path exactly one driver
+// supplies non-z and the other releases with z, so NET_MULTIPLE_ACTIVE_DRIVERS
+// must not fire.
+
+@project NET_MULTIPLE_ACTIVE_DRIVERS_valid_tristate_ok
+    @top TopMod {
+        IN    [1] sel = _;
+        IN    [8] data_a = _;
+        IN    [8] data_b = _;
+        INOUT [8] bus = _;
+        OUT   [8] observed = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] sel;
+        IN    [8] data_a;
+        IN    [8] data_b;
+        INOUT [8] bus;
+        OUT   [8] observed;
+    }
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            bus <= data_a;
+            bus <= 8'bzzzz_zzzz;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+            bus <= data_b;
+        }
+
+        observed <= bus;
+    }
+@endmod

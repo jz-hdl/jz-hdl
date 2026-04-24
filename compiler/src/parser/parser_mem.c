@@ -348,10 +348,7 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                  *   IN <name> READ_FIRST;
                  *   IN <name> NO_CHANGE;
                  */
-                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme &&
-                    (!strcmp(next->lexeme, "WRITE_FIRST") ||
-                     !strcmp(next->lexeme, "READ_FIRST")  ||
-                     !strcmp(next->lexeme, "NO_CHANGE"))) {
+                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme) {
                     write_mode_value = next->lexeme;
                     advance(p); /* consume shorthand mode identifier */
                     next = peek(p);
@@ -435,6 +432,13 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                         strcmp(mode_tok->lexeme, "SYNC") == 0) {
                         mode = mode_tok->lexeme;
                         advance(p);
+                    } else {
+                        char mip_msg[512];
+                        snprintf(mip_msg, sizeof(mip_msg),
+                                 "`%s` is not a valid OUT (read) port qualifier; expected ASYNC or SYNC",
+                                 mode_tok->lexeme ? mode_tok->lexeme : "?");
+                        parser_report_rule(p, mode_tok, "MEM_INVALID_PORT_TYPE", mip_msg);
+                        advance(p);
                     }
                 }
 
@@ -487,10 +491,7 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                 }
 
                 /* Shorthand write mode form */
-                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme &&
-                    (!strcmp(next->lexeme, "WRITE_FIRST") ||
-                     !strcmp(next->lexeme, "READ_FIRST")  ||
-                     !strcmp(next->lexeme, "NO_CHANGE"))) {
+                if (next->type == JZ_TOK_IDENTIFIER && next->lexeme) {
                     write_mode_value = next->lexeme;
                     advance(p);
                     next = peek(p);
@@ -547,9 +548,27 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                     return -1;
                 }
             } else {
-                jz_ast_free(mem);
-                parser_error(p, "expected IN/OUT/INOUT port in MEM block");
-                return -1;
+                if (is_decl_identifier_token(pt)) {
+                    char mip_msg[512];
+                    snprintf(mip_msg, sizeof(mip_msg),
+                             "`%s` is not a valid MEM port direction; expected IN, OUT, or INOUT",
+                             pt->lexeme ? pt->lexeme : "?");
+                    parser_report_rule(p, pt, "MEM_INVALID_PORT_TYPE", mip_msg);
+
+                    while (peek(p)->type != JZ_TOK_EOF &&
+                           peek(p)->type != JZ_TOK_SEMICOLON &&
+                           peek(p)->type != JZ_TOK_RBRACE) {
+                        advance(p);
+                    }
+                    if (peek(p)->type == JZ_TOK_SEMICOLON) {
+                        advance(p);
+                    }
+                    continue;
+                } else {
+                    jz_ast_free(mem);
+                    parser_error(p, "expected IN/OUT/INOUT port in MEM block");
+                    return -1;
+                }
             }
         }
 

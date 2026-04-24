@@ -1,0 +1,55 @@
+// TEMPLATE_APPLY_OUTSIDE_BLOCK: @apply may only appear inside ASYNCHRONOUS or SYNCHRONOUS blocks.
+// Triggers: @apply inside CONST, PORT, WIRE, and REGISTER declaration blocks.
+// Valid @apply inside ASYNC included for negative testing.
+
+@project TEMPLATE_APPLY_OUTSIDE_BLOCK_apply_in_decl_block
+    CONFIG {
+        WIDTH = 1;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template simple(a, b)
+    a <= b;
+@endtemplate
+
+@module TopMod
+    CONST {
+        WIDTH = 1;
+        // Trigger 1: @apply inside CONST block
+        @apply simple(WIDTH, WIDTH);
+    }
+
+    PORT {
+        // Trigger 2: @apply inside PORT block
+        @apply simple(clk, data);
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    WIRE {
+        // Trigger 3: @apply inside WIRE block
+        @apply simple(w1, clk);
+        w1 [1];
+    }
+
+    REGISTER {
+        // Trigger 4: @apply inside REGISTER block
+        @apply simple(r, clk);
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: @apply inside ASYNC (no error)
+        @apply simple(w1, r);
+        data = w1;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

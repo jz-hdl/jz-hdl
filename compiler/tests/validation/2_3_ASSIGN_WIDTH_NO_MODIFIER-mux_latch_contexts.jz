@@ -1,0 +1,91 @@
+// ASSIGN_WIDTH_NO_MODIFIER: Width mismatch in LATCH and MUX read contexts.
+// Tests width mismatch when latch data expression has different width than latch
+// and when a MUX read is assigned to a narrower target.
+// Valid same-width latch and MUX assignments included to verify no false positives.
+
+@project ASSIGN_WIDTH_NO_MODIFIER_mux_latch_contexts
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [1] sel = _;
+        IN  [8] a = _;
+        IN  [4] b = _;
+        OUT [8] data = _;
+        OUT [4] narrow_data = _;
+    }
+@endproj
+
+// Helper module: valid latch usage (no false positive)
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [8] a;
+        OUT [8] data;
+    }
+
+    LATCH {
+        lat_h [8] D;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: latch guarded assignment same width (8-bit latch, 8-bit data)
+        lat_h <= enable : a;
+        data <= lat_h ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [1] sel;
+        IN  [8] a;
+        IN  [4] b;
+        OUT [8] data;
+        OUT [4] narrow_data;
+    }
+
+    WIRE {
+        h_data [8];
+    }
+
+    LATCH {
+        lat_t [8] D;
+    }
+
+    MUX {
+        choices = a, h_data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] enable = enable;
+        IN  [8] a = a;
+        OUT [8] data = h_data;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: latch guarded write with width mismatch (8-bit latch, 4-bit data)
+        lat_t <= enable : b;
+        // Trigger: MUX read is 8 bits, destination is 4 bits
+        narrow_data <= choices[sel];
+        data <= h_data ^ lat_t ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= a;
+    }
+@endmod

@@ -2,4 +2,6 @@ File: 5_5_WIDTHOF_INVALID_CONTEXT-runtime_expression.jz
       31:19   error WIDTHOF_INVALID_CONTEXT S5.5.10 widthof() used outside compile-time constant integer expression context
       36:15   error WIDTHOF_INVALID_CONTEXT S5.5.10 widthof() used outside compile-time constant integer expression context
       68:19   error WIDTHOF_INVALID_CONTEXT S5.5.10 widthof() used outside compile-time constant integer expression context
-      73:15   error WIDTHOF_INVALID_CONTEXT S5.5.10 widthof() used outside compile-time constant integer expression context
+      71:18   error WIDTHOF_INVALID_CONTEXT S5.5.10 widthof() used outside compile-time constant integer expression context
+      71:26   error FEATURE_EXPR_INVALID_CONTEXT S4.14 Feature guard condition may only reference CONFIG.<name>, module CONST, and literals
+      76:15   error WIDTHOF_INVALID_CONTEXT S5.5.10 widthof() used outside compile-time constant integer expression context

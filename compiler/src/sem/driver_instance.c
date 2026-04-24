@@ -32,6 +32,39 @@ static int sem_expr_contains_idx(JZASTNode *expr)
     return 0;
 }
 
+static const char *sem_instance_binding_op_kind(const JZASTNode *bind)
+{
+    if (!bind || bind->type != JZ_AST_PORT_DECL) {
+        return "ALIAS";
+    }
+
+    if (bind->block_kind && strcmp(bind->block_kind, "BUS") == 0) {
+        if (bind->text && bind->text[0] != '\0') {
+            char bus_id[128] = {0};
+            char role[128] = {0};
+            char op[128] = {0};
+            if (sscanf(bind->text, "%127s %127s %127s", bus_id, role, op) == 3 &&
+                op[0] != '\0') {
+                return strcmp(op, "ALIAS_S") == 0 ? "ALIAS_S"
+                     : strcmp(op, "ALIAS_Z") == 0 ? "ALIAS_Z"
+                     : "ALIAS";
+            }
+        }
+        return "ALIAS";
+    }
+
+    if (!bind->text || bind->text[0] == '\0') {
+        return "ALIAS";
+    }
+    if (strcmp(bind->text, "ALIAS_Z") == 0) {
+        return "ALIAS_Z";
+    }
+    if (strcmp(bind->text, "ALIAS_S") == 0) {
+        return "ALIAS_S";
+    }
+    return "ALIAS";
+}
+
 /* Evaluate a simple index node (literal or identifier) as a nonnegative integer.
  * This is intentionally conservative: we only support cases where the index is a
  * simple number-like token that eval_simple_positive_decl_int can handle.
@@ -457,10 +490,11 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
 
                     if (bind->width) {
                         unsigned count = 0;
-                        if (sem_eval_width_expr(bind->width,
-                                                scope,
-                                                project_symbols,
-                                                &count) != 0) {
+                        if (sem_eval_width_expr_at_loc(bind->width,
+                                                       scope,
+                                                       project_symbols,
+                                                       &count,
+                                                       bind->loc) != 0) {
                             sem_report_rule(diagnostics,
                                             bind->loc,
                                             "BUS_PORT_ARRAY_COUNT_INVALID",
@@ -489,12 +523,20 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                         bind->loc,
                                         "INSTANCE_PORT_WIDTH_MISMATCH",
                                         "instantiated port width does not match child module effective port width");
-                    } else if (inst_rc == -1 ||
-                               sem_instance_width_expr_is_invalid(bind->width, scope, project_symbols)) {
-                        sem_report_rule(diagnostics,
-                                        bind->loc,
-                                        "INSTANCE_PORT_WIDTH_EXPR_INVALID",
-                                        "width expression in instance port list uses undefined CONST/CONFIG or invalid integer expression");
+                    } else {
+                        int config_diag =
+                            sem_check_undeclared_config_in_width(bind->width,
+                                                                 bind->loc,
+                                                                 project_symbols,
+                                                                 diagnostics);
+                        if (!config_diag &&
+                            (inst_rc == -1 ||
+                             sem_instance_width_expr_is_invalid(bind->width, scope, project_symbols))) {
+                            sem_report_rule(diagnostics,
+                                            bind->loc,
+                                            "INSTANCE_PORT_WIDTH_EXPR_INVALID",
+                                            "width expression in instance port list uses undefined CONST/CONFIG or invalid integer expression");
+                        }
                     }
                 }
 
@@ -520,6 +562,26 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                         rhs->loc,
                                         "INSTANCE_ARRAY_IDX_INVALID_CONTEXT",
                                         "IDX may only appear in parent-signal bindings of instance arrays");
+                    }
+
+                    {
+                        JZExprReadRulesContext read_ctx;
+                        memset(&read_ctx, 0, sizeof(read_ctx));
+                        read_ctx.is_instance_binding = 1;
+                        read_ctx.check_bus_rules = 1;
+                        sem_check_mem_access_expr(rhs,
+                                                  scope,
+                                                  project_symbols,
+                                                  diagnostics);
+                        sem_check_mux_selectors_recursive(rhs,
+                                                          scope,
+                                                          project_symbols,
+                                                          diagnostics);
+                        sem_check_expr_read_rules(rhs,
+                                                  scope,
+                                                  project_symbols,
+                                                  &read_ctx,
+                                                  diagnostics);
                     }
 
                     /* Simple Non-Overlap check for instance arrays:
@@ -604,6 +666,10 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                  */
                 if (bind->child_count > 0 && bind->width) {
                     JZASTNode *rhs = bind->children[0];
+                    const char *bind_op = sem_instance_binding_op_kind(bind);
+                    int bind_has_ext =
+                        (strcmp(bind_op, "ALIAS_Z") == 0 ||
+                         strcmp(bind_op, "ALIAS_S") == 0);
                     if (rhs && rhs->type == JZ_AST_EXPR_IDENTIFIER &&
                         rhs->name && strcmp(rhs->name, "_") == 0) {
                         /* Explicit no-connect: skip parent-signal width checks. */
@@ -619,10 +685,19 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
                                 int parent_rc = eval_simple_positive_decl_int(pdecl->width, &parent_w);
                                 int inst_rc2  = eval_simple_positive_decl_int(bind->width, &inst_w2);
                                 if (parent_rc == 1 && inst_rc2 == 1 && parent_w != inst_w2) {
-                                    sem_report_rule(diagnostics,
-                                                    bind->loc,
-                                                    "INSTANCE_PARENT_SIGNAL_WIDTH_MISMATCH",
-                                                    "bound parent signal width does not match instantiation port width");
+                                    if (bind_has_ext) {
+                                        if (parent_w > inst_w2) {
+                                            sem_report_rule(diagnostics,
+                                                            bind->loc,
+                                                            "ASSIGN_TRUNCATES",
+                                                            "bound parent signal is wider than the instantiated port and will be truncated");
+                                        }
+                                    } else {
+                                        sem_report_rule(diagnostics,
+                                                        bind->loc,
+                                                        "INSTANCE_PARENT_SIGNAL_WIDTH_MISMATCH",
+                                                        "bound parent signal width does not match instantiation port width");
+                                    }
                                 }
                             }
                         }

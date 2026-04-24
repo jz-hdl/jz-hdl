@@ -30,6 +30,8 @@ typedef struct IR_BusSignalMapping {
     int         array_index;    /**< Array index for arrayed ports, -1 otherwise */
     int         ir_signal_id;   /**< Expanded IR signal's ID */
     int         width;          /**< Signal width in bits */
+    int         parent_msb;     /**< Parent slice MSB for instance-port mappings, -1 for full */
+    int         parent_lsb;     /**< Parent slice LSB for instance-port mappings, -1 for full */
 } IR_BusSignalMapping;
 
 /**
@@ -70,6 +72,21 @@ typedef struct IR_ModuleSpec {
  * @return Newly allocated string in the arena, or NULL on failure.
  */
 char *ir_strdup_arena(JZArena *arena, const char *s);
+
+/**
+ * @brief Deep-clone an IR design into the given arena.
+ *
+ * The clone duplicates all nested arrays, strings, expression trees, and
+ * statement trees so the result can be mutated independently of the source.
+ *
+ * @param src        Source design to clone.
+ * @param arena      Arena that will own the cloned design.
+ * @param out_clone  Receives the cloned design on success.
+ * @return 0 on success, non-zero on allocation failure.
+ */
+int ir_clone_design(const IR_Design *src,
+                    JZArena *arena,
+                    IR_Design **out_clone);
 
 /* ============================================================================
  * Top-level IR construction
@@ -481,6 +498,29 @@ int ir_collect_module_specializations(const JZModuleScope *scopes,
  * @param arena           Arena for allocation.
  * @return 0 on success, non-zero on failure.
  */
+/**
+ * @brief Build bus_map entries for instance output port bindings.
+ *
+ * Scans @new instance declarations in the module AST and, for each OUT/INOUT
+ * port binding that maps to a parent signal, appends an IR_BusSignalMapping
+ * entry so that ir_build_expr can resolve "inst.port" qualified identifiers.
+ *
+ * Must be called during the first IR pass (after signals, before statement
+ * lowering).
+ *
+ * @param scope           Parent module scope.
+ * @param project_symbols Project-level symbol table.
+ * @param arena           Arena for allocation.
+ * @param bus_map         Pointer to bus_map array (may be reallocated).
+ * @param bus_map_count   Pointer to bus_map entry count.
+ * @return 0 on success, non-zero on failure.
+ */
+int ir_build_instance_port_mappings(const JZModuleScope *scope,
+                                     const JZBuffer *project_symbols,
+                                     JZArena *arena,
+                                     IR_BusSignalMapping **bus_map,
+                                     int *bus_map_count);
+
 int ir_build_instances_for_module(const JZModuleScope *scope,
                                   IR_Module *mod,
                                   const JZModuleScope *all_scopes,

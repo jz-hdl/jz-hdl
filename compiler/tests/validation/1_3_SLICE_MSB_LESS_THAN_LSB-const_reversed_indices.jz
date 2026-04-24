@@ -1,0 +1,57 @@
+// SLICE_MSB_LESS_THAN_LSB: Reversed slice indices via CONST names.
+// When slice bounds are named constants (bus[LOW:HIGH] with LOW < HIGH),
+// the compiler must resolve the CONST value and fire the same rule that
+// triggers on literal reversed indices.
+
+@project SLICE_MSB_LESS_THAN_LSB_const_reversed_indices
+    @top TopMod {
+        IN  [16] bus  = _;
+        OUT [4]  out_a = _;
+        OUT [4]  out_b = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [16] bus;
+        OUT [4]  out_a;
+    }
+
+    CONST {
+        H_LOW  = 0;
+        H_HIGH = 3;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: CONST reversed indices in helper module — H_LOW(0) < H_HIGH(3)
+        out_a = bus[H_LOW:H_HIGH];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [16] bus;
+        OUT [4]  out_a;
+        OUT [4]  out_b;
+    }
+
+    CONST {
+        LOW  = 2;
+        HIGH = 5;
+    }
+
+    WIRE {
+        ha_out [4];
+    }
+
+    @new inst_a HelperA {
+        IN  [16] bus   = bus;
+        OUT [4]  out_a = ha_out;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger 2: CONST reversed indices in top module — LOW(2) < HIGH(5)
+        out_a = bus[LOW:HIGH];
+        out_b = ha_out;
+    }
+@endmod

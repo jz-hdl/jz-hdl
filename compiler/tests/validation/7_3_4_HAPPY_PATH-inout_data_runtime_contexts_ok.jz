@@ -1,0 +1,70 @@
+// HAPPY_PATH: INOUT .data is readable in runtime expression contexts.
+// Covers @new binding and SYNCHRONOUS expression usage for §7.3.4 INOUT access.
+
+@project HAPPY_PATH_inout_data_runtime_contexts_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        IN  [DATA_W] wdata = _;
+        OUT [DATA_W] data = _;
+    }
+@endproj
+
+@module SinkMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        sync_sample [8] = 8'h00;
+        bound_data [8] = 8'h00;
+    }
+
+    MEM {
+        mem_t [8] [16] = 8'h00 {
+            INOUT rw;
+        };
+    }
+
+    // Valid: INOUT .data in @new binding.
+    @new inst_sink SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rw.data;
+        OUT [8] dout = bound_data;
+    };
+
+    ASYNCHRONOUS {
+        data = sync_sample ^ bound_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_t.rw.addr <= addr;
+        mem_t.rw.wdata <= wdata;
+        // Valid: INOUT .data in SYNCHRONOUS expression.
+        sync_sample <= mem_t.rw.data;
+        bound_data <= bound_data;
+    }
+@endmod

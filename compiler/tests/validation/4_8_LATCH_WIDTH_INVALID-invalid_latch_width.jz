@@ -1,7 +1,5 @@
 // LATCH_WIDTH_INVALID: LATCH width must be a positive integer.
 // Tests zero-width latch declaration across modules.
-// Note: compiler emits WIDTH_NONPOSITIVE_OR_NONINT instead of LATCH_WIDTH_INVALID
-// for zero-width latches. The latch-specific rule is unreachable (see issues.md).
 // Valid positive-width latches included to verify no false positives.
 
 @project LATCH_WIDTH_INVALID_invalid_latch_width

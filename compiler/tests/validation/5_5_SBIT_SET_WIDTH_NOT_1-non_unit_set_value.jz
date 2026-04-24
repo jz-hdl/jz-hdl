@@ -21,17 +21,21 @@
         OUT [8] out_a;
         OUT [8] out_b;
     }
+    WIRE {
+        src_w [8];
+    }
     REGISTER {
         r [8] = 8'd0;
     }
     ASYNCHRONOUS {
+        src_w = src;
         // Trigger 1: sbit() with 8-bit set value in helper ASYNC
-        out_a <= sbit(src, idx, src);
+        out_a <= sbit(src_w, idx, src_w);
         out_b = r;
     }
     SYNCHRONOUS(CLK=clk) {
         // Trigger 2: sbit() with 8-bit set value in helper SYNC
-        r <= sbit(src, idx, src);
+        r <= sbit(src_w, idx, src_w);
     }
 @endmod
 
@@ -44,6 +48,7 @@
         OUT [8] out_b;
     }
     WIRE {
+        src_w [8];
         ha_a [8];
         ha_b [8];
     }
@@ -60,12 +65,13 @@
     };
 
     ASYNCHRONOUS {
+        src_w = data;
         // Trigger 3: sbit() with 8-bit set value in top ASYNC
-        out_a <= sbit(data, idx, data);
+        out_a <= sbit(src_w, idx, src_w);
         out_b = r;
     }
     SYNCHRONOUS(CLK=clk) {
         // Trigger 4: sbit() with 8-bit set value in top SYNC
-        r <= sbit(data, idx, data);
+        r <= sbit(src_w, idx, src_w);
     }
 @endmod

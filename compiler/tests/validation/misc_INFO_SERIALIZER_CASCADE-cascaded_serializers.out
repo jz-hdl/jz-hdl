@@ -1,0 +1,2 @@
+File: <input>
+       0:0    info  INFO_SERIALIZER_CASCADE Differential output uses cascaded serializers (master+slave) for extended serialization ratio

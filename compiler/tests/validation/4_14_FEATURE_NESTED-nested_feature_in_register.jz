@@ -35,10 +35,11 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = r ^ r2;
     }
 
     SYNCHRONOUS(CLK=clk) {
         r <= ~r;
+        r2 <= ~r2;
     }
 @endmod

@@ -1,0 +1,34 @@
+// IMPORT_NOT_AT_PROJECT_TOP: @import appears after @top declaration.
+// Tests @import placed after the @top block inside @project.
+
+@project IMPORT_NOT_AT_PROJECT_TOP_import_after_top
+
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+
+    // Trigger: @import after @top declaration (must come before @top)
+    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-import_after_top_lib.jz";
+
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

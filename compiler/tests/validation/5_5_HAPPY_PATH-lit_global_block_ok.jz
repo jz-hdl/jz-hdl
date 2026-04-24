@@ -1,0 +1,37 @@
+// HAPPY_PATH: lit(width, value) used inside a @global block.
+// Covers §5.5.11 Req #8 (@global block is an allowed lit() context).
+// No diagnostics expected.
+
+@global ISA
+  OP_A = lit(8, 42);
+  OP_B = lit(16, 65535);
+  OP_C = 17'b0110011_0000000_000;
+@endglob
+
+@project HAPPY_PATH_lit_global_block_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+        OUT [16] out_b = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8]  out_a;
+        OUT [16] out_b;
+    }
+    REGISTER {
+        r_a [8]  = 8'd0;
+        r_b [16] = 16'd0;
+    }
+    ASYNCHRONOUS {
+        out_a = r_a;
+        out_b = r_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_a <= ISA.OP_A;
+        r_b <= ISA.OP_B;
+    }
+@endmod

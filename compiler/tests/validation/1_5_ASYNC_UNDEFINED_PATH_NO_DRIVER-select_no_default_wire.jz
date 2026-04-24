@@ -1,0 +1,71 @@
+// ASYNC_UNDEFINED_PATH_NO_DRIVER: Signal undriven on some ASYNCHRONOUS paths.
+// Tests SELECT without DEFAULT on a wire in an ASYNCHRONOUS block.
+// Valid SELECT-with-DEFAULT on wire included to verify no false positives.
+
+@project ASYNC_UNDEFINED_PATH_NO_DRIVER_select_no_default_wire
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] sel2 = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper module: SELECT without DEFAULT leaves wire undriven
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [2] sel2;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        w [1];
+        v [1];
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // Trigger: SELECT without DEFAULT on wire
+        SELECT (sel2) {
+            CASE 2'b00 { w <= VCC; }
+            CASE 2'b01 { w <= GND; }
+        }
+        out_a = w;
+        // Valid: SELECT with DEFAULT on wire (no false positive)
+        SELECT (sel2) {
+            CASE 2'b00 { v <= VCC; }
+            DEFAULT { v <= GND; }
+        }
+        out_b = v;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] sel2;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        ha_a [1];
+        ha_b [1];
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [2] sel2 = sel2;
+        OUT [1] out_a = ha_a;
+        OUT [1] out_b = ha_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_a;
+        out_b = ha_b;
+    }
+@endmod

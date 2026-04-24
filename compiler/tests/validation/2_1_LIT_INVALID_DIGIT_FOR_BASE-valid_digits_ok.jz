@@ -1,0 +1,64 @@
+// LIT_INVALID_DIGIT_FOR_BASE happy path: binary uses only 0/1/x/z/_ and
+// hex uses only 0-9/A-F/_. No invalid digits. Exercises async-expr,
+// sync-expr, new-binding, check-expr, and feature-cond contexts.
+
+@project LIT_INVALID_DIGIT_FOR_BASE_valid_digits
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din_b;
+        IN  [8] din_h;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout <= din_b ^ din_h;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST { VAL = 8; }
+
+    @check (VAL == 8'b0000_1000 && VAL == 8'h08, "valid digits in check");
+
+    @feature VAL == 8'b0000_1000
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    @feature VAL == 8'hA_8 / 8'h1_1
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    WIRE { ha_out [8]; }
+
+    @new inst_a HelperA {
+        IN  [8] din_b = 8'b1010_0101;
+        IN  [8] din_h = 8'hDE;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'b0000_0001;
+        s [8] = 8'hAb;
+    }
+    ASYNCHRONOUS {
+        data <= r ^ s ^ ha_out ^ 8'b1111_0000 ^ 8'hA_5;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= r ^ 8'b0000_0011;
+        s <= s ^ 8'hCd;
+    }
+@endmod

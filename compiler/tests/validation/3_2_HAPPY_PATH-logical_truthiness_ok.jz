@@ -1,0 +1,47 @@
+// HAPPY_PATH: §3.2 Req #27 — for logical operators (&&, ||, !), nonzero
+// (i.e. 1'b1) operands are treated as true and zero (1'b0) as false.
+// Width-1 operands are the only legal form (LOGICAL_WIDTH_NOT_1), so the
+// inputs are 1-bit signals representing the two truthiness values.
+
+@project HAPPY_PATH_logical_truthiness_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] truthy = _;
+        IN  [1] falsy = _;
+        OUT [1] both_true = _;
+        OUT [1] negate_falsy = _;
+        OUT [1] either_true = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] truthy;
+        IN  [1] falsy;
+        OUT [1] both_true;
+        OUT [1] negate_falsy;
+        OUT [1] either_true;
+    }
+
+    REGISTER {
+        r_both [1] = 1'b0;
+        r_neg  [1] = 1'b0;
+        r_eith [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        // && returns 1'b1 only when both operands are truthy (nonzero).
+        both_true    = (truthy && truthy) | r_both;
+        // ! flips truthiness: !falsy is 1'b1 because falsy is 1'b0.
+        negate_falsy = (!falsy) | r_neg;
+        // || returns 1'b1 when at least one operand is truthy.
+        either_true  = (truthy || falsy) | r_eith;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r_both <= truthy && truthy;
+        r_neg  <= !falsy;
+        r_eith <= truthy || falsy;
+    }
+@endmod

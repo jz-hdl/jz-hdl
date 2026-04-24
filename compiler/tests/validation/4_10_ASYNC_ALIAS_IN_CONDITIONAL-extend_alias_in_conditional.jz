@@ -1,0 +1,92 @@
+// ASYNC_ALIAS_IN_CONDITIONAL: Alias = / =z / =s inside conditional is forbidden.
+// Extends coverage to =z in IF, =s in ELSE, and = in ELIF body.
+// Valid directional assignments (<=, =>) in conditionals verify no false positives.
+
+@project ASYNC_ALIAS_IN_CONDITIONAL_extend_alias_in_conditional
+    @top TopMod {
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [4] din_a = _;
+        IN  [8] din_b = _;
+        OUT [8] dout_a = _;
+        OUT [8] dout_b = _;
+        OUT [8] dout_c = _;
+    }
+@endproj
+
+// Helper module: =z alias inside IF body
+@module HelperMod
+    PORT {
+        IN  [1] sel;
+        IN  [4] din_narrow;
+        IN  [8] din_wide;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: =z alias inside IF body
+        IF (sel) {
+            dout =z din_narrow;
+        } ELSE {
+            // Valid: receive-assign in ELSE (no error)
+            dout <= din_wide;
+        }
+    }
+@endmod
+
+// Second helper: =s alias inside ELSE body
+@module HelperMod2
+    PORT {
+        IN  [1] sel;
+        IN  [4] din_narrow;
+        IN  [8] din_wide;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            // Valid: receive-assign in IF (no error)
+            dout <= din_wide;
+        } ELSE {
+            // Trigger: =s alias inside ELSE body
+            dout =s din_narrow;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [4] din_a;
+        IN  [8] din_b;
+        OUT [8] dout_a;
+        OUT [8] dout_b;
+        OUT [8] dout_c;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] sel = sel_a;
+        IN  [4] din_narrow = din_a;
+        IN  [8] din_wide = din_b;
+        OUT [8] dout = dout_a;
+    };
+
+    @new inst_h2 HelperMod2 {
+        IN  [1] sel = sel_a;
+        IN  [4] din_narrow = din_a;
+        IN  [8] din_wide = din_b;
+        OUT [8] dout = dout_b;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: = alias inside ELIF body
+        IF (sel_a) {
+            dout_c <= din_b;
+        } ELIF (sel_b) {
+            dout_c = din_b;
+        } ELSE {
+            dout_c <= din_b;
+        }
+    }
+@endmod

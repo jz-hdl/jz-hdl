@@ -1,0 +1,48 @@
+// ID_SYNTAX_INVALID: Identifiers starting with a digit violate the regex
+// ^[A-Za-z_][A-Za-z0-9_]{0,254}$. The lexer splits leading-digit tokens
+// (e.g. "1foo" becomes number "1" + identifier "foo"), so the parser
+// rejects these as syntax errors rather than ID_SYNTAX_INVALID.
+// This file tests the PORT declaration context.
+
+@project ID_SYNTAX_INVALID_leading_digit
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        // Trigger: leading-digit port name
+        OUT [1] 1foo;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        1foo = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

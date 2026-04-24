@@ -1,0 +1,31 @@
+// §1.5.4 SCOPE (Req #3): The spec's literal pattern `w <= a; w <= b;`
+// within a single ASYNCHRONOUS block (same identifier, two assignments)
+// must trigger ASSIGN_MULTIPLE_SAME_BITS per §1.5.
+
+@project SCOPE_single_block_w_le_a_w_le_b
+    @top TopMod {
+        IN  [1] a = _;
+        IN  [1] b = _;
+        OUT [1] o = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] a;
+        IN  [1] b;
+        OUT [1] o;
+    }
+
+    WIRE {
+        w [1];
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: canonical `w <= a; w <= b;` pattern from §1.5.4.
+        w <= a;
+        w <= b;
+        // Consume w so it is not a dangling net.
+        o <= w;
+    }
+@endmod

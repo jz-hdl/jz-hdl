@@ -1,0 +1,51 @@
+// INSTANCE_ARRAY_INDEX_REQUIRED: arrayed instance port access in SYNCHRONOUS blocks requires [index].
+// Target diagnostic: INSTANCE_ARRAY_INDEX_REQUIRED.
+// Non-target diagnostics expected: none. The instance is an array, the child
+// port exists and is readable, and all bindings are width-correct.
+
+@project INSTANCE_ARRAY_INDEX_REQUIRED_sync_expr
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module BitChild
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] din;
+        OUT [1] data;
+    }
+    REGISTER {
+        sampled [1] = 1'b0;
+    }
+    @new inst_arr[2] BitChild {
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX];
+        OUT [1] data = _;
+    };
+    ASYNCHRONOUS {
+        data = sampled;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        sampled <= inst_arr.data;
+    }
+@endmod

@@ -1,0 +1,37 @@
+// DIV_CONST_ZERO: §3.2 — division/modulus by a compile-time constant
+// zero in the async-expr context. Driving an OUT port via the tristate
+// receive operator (`<=`) inside ASYNCHRONOUS keeps the literal-zero
+// divisor out of the alias (`=`) path that would otherwise also emit
+// ASYNC_ALIAS_LITERAL_RHS, leaving DIV_CONST_ZERO as the only diagnostic
+// to verify.
+
+@project DIV_CONST_ZERO_async_constant_zero_divisor
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] num = _;
+        OUT [8] out_div = _;
+        OUT [8] out_mod = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] num;
+        OUT [8] out_div;
+        OUT [8] out_mod;
+    }
+
+    REGISTER { tick [1] = 1'b0; }
+
+    ASYNCHRONOUS {
+        // Trigger 1 (async-expr): division by literal zero
+        out_div <= num / 8'd0;
+        // Trigger 2 (async-expr): modulus by literal zero
+        out_mod <= num % 8'd0;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        tick <= tick;
+    }
+@endmod

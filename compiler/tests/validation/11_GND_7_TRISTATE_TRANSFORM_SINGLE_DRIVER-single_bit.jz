@@ -1,0 +1,62 @@
+// TRISTATE_TRANSFORM_SINGLE_DRIVER: 1-bit width variant.
+// Verifies that the single-driver tri-state warning fires on 1-bit wide wires.
+// Existing tests use 8-bit wires; this confirms single-bit behavior.
+// Trigger: 1-bit single-driver tristate wire (GND default)
+
+@project TRISTATE_TRANSFORM_SINGLE_DRIVER_single_bit
+    @top TopMod {
+        IN  [1] en = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Helper module with 1-bit single-driver tri-state wire
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    WIRE {
+        w [1];
+    }
+
+    // Trigger 1: 1-bit single-driver tri-state wire in helper module
+    ASYNCHRONOUS {
+        IF (en) {
+            w <= din;
+        } ELSE {
+            w <= 1'bz;
+        }
+        data <= w;
+    }
+@endmod
+
+// Top module with 1-bit single-driver tri-state wire
+@module TopMod
+    PORT {
+        IN  [1] en;
+        OUT [1] data;
+    }
+
+    WIRE {
+        w_top [1];
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en = en;
+        IN  [1] din = 1'b1;
+        OUT [1] data = _;
+    };
+
+    // Trigger 2: 1-bit single-driver tri-state wire in top module
+    ASYNCHRONOUS {
+        IF (en) {
+            w_top <= 1'b1;
+        } ELSE {
+            w_top <= 1'bz;
+        }
+        data <= w_top;
+    }
+@endmod

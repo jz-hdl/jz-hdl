@@ -1,0 +1,33 @@
+// HAPPY_PATH: Nonexistent import targets still use textual normalization for sandbox checks.
+// The validation runner enables traversal for this file so PATH_OUTSIDE_SANDBOX
+// is reached using a nonexistent target path instead of realpath().
+
+@project HAPPY_PATH_textual_normalization_nonexistent_outside_sandbox
+
+    // Trigger 1: nonexistent traversal target normalizes outside compiler/tests/validation.
+    @import "../path_security_missing/nonexistent_lib.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -70,12 +70,103 @@ typedef struct JZAssignRecord {
     JZAssignRange range;
     int           is_nested;
     int           partial;    /* 1 if only assigned in SOME branches (not all paths) */
+    int           can_drive_z;
     JZASTNode    *stmt;
 } JZAssignRecord;
 
 typedef struct JZPathState {
     JZBuffer assigns;
+    /* Number of records in `assigns` that were inherited when this path was
+     * cloned for branch analysis. Records at index >= branch_base were added
+     * by statements in the current branch body; records below it came from
+     * outer scope (root-level or prior merged IF/SELECT chains). Used to
+     * distinguish "same-branch double-assign" from "independent chain
+     * conflict" when an overlap is detected. Zero on the root path. */
+    size_t   branch_base;
 } JZPathState;
+
+static int sem_dead_select_cases_exhaustive(JZASTNode *select_stmt,
+                                            const JZModuleScope *scope,
+                                            const JZBuffer *project_symbols);
+
+static int sem_flow_expr_contains_z_literal(const JZASTNode *expr)
+{
+    if (!expr) return 0;
+
+    if (expr->type == JZ_AST_EXPR_LITERAL && expr->text) {
+        const char *tick = strchr(expr->text, '\'');
+        if (!tick) return 0;
+        const char *value = tick + 2;
+        for (const char *p = value; *p; ++p) {
+            if (*p == 'z' || *p == 'Z') {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        if (sem_flow_expr_contains_z_literal(expr->children[i])) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int sem_flow_lhs_targets_decl(const JZASTNode *lhs,
+                                     const JZASTNode *decl)
+{
+    if (!lhs || !decl || !decl->name) return 0;
+
+    switch (lhs->type) {
+    case JZ_AST_EXPR_IDENTIFIER:
+        return lhs->name && strcmp(lhs->name, decl->name) == 0;
+
+    case JZ_AST_EXPR_SLICE:
+        return lhs->child_count >= 1 &&
+               sem_flow_lhs_targets_decl(lhs->children[0], decl);
+
+    case JZ_AST_EXPR_CONCAT:
+        for (size_t i = 0; i < lhs->child_count; ++i) {
+            if (sem_flow_lhs_targets_decl(lhs->children[i], decl)) {
+                return 1;
+            }
+        }
+        return 0;
+
+    default:
+        return 0;
+    }
+}
+
+static int sem_flow_node_has_z_assignment_to_decl(const JZASTNode *node,
+                                                  const JZASTNode *decl)
+{
+    if (!node || !decl) return 0;
+
+    if (node->type == JZ_AST_STMT_ASSIGN && node->child_count >= 2) {
+        const char *op = node->block_kind ? node->block_kind : "";
+        int is_alias = (strcmp(op, "ALIAS") == 0 ||
+                        strcmp(op, "ALIAS_Z") == 0 ||
+                        strcmp(op, "ALIAS_S") == 0);
+        int is_drive = (strncmp(op, "DRIVE", 5) == 0);
+        if (!is_alias) {
+            const JZASTNode *target = is_drive ? node->children[1] : node->children[0];
+            const JZASTNode *rhs = node->children[1];
+            if (sem_flow_lhs_targets_decl(target, decl) &&
+                sem_flow_expr_contains_z_literal(rhs)) {
+                return 1;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < node->child_count; ++i) {
+        if (sem_flow_node_has_z_assignment_to_decl(node->children[i], decl)) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 static void sem_excl_free_paths(JZBuffer *paths)
 {
@@ -94,11 +185,17 @@ static int sem_excl_clone_path_state(const JZPathState *src,
     if (!dst) return -1;
     memset(dst, 0, sizeof(*dst));
     if (!src) return 0;
-    if (src->assigns.len == 0) return 0;
+    if (src->assigns.len == 0) {
+        /* No inherited records; branch_base stays 0. */
+        return 0;
+    }
     if (jz_buf_append(&dst->assigns, src->assigns.data, src->assigns.len) != 0) {
         jz_buf_free(&dst->assigns);
         return -1;
     }
+    /* Mark all inherited records as pre-branch; any records added subsequently
+     * by branch-body analysis will sit at index >= branch_base. */
+    dst->branch_base = dst->assigns.len / sizeof(JZAssignRecord);
     return 0;
 }
 
@@ -296,22 +393,38 @@ static void sem_excl_record_assignment_in_path(JZPathState *path,
 
             if (overlap) {
                 const char *rule_id = NULL;
+                if (!is_sync && (r->can_drive_z || e->can_drive_z)) {
+                    continue;
+                }
 
-                if (r->range.has_range && e->range.has_range) {
-                    rule_id = "ASSIGN_SLICE_OVERLAP";
-                } else if (is_sync && e->is_register) {
+                if (is_sync && e->is_register) {
                     int root_and_conditional = ((r->is_nested && !e->is_nested) ||
                                                 (!r->is_nested && e->is_nested));
                     rule_id = root_and_conditional
                         ? "SYNC_ROOT_AND_CONDITIONAL_ASSIGN"
                         : "SYNC_MULTI_ASSIGN_SAME_REG_BITS";
+                } else if (r->range.has_range && e->range.has_range) {
+                    rule_id = "ASSIGN_SLICE_OVERLAP";
                 } else if (!is_sync) {
                     int root_and_conditional = ((r->is_nested && !e->is_nested) ||
                                                 (!r->is_nested && e->is_nested));
+                    /* A conflicting record added during the CURRENT branch
+                     * body sits at index >= path->branch_base. Records below
+                     * that were inherited from outer scope (root or prior
+                     * merged IF/SELECT). This distinguishes "two assigns in
+                     * one branch body" (ASSIGN_MULTIPLE_SAME_BITS) from "same
+                     * target assigned in two independent chains"
+                     * (ASSIGN_INDEPENDENT_IF_SELECT). */
+                    int conflict_in_current_branch = (ri >= path->branch_base);
                     if (root_and_conditional) {
                         rule_id = "ASSIGN_SHADOWING";
                     } else if (!r->is_nested && !e->is_nested) {
                         /* Plain root-level multiple assign to same bits in ASYNCHRONOUS block. */
+                        rule_id = "ASSIGN_MULTIPLE_SAME_BITS";
+                    } else if (conflict_in_current_branch) {
+                        /* Both assignments are in the same branch body — a
+                         * single execution path violation, not independent
+                         * chains. */
                         rule_id = "ASSIGN_MULTIPLE_SAME_BITS";
                     } else {
                         rule_id = "ASSIGN_INDEPENDENT_IF_SELECT";
@@ -334,6 +447,7 @@ static void sem_excl_record_assignment_in_path(JZPathState *path,
         rec.range           = e->range;
         rec.is_nested       = e->is_nested;
         rec.partial         = 0;
+        rec.can_drive_z     = e->can_drive_z;
         rec.stmt            = NULL;
         (void)jz_buf_append(&path->assigns, &rec, sizeof(rec));
         records = (JZAssignRecord *)path->assigns.data;
@@ -505,7 +619,15 @@ static void sem_excl_analyze_if_chain(JZASTNode *block,
                             break;
                         }
                     }
-                    rec->partial = in_all ? 0 : 1;
+                    /* Only upgrade to partial=1 when the decl is missing in
+                     * a sibling branch. Preserve any partial=1 flag already
+                     * set by recursive inner-branch analysis (e.g. a nested
+                     * IF without ELSE inside this branch body) — the outer
+                     * having full coverage does not negate an inner
+                     * uncovered path. */
+                    if (!in_all) {
+                        rec->partial = 1;
+                    }
                 }
             }
 
@@ -545,6 +667,8 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
             break;
         }
     }
+    int has_exhaustive_coverage = (!has_default &&
+        sem_dead_select_cases_exhaustive(select_stmt, scope, project_symbols));
 
     /* Count actual case branches (excluding empty ones) */
     size_t actual_branch_count = 0;
@@ -610,7 +734,7 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
             for (size_t ri = 0; ri < rec_count; ++ri) {
                 JZAssignRecord *rec = &recs[ri];
 
-                if (!has_default) {
+                if (!has_default && !has_exhaustive_coverage) {
                     rec->partial = 1;
                 } else {
                     int in_all = 1;
@@ -623,7 +747,11 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
                             break;
                         }
                     }
-                    rec->partial = in_all ? 0 : 1;
+                    /* Preserve inner-branch partial flags (see matching
+                     * comment in sem_excl_analyze_if_chain). */
+                    if (!in_all) {
+                        rec->partial = 1;
+                    }
                 }
             }
 
@@ -672,6 +800,11 @@ static void sem_excl_analyze_stmt(JZASTNode *stmt,
 
         size_t target_count = targets.len / sizeof(JZAssignTargetEntry);
         JZAssignTargetEntry *entries = (JZAssignTargetEntry *)targets.data;
+        int can_drive_z = sem_flow_expr_contains_z_literal(rhs);
+        for (size_t ti = 0; ti < target_count; ++ti) {
+            entries[ti].can_drive_z = can_drive_z ||
+                sem_flow_node_has_z_assignment_to_decl(scope->node, entries[ti].decl);
+        }
 
         size_t path_count = paths->len / sizeof(JZPathState);
         JZPathState *path_arr = (JZPathState *)paths->data;
@@ -936,6 +1069,19 @@ static void sem_dead_scan_node_for_mem_access(JZASTNode *node,
                             "memory access appears only in unreachable code");
         }
     }
+    if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+        JZMemPortRef ref;
+        memset(&ref, 0, sizeof(ref));
+        if (sem_match_mem_port_qualified_ident(node, scope, NULL, &ref) &&
+            ref.port && (ref.field == MEM_PORT_FIELD_ADDR ||
+                         ref.field == MEM_PORT_FIELD_DATA ||
+                         ref.field == MEM_PORT_FIELD_WDATA)) {
+            sem_report_rule(diagnostics,
+                            node->loc,
+                            "MEM_WARN_DEAD_CODE_ACCESS",
+                            "memory access appears only in unreachable code");
+        }
+    }
 
     for (size_t i = 0; i < node->child_count; ++i) {
         sem_dead_scan_node_for_mem_access(node->children[i], scope, diagnostics);
@@ -1063,8 +1209,90 @@ static void sem_dead_check_if_chain(JZASTNode *block,
     }
 }
 
+static int sem_dead_select_cases_exhaustive(JZASTNode *select_stmt,
+                                            const JZModuleScope *scope,
+                                            const JZBuffer *project_symbols)
+{
+    if (!select_stmt || select_stmt->type != JZ_AST_STMT_SELECT ||
+        select_stmt->child_count < 2 || !scope) {
+        return 0;
+    }
+
+    JZASTNode *selector = select_stmt->children[0];
+    if (!selector) return 0;
+
+    JZBitvecType sel_t;
+    sel_t.width = 0;
+    sel_t.is_signed = 0;
+    infer_expr_type(selector, scope, project_symbols, NULL, &sel_t);
+    if (sel_t.width == 0 || sel_t.width > 20) {
+        return 0;
+    }
+
+    size_t total = (size_t)1u << sel_t.width;
+    unsigned char *seen = (unsigned char *)calloc(total, sizeof(unsigned char));
+    if (!seen) return 0;
+
+    size_t covered = 0;
+    for (size_t i = 1; i < select_stmt->child_count; ++i) {
+        JZASTNode *case_node = select_stmt->children[i];
+        if (!case_node || case_node->type != JZ_AST_STMT_CASE ||
+            case_node->child_count == 0) {
+            continue;
+        }
+
+        JZASTNode *val = case_node->children[0];
+        if (!val || val->type != JZ_AST_EXPR_LITERAL || !val->text) {
+            continue;
+        }
+
+        unsigned value = 0;
+        if (!parse_literal_unsigned_value(val->text, &value)) {
+            continue;
+        }
+        if ((size_t)value >= total || seen[value]) {
+            continue;
+        }
+
+        seen[value] = 1;
+        covered++;
+        if (covered == total) {
+            free(seen);
+            return 1;
+        }
+    }
+
+    free(seen);
+    return 0;
+}
+
+static void sem_dead_check_select(JZASTNode *select_stmt,
+                                  const JZModuleScope *scope,
+                                  const JZBuffer *project_symbols,
+                                  JZDiagnosticList *diagnostics)
+{
+    if (!select_stmt || !scope || !diagnostics) return;
+    if (select_stmt->type != JZ_AST_STMT_SELECT) return;
+    if (!sem_dead_select_cases_exhaustive(select_stmt, scope, project_symbols)) {
+        return;
+    }
+
+    for (size_t i = 1; i < select_stmt->child_count; ++i) {
+        JZASTNode *branch = select_stmt->children[i];
+        if (!branch || branch->type != JZ_AST_STMT_DEFAULT) continue;
+
+        for (size_t j = 0; j < branch->child_count; ++j) {
+            JZASTNode *body = branch->children[j];
+            if (!body) continue;
+            sem_dead_mark_unreachable_branch_body(body, scope, diagnostics);
+        }
+        return;
+    }
+}
+
 static void sem_check_dead_code_for_block(JZASTNode *block,
                                           const JZModuleScope *scope,
+                                          const JZBuffer *project_symbols,
                                           JZDiagnosticList *diagnostics)
 {
     if (!block || !scope) return;
@@ -1094,12 +1322,15 @@ static void sem_check_dead_code_for_block(JZASTNode *block,
 
             sem_dead_check_if_chain(block, start, end, scope, diagnostics);
             i = end - 1;
+        } else if (stmt->type == JZ_AST_STMT_SELECT) {
+            sem_dead_check_select(stmt, scope, project_symbols, diagnostics);
         }
     }
 }
 
 void sem_check_dead_code(JZASTNode *root,
                          JZBuffer *module_scopes,
+                         const JZBuffer *project_symbols,
                          JZDiagnosticList *diagnostics)
 {
     if (!root || root->type != JZ_AST_PROJECT || !module_scopes) return;
@@ -1118,7 +1349,7 @@ void sem_check_dead_code(JZASTNode *root,
             (void)is_async;
             (void)is_sync;
             if (!is_async && !is_sync) continue;
-            sem_check_dead_code_for_block(child, scope, diagnostics);
+            sem_check_dead_code_for_block(child, scope, project_symbols, diagnostics);
         }
     }
 }

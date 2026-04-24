@@ -1,0 +1,83 @@
+// SELECT_NO_MATCH_SYNC_OK: Nested SELECT in SYNC without DEFAULT holds registers.
+// Tests that the warning fires on the inner (nested) SELECT when it has no DEFAULT.
+// Outer SELECT with DEFAULT included to verify no false positive on outer level.
+
+@project SELECT_NO_MATCH_SYNC_OK_nested_sync_no_default
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] sel = _;
+        IN  [8] opcode = _;
+        OUT [1] out_a = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] sel;
+        IN  [8] opcode;
+        OUT [1] out_a;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: nested SELECT in SYNC without DEFAULT in helper module
+        SELECT (sel) {
+            CASE 0 {
+                SELECT (opcode) {
+                    CASE 8'h10 {
+                        r <= VCC;
+                    }
+                    CASE 8'h20 {
+                        r <= GND;
+                    }
+                }
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] sel;
+        IN  [8] opcode;
+        OUT [1] out_a;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] sel = sel;
+        IN  [8] opcode = opcode;
+        OUT [1] out_a = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: nested SELECT in SYNC without DEFAULT in top module
+        SELECT (sel) {
+            CASE 0 {
+                SELECT (opcode) {
+                    CASE 8'hAA {
+                        r <= VCC;
+                    }
+                }
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

@@ -1,0 +1,76 @@
+// HAPPY_PATH: Alias operators on BUS signals — `=`, `=z`, `=s` — merge nets
+// with the appropriate extension behavior. Covers Req #26 (alias operators).
+//
+// Setup: a module owns both a SOURCE and a TARGET port of the same BUS id.
+// Complementary roles make signals with matching BUS-definition directions
+// have complementary read/write on each side, so aliasing them merges one
+// driver and one sink.
+
+@project HAPPY_PATH_bus_alias_operators_ok
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    BUS NARROW_BUS {
+        OUT [4] tx;
+        IN  [4] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] dout_a = _;
+    }
+@endproj
+
+@module AliasMod
+    PORT {
+        IN  [1] clk;
+        BUS MY_BUS SOURCE  src;
+        BUS MY_BUS TARGET  tgt;
+        BUS NARROW_BUS SOURCE nsrc;
+        BUS NARROW_BUS TARGET ntgt;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Alias `=`: width(lhs) == width(rhs). tgt.tx readable in TARGET,
+        // src.tx writable in SOURCE — merges driver and sink into one net.
+        src.tx = tgt.tx;
+        // Alias `=`: rx direction flips — src.rx readable (SOURCE IN),
+        // tgt.rx writable (TARGET OUT), merge.
+        tgt.rx = src.rx;
+        // Alias `=z`: same-width alias with zero-extension semantics
+        nsrc.tx =z ntgt.tx;
+        // Alias `=s`: same-width alias with sign-extension semantics
+        ntgt.rx =s nsrc.rx;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= src.rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] dout_a;
+    }
+
+    @new inst_a AliasMod {
+        IN  [1] clk = clk;
+        BUS MY_BUS SOURCE  src = _;
+        BUS MY_BUS TARGET  tgt = _;
+        BUS NARROW_BUS SOURCE nsrc = _;
+        BUS NARROW_BUS TARGET ntgt = _;
+        OUT [8] data_out = dout_a;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

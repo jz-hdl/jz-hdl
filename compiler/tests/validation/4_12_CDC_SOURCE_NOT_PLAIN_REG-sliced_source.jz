@@ -7,6 +7,7 @@
         IN  [1] clk_a = _;
         IN  [1] clk_b = _;
         OUT [1] data = _;
+        OUT [8] wide_data = _;
     }
 @endproj
 
@@ -16,6 +17,7 @@
         IN  [1] clk_a;
         IN  [1] clk_b;
         OUT [1] data;
+        OUT [8] wide_data;
     }
 
     REGISTER {
@@ -32,6 +34,7 @@
 
     ASYNCHRONOUS {
         data = ok_sync;
+        wide_data = wide_reg;
     }
 
     SYNCHRONOUS(CLK=clk_a) {
@@ -51,6 +54,7 @@
         IN  [1] clk_a;
         IN  [1] clk_b;
         OUT [1] data;
+        OUT [8] wide_data;
     }
 
     REGISTER {
@@ -69,10 +73,12 @@
         IN  [1] clk_a = clk_a;
         IN  [1] clk_b = clk_b;
         OUT [1] data = _;
+        OUT [8] wide_data = _;
     };
 
     ASYNCHRONOUS {
         data = top_ok_sync;
+        wide_data = top_reg;
     }
 
     SYNCHRONOUS(CLK=clk_a) {

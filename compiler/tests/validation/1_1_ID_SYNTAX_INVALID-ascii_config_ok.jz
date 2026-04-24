@@ -1,0 +1,27 @@
+// ID_SYNTAX_INVALID: Happy-path test for valid ASCII identifiers in
+// config-name context. Exercises CONFIG entry names with letters (upper
+// and lower), digits, and underscores. No diagnostics expected.
+
+@project ID_SYNTAX_INVALID_ascii_config_ok
+    CONFIG {
+        my_cfg_01 = 8;
+        aBcD_02   = 4;
+        _leading  = 2;
+        X         = 1;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

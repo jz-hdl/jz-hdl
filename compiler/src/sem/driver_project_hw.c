@@ -19,6 +19,18 @@ static int sem_parse_nonnegative_simple(const char *s, unsigned *out)
     return parse_simple_nonnegative_int(s, out);
 }
 
+static int is_clock_gen_output(JZASTNode *project, const char *clock_name);
+static int is_clock_gen_input(JZASTNode *project, const char *clock_name);
+static int is_clock_gen_named_signal(JZASTNode *project,
+                                     const char *signal_name,
+                                     int include_wire_outputs);
+static int sem_is_valid_diff_clock_ref(JZASTNode *project,
+                                       const JZBuffer *project_symbols,
+                                       const char *name);
+static int sem_is_valid_diff_reset_ref(JZASTNode *project,
+                                       const JZBuffer *project_symbols,
+                                       const char *name);
+
 static int sem_clock_parse_attrs(const char *attrs,
                                  double *out_period,
                                  char *out_edge,
@@ -115,7 +127,13 @@ void sem_check_project_clocks(JZASTNode *project,
         }
 
         if (project_symbols && has_period) {
-            /* Clock with period: must be in IN_PINS (external clock) */
+            /* Clock with period: must be in IN_PINS unless it is a CLOCK_GEN
+             * output, which is reported by the more specific CLOCK_GEN rule.
+             */
+            if (is_clock_gen_output(project, decl->name)) {
+                continue;
+            }
+
             const JZSymbol *pin_sym = project_lookup(project_symbols, decl->name, JZ_SYM_PIN);
             JZASTNode *pin_decl = pin_sym ? pin_sym->node : NULL;
             const char *pin_block = (pin_decl && pin_decl->block_kind)
@@ -198,6 +216,62 @@ static int is_clock_gen_input(JZASTNode *project, const char *clock_name) {
         }
     }
     return 0;
+}
+
+static int is_clock_gen_named_signal(JZASTNode *project,
+                                     const char *signal_name,
+                                     int include_wire_outputs)
+{
+    if (!project || !signal_name) return 0;
+
+    for (size_t i = 0; i < project->child_count; ++i) {
+        JZASTNode *child = project->children[i];
+        if (!child || child->type != JZ_AST_CLOCK_GEN_BLOCK) continue;
+
+        for (size_t u = 0; u < child->child_count; ++u) {
+            JZASTNode *unit = child->children[u];
+            if (!unit || unit->type != JZ_AST_CLOCK_GEN_UNIT) continue;
+
+            for (size_t c = 0; c < unit->child_count; ++c) {
+                JZASTNode *out = unit->children[c];
+                if (!out || !out->name) continue;
+                if (out->type != JZ_AST_CLOCK_GEN_OUT &&
+                    (!include_wire_outputs || out->type != JZ_AST_CLOCK_GEN_WIRE)) {
+                    continue;
+                }
+                if (strcmp(out->name, signal_name) == 0) {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int sem_is_valid_diff_clock_ref(JZASTNode *project,
+                                       const JZBuffer *project_symbols,
+                                       const char *name)
+{
+    if (!name || !*name) return 0;
+    if (project_symbols && project_lookup(project_symbols, name, JZ_SYM_CLOCK)) {
+        return 1;
+    }
+    return is_clock_gen_named_signal(project, name, 0);
+}
+
+static int sem_is_valid_diff_reset_ref(JZASTNode *project,
+                                       const JZBuffer *project_symbols,
+                                       const char *name)
+{
+    if (!name || !*name) return 0;
+    if (project_symbols) {
+        if (project_lookup(project_symbols, name, JZ_SYM_PIN) ||
+            project_lookup(project_symbols, name, JZ_SYM_CLOCK)) {
+            return 1;
+        }
+    }
+    return is_clock_gen_named_signal(project, name, 1);
 }
 
 /* -------------------------------------------------------------------------
@@ -468,20 +542,22 @@ void sem_check_project_clock_gen(JZASTNode *project,
                     has_input = 1;
                     const char *in_selector = elem->block_kind; /* e.g. "REF_CLK", "CE" */
                     const char *in_clk = elem->name;            /* signal name */
+                    char unit_type_lower[32] = {0};
                     if (!in_clk) continue;
+
+                    if (unit->name) {
+                        size_t tlen = strlen(unit->name);
+                        if (tlen >= sizeof(unit_type_lower)) tlen = sizeof(unit_type_lower) - 1;
+                        for (size_t t = 0; t < tlen; ++t) {
+                            unit_type_lower[t] = (char)tolower((unsigned char)unit->name[t]);
+                        }
+                        unit_type_lower[tlen] = '\0';
+                    }
 
                     /* Look up chip data input definition for this selector */
                     const JZChipClockGenInput *chip_input = NULL;
                     if (chip && unit->name && in_selector) {
-                        char tl[32];
-                        {
-                            size_t tlen = strlen(unit->name);
-                            if (tlen >= sizeof(tl)) tlen = sizeof(tl) - 1;
-                            for (size_t t = 0; t < tlen; ++t)
-                                tl[t] = (char)tolower((unsigned char)unit->name[t]);
-                            tl[tlen] = '\0';
-                        }
-                        chip_input = jz_chip_clock_gen_input(chip, tl, in_selector);
+                        chip_input = jz_chip_clock_gen_input(chip, unit_type_lower, in_selector);
                     }
 
                     /* Validate input clock exists in CLOCKS */
@@ -494,8 +570,16 @@ void sem_check_project_clock_gen(JZASTNode *project,
                         continue;
                     }
 
-                    /* Check if input is an output of a prior unit (cross-unit chaining is OK) */
+                    /* Check if input is an output of a prior unit. Chained inputs
+                     * are exempt from period-on-input checks.
+                     *
+                     * The chip-data `chaining` capability is defined for PLLs:
+                     * it governs feeding one PLL from an earlier PLL output.
+                     * Other common derived-clock topologies such as PLL -> CLKDIV
+                     * are valid and documented.
+                     */
                     int is_chained = 0;
+                    int chained_from_prior_pll = 0;
                     {
                         size_t prior_count = prior_unit_outputs.len / sizeof(char *);
                         char **priors = (char **)prior_unit_outputs.data;
@@ -504,6 +588,54 @@ void sem_check_project_clock_gen(JZASTNode *project,
                                 is_chained = 1;
                                 break;
                             }
+                        }
+                    }
+
+                    if (is_chained) {
+                        for (size_t pu = 0; pu < u && !chained_from_prior_pll; ++pu) {
+                            JZASTNode *prior_unit = cgen->children[pu];
+                            if (!prior_unit || prior_unit->type != JZ_AST_CLOCK_GEN_UNIT ||
+                                !prior_unit->name) {
+                                continue;
+                            }
+
+                            if (strncasecmp(prior_unit->name, "PLL", 3) != 0) {
+                                continue;
+                            }
+
+                            for (size_t pc = 0; pc < prior_unit->child_count; ++pc) {
+                                JZASTNode *prior_elem = prior_unit->children[pc];
+                                if (!prior_elem || !prior_elem->name) continue;
+                                if (prior_elem->type != JZ_AST_CLOCK_GEN_OUT &&
+                                    prior_elem->type != JZ_AST_CLOCK_GEN_WIRE) {
+                                    continue;
+                                }
+                                if (strcmp(prior_elem->name, in_clk) == 0) {
+                                    chained_from_prior_pll = 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (is_chained &&
+                        chained_from_prior_pll &&
+                        chip &&
+                        unit_type_lower[0] != '\0' &&
+                        strncmp(unit_type_lower, "pll", 3) == 0) {
+                        int chaining_supported = 0;
+                        int has_chaining =
+                            jz_chip_clock_gen_chaining(chip, unit_type_lower,
+                                                       &chaining_supported);
+                        if (!has_chaining || !chaining_supported) {
+                            char msg[256];
+                            snprintf(msg, sizeof(msg),
+                                     "CLOCK_GEN input '%s' is driven by an earlier "
+                                     "%s unit, but %s chaining is not supported on "
+                                     "this chip",
+                                     in_clk, unit->name, unit->name);
+                            sem_report_rule(diagnostics, elem->loc,
+                                            "CLOCK_GEN_CHAINING_UNSUPPORTED", msg);
                         }
                     }
 
@@ -538,16 +670,8 @@ void sem_check_project_clock_gen(JZASTNode *project,
                             } else if (chip && unit->name) {
                                 /* Fallback: use legacy refclk_range */
                                 double freq_mhz = 1000.0 / period;
-                                char tl[32];
-                                {
-                                    size_t tlen = strlen(unit->name);
-                                    if (tlen >= sizeof(tl)) tlen = sizeof(tl) - 1;
-                                    for (size_t t = 0; t < tlen; ++t)
-                                        tl[t] = (char)tolower((unsigned char)unit->name[t]);
-                                    tl[tlen] = '\0';
-                                }
                                 double rmin = 0.0, rmax = 0.0;
-                                if (jz_chip_clock_gen_refclk_range(chip, tl, &rmin, &rmax)) {
+                                if (jz_chip_clock_gen_refclk_range(chip, unit_type_lower, &rmin, &rmax)) {
                                     if (freq_mhz < rmin || freq_mhz > rmax) {
                                         char msg[512];
                                         snprintf(msg, sizeof(msg),
@@ -556,6 +680,46 @@ void sem_check_project_clock_gen(JZASTNode *project,
                                                  freq_mhz, rmin, rmax);
                                         sem_report_rule(diagnostics, elem->loc,
                                                         "CLOCK_GEN_INPUT_FREQ_OUT_OF_RANGE", msg);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    /* pad_exclusive: if the chip data says the PAD variant
+                     * exclusively owns the IO cell, the ref clock pin must
+                     * not also appear as a direct binding target in @top
+                     * (which would require an SB_IO on the same pin).
+                     * Users should bind to the PLL's BASE output instead. */
+                    if (chip && unit->name) {
+                        int pe = 0;
+                        if (jz_chip_clock_gen_pad_exclusive(chip, unit_type_lower, &pe) && pe) {
+                            const JZSymbol *pin_sym_pe = project_lookup(
+                                project_symbols, in_clk, JZ_SYM_PIN);
+                            if (pin_sym_pe) {
+                                JZASTNode *top_new_pe = sem_find_project_top_new(project);
+                                if (top_new_pe) {
+                                    for (size_t bi = 0; bi < top_new_pe->child_count; ++bi) {
+                                        JZASTNode *bnd = top_new_pe->children[bi];
+                                        if (!bnd || bnd->type != JZ_AST_PORT_DECL) continue;
+                                        const char *tgt = bnd->text;
+                                        if (!tgt || tgt[0] == '\0') tgt = bnd->name;
+                                        if (!tgt) continue;
+                                        /* Strip leading ~ for inverted bindings */
+                                        const char *tgt_clean = tgt;
+                                        while (*tgt_clean == '~' || *tgt_clean == ' ')
+                                            tgt_clean++;
+                                        if (strcmp(tgt_clean, in_clk) == 0) {
+                                            char msg[512];
+                                            snprintf(msg, sizeof(msg),
+                                                "on this chip the PLL pad variant exclusively "
+                                                "owns the IO cell; '%s' cannot also be used "
+                                                "as a logic signal in @top — use a PLL BASE "
+                                                "output instead", in_clk);
+                                            sem_report_rule(diagnostics, elem->loc,
+                                                "CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT", msg);
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -642,13 +806,25 @@ void sem_check_project_clock_gen(JZASTNode *project,
                             continue;
                         }
 
+                        const JZSymbol *pin_sym = project_lookup(project_symbols, out_clk, JZ_SYM_PIN);
+                        int output_is_input_pin =
+                            pin_sym && pin_sym->node && pin_sym->node->block_kind &&
+                            strcmp(pin_sym->node->block_kind, "IN_PINS") == 0;
+
                         /* Output clock must NOT have a period */
                         JZASTNode *clk_decl = clk_sym->node;
+                        int output_has_period = 0;
                         if (clk_decl) {
                             double period = 0.0;
                             char edge[32];
                             sem_clock_parse_attrs(clk_decl->text, &period, edge, sizeof(edge));
-                            if (period > 0.0) {
+                            output_has_period = (period > 0.0);
+                            if (output_has_period && output_is_input_pin) {
+                                sem_report_rule(diagnostics,
+                                                elem->loc,
+                                                "CLOCK_SOURCE_AMBIGUOUS",
+                                                "clock is declared as both an IN_PINS clock and a CLOCK_GEN output");
+                            } else if (output_has_period) {
                                 sem_report_rule(diagnostics,
                                                 elem->loc,
                                                 "CLOCK_GEN_OUTPUT_HAS_PERIOD",
@@ -657,14 +833,11 @@ void sem_check_project_clock_gen(JZASTNode *project,
                         }
 
                         /* Output clock must NOT be an IN_PINS */
-                        const JZSymbol *pin_sym = project_lookup(project_symbols, out_clk, JZ_SYM_PIN);
-                        if (pin_sym && pin_sym->node && pin_sym->node->block_kind) {
-                            if (strcmp(pin_sym->node->block_kind, "IN_PINS") == 0) {
-                                sem_report_rule(diagnostics,
-                                                elem->loc,
-                                                "CLOCK_GEN_OUTPUT_IS_INPUT_PIN",
-                                                "CLOCK_GEN output clock must not be declared as IN_PINS");
-                            }
+                        if (output_is_input_pin && !output_has_period) {
+                            sem_report_rule(diagnostics,
+                                            elem->loc,
+                                            "CLOCK_GEN_OUTPUT_IS_INPUT_PIN",
+                                            "CLOCK_GEN output clock must not be declared as IN_PINS");
                         }
                     }
 
@@ -867,14 +1040,6 @@ void sem_check_project_clock_gen(JZASTNode *project,
                                         "CLOCK_PERIOD_NONPOSITIVE",
                                         "clock period must be positive or clock must be CLOCK_GEN output");
                     }
-                }
-            } else if (period > 0.0) {
-                /* Clock with period must NOT be a CLOCK_GEN output */
-                if (is_clock_gen_output(project, decl->name)) {
-                    sem_report_rule(diagnostics,
-                                    decl->loc,
-                                    "CLOCK_SOURCE_AMBIGUOUS",
-                                    "clock has period but is also a CLOCK_GEN output");
                 }
             }
         }
@@ -1122,8 +1287,6 @@ void sem_check_project_pins(JZASTNode *project,
                             const JZChipData *chip,
                             JZDiagnosticList *diagnostics)
 {
-    (void)project_symbols;
-
     if (!project || project->type != JZ_AST_PROJECT) return;
 
     for (size_t i = 0; i < project->child_count; ++i) {
@@ -1135,7 +1298,9 @@ void sem_check_project_pins(JZASTNode *project,
             continue;
         }
 
+        int is_in_block = (blk->type == JZ_AST_IN_PINS_BLOCK);
         int is_out_block = (blk->type == JZ_AST_OUT_PINS_BLOCK);
+        int is_inout_block = (blk->type == JZ_AST_INOUT_PINS_BLOCK);
         int require_drive = (blk->type == JZ_AST_OUT_PINS_BLOCK || blk->type == JZ_AST_INOUT_PINS_BLOCK);
 
         for (size_t j = 0; j < blk->child_count; ++j) {
@@ -1307,43 +1472,109 @@ void sem_check_project_pins(JZASTNode *project,
                                 "width attribute is only valid when mode=DIFFERENTIAL");
             }
 
-            /* --- fclk / pclk / reset: required set depends on chip serializer --- */
-            if (is_diff && is_out_block) {
+            /* --- fclk / pclk / reset: required set depends on chip serializer/deserializer --- */
+            if (is_diff) {
                 char fclk_val[64], pclk_val[64], reset_val[64];
                 int has_fclk  = sem_extract_attr(attrs, "fclk",  fclk_val,  sizeof(fclk_val));
                 int has_pclk  = sem_extract_attr(attrs, "pclk",  pclk_val,  sizeof(pclk_val));
                 int has_reset = sem_extract_attr(attrs, "reset", reset_val, sizeof(reset_val));
+                int pin_width = 0;
+                int have_serdes_width = 0;
 
-                /* Determine which clocks this serializer actually needs */
-                int need_fclk = 1, need_pclk = 1, need_reset = 1;
-                if (chip && has_width) {
+                if (has_width) {
                     char *endp = NULL;
                     long wn = strtol(width_val, &endp, 10);
                     if (endp && endp != width_val && *endp == '\0' && wn > 0) {
+                        pin_width = (int)wn;
+                        have_serdes_width = 1;
+                    }
+                }
+
+                int need_out_fclk = 0, need_out_pclk = 0, need_out_reset = 0;
+                int need_in_fclk = 0, need_in_pclk = 0, need_in_reset = 0;
+
+                if (is_out_block || (is_inout_block && have_serdes_width)) {
+                    need_out_fclk = 1;
+                    need_out_pclk = 1;
+                    need_out_reset = 1;
+                    if (chip && have_serdes_width) {
                         int rf = 1, rp = 1, rr = 1;
                         if (jz_chip_diff_serializer_required_clocks(
-                                chip, (int)wn, &rf, &rp, &rr)) {
-                            need_fclk = rf;
-                            need_pclk = rp;
-                            need_reset = rr;
+                                chip, pin_width, &rf, &rp, &rr)) {
+                            need_out_fclk = rf;
+                            need_out_pclk = rp;
+                            need_out_reset = rr;
                         }
                     }
                 }
 
-                if (need_fclk && !has_fclk) {
-                    sem_report_rule(diagnostics, decl->loc,
-                                    "PIN_DIFF_OUT_MISSING_FCLK",
-                                    "differential output pin requires fclk attribute");
+                if ((is_in_block || is_inout_block) && have_serdes_width) {
+                    need_in_fclk = 1;
+                    need_in_pclk = 1;
+                    need_in_reset = 1;
+                    if (chip) {
+                        int rf = 1, rp = 1, rr = 1;
+                        if (jz_chip_diff_deserializer_required_clocks(
+                                chip, pin_width, &rf, &rp, &rr)) {
+                            need_in_fclk = rf;
+                            need_in_pclk = rp;
+                            need_in_reset = rr;
+                        }
+                    }
                 }
-                if (need_pclk && !has_pclk) {
-                    sem_report_rule(diagnostics, decl->loc,
-                                    "PIN_DIFF_OUT_MISSING_PCLK",
-                                    "differential output pin requires pclk attribute");
+
+                if (is_out_block) {
+                    if (need_out_fclk && !has_fclk) {
+                        sem_report_rule(diagnostics, decl->loc,
+                                        "PIN_DIFF_OUT_MISSING_FCLK",
+                                        "differential output pin requires fclk attribute");
+                    }
+                    if (need_out_pclk && !has_pclk) {
+                        sem_report_rule(diagnostics, decl->loc,
+                                        "PIN_DIFF_OUT_MISSING_PCLK",
+                                        "differential output pin requires pclk attribute");
+                    }
+                    if (need_out_reset && !has_reset) {
+                        sem_report_rule(diagnostics, decl->loc,
+                                        "PIN_DIFF_OUT_MISSING_RESET",
+                                        "differential output pin requires reset attribute");
+                    }
+                } else if (is_in_block || is_inout_block) {
+                    int need_fclk = need_in_fclk || need_out_fclk;
+                    int need_pclk = need_in_pclk || need_out_pclk;
+                    int need_reset = need_in_reset || need_out_reset;
+
+                    if (need_fclk && !has_fclk) {
+                        sem_report_rule(diagnostics, decl->loc,
+                                        "PIN_DIFF_MISSING_FCLK",
+                                        "differential input/inout pin requires fclk attribute");
+                    }
+                    if (need_pclk && !has_pclk) {
+                        sem_report_rule(diagnostics, decl->loc,
+                                        "PIN_DIFF_MISSING_PCLK",
+                                        "differential input/inout pin requires pclk attribute");
+                    }
+                    if (need_reset && !has_reset) {
+                        sem_report_rule(diagnostics, decl->loc,
+                                        "PIN_DIFF_MISSING_RESET",
+                                        "differential input/inout pin requires reset attribute");
+                    }
                 }
-                if (need_reset && !has_reset) {
+
+                if (has_fclk && !sem_is_valid_diff_clock_ref(project, project_symbols, fclk_val)) {
                     sem_report_rule(diagnostics, decl->loc,
-                                    "PIN_DIFF_OUT_MISSING_RESET",
-                                    "differential output pin requires reset attribute");
+                                    "PIN_DIFF_FCLK_INVALID",
+                                    "differential pin fclk must reference CLOCKS or CLOCK_GEN output");
+                }
+                if (has_pclk && !sem_is_valid_diff_clock_ref(project, project_symbols, pclk_val)) {
+                    sem_report_rule(diagnostics, decl->loc,
+                                    "PIN_DIFF_PCLK_INVALID",
+                                    "differential pin pclk must reference CLOCKS or CLOCK_GEN output");
+                }
+                if (has_reset && !sem_is_valid_diff_reset_ref(project, project_symbols, reset_val)) {
+                    sem_report_rule(diagnostics, decl->loc,
+                                    "PIN_DIFF_RESET_INVALID",
+                                    "differential pin reset must reference a declared pin, clock, or CLOCK_GEN signal");
                 }
             }
         }
@@ -1784,6 +2015,104 @@ static int sem_top_binding_has_literal(const char *expr)
     return 0;
 }
 
+static JZASTNode *sem_find_top_module_port(JZASTNode *top_mod, const char *port_name)
+{
+    if (!top_mod || !port_name || !*port_name) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < top_mod->child_count; ++i) {
+        JZASTNode *blk = top_mod->children[i];
+        if (!blk || blk->type != JZ_AST_PORT_BLOCK) continue;
+
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *pd = blk->children[j];
+            if (!pd || pd->type != JZ_AST_PORT_DECL || !pd->name) continue;
+            if (strcmp(pd->name, port_name) == 0) {
+                return pd;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static int sem_clock_binds_to_top_in_port(JZASTNode *top_mod,
+                                          JZASTNode *top_new,
+                                          const char *clock_name)
+{
+    if (!top_mod || !top_new || !clock_name || !*clock_name) {
+        return 0;
+    }
+
+    for (size_t i = 0; i < top_new->child_count; ++i) {
+        JZASTNode *binding = top_new->children[i];
+        if (!binding || binding->type != JZ_AST_PORT_DECL || !binding->name) continue;
+
+        const char *target_raw = (binding->text && binding->text[0] != '\0')
+                               ? binding->text
+                               : binding->name;
+        char target_buf[256];
+        sem_trim_copy(target_raw, target_buf, sizeof(target_buf));
+        if (strcmp(target_buf, clock_name) != 0) {
+            continue;
+        }
+
+        JZASTNode *mod_port = sem_find_top_module_port(top_mod, binding->name);
+        if (mod_port && mod_port->block_kind &&
+            strcmp(mod_port->block_kind, "IN") == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int sem_clock_used_by_project_hw(JZASTNode *project, const char *clock_name)
+{
+    if (!project || !clock_name || !*clock_name) {
+        return 0;
+    }
+
+    if (is_clock_gen_input(project, clock_name)) {
+        return 1;
+    }
+
+    for (size_t i = 0; i < project->child_count; ++i) {
+        JZASTNode *blk = project->children[i];
+        if (!blk) continue;
+        if (blk->type != JZ_AST_IN_PINS_BLOCK &&
+            blk->type != JZ_AST_OUT_PINS_BLOCK &&
+            blk->type != JZ_AST_INOUT_PINS_BLOCK) {
+            continue;
+        }
+
+        for (size_t j = 0; j < blk->child_count; ++j) {
+            JZASTNode *decl = blk->children[j];
+            if (!decl || decl->type != JZ_AST_PORT_DECL || !decl->text) continue;
+
+            char pattern[96];
+
+            snprintf(pattern, sizeof(pattern), "fclk = %s", clock_name);
+            if (strstr(decl->text, pattern) != NULL) {
+                return 1;
+            }
+
+            snprintf(pattern, sizeof(pattern), "pclk = %s", clock_name);
+            if (strstr(decl->text, pattern) != NULL) {
+                return 1;
+            }
+
+            snprintf(pattern, sizeof(pattern), "reset = %s", clock_name);
+            if (strstr(decl->text, pattern) != NULL) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 void sem_check_project_top_new(JZASTNode *project,
                                JZBuffer *module_scopes,
                                const JZBuffer *project_symbols,
@@ -1817,6 +2146,34 @@ void sem_check_project_top_new(JZASTNode *project,
 
     JZASTNode **bindings = top_new->children;
     size_t binding_count = top_new->child_count;
+    size_t project_symbol_count = project_symbols->len / sizeof(JZSymbol);
+    const JZSymbol *project_syms = (const JZSymbol *)project_symbols->data;
+
+    for (size_t i = 0; i < project_symbol_count; ++i) {
+        const JZSymbol *sym = &project_syms[i];
+        if (sym->kind != JZ_SYM_CLOCK || !sym->name || !sym->node) continue;
+
+        double period = 0.0;
+        char edge[32];
+        sem_clock_parse_attrs(sym->node->text, &period, edge, sizeof(edge));
+        if (period <= 0.0 || is_clock_gen_output(project, sym->name)) {
+            continue;
+        }
+
+        const JZSymbol *pin_sym = project_lookup(project_symbols, sym->name, JZ_SYM_PIN);
+        if (!pin_sym || !pin_sym->node || !pin_sym->node->block_kind ||
+            strcmp(pin_sym->node->block_kind, "IN_PINS") != 0) {
+            continue;
+        }
+
+        if (!sem_clock_binds_to_top_in_port(top_mod, top_new, sym->name) &&
+            !sem_clock_used_by_project_hw(project, sym->name)) {
+            sem_report_rule(diagnostics,
+                            sym->node->loc,
+                            "CLOCK_NAME_NOT_TOP_IN_PORT",
+                            "clock with period in CLOCKS is not bound to any IN port on the top module");
+        }
+    }
 
     for (size_t i = 0; i < top_mod->child_count; ++i) {
         JZASTNode *blk = top_mod->children[i];
@@ -2025,19 +2382,7 @@ void sem_check_project_top_new(JZASTNode *project,
             }
         }
 
-        JZASTNode *mod_port = NULL;
-        for (size_t i = 0; i < top_mod->child_count && !mod_port; ++i) {
-            JZASTNode *blk = top_mod->children[i];
-            if (!blk || blk->type != JZ_AST_PORT_BLOCK) continue;
-            for (size_t j = 0; j < blk->child_count; ++j) {
-                JZASTNode *pd = blk->children[j];
-                if (!pd || pd->type != JZ_AST_PORT_DECL || !pd->name) continue;
-                if (strcmp(pd->name, port_name) == 0) {
-                    mod_port = pd;
-                    break;
-                }
-            }
-        }
+        JZASTNode *mod_port = sem_find_top_module_port(top_mod, port_name);
 
         if (!mod_port) {
             sem_report_rule(diagnostics,

@@ -1,0 +1,80 @@
+// HAPPY_PATH: abs() behavioral examples from §5.5.18.
+// Exercises:
+//   Req #4 - positive, negative, and most-negative operand cases are used.
+
+@project HAPPY_PATH_abs_semantics_examples_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] pos_val = _;
+        IN  [8] neg_val = _;
+        IN  [8] min_val = _;
+        OUT [9] out_pos = _;
+        OUT [9] out_neg = _;
+        OUT [9] out_min = _;
+    }
+@endproj
+
+@module HelperAbsSemantics
+    PORT {
+        IN  [8] pos_val;
+        IN  [8] neg_val;
+        IN  [8] min_val;
+        OUT [9] out_pos;
+        OUT [9] out_neg;
+        OUT [9] out_min;
+    }
+
+    ASYNCHRONOUS {
+        // Req #4: sign bit 0 case.
+        out_pos = abs(pos_val);
+        // Req #4: sign bit 1 case with non-overflow negative value.
+        out_neg = abs(neg_val);
+        // Req #4: most-negative value case where overflow flag is the MSB.
+        out_min = abs(min_val);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] pos_val;
+        IN  [8] neg_val;
+        IN  [8] min_val;
+        OUT [9] out_pos;
+        OUT [9] out_neg;
+        OUT [9] out_min;
+    }
+
+    WIRE {
+        h_pos [9];
+        h_neg [9];
+        h_min [9];
+    }
+
+    REGISTER {
+        hold [1] = 1'b0;
+    }
+
+    @new inst_h HelperAbsSemantics {
+        IN  [8] pos_val = pos_val;
+        IN  [8] neg_val = neg_val;
+        IN  [8] min_val = min_val;
+        OUT [9] out_pos = h_pos;
+        OUT [9] out_neg = h_neg;
+        OUT [9] out_min = h_min;
+    };
+
+    ASYNCHRONOUS {
+        out_pos = h_pos;
+        out_neg = h_neg;
+        out_min = h_min;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        hold <= ~hold;
+    }
+@endmod

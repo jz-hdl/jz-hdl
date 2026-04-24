@@ -1,0 +1,11 @@
+// Imported module for imported-vs-local collision.
+
+@module SharedLocal
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = din;
+    }
+@endmod

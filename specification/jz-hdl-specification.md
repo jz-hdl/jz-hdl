@@ -24,6 +24,11 @@ header-includes:
 - Maximum length: 255 characters
 - Case-sensitive
 - Single underscore (`_`) is invalid as a regular identifier; reserved as a "no-connect" placeholder in module instantiation port lists only
+- **Diagnostics:**
+  - Length violations (>255 characters) → `ID_SYNTAX_INVALID`
+  - Character-class violations (e.g. `.`, `$`, `#`, non-ASCII) and leading-digit violations → `PARSE000`. The lexer enforces the character set structurally: `is_identifier_start()` accepts only `[A-Za-z_]` and `is_identifier_char()` accepts only `[A-Za-z0-9_]`, so invalid characters are never part of an identifier token. They are emitted as separate tokens and rejected by the parser.
+  - Single underscore in non-no-connect context → `ID_SINGLE_UNDERSCORE`
+  - Reserved keywords and reserved identifiers used as declaration names → `KEYWORD_AS_IDENTIFIER` (covers both lists below)
 - Keywords (uppercase, reserved):
   - Project: CLOCKS, IN_PINS, OUT_PINS, INOUT_PINS, MAP, CLOCK_GEN, BUS
   - Flow Control: IF, ELIF, ELSE, SELECT, CASE, DEFAULT, MUX
@@ -94,7 +99,7 @@ A signal location whose value is architecturally visible or externally observabl
 A statically distinct control-flow branch through a block, defined by mutually exclusive IF/ELIF/ELSE or SELECT/CASE structures. Execution paths are determined structurally, not by symbolic reasoning. Independent control-flow chains at the same nesting level are treated as potentially concurrent (see Section 1.5).
 
 **Assignable Identifier:**
-A signal that may legally appear on the left-hand side of an assignment. Includes REGISTER (in SYNCHRONOUS only), WIRE, OUT port, INOUT port, LATCH (guarded, in ASYNCHRONOUS only), and writable BUS signals.
+A signal that may legally appear on the left-hand side of an assignment. Includes REGISTER (in SYNCHRONOUS only), WIRE, OUT port, INOUT port, LATCH (guarded, in ASYNCHRONOUS only), and writable BUS signals (see Section 6.8).
 
 **Register:**
 A storage signal bound to a clock domain (flip-flops) that exposes:
@@ -1067,10 +1072,14 @@ MUX {
 
 **Width Rule:**
   - Let N = number of aggregated sources
-  - Selector width should be >= clog2(N)
-  - If narrower: implicitly zero-extend
+  - Required selector width = `clog2(N)` (`clog2(1)` = `1`)
+  - Runtime selector width must match exactly
+  - If selector width differs, compile error unless explicitly widened or sliced before access
   - If statically provable out-of-range: compile error
   - If runtime out-of-range indices return 0
+
+Runtime addressed selectors are width-checked as ordinary runtime bit-vectors.
+This differs from compile-time indexing constructs such as `IDX`, which are substituted during elaboration and are not runtime signals.
 
 **Read-Only:**
 - A `MUX` identifier is **read-only** and acts as a source.
@@ -4034,16 +4043,16 @@ The electrical configuration of a pin includes a `mode` attribute which determin
 *   **`mode=DIFFERENTIAL`:** A 1-to-2 mapping. Each logical bit corresponds to one differential pair consisting of a **Positive (P)** and **Negative (N)** physical pin.
 
 **Serialization Width (`width`):**
-*   **`width=N`:** Specifies the serialization/deserialization ratio for a differential pin. The pin's logical width becomes `N` — this is the width seen by the `@top` binding and the module port. Physically, the pin remains a single differential pair (or array of pairs if declared with `[W]`).
+*   **`width=N`:** Specifies the logical parallel data width for a differential pin. The pin's logical width becomes `N` — this is the width seen by the `@top` binding and the module port. Physically, the pin remains a single differential pair (or array of pairs if declared with `[W]`). The compiler selects the smallest serializer/deserializer ratio supported by the target chip that is greater than or equal to `N`; that selected primitive ratio is a backend detail and does not change the logical width exposed by the language.
 *   For `OUT_PINS`: The compiler instantiates an N:1 serializer (encoder) that accepts `N` parallel bits from the module and shifts them out serially through the differential output.
 *   For `IN_PINS`: The compiler instantiates a 1:N deserializer (decoder) that samples serial data from the differential input and presents `N` parallel bits to the module.
 *   For `INOUT_PINS`: The compiler instantiates both a serializer and deserializer, switched by the direction control (tri-state logic).
 *   When omitted, the default width is 1 (no serialization).
-*   The `width` value must match a serializer ratio supported by the target chip (validated against chip data).
+*   The `width` value does not need to exactly match a serializer ratio listed in the chip data. Instead, backend code generation selects the smallest supported ratio greater than or equal to `width`. If the selected primitive ratio is wider than the logical `width`, the backend wrapper/template layer is responsible for tying off, padding, or otherwise safely handling the surplus serializer/deserializer lanes without changing the user-visible width. If the target chip has no serializer/deserializer primitive with ratio greater than or equal to `width`, compilation fails with an unsupported-width diagnostic during backend emission.
 *   The `@top` binding width must equal the pin's `width` value.
 
 **Serialization Clock and Reset Attributes (`fclk`, `pclk`, `reset`):**
-*   **`fclk` (fast clock):** The high-speed serialization clock. Must reference a clock declared in the `CLOCKS` block or generated by `CLOCK_GEN`. The frequency must be an integer multiple of `pclk` matching the chip's serializer ratio (e.g., 5x for a 10:1 serializer with DDR).
+*   **`fclk` (fast clock):** The high-speed serialization clock. Must reference a clock declared in the `CLOCKS` block or generated by `CLOCK_GEN`. The frequency must be an integer multiple of `pclk` matching the selected serializer/deserializer ratio (e.g., 5x for a selected 10:1 serializer with DDR).
 *   **`pclk` (parallel clock):** The parallel data clock at which the module produces data. Must reference a clock declared in the `CLOCKS` block or generated by `CLOCK_GEN`.
 *   **`reset` (serializer reset):** The signal used to reset the serializer primitive after power-on or clock stabilization. Typically references the PLL `LOCK` output declared in the `CLOCK_GEN` block (e.g., `OUT LOCK pll_lock`). The compiler automatically inverts this signal: the serializer is held in reset while the lock signal is low (PLL not locked), and released when it goes high (PLL locked).
 *   When `mode=DIFFERENTIAL` on an output pin, the compiler uses the chip data's `differential` section to automatically instantiate the appropriate serializer and differential buffer primitives.
@@ -4051,14 +4060,14 @@ The electrical configuration of a pin includes a `mode` attribute which determin
 **Validation Rules:**
 1.  **Logical Width vs. Physical Pins:** If a signal is declared with width `[W]` and `mode=DIFFERENTIAL`, the compiler expects exactly `W` pairs of pins (total $2W$ physical pins) to be defined in the `MAP` block.
 2.  **Standard Compatibility:** If `mode=DIFFERENTIAL` is specified, the `standard` must be a valid differential standard supported by the target `CHIP` (e.g., `LVDS25`, `MINI_LVDS`, `TMDS33`).
-3.  **Drive Strength:** For differential standards, the `drive` attribute is optional and may be ignored if the chip uses fixed current-mode logic (CML) for that standard.
+3.  **Drive Strength:** For differential standards, the `drive` attribute is still required on `OUT_PINS` and `INOUT_PINS`. Some chips may ignore the numeric value when the differential primitive uses fixed current-mode logic (CML), but the declaration must still provide a positive `drive=` value.
 4. **Termination:** Valid for `mode=DIFFERENTIAL` and for single-ended SSTL/HSTL standards; OFF by default. When ON, termination resistors will be active (100 Ohm differential or on-die termination for SSTL/HSTL, if supported by your chip). The compiler always emits the termination setting explicitly in constraints output (e.g., `IN_TERM NONE` in Xilinx XDC when OFF, `DIFF_TERM FALSE` for differential inputs) to ensure deterministic IOB configuration.
 5. **PULL Mode:** The `pull` setting is not valid on `OUT` pins.
   - none: No internal resistor (default).
   - up: Internal pull-up resistor to VCC.
   - down: Internal pull-down resistor to GND.
-6. **Serialization Attributes:** Which of `fclk`, `pclk`, and `reset` are required for a differential pin depends on the target chip's serializer or deserializer primitive, as declared by the `required_clocks` field in the chip data. For example, a simple DDR primitive (ratio 2) may only require `fclk`, while a 10:1 serializer typically requires all three. When no chip data is available (GENERIC target), all three are required. `fclk` and `pclk` must reference valid clock names declared in `CLOCKS` or generated by `CLOCK_GEN`. `reset` must reference a valid signal name, typically a `CLOCK_GEN` `LOCK` output.
-7. **Width Attribute:** `width` is only valid when `mode=DIFFERENTIAL` is specified. It must be a positive integer matching a serializer ratio supported by the target chip.
+6. **Serialization Attributes:** Which of `fclk`, `pclk`, and `reset` are required for a differential pin depends on the target chip's selected serializer or deserializer primitive, as declared by the `required_clocks` field in the chip data. For example, a simple DDR primitive (ratio 2) may only require `fclk`, while a 10:1 serializer typically requires all three. When no chip data is available (GENERIC target), all three are required. `fclk` and `pclk` must reference valid clock names declared in `CLOCKS` or generated by `CLOCK_GEN`. `reset` must reference a valid signal name, typically a `CLOCK_GEN` `LOCK` output.
+7. **Width Attribute:** `width` is only valid when `mode=DIFFERENTIAL` is specified. It must be a positive integer. Support against chip data is resolved during backend wrapper generation by selecting the smallest supported serializer/deserializer ratio greater than or equal to `width`; if the selected primitive is wider than `width`, the backend is responsible for padding or tying off the extra lanes while preserving the logical project-visible width. Compilation fails if no such primitive exists.
 
 ### 6.6 MAP Block (Physical Pin Assignment)
 
@@ -4681,6 +4690,9 @@ SYNCHRONOUS(CLK=clk) {
 
 ### 7.3 Memory Access Syntax
 
+Runtime memory addresses are width-checked as ordinary runtime bit-vectors.
+This differs from compile-time indexing constructs such as `IDX`, which are substituted during elaboration and are not runtime signals.
+
 #### 7.3.1 Asynchronous Read
 
 **Declaration:**
@@ -4700,8 +4712,8 @@ ASYNCHRONOUS {
 ```
 
 **Width Rules:**
-- `address_signal` width must be ≤ `ceil(log2(256))` = 8 bits
-- If narrower, zero-extended to fit
+- `address_signal` width must equal `ceil(log2(256))` = 8 bits
+- If width differs, compile error unless explicitly widened or sliced before access
 - Result width = memory's `word_width` (8 bits in this example)
 
 **Semantics:**
@@ -4755,8 +4767,8 @@ SYNCHRONOUS(CLK=clk) {
 - `.data` is automatically exposed as a readable net (usable in `ASYNCHRONOUS` blocks), and may in turn participate in other `=`, `=>`, or `<=` assignments.
 
 **Width Rules:**
-- `address_signal` width must be ≤ `ceil(log2(depth))`
-- If narrower, zero-extended
+- `address_signal` width must equal `ceil(log2(depth))`
+- The value assigned to `.addr` must have exact address width; use `<=z` for narrower values or an explicit slice for wider values
 - Result width = memory's `word_width`
 
 **Read Output Semantics:**
@@ -4810,10 +4822,14 @@ SYNCHRONOUS(CLK=clk) {
 ```
 
 **Width Rules:**
-- `address_signal` width must be ≤ `ceil(log2(depth))`
-- If narrower, zero-extended
-- `data_signal` width must be ≤ memory's `word_width`
-- If narrower, zero-extended to match word width
+- `address_signal` width must equal `ceil(log2(depth))`
+- The address expression must have exact address width; widen or slice it explicitly before the access
+- Bare `<=` requires `data_signal` width to equal memory's `word_width`
+- If narrower, use `<=z` to zero-extend to match word width
+- If wider, compile error unless explicitly sliced to word width
+
+Compile-time indexing and runtime addressing are intentionally distinct.
+Compile-time constructs such as `IDX` are substituted during elaboration, while runtime addresses and write data follow the normal exact-width rules unless an explicit widening operator is used.
 
 **Semantics:**
 - Address and data are captured at clock edge

@@ -1,6 +1,7 @@
 // WIDTH_NONPOSITIVE_OR_NONINT: Declared width <= 0 or not an integer.
 // Tests zero-width declarations in PORT, WIRE, and REGISTER blocks
-// across two modules connected via @new.
+// across two modules connected via @new. Zero-width wires are inherently
+// unusable, so WARN_UNUSED_WIRE cascades are expected for those declarations.
 // Valid positive-width declarations included to verify no false positives.
 
 @project WIDTH_NONPOSITIVE_OR_NONINT_zero_width

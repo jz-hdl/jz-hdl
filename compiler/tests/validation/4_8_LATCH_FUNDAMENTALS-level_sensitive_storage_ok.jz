@@ -1,0 +1,84 @@
+// LATCH_FUNDAMENTALS: A LATCH is an explicit level-sensitive storage
+// element. Unlike REGISTERs (edge-triggered), a latch updates
+// continuously while enable is active and holds when enable is inactive.
+// Latches are never inferred implicitly — all latch storage must be
+// declared and written explicitly. A latch declares storage only, does
+// not belong to any clock domain, and has no reset/init value.
+// No diagnostics expected.
+
+@project LATCH_FUNDAMENTALS_level_sensitive_storage_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] enable = _;
+        IN  [8] din = _;
+        IN  [1] set_sig = _;
+        IN  [1] reset_sig = _;
+        OUT [8] d_out = _;
+        OUT [1] sr_out = _;
+    }
+@endproj
+
+// Helper module demonstrates fundamental latch storage semantics:
+// - D-latch and SR-latch explicitly declared
+// - No clock domain associated with latches
+// - No reset value; initial state is indeterminate by spec
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [8] din;
+        IN  [1] set_sig;
+        IN  [1] reset_sig;
+        OUT [8] d_out;
+        OUT [1] sr_out;
+    }
+
+    LATCH {
+        // Explicit D-latch storage declaration, no clock domain, no reset.
+        lat_d [8] D;
+        // Explicit SR-latch storage declaration, no clock domain, no reset.
+        lat_sr [1] SR;
+    }
+
+    REGISTER {
+        // Register for contrast: requires reset value and clock domain.
+        r_edge [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Level-sensitive: lat_d tracks din continuously while enable=1
+        // and holds its value while enable=0. Written explicitly.
+        lat_d <= enable : din;
+        // SR-latch explicitly written via set/reset.
+        lat_sr <= set_sig : reset_sig;
+        d_out <= lat_d ^ r_edge;
+        sr_out <= lat_sr;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Register updates on clock edge — contrasts latch continuous update.
+        r_edge <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] enable;
+        IN  [8] din;
+        IN  [1] set_sig;
+        IN  [1] reset_sig;
+        OUT [8] d_out;
+        OUT [1] sr_out;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [1] enable = enable;
+        IN  [8] din = din;
+        IN  [1] set_sig = set_sig;
+        IN  [1] reset_sig = reset_sig;
+        OUT [8] d_out = d_out;
+        OUT [1] sr_out = sr_out;
+    };
+@endmod

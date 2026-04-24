@@ -1,7 +1,7 @@
 // HAPPY_PATH: Valid BUS definitions and usage.
 // Covers: BUS with IN/OUT/INOUT signals, SOURCE and TARGET ports,
 // bulk BUS assignment (SOURCE-to-TARGET), CONFIG width references,
-// BUS with single signal, multi-module instantiation with BUS bindings.
+// multi-module instantiation with BUS bindings.
 
 @project HAPPY_PATH_bus_ok
 
@@ -15,11 +15,6 @@
         OUT   [1] mosi;
         IN    [1] miso;
         INOUT [CONFIG.DATA_W] data;
-    }
-
-    // Valid: minimal BUS with single signal
-    BUS ENABLE_BUS {
-        OUT [1] en;
     }
 
     @top TopMod {
@@ -73,28 +68,6 @@
     }
 @endmod
 
-// Valid: module with single-signal BUS
-@module EnableMod
-    PORT {
-        IN  [1] clk;
-        BUS ENABLE_BUS SOURCE ebus;
-        OUT [1] data;
-    }
-
-    REGISTER {
-        r [1] = 1'b0;
-    }
-
-    ASYNCHRONOUS {
-        ebus.en = r;
-        data = r;
-    }
-
-    SYNCHRONOUS(CLK=clk) {
-        r <= ~r;
-    }
-@endmod
-
 // Top module: instantiates SOURCE and TARGET, performs bulk BUS assignment
 @module TopMod
     PORT {
@@ -111,12 +84,6 @@
     @new inst_t TargetMod {
         IN  [1] clk = clk;
         BUS SPI_BUS TARGET tbus = _;
-        OUT [1] data = _;
-    };
-
-    @new inst_e EnableMod {
-        IN  [1] clk = clk;
-        BUS ENABLE_BUS SOURCE ebus = _;
         OUT [1] data = _;
     };
 

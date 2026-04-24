@@ -1,0 +1,34 @@
+// WARN_DEAD_CODE_UNREACHABLE: DEFAULT branch after exhaustive SELECT coverage.
+// A 1-bit selector is fully covered by CASE 1'b0 and CASE 1'b1, making DEFAULT
+// statically unreachable.
+
+@project WARN_DEAD_CODE_UNREACHABLE_select_dead_case
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        SELECT (sel) {
+            CASE 1'b0 {
+                data <= 1'b0;
+            }
+            CASE 1'b1 {
+                data <= din;
+            }
+            DEFAULT {
+                // Trigger: DEFAULT is unreachable after exhaustive CASE coverage.
+                data <= 1'b0;
+            }
+        }
+    }
+@endmod

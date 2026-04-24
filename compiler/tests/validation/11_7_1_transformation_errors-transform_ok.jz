@@ -1,0 +1,82 @@
+// TRANSFORMATION_ERRORS: Valid tri-state transformation under S11.7.1.
+// Covers: provably exclusive drivers, full-width z on all bits, and a blackbox
+// binding that remains external and non-transformable without error.
+
+@project transformation_errors_transform_ok
+    @blackbox ExternalPad {
+        PORT {
+            INOUT [8] pad;
+        }
+    }
+
+    @top TopMod {
+        IN    [2] sel = _;
+        IN    [8] data_a = _;
+        IN    [8] data_b = _;
+        OUT   [8] observed = _;
+        INOUT [8] pad = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: selector value is disjoint from DriverB, so drivers are mutually exclusive.
+        bus <= (sel == 2'b00) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN    [2] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: selector value is disjoint from DriverA, so drivers are mutually exclusive.
+        bus <= (sel == 2'b01) ? din : 8'bzzzz_zzzz;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [2] sel;
+        IN    [8] data_a;
+        IN    [8] data_b;
+        OUT   [8] observed;
+        INOUT [8] pad;
+    }
+
+    WIRE {
+        shared_bus [8];
+        safe_copy [8];
+    }
+
+    @new ext ExternalPad {
+        INOUT [8] pad = pad;
+    };
+
+    @new inst_a DriverA {
+        IN    [2] sel = sel;
+        IN    [8] din = data_a;
+        INOUT [8] bus = shared_bus;
+    };
+
+    @new inst_b DriverB {
+        IN    [2] sel = sel;
+        IN    [8] din = data_b;
+        INOUT [8] bus = shared_bus;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: every bit sees the same driver set and full-width z pattern.
+        safe_copy <= shared_bus;
+        observed <= safe_copy;
+    }
+@endmod

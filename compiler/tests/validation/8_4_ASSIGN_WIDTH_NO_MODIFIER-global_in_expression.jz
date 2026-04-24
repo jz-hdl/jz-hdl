@@ -1,0 +1,61 @@
+// ASSIGN_WIDTH_NO_MODIFIER: Global constant used in expression with width mismatch.
+// Tests that width mismatch is caught when a global appears inside an expression.
+
+@global CMD
+    NARROW = 4'b0001;
+    MATCH8 = 8'hAA;
+@endglob
+
+@project ASSIGN_WIDTH_NO_MODIFIER_global_in_expression
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Trigger: global in expression result assigned to mismatched target
+        out_a = CMD.NARROW | CMD.NARROW;
+        // Valid: same-width global expression (no error); also sinks r
+        out_b = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= CMD.MATCH8;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+
+    @new inst_a Helper {
+        IN  [1] clk = clk;
+        OUT [8] out_a = out_a;
+        OUT [8] out_b = _;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        out_b = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= CMD.MATCH8;
+    }
+@endmod

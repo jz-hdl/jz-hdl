@@ -1,0 +1,26 @@
+// COMMENT_IN_TOKEN: Comment inside a CONFIG entry name.
+// Valid CONFIG entries included to verify no false positives.
+
+@project COMMENT_IN_TOKEN_config_name
+    CONFIG {
+        // Valid: comment between tokens
+        VALID /* ok */ = 8;
+        // Trigger: comment inside CONFIG entry name
+        WID/**/TH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

@@ -1,0 +1,54 @@
+// TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL: VCC default variant.
+// Two instances drive the same INOUT wire with the same enable condition
+// (non-mutually-exclusive). Verifies the error fires under VCC default.
+// Trigger: VCC default variant (non-exclusive enables)
+
+@project TRISTATE_TRANSFORM_MUTUAL_EXCLUSION_FAIL_non_exclusive_vcc
+    @top TopMod {
+        IN  [1] en = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+// Driver module with conditional tri-state output via INOUT
+@module DriverMod
+    PORT {
+        IN    [1] en;
+        INOUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'hAA;
+        } ELSE {
+            data <= 8'bzzzz_zzzz;
+        }
+    }
+@endmod
+
+// Top module: two instances drive same wire with same enable (non-exclusive)
+@module TopMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    WIRE {
+        bus [8];
+    }
+
+    // Trigger: two instances share same INOUT wire with same enable
+    @new inst_a DriverMod {
+        IN    [1] en = en;
+        INOUT [8] data = bus;
+    };
+
+    @new inst_b DriverMod {
+        IN    [1] en = en;
+        INOUT [8] data = bus;
+    };
+
+    ASYNCHRONOUS {
+        data <= bus;
+    }
+@endmod

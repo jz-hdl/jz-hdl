@@ -1,0 +1,84 @@
+// ASSIGN_SHADOWING: Assignment at higher nesting level followed by nested assignment to same bits.
+// Tests root assignment shadowed by deeply nested IF (multi-level nesting) in ASYNCHRONOUS block.
+// Valid assignments included to verify no false positives.
+
+@project ASSIGN_SHADOWING_deep_nesting
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [1] sel_c = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper module: root assignment shadowed at 3 levels of IF nesting
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [1] sel_c;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        // Trigger: root assignment shadowed by deeply nested IF
+        out_a = GND;
+        IF (sel_a) {
+            IF (sel_b) {
+                IF (sel_c) {
+                    out_a <= VCC;
+                } ELSE {
+                    out_a <= r;
+                }
+            } ELSE {
+                out_a <= GND;
+            }
+        } ELSE {
+            out_a <= r;
+        }
+        // Valid: no root assignment, only branch-exclusive (no false positive)
+        IF (sel_a) {
+            out_b <= VCC;
+        } ELSE {
+            out_b <= GND;
+        }
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [1] sel_c;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        ha_a [1];
+        ha_b [1];
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [1] sel_a = sel_a;
+        IN  [1] sel_b = sel_b;
+        IN  [1] sel_c = sel_c;
+        OUT [1] out_a = ha_a;
+        OUT [1] out_b = ha_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_a;
+        out_b = ha_b;
+    }
+@endmod

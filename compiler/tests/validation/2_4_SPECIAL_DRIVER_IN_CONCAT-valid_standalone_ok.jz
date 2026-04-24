@@ -1,0 +1,68 @@
+// SPECIAL_DRIVER_IN_CONCAT: Happy-path - GND/VCC as standalone drivers,
+// not inside concatenations. Concatenations use literal bits instead.
+// Demonstrates that legal uses do NOT trigger SPECIAL_DRIVER_IN_CONCAT.
+// Covers async-expr and sync-expr contexts.
+
+@project SPECIAL_DRIVER_IN_CONCAT_valid_standalone_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+// Helper: standalone GND/VCC + concatenations of literals only
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Valid: standalone GND on register-width target (async-expr)
+        // and concatenation using only literal bits (no GND/VCC in concat)
+        out_a <= { 4'b0000, din };
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: VCC as atomic standalone sync assignment (sync-expr)
+        r <= VCC;
+    }
+    ASYNCHRONOUS {
+        out_b = r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+    WIRE {
+        ha_out_a [8];
+        ha_out_b [8];
+    }
+    REGISTER {
+        din [4] = 4'h0;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [4] din = din;
+        OUT [8] out_a = ha_out_a;
+        OUT [8] out_b = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: GND as atomic standalone sync assignment (sync-expr)
+        din <= GND;
+    }
+@endmod

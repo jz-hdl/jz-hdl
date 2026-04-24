@@ -1,0 +1,44 @@
+// INSTANCE_INTERNAL_ACCESS: Accessing an internal latch of an instance is
+// not permitted in synthesizable code.
+
+@project INSTANCE_INTERNAL_ACCESS_access_internal_latch
+    @top TopMod {
+        IN  [1] enable = _;
+        IN  [8] din = _;
+        OUT [8] result = _;
+    }
+@endproj
+
+@module ChildMod
+    PORT {
+        IN  [1] enable;
+        IN  [8] din;
+        OUT [8] data;
+    }
+    LATCH {
+        internal_lat [8] D;
+    }
+    ASYNCHRONOUS {
+        internal_lat <= enable : din;
+        data <= internal_lat;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] enable;
+        IN  [8] din;
+        OUT [8] result;
+    }
+
+    @new inst1 ChildMod {
+        IN  [1] enable = enable;
+        IN  [8] din = din;
+        OUT [8] data = result;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: accessing internal latch of child module
+        result = inst1.internal_lat;
+    }
+@endmod

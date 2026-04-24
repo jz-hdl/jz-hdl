@@ -1,0 +1,74 @@
+// OUT (Read Port): ASYNC read-port access contexts for §7.2.1.
+// Valid ASYNC-block indexing is included. Invalid uses in @new, @check,
+// and @feature cover contexts outside ASYNCHRONOUS blocks.
+
+@project OUT_READ_PORT_async_read_contexts
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        IN  [DATA_W] wdata = _;
+        OUT [DATA_W] data = _;
+    }
+@endproj
+
+@module SinkMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Trigger 1 (new-binding): ASYNC read used outside an ASYNCHRONOUS block.
+    @new inst_sink SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rd[addr];
+        OUT [8] dout = _;
+    };
+
+    // Trigger 2 (check-expr): ASYNC read used in @check constant-expression context.
+    @check (mem_t.rd[addr] == 8'h00, "async read in check");
+
+    // Trigger 3 (feature-cond): ASYNC read used in @feature constant-expression context.
+    @feature mem_t.rd[addr] == 8'h00
+        CONST { MODE = 1; }
+    @else
+        CONST { MODE = 0; }
+    @endfeat
+
+    ASYNCHRONOUS {
+        // Valid: ASYNC read used in its intended context.
+        data = mem_t.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_t.wr[addr] <= wdata;
+    }
+@endmod

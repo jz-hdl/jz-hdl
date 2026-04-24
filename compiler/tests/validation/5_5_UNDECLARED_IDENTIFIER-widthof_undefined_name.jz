@@ -1,0 +1,29 @@
+// UNDECLARED_IDENTIFIER: widthof(undefined_name) owns the missing-name case.
+// Target diagnostic: UNDECLARED_IDENTIFIER, not WIDTHOF_INVALID_TARGET.
+
+@project UNDECLARED_IDENTIFIER_widthof_undefined_name
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        // Trigger 1: ghost is not declared anywhere in this module.
+        BAD_W = widthof(ghost);
+    }
+    PORT {
+        IN  [1] clk;
+        OUT [1] out_a;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        out_a = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= 1'b0;
+    }
+@endmod

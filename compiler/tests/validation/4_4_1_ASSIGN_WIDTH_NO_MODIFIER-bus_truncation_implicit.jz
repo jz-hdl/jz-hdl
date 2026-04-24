@@ -1,0 +1,58 @@
+// ASSIGN_WIDTH_NO_MODIFIER: Truncating assignment to a BUS signal — RHS wider
+// than LHS without an explicit truncation modifier — is a compile error.
+// Covers Req #31 (truncation never implicit).
+
+@project ASSIGN_WIDTH_NO_MODIFIER_bus_truncation_implicit
+    BUS NARROW_BUS {
+        OUT [4] tx;
+        IN  [4] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din8 = _;
+        OUT [4] dout_a = _;
+    }
+@endproj
+
+@module TruncMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din8;
+        BUS NARROW_BUS SOURCE sbus;
+        OUT [4] data_out;
+    }
+
+    REGISTER {
+        r [4] = 4'h0;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: 8-bit RHS into 4-bit writable BUS signal without `<=t`
+        // — implicit truncation is forbidden.
+        sbus.tx <= din8;
+        data_out <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= sbus.rx;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din8;
+        OUT [4] dout_a;
+    }
+
+    @new inst_t TruncMod {
+        IN  [1] clk = clk;
+        IN  [8] din8 = din8;
+        BUS NARROW_BUS SOURCE sbus = _;
+        OUT [4] data_out = dout_a;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

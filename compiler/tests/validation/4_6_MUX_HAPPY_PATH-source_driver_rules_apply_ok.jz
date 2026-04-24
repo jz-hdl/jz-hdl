@@ -1,0 +1,62 @@
+// MUX §4.6 Req #41 happy-path:
+// "All normal net-driver and tri-state rules still apply to the underlying
+// sources."
+// Sources used inside a MUX (module IN ports, WIRE driven once in ASYNC,
+// REGISTER written by SYNC) continue to obey their own normal net-driver
+// rules regardless of MUX membership.
+// No diagnostics expected.
+
+@project MUX_HAPPY_PATH_source_driver_rules_apply_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [8] a = _;
+        IN    [8] b = _;
+        IN    [2] sel = _;
+        OUT   [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [8] a;
+        IN    [8] b;
+        IN    [2] sel;
+        OUT   [8] data;
+    }
+
+    WIRE {
+        // Driven exactly once below -> satisfies normal net-driver rule.
+        w [8];
+    }
+
+    REGISTER {
+        // Written in SYNC -> normal REGISTER driver rule applies.
+        r [8] = 8'h00;
+    }
+
+    // MUX whose sources span IN ports, WIRE, and REGISTER. The MUX must
+    // NOT relax or duplicate the driver rules for any of them.
+    MUX {
+        agg = a, b, w, r;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger: normal net-driver rule for WIRE still applies -- driven
+        // exactly once even though `w` is also a MUX source.
+        w = a | b;
+        // Trigger: MUX reads the mixed sources; each source still obeys
+        // its own net-driver rule (verified by the surrounding declarations).
+        data = agg[sel];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: normal REGISTER driver rule still applies -- written in
+        // SYNC even though `r` is also a MUX source.
+        r <= a;
+    }
+@endmod

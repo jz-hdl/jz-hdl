@@ -1,0 +1,2 @@
+File: 6_9_TOP_PORT_PIN_DECL_MISSING-inout_undeclared.jz
+      22:19   error TOP_PORT_PIN_DECL_MISSING S6.9/S6.10 Connected top port has no corresponding IN_PINS/OUT_PINS/INOUT_PINS/CLOCKS declaration

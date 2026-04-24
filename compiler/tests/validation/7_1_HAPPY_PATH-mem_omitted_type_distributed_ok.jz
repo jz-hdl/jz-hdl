@@ -1,0 +1,35 @@
+// HAPPY_PATH: Omitted MEM type with depth <= 16 infers DISTRIBUTED.
+// The ASYNC read port proves the compiler did not infer BLOCK.
+
+@project HAPPY_PATH_mem_omitted_type_distributed_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_auto [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_auto.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_auto.wr[addr] <= wdata;
+    }
+@endmod

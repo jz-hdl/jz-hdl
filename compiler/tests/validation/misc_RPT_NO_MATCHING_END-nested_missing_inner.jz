@@ -1,0 +1,30 @@
+// RPT_NO_MATCHING_END: nested @repeat with missing inner @end.
+// Tests that the repeat expander detects the missing inner @end in a nested @repeat.
+
+@project RPT_NO_MATCHING_END_nested_missing_inner
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid outer @repeat
+        @repeat 2
+            // Trigger: nested @repeat missing its @end
+            @repeat 2
+                r <= ~r;
+        @end
+    }
+@endmod

@@ -1,0 +1,37 @@
+// Scratch wires are expansion-local and must not be referenceable outside the
+// template body that declared them.
+
+@project scratch_not_in_module_namespace
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@template use_scratch(src, dst)
+    @scratch tmp [WIDTH];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    WIRE {
+        w1 [8];
+    }
+
+    ASYNCHRONOUS {
+        @apply use_scratch(din, w1);
+
+        // Trigger 1: scratch identifier is not visible in module scope after expansion.
+        dout <= tmp;
+    }
+@endmod

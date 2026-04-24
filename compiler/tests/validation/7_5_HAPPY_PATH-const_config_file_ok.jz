@@ -1,0 +1,52 @@
+// HAPPY_PATH: Valid MEM @file initialization using CONST and CONFIG string paths.
+// No diagnostics expected.
+
+@project HAPPY_PATH_const_config_file_ok
+    CONFIG {
+        BOOT_IMAGE = "mem_exact_4bytes.bin";
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        ROM_FILE = "mem_exact_4bytes.bin";
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_const [8] [4] = @file(ROM_FILE) {
+            OUT rd_const ASYNC;
+            IN  wr_const;
+        };
+
+        mem_config [8] [4] = @file(CONFIG.BOOT_IMAGE) {
+            OUT rd_config ASYNC;
+            IN  wr_config;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = mem_const.rd_const[addr] ^ mem_config.rd_config[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r;
+        mem_const.wr_const[addr] <= 8'h00;
+        mem_config.wr_config[addr] <= 8'h00;
+    }
+@endmod

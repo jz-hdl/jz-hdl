@@ -1,0 +1,37 @@
+// ID_SYNTAX_INVALID: Non-ASCII character in identifier violates the regex
+// ^[A-Za-z_][A-Za-z0-9_]{0,254}$.
+// The lexer does not recognize non-ASCII bytes and reports them via
+// PARSE000 "unrecognized character". The identifier "caf" is valid;
+// the non-ASCII bytes are rejected separately.
+// This file tests the WIRE declaration context with UTF-8 e-acute.
+
+@project ID_SYNTAX_INVALID_invalid_chars_non_ascii
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    // Trigger: non-ASCII (UTF-8 e-acute U+00E9, bytes 0xC3 0xA9) in identifier
+    WIRE {
+        café [1];
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

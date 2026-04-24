@@ -1,0 +1,78 @@
+// Req #4: When --tristate-default is specified, internal tri-state nets are
+// transformed while external INOUT pad behavior is preserved.
+
+@project REQ4_flag_transforms_internal_tristate_ok
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en = _;
+        OUT   [8] data = _;
+        INOUT [8] bidir = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        // Trigger 1: helper internal tri-state participates in transformation.
+        w_helper [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_helper <= din;
+        } ELSE {
+            w_helper <= 8'bzzzz_zzzz;
+        }
+        data <= w_helper;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        OUT   [8] data;
+        INOUT [8] bidir;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en = en;
+        IN  [8] din = r;
+        OUT [8] data = _;
+    };
+
+    WIRE {
+        // Trigger 2: top internal tri-state participates in transformation.
+        w_top [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_top <= r;
+        } ELSE {
+            w_top <= 8'bzzzz_zzzz;
+        }
+
+        // Valid: external INOUT tri-state remains preserved for pads.
+        IF (en) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 8'bzzzz_zzzz;
+        }
+
+        data <= w_top;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

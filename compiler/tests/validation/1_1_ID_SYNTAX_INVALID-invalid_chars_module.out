@@ -1,0 +1,2 @@
+File: 1_1_ID_SYNTAX_INVALID-invalid_chars_module.jz
+      13:9    error PARSE000 parse error near token '1Foo': expected identifier after @module (orig: PARSE000)

@@ -1,0 +1,77 @@
+// Req #4: No New Loops.
+// Verifies that tri-state transformation handles read/write bus participants
+// without introducing a new combinational loop.
+
+@project req4_no_new_loops_ok
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [8] data_a = _;
+        IN  [8] data_b = _;
+        OUT [8] observed = _;
+        OUT [8] seen_a = _;
+        OUT [8] seen_b = _;
+    }
+@endproj
+
+@module DriverA
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+        OUT   [8] seen;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: This driver both reads and conditionally drives the shared bus.
+        bus <= (sel == 1'b1) ? din : 8'bzzzz_zzzz;
+        seen <= bus;
+    }
+@endmod
+
+@module DriverB
+    PORT {
+        IN    [1] sel;
+        IN    [8] din;
+        INOUT [8] bus;
+        OUT   [8] seen;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 2: Second read/write participant on the same shared bus.
+        bus <= (sel == 1'b0) ? din : 8'bzzzz_zzzz;
+        seen <= bus;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [8] data_a;
+        IN  [8] data_b;
+        OUT [8] observed;
+        OUT [8] seen_a;
+        OUT [8] seen_b;
+    }
+
+    WIRE {
+        shared_bus [8];
+    }
+
+    @new inst_a DriverA {
+        IN    [1] sel = sel;
+        IN    [8] din = data_a;
+        INOUT [8] bus = shared_bus;
+        OUT   [8] seen = seen_a;
+    };
+
+    @new inst_b DriverB {
+        IN    [1] sel = sel;
+        IN    [8] din = data_b;
+        INOUT [8] bus = shared_bus;
+        OUT   [8] seen = seen_b;
+    };
+
+    ASYNCHRONOUS {
+        observed <= shared_bus;
+    }
+@endmod

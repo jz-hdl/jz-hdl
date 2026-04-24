@@ -1,0 +1,87 @@
+// HAPPY_PATH: popcount() behavioral requirements from §5.5.23.
+// Exercises:
+//   Req #2 - result width is clog2(width(source) + 1).
+//   Req #3 - source accepts any bit-vector expression with width >= 1.
+//   Req #5 - popcount() is allowed on ASYNCHRONOUS RHS.
+//   Req #6 - popcount() is allowed on SYNCHRONOUS RHS.
+
+@project HAPPY_PATH_popcount_semantics_contexts_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] src8 = _;
+        IN  [8] mask8 = _;
+        IN  [1] src1 = _;
+        OUT [4] out_async_plain = _;
+        OUT [4] out_async_expr = _;
+        OUT [1] out_async_one = _;
+        OUT [4] out_sync = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [8] src8;
+        IN  [8] mask8;
+        IN  [1] src1;
+        OUT [4] out_plain;
+        OUT [4] out_expr;
+        OUT [1] out_one;
+    }
+
+    ASYNCHRONOUS {
+        // Req #2/#5: 8-bit source yields clog2(8 + 1) = 4 bits.
+        out_plain = popcount(src8);
+        // Req #3/#5: any bit-vector expression is valid here.
+        out_expr  = popcount(src8 & mask8);
+        // Req #2/#3/#5: 1-bit source yields clog2(1 + 1) = 1 bit.
+        out_one   = popcount(src1);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src8;
+        IN  [8] mask8;
+        IN  [1] src1;
+        OUT [4] out_async_plain;
+        OUT [4] out_async_expr;
+        OUT [1] out_async_one;
+        OUT [4] out_sync;
+    }
+
+    WIRE {
+        h_plain [4];
+        h_expr  [4];
+        h_one   [1];
+    }
+
+    REGISTER {
+        r_sync [4] = 4'd0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [8] src8 = src8;
+        IN  [8] mask8 = mask8;
+        IN  [1] src1 = src1;
+        OUT [4] out_plain = h_plain;
+        OUT [4] out_expr = h_expr;
+        OUT [1] out_one = h_one;
+    };
+
+    ASYNCHRONOUS {
+        out_async_plain = h_plain;
+        out_async_expr  = h_expr;
+        out_async_one   = h_one;
+        out_sync        = r_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Req #2/#3/#6: expression source is valid on SYNCHRONOUS RHS.
+        r_sync <= popcount(src8 ^ mask8);
+    }
+@endmod

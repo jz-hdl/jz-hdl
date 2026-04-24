@@ -1,0 +1,62 @@
+// LIT_UNSIZED: unsized literals used across new-binding, check-expr, and
+// feature-cond contexts.
+
+@project LIT_UNSIZED_new_binding_check_feature
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperA
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger 1 (check-expr): unsized literal in @check expression
+    @check (VAL == 'h08, "unsized in check");
+
+    // Trigger 2 (feature-cond): unsized literal in @feature condition
+    @feature VAL == 'd8
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    WIRE {
+        ha_out [8];
+    }
+
+    // Trigger 3 (new-binding): unsized literal in @new instance port binding
+    @new inst_a HelperA {
+        IN  [8] din = 'hFF;
+        OUT [8] dout = ha_out;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r ^ ha_out;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= r + 8'h01;
+    }
+@endmod

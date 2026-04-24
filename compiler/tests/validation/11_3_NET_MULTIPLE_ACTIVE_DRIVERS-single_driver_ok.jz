@@ -1,0 +1,76 @@
+// HAPPY_PATH: Each net has exactly one active driver.
+// Exercises helper and top-module instance bindings plus local reads without
+// introducing any competing drivers, so NET_MULTIPLE_ACTIVE_DRIVERS must not
+// fire.
+
+@project NET_MULTIPLE_ACTIVE_DRIVERS_single_driver_ok
+    @top TopMod {
+        IN  [1] en   = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module DriverMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= 8'hA5;
+        } ELSE {
+            data <= 8'h5A;
+        }
+    }
+@endmod
+
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    WIRE {
+        helper_single [8];
+    }
+
+    @new helper_drv DriverMod {
+        IN  [1] en   = en;
+        OUT [8] data = helper_single;
+    };
+
+    ASYNCHRONOUS {
+        data <= helper_single;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] en;
+        OUT [8] data;
+    }
+
+    WIRE {
+        top_single    [8];
+        helper_result [8];
+    }
+
+    @new top_drv DriverMod {
+        IN  [1] en   = en;
+        OUT [8] data = top_single;
+    };
+
+    @new helper HelperMod {
+        IN  [1] en   = en;
+        OUT [8] data = helper_result;
+    };
+
+    ASYNCHRONOUS {
+        IF (en) {
+            data <= top_single;
+        } ELSE {
+            data <= helper_result;
+        }
+    }
+@endmod

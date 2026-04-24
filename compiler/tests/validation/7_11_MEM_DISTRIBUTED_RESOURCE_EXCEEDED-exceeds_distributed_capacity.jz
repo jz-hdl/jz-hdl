@@ -5,7 +5,7 @@
 @project(CHIP="gw1nr-9-qn88-c6-i5") MEM_DISTRIBUTED_RESOURCE_EXCEEDED_exceeds_distributed_capacity
     @top TopMod {
         IN  [1] clk = _;
-        IN  [4] addr = _;
+        IN  [10] addr = _;
         IN  [8] wdata = _;
         OUT [8] data = _;
     }
@@ -14,7 +14,7 @@
 @module DistChild
     PORT {
         IN  [1] clk;
-        IN  [4] addr;
+        IN  [10] addr;
         IN  [8] wdata;
         OUT [8] data;
     }
@@ -45,7 +45,7 @@
 @module TopMod
     PORT {
         IN  [1] clk;
-        IN  [4] addr;
+        IN  [10] addr;
         IN  [8] wdata;
         OUT [8] data;
     }
@@ -64,14 +64,14 @@
 
     @new inst_a DistChild {
         IN  [1] clk = clk;
-        IN  [4] addr = addr;
+        IN  [10] addr = addr;
         IN  [8] wdata = wdata;
         OUT [8] data = _;
     };
 
     @new inst_b DistChild {
         IN  [1] clk = clk;
-        IN  [4] addr = addr;
+        IN  [10] addr = addr;
         IN  [8] wdata = wdata;
         OUT [8] data = _;
     };

@@ -1,0 +1,93 @@
+// CHECK_INVALID_EXPR_TYPE: @check with memory port reference.
+// S9.4 forbids any memory port in @check expressions.
+// Valid CONST check included to verify no false positives.
+
+@project CHECK_INVALID_EXPR_TYPE_memory_port
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST { DEPTH = 16; }
+
+    MEM {
+        mem [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Valid: CONST in @check (no error)
+    @check (DEPTH > 0, "depth ok");
+
+    // Trigger: memory port ref in @check (helper module)
+    @check (mem.rd[0] == 8'h00, "memory port in helper");
+
+    ASYNCHRONOUS {
+        data = mem.rd[r[3:0]];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+        mem.wr[r[3:0]] <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST { SIZE = 8; }
+
+    MEM {
+        tmem [8] [16] = 8'h00 {
+            OUT trd ASYNC;
+            IN  twr;
+        };
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Valid: CONST in @check (no error)
+    @check (SIZE == 8, "size ok");
+
+    // Valid: CONFIG in @check (no error)
+    @check (CONFIG.WIDTH == 8, "config ok");
+
+    @new inst_a HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = tmem.trd[r[3:0]];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+        tmem.twr[r[3:0]] <= din;
+    }
+@endmod

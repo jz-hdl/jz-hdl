@@ -1,0 +1,80 @@
+// HAPPY_PATH: usub(a, b) widening-subtract semantics from §5.5.16.
+// Exercises the legal ASYNCHRONOUS and SYNCHRONOUS RHS contexts and examples
+// where the widened MSB acts as the borrow bit.
+
+@project HAPPY_PATH_usub_semantics_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a8 = _;
+        IN  [8] b8 = _;
+        IN  [4] a4 = _;
+        IN  [4] b4 = _;
+        OUT [9] async_no_borrow = _;
+        OUT [9] async_borrow = _;
+        OUT [9] sync_mixed = _;
+        OUT [5] sync_equal = _;
+    }
+@endproj
+
+@module HelperAsync
+    PORT {
+        IN  [8] a8;
+        IN  [8] b8;
+        OUT [9] out_no_borrow;
+        OUT [9] out_borrow;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: 8-bit minus 8-bit widens to 9 bits; MSB is borrow=0.
+        out_no_borrow <= usub(a8, b8);
+
+        // Trigger 2: {1'b0, 4'd3} - {1'b0, 8'd5} -> 9-bit result with borrow=1.
+        out_borrow <= usub(4'd3, 8'd5);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a8;
+        IN  [8] b8;
+        IN  [4] a4;
+        IN  [4] b4;
+        OUT [9] async_no_borrow;
+        OUT [9] async_borrow;
+        OUT [9] sync_mixed;
+        OUT [5] sync_equal;
+    }
+
+    WIRE {
+        helper_no_borrow [9];
+        helper_borrow [9];
+    }
+
+    REGISTER {
+        r_sync_mixed [9] = 9'd0;
+        r_sync_equal [5] = 5'd0;
+    }
+
+    @new inst_async HelperAsync {
+        IN  [8] a8 = a8;
+        IN  [8] b8 = b8;
+        OUT [9] out_no_borrow = helper_no_borrow;
+        OUT [9] out_borrow = helper_borrow;
+    };
+
+    ASYNCHRONOUS {
+        async_no_borrow = helper_no_borrow;
+        async_borrow = helper_borrow;
+        sync_mixed = r_sync_mixed;
+        sync_equal = r_sync_equal;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 3: 4-bit minus 8-bit widens to 9 bits via max(width)+1.
+        r_sync_mixed <= usub(a4, 8'd1);
+
+        // Trigger 4: equal-width subtract still widens by one extra bit.
+        r_sync_equal <= usub(b4, b4);
+    }
+@endmod

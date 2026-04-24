@@ -1,0 +1,39 @@
+// LIT_OVERFLOW: literal intrinsic width exceeds declared width.
+// Covers the feature-cond context (compile-time condition expression);
+// see audit/runner.log for notes on check-expr and new-binding, which do
+// not currently propagate LIT_OVERFLOW through the compiler front-end.
+
+@project LIT_OVERFLOW_new_binding_check_feature
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST { VAL = 8; }
+
+    // Trigger (feature-cond): 4'd16 has intrinsic 5 bits > declared 4
+    @feature VAL == 4'd16
+        CONST { F_A = 1; }
+    @else
+        CONST { F_A = 0; }
+    @endfeat
+
+    // Trigger (feature-cond): 4'hFF has intrinsic 8 bits > declared 4
+    @feature VAL == 4'hFF
+        CONST { F_B = 1; }
+    @else
+        CONST { F_B = 0; }
+    @endfeat
+
+    REGISTER { r [8] = 8'h00; }
+
+    ASYNCHRONOUS { data = r; }
+    SYNCHRONOUS(CLK=clk) { r <= r + 8'h01; }
+@endmod

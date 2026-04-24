@@ -1,0 +1,65 @@
+// MEM_ASYNC_PORT_FIELD_DATA: happy-path coverage for indexed ASYNC reads.
+// Valid bracket indexing is exercised in semantically valid contexts without
+// using `.data`.
+
+@project MEM_ASYNC_PORT_FIELD_DATA_contexts_ok
+    CONFIG {
+        ADDR_W = 4;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [ADDR_W] addr = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module SinkMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM(type=DISTRIBUTED) {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+        };
+    }
+
+    // Valid (new-binding): indexed ASYNC read in @new binding.
+    @new inst_sink SinkMod {
+        IN  [1] clk = clk;
+        IN  [8] din = mem_t.rd[addr];
+        OUT [8] dout = _;
+    };
+
+    ASYNCHRONOUS {
+        // Valid (async-expr): indexed ASYNC read in ASYNCHRONOUS block.
+        data = mem_t.rd[addr] ^ r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid (sync-expr): indexed ASYNC read in SYNCHRONOUS block.
+        r <= mem_t.rd[addr];
+    }
+@endmod

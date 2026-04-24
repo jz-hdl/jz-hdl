@@ -1,0 +1,36 @@
+// PRECEDENCE: §3.3 Req #10 — Bitwise AND `&` binds tighter than bitwise
+// XOR `^`. `a & b ^ c` parses as `(a & b) ^ c`, not `a & (b ^ c)`.
+// No diagnostics expected.
+
+@project PRECEDENCE_bit_and_above_bit_xor_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [8] c = _;
+        OUT [8] out_xor = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [8] c;
+        OUT [8] out_xor;
+    }
+    REGISTER {
+        r_xor [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // & binds tighter than ^ : (a & b) ^ c
+        out_xor = ((a & b) ^ c) | r_xor;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r_xor <= (a & b) ^ c;
+    }
+@endmod

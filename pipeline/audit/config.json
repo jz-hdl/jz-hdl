@@ -1,0 +1,82 @@
+{
+  "name": "audit",
+  "description": "Spec-corpus audit pipeline",
+  "default_cli": "codex",
+  "output_dir": "audit",
+  "placeholders": {
+    "target": "<SPEC_SECTION_TARGET>",
+    "output_file": "<OUTPUT_FILE>"
+  },
+  "options": [
+    "filter",
+    "start",
+    "start_at",
+    "dry_run",
+    "list",
+    "spec",
+    "include_parents"
+  ],
+  "targeting": {
+    "discover": {
+      "type": "markdown_headings",
+      "glob": "specification/*.md",
+      "heading_levels": [2, 3, 4],
+      "numbered_only": true
+    },
+    "group": {
+      "type": "leaf_sections",
+      "include_parents_option": "include_parents"
+    },
+    "output_filename": {
+      "type": "spec_section",
+      "template": "{section}_{safe_title}.md"
+    },
+    "unit_name": "section",
+    "summary_label": "spec section(s) to audit",
+    "full_run_default_options": [
+      "spec",
+      "filter",
+      "start",
+      "end",
+      "start_at",
+      "include_parents"
+    ],
+    "no_match_message": "No spec sections matched."
+  },
+  "steps": [
+    {
+      "path": "pipeline/audit/prompts/1-extract-rules.md",
+      "effort": "medium",
+      "kind": "target_prompt"
+    },
+    {
+      "path": "pipeline/audit/prompts/2-map-rule-ids.md",
+      "effort": "medium",
+      "kind": "target_prompt"
+    },
+    {
+      "path": "pipeline/audit/prompts/3-map-tests.md",
+      "effort": "high",
+      "kind": "target_prompt"
+    },
+    {
+      "path": "pipeline/audit/prompts/4-generate-issues.md",
+      "effort": "low",
+      "kind": "target_prompt"
+    },
+    {
+      "path": "pipeline/audit/prompts/5-fix.md",
+      "effort": "high",
+      "kind": "output_prompt",
+      "append_template": "\n\nAudit file: `{output_path}`\n"
+    }
+  ],
+  "post_steps": [
+    {
+      "glob": "pipeline/audit/prompts/*.md",
+      "min_numeric_prefix": 100,
+      "effort": "medium",
+      "run_when": "full_success_only"
+    }
+  ]
+}

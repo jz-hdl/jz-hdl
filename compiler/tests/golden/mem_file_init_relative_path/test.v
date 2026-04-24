@@ -1,5 +1,5 @@
 // This Verilog was transpiled from JZ-HDL.
-// jz-hdl version: Version 0.1.3 (3981ed5)
+// jz-hdl version: jz-hdl 0.1 (prototype)
 // Intended for use with yosys.
 
 `default_nettype none
@@ -24,7 +24,7 @@ module mem_reader__SPEC_DATA_FILE_data_lut_bin (
     (* ram_style = "block" *) reg [7:0] lut[0:7];
 
     initial begin
-        $readmemh("data/lut.bin.hex", lut);
+        $readmemh("jz_mem_init__mem_reader__SPEC_DATA_FILE_data_lut_bin__lut.hex", lut);
     end
 
 

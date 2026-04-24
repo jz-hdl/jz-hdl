@@ -1,0 +1,31 @@
+// PATH_TRAVERSAL_FORBIDDEN: Nested imports use the same path-security policy.
+// Target diagnostic: PATH_TRAVERSAL_FORBIDDEN on the nested @import.
+// Non-target diagnostics: none; the root project and intermediate import are otherwise valid.
+
+@project PATH_TRAVERSAL_FORBIDDEN_nested_import
+    @import "./12_4_PATH_TRAVERSAL_FORBIDDEN-nested_import_mid.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

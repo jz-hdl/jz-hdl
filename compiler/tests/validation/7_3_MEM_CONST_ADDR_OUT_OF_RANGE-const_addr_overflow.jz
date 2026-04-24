@@ -1,7 +1,7 @@
 // MEM_CONST_ADDR_OUT_OF_RANGE: Constant address >= depth.
-// mem [8] [4] has depth 4, so valid addresses are 0-3.
+// mem [8] [3] has depth 3, so valid addresses are 0-2 and required width is 2.
 // Triggers in async read and sync write contexts.
-// Valid constant address included for no false positives.
+// Sized literals use the exact required width so only the out-of-range rule fires.
 
 @project MEM_CONST_ADDR_OUT_OF_RANGE_const_addr_overflow
     @top TopMod {
@@ -24,7 +24,7 @@
     }
 
     MEM {
-        mem_a [8] [4] = 8'h00 {
+        mem_a [8] [3] = 8'h00 {
             OUT rd ASYNC;
             IN  wr;
             IN  wr2;
@@ -32,16 +32,16 @@
     }
 
     ASYNCHRONOUS {
-        // Trigger 1: addr 4 >= depth 4
-        data = mem_a.rd[4];
+        // Trigger 1: addr 2'b11 >= depth 3
+        data = mem_a.rd[2'b11];
     }
 
     SYNCHRONOUS(CLK=clk) {
         r <= r;
-        // Valid: addr 0 is within range
-        mem_a.wr[0] <= wdata;
-        // Trigger 2: addr 5 >= depth 4 in sync write
-        mem_a.wr2[5] <= 8'hAA;
+        // Valid: addr 2'b00 is within range
+        mem_a.wr[2'b00] <= wdata;
+        // Trigger 2: addr 2'b11 >= depth 3 in sync write
+        mem_a.wr2[2'b11] <= 8'hAA;
     }
 @endmod
 
@@ -57,7 +57,7 @@
     }
 
     MEM {
-        mem_b [8] [4] = 8'h00 {
+        mem_b [8] [3] = 8'h00 {
             OUT rd ASYNC;
             IN  wr;
             IN  wr2;
@@ -71,15 +71,15 @@
     };
 
     ASYNCHRONOUS {
-        // Trigger 3: addr 10 >= depth 4 in top module
-        data = mem_b.rd[10];
+        // Trigger 3: addr 2'b11 >= depth 3 in top module
+        data = mem_b.rd[2'b11];
     }
 
     SYNCHRONOUS(CLK=clk) {
         r <= r;
-        // Valid: addr 3 is last valid (depth-1)
-        mem_b.wr[3] <= wdata;
-        // Trigger 4: addr 100 >= depth 4 in sync write in top
-        mem_b.wr2[100] <= 8'hBB;
+        // Valid: addr 2'b10 is last valid (depth-1)
+        mem_b.wr[2'b10] <= wdata;
+        // Trigger 4: addr 2'b11 >= depth 3 in sync write in top
+        mem_b.wr2[2'b11] <= 8'hBB;
     }
 @endmod

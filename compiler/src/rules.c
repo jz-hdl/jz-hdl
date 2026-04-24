@@ -8,6 +8,14 @@
  *   WARN   -> JZ_RULE_MODE_WRN
  *   IGNORE -> JZ_RULE_MODE_WRN (still present in the table but may be
  *              suppressed by higher-level policy).
+ *
+ * Rule priorities are consumed by diagnostic.c only:
+ *   - at the same file/line/column, higher-priority diagnostics sort first
+ *   - at the same file+line, only the line's highest-priority diagnostics are
+ *     printed, plus the highest-priority errors so a warning cannot hide all
+ *     errors on that line
+ * They do not change severity and they do not suppress diagnostics on other
+ * source lines.
  */
 
 /* ASSIGN_CONCAT_WIDTH_MISMATCH > ASSIGN_WIDTH_NO_MODIFIER > WIDTH_ASSIGN_MISMATCH_NO_EXT */
@@ -26,7 +34,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "PARSE", "LIT_INVALID_DIGIT_FOR_BASE",                        0, JZ_RULE_MODE_ERR, "S2.1 Literal contains digit not allowed for its base (b/d/h)" },
 
     /* [LEXICAL] (done) */
-    { "LEXICAL", "ID_SYNTAX_INVALID",                               0, JZ_RULE_MODE_ERR, "S1.1 Identifier does not match identifier regex or exceeds 255 chars" },
+    { "LEXICAL", "ID_SYNTAX_INVALID",                               1, JZ_RULE_MODE_ERR, "S1.1 Identifier exceeds 255 characters" },
     { "LEXICAL", "ID_SINGLE_UNDERSCORE",                            0, JZ_RULE_MODE_ERR, "S1.1 Single underscore `_` used as regular identifier outside no-connect context" },
 
     /* [LITERALS_AND_TYPES] */
@@ -57,6 +65,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_CONCAT",     0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in concatenations" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_SLICED",        0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not be sliced or indexed" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_INDEX",      0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in slice/index expressions" },
+    { "OPERATORS_AND_EXPRESSIONS", "SBIT_INVALID_SOURCE",         0, JZ_RULE_MODE_ERR, "S5.5.7 sbit() first argument (source) must be a readable WIRE or REGISTER" },
     { "OPERATORS_AND_EXPRESSIONS", "SBIT_SET_WIDTH_NOT_1",        0, JZ_RULE_MODE_ERR, "S5.5.7 sbit() third argument (set) must be a width-1 expression" },
     { "OPERATORS_AND_EXPRESSIONS", "GBIT_INDEX_OUT_OF_RANGE",     0, JZ_RULE_MODE_ERR, "S5.5.6 gbit() index is out of range for source width" },
     { "OPERATORS_AND_EXPRESSIONS", "SBIT_INDEX_OUT_OF_RANGE",     0, JZ_RULE_MODE_ERR, "S5.5.7 sbit() index is out of range for source width" },
@@ -124,14 +133,20 @@ const JZRuleInfo jz_rule_table[] = {
     { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_IDX_INVALID_CONTEXT",    2, JZ_RULE_MODE_ERR, "S4.13.1 IDX may be used only in parent-signal bindings of instance arrays, not in scalar @new or OVERRIDE expressions" },
     { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_PARENT_BIT_OVERLAP",     0, JZ_RULE_MODE_ERR, "S4.13.1 Instance array OUT mappings drive overlapping bits of the same parent signal for different instance indices" },
     { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_IDX_SLICE_OUT_OF_RANGE", 0, JZ_RULE_MODE_ERR, "S4.13.1 Instance array IDX-dependent slice evaluates to indices outside the parent signal width for some instance index" },
+    { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_INDEX_REQUIRED",         0, JZ_RULE_MODE_ERR, "S4.13.1 Instance array port access requires an explicit element index" },
+    { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_INDEX_NOT_ARRAY",        0, JZ_RULE_MODE_ERR, "S4.13.1 Indexed instance port access requires an instance array" },
+    { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_INDEX_INVALID",          0, JZ_RULE_MODE_ERR, "S4.13.1 Instance array port index must be a nonnegative constant expression" },
+    { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_INDEX_OUT_OF_RANGE",     0, JZ_RULE_MODE_ERR, "S4.13.1 Instance array port index is outside the declared instance count" },
     { "MODULE_AND_INSTANTIATION", "INSTANCE_OUT_PORT_LITERAL",            0, JZ_RULE_MODE_ERR, "S4.13 OUT port binding in @new may not be a literal value" },
     { "MODULE_AND_INSTANTIATION", "INSTANCE_ARRAY_MULTI_DIMENSIONAL",     0, JZ_RULE_MODE_ERR, "S4.13.1 Multi-dimensional instance arrays are not supported" },
+    { "MODULE_AND_INSTANTIATION", "INSTANCE_INTERNAL_ACCESS",              0, JZ_RULE_MODE_ERR, "S4.13 Cannot access internal signals (WIRE/REGISTER/LATCH) of an instance; only PORT members are accessible" },
 
     /* [MUX_RULES] */
     { "MUX_RULES", "MUX_ASSIGN_LHS",                                2, JZ_RULE_MODE_ERR, "S4.6 Assigning to MUX id or its indexed form on LHS is forbidden (MUX is read-only)" },
     { "MUX_RULES", "MUX_AGG_SOURCE_WIDTH_MISMATCH",                 0, JZ_RULE_MODE_ERR, "S4.6 Aggregation form sources must all have identical bit-width" },
     { "MUX_RULES", "MUX_AGG_SOURCE_INVALID",                        0, JZ_RULE_MODE_ERR, "S4.6 Aggregation source not a valid readable signal in module scope" },
     { "MUX_RULES", "MUX_SLICE_WIDTH_NOT_DIVISOR",                   0, JZ_RULE_MODE_ERR, "S4.6 Auto-slicing form requires wide_source width to be exact multiple of element_width" },
+    { "MUX_RULES", "MUX_SELECTOR_WIDTH_MISMATCH",                   0, JZ_RULE_MODE_ERR, "S4.6 Runtime MUX selector width must equal clog2(N); widen or slice explicitly before access" },
     { "MUX_RULES", "MUX_SELECTOR_OUT_OF_RANGE_CONST",               0, JZ_RULE_MODE_ERR, "S4.6 Selector statically provable outside valid index range" },
     { "MUX_RULES", "MUX_NAME_DUPLICATE",                            0, JZ_RULE_MODE_ERR, "S4.6 MUX identifier duplicates another identifier in module" },
 
@@ -147,7 +162,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "ASSIGNMENTS_AND_EXCLUSIVE", "ASYNC_UNDEFINED_PATH_NO_DRIVER",    0, JZ_RULE_MODE_ERR, "S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case" },
 
     /* [ASYNC_BLOCK_RULES] */
-    { "ASYNC_BLOCK_RULES", "ASYNC_INVALID_STATEMENT_TARGET",        1, JZ_RULE_MODE_ERR, "S4.10/S5.1/S8.1 LHS in ASYNCHRONOUS assignment is not assignable (e.g. CONST, function call)" },
+    { "ASYNC_BLOCK_RULES", "ASYNC_INVALID_STATEMENT_TARGET",        1, JZ_RULE_MODE_ERR, "S4.10/S5.1/S8.1 LHS in ASYNCHRONOUS assignment is not assignable" },
     { "ASYNC_BLOCK_RULES", "ASYNC_ASSIGN_REGISTER",                 0, JZ_RULE_MODE_ERR, "S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block" },
     { "ASYNC_BLOCK_RULES", "ASYNC_ALIAS_LITERAL_RHS",               0, JZ_RULE_MODE_ERR, "S4.10/S5.1 Literal on RHS of `=` in ASYNCHRONOUS block; did you mean `<=` or `=>`?" },
 
@@ -305,6 +320,12 @@ const JZRuleInfo jz_rule_table[] = {
     { "CLOCKS_PINS_MAP", "PIN_DIFF_OUT_MISSING_FCLK",              0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential output pin missing required fclk attribute" },
     { "CLOCKS_PINS_MAP", "PIN_DIFF_OUT_MISSING_PCLK",              0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential output pin missing required pclk attribute" },
     { "CLOCKS_PINS_MAP", "PIN_DIFF_OUT_MISSING_RESET",             0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential output pin missing required reset attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_MISSING_FCLK",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential input/INOUT pin missing required fclk attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_MISSING_PCLK",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential input/INOUT pin missing required pclk attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_MISSING_RESET",                 0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential input/INOUT pin missing required reset attribute" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_FCLK_INVALID",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential pin fclk must reference CLOCKS or CLOCK_GEN output" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_PCLK_INVALID",                  0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential pin pclk must reference CLOCKS or CLOCK_GEN output" },
+    { "CLOCKS_PINS_MAP", "PIN_DIFF_RESET_INVALID",                 0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Differential pin reset must reference a declared pin, clock, or CLOCK_GEN signal" },
     { "CLOCKS_PINS_MAP", "MAP_DIFF_EXPECTED_PAIR",                 0, JZ_RULE_MODE_ERR, "S6.6/S6.9 Differential pin must use { P=<id>, N=<id> } MAP syntax" },
     { "CLOCKS_PINS_MAP", "MAP_SINGLE_UNEXPECTED_PAIR",             0, JZ_RULE_MODE_ERR, "S6.6/S6.9 Single-ended pin must not use { P, N } MAP syntax" },
     { "CLOCKS_PINS_MAP", "MAP_DIFF_MISSING_PN",                    0, JZ_RULE_MODE_ERR, "S6.6/S6.9 Differential MAP entry missing P or N identifier" },
@@ -323,6 +344,8 @@ const JZRuleInfo jz_rule_table[] = {
     { "CLOCK_GEN_RULES", "CLOCK_GEN_OUTPUT_IS_INPUT_PIN",          0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN output clock must not be declared as IN_PINS" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_MULTIPLE_DRIVERS",             0, JZ_RULE_MODE_ERR, "S6.4.1 Clock is driven by multiple CLOCK_GEN outputs" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_IS_SELF_OUTPUT",         0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input clock is an output of the same CLOCK_GEN block" },
+    { "CLOCK_GEN_RULES", "CLOCK_GEN_CHAINING_UNSUPPORTED",         0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN chaining is only allowed when the target chip explicitly supports it" },
+    { "CLOCK_GEN_RULES", "CLOCK_GEN_PAD_EXCLUSIVE_CONFLICT",      0, JZ_RULE_MODE_ERR, "S6.4.1 PLL reference clock pin cannot also be used as a logic signal in @top on pad_exclusive chips" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INVALID_TYPE",                 0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN generator must be PLL, DLL, CLKDIV, OSC, or BUF (with optional numeric suffix)" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_MISSING_INPUT",                0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN unit must have an IN clock declaration" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_REQUIRED_INPUT_MISSING",      0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN required input is not provided" },
@@ -344,6 +367,7 @@ const JZRuleInfo jz_rule_table[] = {
     /* [TOP_LEVEL_INSTANTIATION] */
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_NOT_LISTED",             0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Top module port omitted from project-level @top block" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_WIDTH_MISMATCH",         0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Instantiated top port width does not match module port width" },
+    { "TOP_LEVEL_INSTANTIATION", "CLOCK_NAME_NOT_TOP_IN_PORT",      0, JZ_RULE_MODE_ERR, "S6.10 Clock with period in CLOCKS is not bound to any IN port on the top module" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_PIN_DECL_MISSING",       0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Connected top port has no corresponding IN_PINS/OUT_PINS/INOUT_PINS/CLOCKS declaration" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_PORT_PIN_DIRECTION_MISMATCH", 0, JZ_RULE_MODE_ERR, "S6.9/S6.10 Module IN/OUT/INOUT direction incompatible with pin category" },
     { "TOP_LEVEL_INSTANTIATION", "TOP_OUT_LITERAL_BINDING",         0, JZ_RULE_MODE_ERR, "S6.9 OUT ports may not be bound to literal values in project-level @top" },
@@ -364,6 +388,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "MEM_DECLARATION", "MEM_MISSING_INIT",                        0, JZ_RULE_MODE_ERR, "S7.5.1/S7.7.1/S7.7.3 MEM declared without required `= <init>` or `= @file(...)` initialization" },
     { "MEM_DECLARATION", "MEM_INIT_FILE_NOT_FOUND",                 0, JZ_RULE_MODE_ERR, "S7.5.2/S7.7.1 @file path does not resolve to readable file" },
     { "MEM_DECLARATION", "MEM_INIT_CONTAINS_X",                      0, JZ_RULE_MODE_ERR, "S2.1/S7.5.1 Memory initialization literal must not contain `x` bits" },
+    { "MEM_DECLARATION", "MEM_INIT_CONTAINS_Z",                      0, JZ_RULE_MODE_ERR, "S1.6.7/S7.5.1 Memory initialization literal must not contain `z` bits" },
     { "MEM_DECLARATION", "MEM_INIT_FILE_CONTAINS_X",               0, JZ_RULE_MODE_ERR, "S7.5.2 Memory initialization file contains x or z values" },
     { "MEM_DECLARATION", "MEM_INIT_FILE_TOO_LARGE",                 0, JZ_RULE_MODE_ERR, "S7.5.2/S7.7.1 Initialization file larger than depth*word_width" },
     { "MEM_DECLARATION", "MEM_TYPE_INVALID",                        0, JZ_RULE_MODE_ERR, "S7.1 MEM TYPE value is not recognized; expected BLOCK or DISTRIBUTED" },
@@ -384,14 +409,13 @@ const JZRuleInfo jz_rule_table[] = {
     { "MEM_ACCESS", "MEM_ASYNC_PORT_FIELD_DATA",                    0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.1/S7.7.2 ASYNC read ports must be indexed; mem.port.data is SYNC-only" },
     { "MEM_ACCESS", "MEM_SYNC_ADDR_INVALID_PORT",                   0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 mem.port.addr is only valid for SYNC OUT ports" },
     { "MEM_ACCESS", "MEM_SYNC_ADDR_IN_ASYNC_BLOCK",                 0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 SYNC read addresses must be assigned in SYNCHRONOUS blocks" },
-    { "MEM_ACCESS", "MEM_SYNC_DATA_IN_ASYNC_BLOCK",                 0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 SYNC MEM read data (mem.port.data) may not be read in ASYNCHRONOUS blocks" },
     { "MEM_ACCESS", "MEM_SYNC_ADDR_WITHOUT_RECEIVE",                0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2 MEM read address must use `<=` in SYNCHRONOUS block; did you mean `<=` instead of `=`?" },
     { "MEM_ACCESS", "MEM_READ_SYNC_WITH_EQUALS",                    0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2 Synchronous MEM read used `=` in SYNCHRONOUS block; did you mean `<=`?" },
     { "MEM_ACCESS", "MEM_IN_PORT_FIELD_ACCESS",                      0, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3 IN (write) port requires bracket syntax mem.port[addr] <= data; .addr/.data fields are not valid" },
     { "MEM_ACCESS", "MEM_WRITE_IN_ASYNC_BLOCK",                     2, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3 MEM writes must be in SYNCHRONOUS blocks; move this assignment out of ASYNCHRONOUS" },
     { "MEM_ACCESS", "MEM_WRITE_TO_READ_PORT",                       1, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2 Writing to MEM read port (IN); did you mean to use an OUT port?" },
     { "MEM_ACCESS", "MEM_READ_FROM_WRITE_PORT",                     1, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3 Reading from MEM write port (OUT); did you mean to use an IN port?" },
-    { "MEM_ACCESS", "MEM_ADDR_WIDTH_TOO_WIDE",                      0, JZ_RULE_MODE_ERR, "S7.2/S7.3/S7.7.2 Address width exceeds ceil(log2(depth)) in constant-time-provable way" },
+    { "MEM_ACCESS", "MEM_ADDR_WIDTH_MISMATCH",                      0, JZ_RULE_MODE_ERR, "S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access" },
     { "MEM_ACCESS", "MEM_MULTIPLE_WRITES_SAME_IN",                  0, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3/S7.7.2 Multiple writes to same IN port within single SYNCHRONOUS block" },
     { "MEM_ACCESS", "MEM_MULTIPLE_ASSIGN_SYNC_READ_OUT",            0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 Synchronous read address sampled from multiple addresses in one execution path" },
     { "MEM_ACCESS", "MEM_CONST_ADDR_OUT_OF_RANGE",                  0, JZ_RULE_MODE_ERR, "S7.2/S7.3/S7.7.2 Constant address index >= depth" },
@@ -415,6 +439,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_SINGLE_DRIVER",         0, JZ_RULE_MODE_WRN, "S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC" },
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_OE_EXTRACT_FAIL",       0, JZ_RULE_MODE_ERR, "S11.7 Could not extract output-enable condition from tri-state port; _oe driven high as fallback" },
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_UNUSED_DEFAULT",        0, JZ_RULE_MODE_WRN, "S11.7 --tristate-default specified but no internal tri-state nets found to transform" },
+    { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_ROLLBACK",             0, JZ_RULE_MODE_ERR, "S11.5 Tri-state transform failed and was rolled back to the pre-transform IR" },
     { "TRISTATE_TRANSFORM", "INFO_TRISTATE_TRANSFORM",                  0, JZ_RULE_MODE_INF, "S11 Tri-state net transformed by --tristate-default" },
 
     /* [SERIALIZER] */
@@ -433,8 +458,10 @@ const JZRuleInfo jz_rule_table[] = {
     { "TEMPLATE", "TEMPLATE_APPLY_OUTSIDE_BLOCK",    0, JZ_RULE_MODE_ERR, "S10.5 @apply may only appear inside ASYNCHRONOUS or SYNCHRONOUS blocks" },
     { "TEMPLATE", "TEMPLATE_DUP_NAME",               0, JZ_RULE_MODE_ERR, "S10.2 Duplicate template name in the same scope" },
     { "TEMPLATE", "TEMPLATE_DUP_PARAM",              0, JZ_RULE_MODE_ERR, "S10.2 Duplicate parameter name in template definition" },
+    { "TEMPLATE", "TEMPLATE_SCRATCH_SHADOW",         0, JZ_RULE_MODE_ERR, "S10.3 @scratch name may not shadow a template parameter, another @scratch, or an existing identifier in the enclosing module scope" },
     { "TEMPLATE", "TEMPLATE_SCRATCH_WIDTH_INVALID",  0, JZ_RULE_MODE_ERR, "S10.3 @scratch width must be a positive integer constant expression" },
     { "TEMPLATE", "TEMPLATE_EXTERNAL_REF",           0, JZ_RULE_MODE_ERR, "S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments" },
+    { "TEMPLATE", "TEMPLATE_RESET_LOGIC_FORBIDDEN",  0, JZ_RULE_MODE_ERR, "S10.4 Reset-style conditional logic is not allowed inside templates; keep reset handling at the callsite or enclosing SYNCHRONOUS block" },
 
     /* [TESTBENCH] */
     { "TESTBENCH", "TB_WRONG_TOOL",               0, JZ_RULE_MODE_ERR, "File contains @testbench blocks; use --test to run testbenches" },

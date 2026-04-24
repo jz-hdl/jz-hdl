@@ -1,0 +1,46 @@
+// HAPPY_PATH: lit(<width>, <value>) zero-extends the value to the given
+// width (§5.5.11 Req #13). Small values fit into wide lit() results with
+// the high bits implicitly zero. No diagnostics expected.
+
+@project HAPPY_PATH_lit_zero_extension_ok
+    @top TopMod {
+        IN  [1]  clk = _;
+        OUT [8]  out_small = _;
+        OUT [16] out_mid = _;
+        OUT [32] out_wide = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        OUT [8]  out_small;
+        OUT [16] out_mid;
+        OUT [32] out_wide;
+    }
+
+    REGISTER {
+        // Reset value: lit(8, 1) materializes as 8'b00000001 (value 1
+        // zero-extended from 1 bit to 8 bits).
+        r_small [8]  = lit(8, 1);
+        // lit(16, 255) -> 16'h00FF (value 255 zero-extended from 8 bits
+        // to 16 bits; upper byte is zero).
+        r_mid   [16] = lit(16, 255);
+        // lit(32, 1) -> 32'h00000001 (value 1 zero-extended from 1 bit
+        // to 32 bits; upper 31 bits are zero).
+        r_wide  [32] = lit(32, 1);
+    }
+
+    ASYNCHRONOUS {
+        out_small = r_small;
+        out_mid   = r_mid;
+        out_wide  = r_wide;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // RHS lit() also zero-extends the compile-time value.
+        r_small <= lit(8, 3);
+        r_mid   <= lit(16, 1);
+        r_wide  <= lit(32, 65535);
+    }
+@endmod

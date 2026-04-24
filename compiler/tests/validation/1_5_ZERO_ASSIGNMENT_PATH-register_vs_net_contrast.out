@@ -1,0 +1,2 @@
+File: 1_5_ZERO_ASSIGNMENT_PATH-register_vs_net_contrast.jz
+      24:9    error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case

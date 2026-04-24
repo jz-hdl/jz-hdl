@@ -16,7 +16,7 @@
           "kind": "port",
           "width": 1,
           "owner_module_id": 0,
-          "source_line": 54,
+          "source_line": 48,
           "can_be_z": false,
           "iob": false,
           "port": { "direction": "IN" }
@@ -27,7 +27,7 @@
           "kind": "port",
           "width": 1,
           "owner_module_id": 0,
-          "source_line": 55,
+          "source_line": 49,
           "can_be_z": false,
           "iob": false,
           "port": { "direction": "IN" }
@@ -38,7 +38,7 @@
           "kind": "port",
           "width": 8,
           "owner_module_id": 0,
-          "source_line": 56,
+          "source_line": 50,
           "can_be_z": false,
           "iob": false,
           "port": { "direction": "IN" }
@@ -49,7 +49,7 @@
           "kind": "port",
           "width": 8,
           "owner_module_id": 0,
-          "source_line": 57,
+          "source_line": 51,
           "can_be_z": false,
           "iob": false,
           "port": { "direction": "OUT" }
@@ -60,7 +60,7 @@
           "kind": "port",
           "width": 1,
           "owner_module_id": 0,
-          "source_line": 58,
+          "source_line": 52,
           "can_be_z": false,
           "iob": false,
           "port": { "direction": "OUT" }

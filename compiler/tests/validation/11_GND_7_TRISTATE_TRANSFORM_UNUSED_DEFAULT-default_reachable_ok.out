@@ -1,0 +1,4 @@
+File: 11_GND_7_TRISTATE_TRANSFORM_UNUSED_DEFAULT-default_reachable_ok.jz
+      15:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      27:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      48:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

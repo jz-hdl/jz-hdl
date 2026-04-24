@@ -1,0 +1,2 @@
+File: 12_3_WARN_DEAD_CODE_UNREACHABLE-select_dead_case.jz
+      30:17   warn  WARN_DEAD_CODE_UNREACHABLE S7.7.3/S8.3 Dead code (unreachable statements detected by analysis)

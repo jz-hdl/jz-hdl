@@ -1,0 +1,45 @@
+// COMB_LOOP_UNCONDITIONAL: Cycle through an instance port.
+// The child module has an unconditional IN -> OUT path. The parent feeds the
+// instance OUT net back to the same instance IN net in ASYNCHRONOUS logic.
+
+@project COMB_LOOP_UNCONDITIONAL_cycle_through_instance
+    @top TopMod {
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module PassThrough
+    PORT {
+        IN  [1] i;
+        OUT [1] o;
+    }
+
+    ASYNCHRONOUS {
+        o <= i;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    WIRE {
+        feedback_in [1];
+        feedback_out [1];
+    }
+
+    @new inst_p PassThrough {
+        IN  [1] i = feedback_in;
+        OUT [1] o = feedback_out;
+    };
+
+    ASYNCHRONOUS {
+        // Trigger: feedback_out -> feedback_in in the parent, plus
+        // PassThrough's feedback_in -> feedback_out port transparency.
+        feedback_in <= feedback_out;
+        data <= din;
+    }
+@endmod

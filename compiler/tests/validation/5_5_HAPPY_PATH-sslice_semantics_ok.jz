@@ -1,0 +1,76 @@
+// HAPPY_PATH: sslice() behavioral requirements from §5.5.9.
+// Exercises:
+//   Reqs #1-5 (async-expr context) - sslice in ASYNCHRONOUS RHS.
+//   Req #8   - index_width >= clog2(W) satisfied at exact boundary.
+//   Req #9   - index narrower than clog2(W) is implicitly zero-extended.
+//   Reqs #10-11 (happy) - index wider than clog2(W); may be out of range at
+//                         runtime but not statically proven, so allowed.
+//   Req #12  - index + width may exceed W at runtime; out-of-range bits are
+//              passed through from source.
+//   Req #13  - per-bit semantics: result[k] = (index+k in range) ? value[k]
+//              : source[k].
+//   Req #14  - pure combinational transformation (direct ASYNC RHS use).
+//   Req #15  - no hidden state introduced by sslice.
+//   Req #16  - deterministic, stable, hardware-realizable.
+// Covers async-expr and sync-expr contexts (the only syntactically legal
+// contexts for intrinsics). new-binding, check-expr, feature-cond are
+// inapplicable; see audit/runner.log for the rationale.
+
+@project HAPPY_PATH_sslice_semantics_ok
+    @top TopMod {
+        IN  [1]  clk       = _;
+        IN  [16] src16     = _;
+        IN  [2]  narrow_i  = _;
+        IN  [4]  exact_i   = _;
+        IN  [5]  wide_i    = _;
+        IN  [4]  val4      = _;
+        OUT [16] out_narrow = _;
+        OUT [16] out_exact  = _;
+        OUT [16] out_wide   = _;
+        OUT [16] out_combo  = _;
+        OUT [16] out_ovf    = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [16] src16;
+        IN  [2]  narrow_i;
+        IN  [4]  exact_i;
+        IN  [5]  wide_i;
+        IN  [4]  val4;
+        OUT [16] out_narrow;
+        OUT [16] out_exact;
+        OUT [16] out_wide;
+        OUT [16] out_combo;
+        OUT [16] out_ovf;
+    }
+
+    REGISTER {
+        r_sync [16] = 16'd0;
+    }
+
+    ASYNCHRONOUS {
+        // Reqs #1-5, #9: 2-bit index < clog2(16)=4, implicit zero-extend;
+        // covers sslice in async-expr (Reqs #1-5 async context).
+        out_narrow <= sslice(src16, narrow_i, 4, val4);
+        // Req #8: 4-bit index == clog2(16)=4, exact boundary is satisfied.
+        out_exact  <= sslice(src16, exact_i, 4, val4);
+        // Reqs #10-11 (happy), #16: 5-bit index > clog2(16) can encode values
+        // >= 16 at runtime; allowed because not statically provable OOR.
+        out_wide   <= sslice(src16, wide_i, 4, val4);
+        // Req #12: dynamic index where index + width may exceed W at runtime
+        // (exact_i can be 13..15 so index+4 exceeds 16). Out-of-range bits
+        // are passed through from source; allowed at compile time.
+        out_ovf    <= sslice(src16, exact_i, 4, val4);
+        // Reqs #13-#15: combinational transformation, no hidden state,
+        // result used directly in async RHS.
+        out_combo   = r_sync;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // sync-expr: sslice used as RHS of a register assignment.
+        r_sync <= sslice(src16, narrow_i, 4, val4);
+    }
+@endmod

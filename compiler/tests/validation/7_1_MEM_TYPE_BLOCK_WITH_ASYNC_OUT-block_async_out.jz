@@ -31,11 +31,12 @@
     }
 
     ASYNCHRONOUS {
-        data = r;
+        data = mem_a.rd[addr] ^ r;
     }
 
     SYNCHRONOUS(CLK=clk) {
         r <= wdata;
+        mem_a.wr[addr] <= wdata;
     }
 @endmod
 
@@ -75,12 +76,13 @@
     };
 
     ASYNCHRONOUS {
-        data = r;
+        data = mem_b.rd[addr] ^ r;
     }
 
     SYNCHRONOUS(CLK=clk) {
         mem_ok.rd_ok.addr <= addr;
         r <= mem_ok.rd_ok.data;
+        mem_b.wr[addr] <= wdata;
         mem_ok.wr_ok[addr] <= wdata;
     }
 @endmod

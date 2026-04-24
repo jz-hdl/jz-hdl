@@ -1,0 +1,66 @@
+// SPECIAL_DRIVER_IN_EXPRESSION: Happy-path - GND/VCC used as standalone
+// atomic drivers, never as operands in arithmetic or logical expressions.
+// Demonstrates that legal uses do NOT trigger SPECIAL_DRIVER_IN_EXPRESSION.
+// Covers async-expr and sync-expr contexts.
+
+@project SPECIAL_DRIVER_IN_EXPRESSION_valid_standalone_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] out_a = _;
+        OUT [1] out_b = _;
+    }
+@endproj
+
+// Helper: standalone GND/VCC on RHS in async and sync
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [1] sel;
+        OUT [8] out_a;
+        OUT [1] out_b;
+    }
+    REGISTER {
+        r [8] = 8'h00;
+    }
+    ASYNCHRONOUS {
+        // Valid: GND as ternary arm (arms are standalone drivers)
+        out_a = sel ? r : GND;
+        // Valid: VCC/GND as ternary arms (standalone drivers, not operands)
+        out_b = sel ? VCC : GND;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: VCC as atomic standalone sync assignment (sync-expr)
+        r <= VCC;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] out_a;
+        OUT [1] out_b;
+    }
+    WIRE {
+        ha_out_a [8];
+        ha_out_b [1];
+    }
+    REGISTER {
+        sel [1] = VCC;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [1] sel = sel;
+        OUT [8] out_a = ha_out_a;
+        OUT [1] out_b = ha_out_b;
+    };
+
+    ASYNCHRONOUS {
+        out_a = ha_out_a;
+        out_b = ha_out_b;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: GND as atomic standalone register assignment (sync-expr)
+        sel <= GND;
+    }
+@endmod

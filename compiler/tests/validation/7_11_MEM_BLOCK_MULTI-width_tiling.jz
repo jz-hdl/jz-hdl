@@ -1,0 +1,81 @@
+// MEM_BLOCK_MULTI: BLOCK memory requiring width-tiling across multiple BSRAM blocks.
+// Uses gw1nr-9 chip. A MEM [64] [512] exceeds the max single-block width (36),
+// requiring 2 width tiles of [32]x[512] = 2 BSRAM blocks.
+
+@project(CHIP="gw1nr-9-qn88-c6-i5") MEM_BLOCK_MULTI_width_tiling
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [9] addr = _;
+        IN  [64] wdata = _;
+        OUT [64] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [9] addr;
+        IN  [64] wdata;
+        OUT [64] data;
+    }
+
+    REGISTER {
+        r [64] = 64'h0000000000000000;
+    }
+
+    // Valid: a narrow MEM that fits in one block (no MEM_BLOCK_MULTI)
+    MEM(type=BLOCK) {
+        small_mem [8] [512] = 8'h00 {
+            OUT rd SYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        small_mem.rd.addr <= addr;
+        r <= {small_mem.rd.data, 56'h00000000000000};
+        small_mem.wr[addr] <= wdata[7:0];
+    }
+@endmod
+
+// Trigger: width-tiling in top module ([64] x [512] = 2 BSRAM blocks, 2x1 of [32]x[512])
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [9] addr;
+        IN  [64] wdata;
+        OUT [64] data;
+    }
+
+    REGISTER {
+        r [64] = 64'h0000000000000000;
+    }
+
+    MEM(type=BLOCK) {
+        wide_mem [64] [512] = 64'h0000000000000000 {
+            OUT rd SYNC;
+            IN  wr;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [9] addr = addr;
+        IN  [64] wdata = wdata;
+        OUT [64] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        wide_mem.rd.addr <= addr;
+        r <= wide_mem.rd.data;
+        wide_mem.wr[addr] <= wdata;
+    }
+@endmod

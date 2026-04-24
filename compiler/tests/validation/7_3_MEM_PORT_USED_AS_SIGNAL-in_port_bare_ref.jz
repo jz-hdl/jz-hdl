@@ -1,0 +1,40 @@
+// MEM_PORT_USED_AS_SIGNAL: Bare IN (write) port reference used as a signal.
+// IN ports must use bracket syntax mem.port[addr] <= data.
+
+@project MEM_PORT_USED_AS_SIGNAL_in_port_bare_ref
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    MEM {
+        mem_a [8] [16] = 8'h00 {
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_a.wr[addr] <= wdata;
+        // Trigger: bare IN port ref on RHS
+        r <= mem_a.wr;
+    }
+@endmod

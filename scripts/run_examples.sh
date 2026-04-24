@@ -11,11 +11,10 @@ set -euo pipefail
 EXAMPLES_DIR="${1:?Usage: $0 <examples-dir> <output-file>}"
 OUTPUT_FILE="${2:?Usage: $0 <examples-dir> <output-file>}"
 
-# Collect example directories (sorted, skip cpu/soc)
+# Collect example directories (sorted)
 examples=()
 for d in "$EXAMPLES_DIR"/*/; do
     name=$(basename "$d")
-    case "$name" in cpu|soc) continue ;; esac
     [ -f "$d/Makefile" ] || continue
     examples+=("$name")
 done

@@ -1,0 +1,48 @@
+// HAPPY_PATH: x-wildcard CASE values in SYNCHRONOUS SELECT.
+// Req #11: x bits appear only in CASE match patterns.
+// Req #12: x bits express intentional irrelevance.
+// The x bits act as don't-care wildcards and do not propagate into the
+// register result (assignment RHS is fully-defined 0 or 1).
+
+@project HAPPY_PATH_xwild_sync_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] opcode = _;
+        OUT [1] out_a = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] opcode;
+        OUT [1] out_a;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        out_a <= r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // x-wildcard patterns match the selector regardless of those bits.
+        // The assigned value is fully defined (no x propagation into r).
+        SELECT (opcode) {
+            CASE 8'b1010_xxxx {
+                r <= VCC;
+            }
+            CASE 8'b0101_xxxx {
+                r <= GND;
+            }
+            CASE 8'b10xx_0011 {
+                r <= VCC;
+            }
+            DEFAULT {
+                r <= GND;
+            }
+        }
+    }
+@endmod

@@ -79,7 +79,7 @@
     };
 
     ASYNCHRONOUS {
-        // Trigger 2: two @apply same wire in top module
+        // Trigger 2: same template-body error as Trigger 1; diagnostic deduplicates
         @apply set_high(w1);
         @apply set_low(w1);
 

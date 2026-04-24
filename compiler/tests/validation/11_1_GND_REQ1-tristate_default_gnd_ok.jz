@@ -1,0 +1,79 @@
+// Req #1: `jz-hdl --tristate-default=GND design.jz`.
+// Covers the section 11.1 command form by compiling a valid design with an
+// internal tri-state net under the GND default mode.
+
+@project REQ1_tristate_default_gnd_ok
+    @top TopMod {
+        IN    [1] clk = _;
+        IN    [1] en = _;
+        OUT   [8] data = _;
+        INOUT [8] bidir = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] en;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    WIRE {
+        // Trigger 1: internal tri-state wire is transformed under GND mode.
+        w_internal [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_internal <= din;
+        } ELSE {
+            w_internal <= 8'bzzzz_zzzz;
+        }
+        data <= w_internal;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        IN    [1] en;
+        OUT   [8] data;
+        INOUT [8] bidir;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] en = en;
+        IN  [8] din = r;
+        OUT [8] data = _;
+    };
+
+    WIRE {
+        // Trigger 2: top-level internal tri-state wire is transformed too.
+        w_top [8];
+    }
+
+    ASYNCHRONOUS {
+        IF (en) {
+            w_top <= r;
+        } ELSE {
+            w_top <= 8'bzzzz_zzzz;
+        }
+
+        // Valid: external INOUT tri-state remains preserved.
+        IF (en) {
+            bidir <= r;
+        } ELSE {
+            bidir <= 8'bzzzz_zzzz;
+        }
+
+        data <= w_top;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

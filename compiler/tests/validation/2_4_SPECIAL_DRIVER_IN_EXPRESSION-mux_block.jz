@@ -1,0 +1,90 @@
+// SPECIAL_DRIVER_IN_EXPRESSION: GND/VCC in expressions within MUX selection context.
+// Tests GND/VCC used in arithmetic expressions where a MUX is involved.
+// Valid standalone GND/VCC usage included to verify no false positives.
+
+@project SPECIAL_DRIVER_IN_EXPRESSION_mux_block
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] a = _;
+        IN  [8] b = _;
+        IN  [1] sel = _;
+        OUT [8] out_a = _;
+        OUT [8] out_b = _;
+    }
+@endproj
+
+// Helper: GND/VCC in expression with MUX read
+@module HelperA
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [1] sel;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+
+    MUX {
+        m = a, b;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: MUX read as standalone RHS (no false positive)
+        out_a = m[sel] | r;
+        // Trigger: GND in expression with MUX read (async)
+        out_b = m[sel] + GND;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= m[sel];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] a;
+        IN  [8] b;
+        IN  [1] sel;
+        OUT [8] out_a;
+        OUT [8] out_b;
+    }
+
+    WIRE {
+        ha_out_a [8];
+        ha_out_b [8];
+    }
+
+    MUX {
+        top_m = a, b;
+    }
+
+    @new inst_a HelperA {
+        IN  [1] clk = clk;
+        IN  [8] a = a;
+        IN  [8] b = b;
+        IN  [1] sel = sel;
+        OUT [8] out_a = ha_out_a;
+        OUT [8] out_b = ha_out_b;
+    };
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: standalone GND assignment (no false positive)
+        out_a = ha_out_a | r;
+        // Trigger: VCC in expression with MUX read (async, top module)
+        out_b = top_m[sel] | VCC;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger: GND in expression with MUX read (sync, top module)
+        r <= top_m[sel] - GND;
+    }
+@endmod

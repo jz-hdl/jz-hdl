@@ -1,0 +1,69 @@
+// MODULE_CANONICAL_FORM: Happy path for §4.1 Req #41 — multiple statements
+// inside a SYNCHRONOUS block.
+// The canonical form allows "..." inside SYNCHRONOUS, meaning a block
+// may contain many <stmt>; entries. This test exercises that.
+
+@project MODULE_CANONICAL_FORM_multi_sync_stmts_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module MultiSyncStmts
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r1 [1] = 1'b0;
+        r2 [1] = 1'b0;
+        r3 [1] = 1'b0;
+        r4 [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r1 ^ r2 ^ r3 ^ r4;
+    }
+
+    // Multiple <stmt>; entries exercising Req #41's "..." ellipsis
+    SYNCHRONOUS(CLK=clk) {
+        r1 <= din;
+        r2 <= r1;
+        r3 <= r2;
+        r4 <= r3;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    @new inst_ms MultiSyncStmts {
+        IN  [1] clk = clk;
+        IN  [1] din = din;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

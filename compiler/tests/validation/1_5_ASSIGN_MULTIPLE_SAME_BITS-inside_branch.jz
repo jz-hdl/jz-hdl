@@ -1,0 +1,66 @@
+// ASSIGN_MULTIPLE_SAME_BITS: Same bits assigned twice inside a single branch
+// body. Two sequential assignments to the same target in one IF-THEN, ELSE,
+// or SELECT CASE body lie on a single execution path and must fire
+// ASSIGN_MULTIPLE_SAME_BITS (not ASSIGN_INDEPENDENT_IF_SELECT, which is for
+// two separate IF/SELECT chains at the same nesting level).
+// Valid branch-exclusive assignments are included to verify no false positives.
+
+@project ASSIGN_MULTIPLE_SAME_BITS_inside_branch
+    @top TopMod {
+        IN  [1] sel_a = _;
+        IN  [1] sel_b = _;
+        IN  [2] mode  = _;
+        OUT [1] out_a = _;
+        OUT [1] out_b = _;
+        OUT [1] out_c = _;
+        OUT [1] out_d = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] sel_a;
+        IN  [1] sel_b;
+        IN  [2] mode;
+        OUT [1] out_a;
+        OUT [1] out_b;
+        OUT [1] out_c;
+        OUT [1] out_d;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: two assignments inside a single IF-THEN body
+        IF (sel_a) {
+            out_a <= VCC;
+            out_a <= GND;
+        } ELSE {
+            out_a <= GND;
+        }
+
+        // Trigger 2: two assignments inside a single ELSE body
+        IF (sel_b) {
+            out_b <= VCC;
+        } ELSE {
+            out_b <= VCC;
+            out_b <= GND;
+        }
+
+        // Trigger 3: two assignments inside a single SELECT CASE body
+        SELECT (mode) {
+            CASE 2'b00 {
+                out_c <= VCC;
+                out_c <= GND;
+            }
+            DEFAULT {
+                out_c <= GND;
+            }
+        }
+
+        // Valid: branch-exclusive assignments in one IF/ELSE (no trigger)
+        IF (sel_a) {
+            out_d <= VCC;
+        } ELSE {
+            out_d <= GND;
+        }
+    }
+@endmod
