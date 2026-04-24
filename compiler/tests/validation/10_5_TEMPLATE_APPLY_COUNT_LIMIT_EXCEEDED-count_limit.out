@@ -1,0 +1,2 @@
+File: 10_5_TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED-count_limit.jz
+      23:9    error TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED S10.5 @apply count exceeds the configured hard limit

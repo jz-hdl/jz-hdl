@@ -1,0 +1,22 @@
+// RPT_COUNT_LIMIT_EXCEEDED: @repeat count exceeds the configured hard limit.
+// Trigger: @repeat 1025 with the default repeat-count limit of 1024.
+// The repeat expander must stop before lexing or parsing.
+
+@project RPT_COUNT_LIMIT_EXCEEDED_repeat_count_limit
+    @top TopMod {
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        @repeat 1025
+            // expansion body is otherwise harmless
+        @end
+        data <= 1'b0;
+    }
+@endmod

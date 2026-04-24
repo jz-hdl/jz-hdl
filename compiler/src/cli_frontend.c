@@ -23,7 +23,8 @@ int jz_cli_run_frontend(JZCompiler *compiler,
                         FILE *ast_out,
                         int test_mode,
                         int simulate_mode,
-                        int verbose)
+                        int verbose,
+                        const JZExpansionLimits *limits)
 {
     clock_t t0, t1;
 
@@ -38,7 +39,7 @@ int jz_cli_run_frontend(JZCompiler *compiler,
     }
 
     /* Expand @repeat N ... @end blocks before lexing */
-    char *expanded = jz_repeat_expand(source, filename, &compiler->diagnostics);
+    char *expanded = jz_repeat_expand(source, filename, &compiler->diagnostics, limits);
     if (!expanded) {
         free(source);
         return 1;
@@ -86,7 +87,7 @@ int jz_cli_run_frontend(JZCompiler *compiler,
 
     /* Expand templates before semantic analysis or AST output. */
     t0 = clock();
-    jz_template_expand(compiler->ast_root, &compiler->diagnostics, filename);
+    jz_template_expand(compiler->ast_root, &compiler->diagnostics, filename, limits);
     t1 = clock();
     if (verbose) fprintf(stderr, "[verbose] template_expand: %.1f ms\n", jz_cli_elapsed_ms(t0));
 

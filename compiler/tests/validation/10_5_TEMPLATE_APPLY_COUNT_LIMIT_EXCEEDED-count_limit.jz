@@ -1,0 +1,26 @@
+// TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED: @apply count exceeds the configured
+// hard limit.
+// Trigger: @apply[1025] with the default apply-count limit of 1024.
+
+@project TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED_count_limit
+    @top TopMod {
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template drive(dst, src)
+    dst <= src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        @apply[1025] drive(data, din);
+        data = din;
+    }
+@endmod

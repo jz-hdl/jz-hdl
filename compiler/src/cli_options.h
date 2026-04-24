@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "diagnostic.h"
+#include "expansion_limits.h"
 #include "sim/sim_engine.h"
 
 /**
@@ -67,6 +68,9 @@ typedef struct JZCLIOptions {
     int num_jitter;
     SimDriftConfig drift_configs[16];
     int num_drift;
+
+    /* Expansion hard limits. */
+    JZExpansionLimits expansion_limits;
 } JZCLIOptions;
 
 /**

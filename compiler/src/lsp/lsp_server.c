@@ -80,6 +80,11 @@ static char s_workspace_root[2048] = {0};
 static int s_hover_clocks = 1;
 static int s_hover_declarations = 1;
 
+static const JZExpansionLimits *lsp_expansion_limits(void) {
+    static const JZExpansionLimits limits = JZ_EXPANSION_LIMITS_DEFAULT_INIT;
+    return &limits;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Project override map                                              */
 /*                                                                    */
@@ -754,7 +759,8 @@ static void publish_diagnostics_via_project(const char *uri,
 
     /* Expand @repeat blocks in the project source. */
     char *expanded = jz_repeat_expand(proj_source, project_path,
-                                      &compiler.diagnostics);
+                                      &compiler.diagnostics,
+                                      lsp_expansion_limits());
     char *source = expanded ? expanded : proj_source;
     int free_source = (expanded != NULL);
 
@@ -773,7 +779,8 @@ static void publish_diagnostics_via_project(const char *uri,
 
     /* Template expansion + semantic analysis on the full project AST. */
     if (ast) {
-        jz_template_expand(ast, &compiler.diagnostics, project_path);
+        jz_template_expand(ast, &compiler.diagnostics, project_path,
+                           lsp_expansion_limits());
         jz_sem_run(ast, &compiler.diagnostics, project_path, 0);
 
         /* Build IR for clock info extraction.  The IR gives us resolved
@@ -909,7 +916,8 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
 
     /* Expand @repeat blocks. */
     char *expanded = jz_repeat_expand(doc->content, filepath,
-                                      &compiler.diagnostics);
+                                      &compiler.diagnostics,
+                                      lsp_expansion_limits());
     char *source = expanded ? expanded : doc->content;
     int free_source = (expanded != NULL);
 
@@ -1031,7 +1039,8 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
 
     /* Template expansion + semantic analysis. */
     if (ast) {
-        jz_template_expand(ast, &compiler.diagnostics, filepath);
+        jz_template_expand(ast, &compiler.diagnostics, filepath,
+                           lsp_expansion_limits());
         jz_sem_run(ast, &compiler.diagnostics, filepath, 0);
         if (has_project) {
             {
@@ -1515,7 +1524,8 @@ static void handle_text_document_hover(const char *msg, int id,
             jz_compiler_init(&hover_compiler, JZ_COMPILER_MODE_LINT);
 
             char *hover_expanded = jz_repeat_expand(doc->content, hover_filepath,
-                                                     &hover_compiler.diagnostics);
+                                                     &hover_compiler.diagnostics,
+                                                     lsp_expansion_limits());
             char *hover_src = hover_expanded ? hover_expanded : doc->content;
 
             JZTokenStream hover_tokens;
@@ -1526,7 +1536,7 @@ static void handle_text_document_hover(const char *msg, int id,
                                                       &hover_compiler.diagnostics);
                 if (hover_ast) {
                     jz_template_expand(hover_ast, &hover_compiler.diagnostics,
-                                       hover_filepath);
+                                       hover_filepath, lsp_expansion_limits());
                     JZASTNode *decl = find_declaration(hover_ast, word);
                     if (decl) {
                         char *bp = hover_buf;
@@ -1806,7 +1816,8 @@ static void handle_text_document_definition(const char *msg, int id,
     jz_compiler_init(&compiler, JZ_COMPILER_MODE_LINT);
 
     char *expanded = jz_repeat_expand(doc->content, filepath,
-                                      &compiler.diagnostics);
+                                      &compiler.diagnostics,
+                                      lsp_expansion_limits());
     char *compile_src = expanded ? expanded : doc->content;
     int free_src = (expanded != NULL);
 
@@ -1821,7 +1832,8 @@ static void handle_text_document_definition(const char *msg, int id,
     }
 
     if (ast) {
-        jz_template_expand(ast, &compiler.diagnostics, filepath);
+        jz_template_expand(ast, &compiler.diagnostics, filepath,
+                           lsp_expansion_limits());
     }
 
     JZASTNode *target = ast ? find_declaration(ast, word) : NULL;

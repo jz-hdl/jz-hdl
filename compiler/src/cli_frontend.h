@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "compiler.h"
+#include "expansion_limits.h"
 
 /**
  * @file cli_frontend.h
@@ -26,6 +27,7 @@ int jz_cli_run_frontend(JZCompiler *compiler,
                         FILE *ast_out,
                         int test_mode,
                         int simulate_mode,
-                        int verbose);
+                        int verbose,
+                        const JZExpansionLimits *limits);
 
 #endif /* JZ_HDL_CLI_FRONTEND_H */

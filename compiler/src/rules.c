@@ -462,6 +462,8 @@ const JZRuleInfo jz_rule_table[] = {
     { "TEMPLATE", "TEMPLATE_SCRATCH_WIDTH_INVALID",  0, JZ_RULE_MODE_ERR, "S10.3 @scratch width must be a positive integer constant expression" },
     { "TEMPLATE", "TEMPLATE_EXTERNAL_REF",           0, JZ_RULE_MODE_ERR, "S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments" },
     { "TEMPLATE", "TEMPLATE_RESET_LOGIC_FORBIDDEN",  0, JZ_RULE_MODE_ERR, "S10.4 Reset-style conditional logic is not allowed inside templates; keep reset handling at the callsite or enclosing SYNCHRONOUS block" },
+    { "TEMPLATE", "TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 @apply count exceeds the configured hard limit" },
+    { "TEMPLATE", "TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 Template expansion exceeds the configured total growth limit" },
 
     /* [TESTBENCH] */
     { "TESTBENCH", "TB_WRONG_TOOL",               0, JZ_RULE_MODE_ERR, "File contains @testbench blocks; use --test to run testbenches" },
@@ -489,6 +491,8 @@ const JZRuleInfo jz_rule_table[] = {
     /* [REPEAT] */
     { "REPEAT", "RPT_COUNT_INVALID",              0, JZ_RULE_MODE_ERR, "RPT-001 @repeat requires a positive integer count" },
     { "REPEAT", "RPT_NO_MATCHING_END",            0, JZ_RULE_MODE_ERR, "RPT-002 @repeat without matching @end" },
+    { "REPEAT", "RPT_COUNT_LIMIT_EXCEEDED",       0, JZ_RULE_MODE_ERR, "RPT-003 @repeat count exceeds the configured hard limit" },
+    { "REPEAT", "RPT_EXPANDED_SIZE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "RPT-004 @repeat expansion exceeds the configured expanded-size limit" },
 
     /* [GENERAL_WARNINGS] */
     { "GENERAL_WARNINGS", "WARN_UNUSED_REGISTER",                   0, JZ_RULE_MODE_WRN, "S8.3 Register is never read or written; remove it if unused" },

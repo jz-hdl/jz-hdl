@@ -255,7 +255,9 @@ int main(int argc, char **argv) {
 
     /* Always run the front end for AST, lint, IR, Verilog, and test modes. */
     phase_t0 = clock();
-    rc = jz_cli_run_frontend(&compiler, opts.input_filename, print_ast_json, ast_out, opts.test_mode, opts.simulate_mode, opts.verbose);
+    rc = jz_cli_run_frontend(&compiler, opts.input_filename, print_ast_json, ast_out,
+                             opts.test_mode, opts.simulate_mode, opts.verbose,
+                             &opts.expansion_limits);
     if (opts.verbose) fprintf(stderr, "[verbose] frontend (total): %.1f ms\n", jz_cli_elapsed_ms(phase_t0));
 
     /* In lint mode, build IR (if no errors) to run the division guard check. */

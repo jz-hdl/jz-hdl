@@ -1,9 +1,114 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "cli_options.h"
 #include "version.h"
+
+static int parse_positive_size(const char *text, size_t *out) {
+    char *end = NULL;
+    unsigned long long value;
+
+    if (!text || !*text) return 0;
+
+    value = strtoull(text, &end, 10);
+    if (!end || *end != '\0' || value == 0 || value > (unsigned long long)SIZE_MAX) {
+        return 0;
+    }
+
+    *out = (size_t)value;
+    return 1;
+}
+
+static int parse_expansion_limits_arg(JZExpansionLimits *limits, const char *arg) {
+    char *copy = NULL;
+    char *field = NULL;
+    char *saveptr = NULL;
+    int saw_repeat_count = 0;
+    int saw_repeat_bytes = 0;
+    int saw_apply_count = 0;
+    int saw_apply_growth = 0;
+
+    if (!limits || !arg || !*arg) {
+        fprintf(stderr,
+                "Invalid --expansion-limits value (expected repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>)\n");
+        return 1;
+    }
+
+    copy = strdup(arg);
+    if (!copy) {
+        fprintf(stderr, "Out of memory while parsing --expansion-limits\n");
+        return 1;
+    }
+
+    for (field = strtok_r(copy, ",", &saveptr);
+         field != NULL;
+         field = strtok_r(NULL, ",", &saveptr)) {
+        char *eq = strchr(field, '=');
+        size_t value = 0;
+
+        if (!eq || eq == field || eq[1] == '\0') {
+            fprintf(stderr,
+                    "Invalid --expansion-limits entry '%s' (expected name=value)\n",
+                    field);
+            free(copy);
+            return 1;
+        }
+
+        *eq = '\0';
+        if (!parse_positive_size(eq + 1, &value)) {
+            fprintf(stderr,
+                    "Invalid --expansion-limits value for '%s': '%s' (expected positive integer)\n",
+                    field, eq + 1);
+            free(copy);
+            return 1;
+        }
+
+        if (strcmp(field, "repeat-count") == 0) {
+            if (saw_repeat_count) {
+                fprintf(stderr, "Duplicate --expansion-limits field: repeat-count\n");
+                free(copy);
+                return 1;
+            }
+            limits->repeat_max_count = value;
+            saw_repeat_count = 1;
+        } else if (strcmp(field, "repeat-bytes") == 0) {
+            if (saw_repeat_bytes) {
+                fprintf(stderr, "Duplicate --expansion-limits field: repeat-bytes\n");
+                free(copy);
+                return 1;
+            }
+            limits->repeat_max_bytes = value;
+            saw_repeat_bytes = 1;
+        } else if (strcmp(field, "apply-count") == 0) {
+            if (saw_apply_count) {
+                fprintf(stderr, "Duplicate --expansion-limits field: apply-count\n");
+                free(copy);
+                return 1;
+            }
+            limits->apply_max_count = value;
+            saw_apply_count = 1;
+        } else if (strcmp(field, "apply-growth") == 0) {
+            if (saw_apply_growth) {
+                fprintf(stderr, "Duplicate --expansion-limits field: apply-growth\n");
+                free(copy);
+                return 1;
+            }
+            limits->apply_max_growth = value;
+            saw_apply_growth = 1;
+        } else {
+            fprintf(stderr,
+                    "Unknown --expansion-limits field '%s' (expected repeat-count, repeat-bytes, apply-count, or apply-growth)\n",
+                    field);
+            free(copy);
+            return 1;
+        }
+    }
+
+    free(copy);
+    return 0;
+}
 
 void jz_cli_print_usage(const char *prog) {
     fprintf(stderr,
@@ -23,6 +128,11 @@ void jz_cli_print_usage(const char *prog) {
             "       %s --help\n"
             "       %s --version\n"
             "\n"
+            "Expansion safety options:\n"
+            "  --expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>\n"
+            "                           Override hard expansion limits (defaults: repeat-count=1024,\n"
+            "                           repeat-bytes=1048576, apply-count=1024, apply-growth=4096)\n"
+            "\n"
             "Path security options:\n"
             "  --sandbox-root=<dir>     Add permitted root directory for file access\n"
             "  --allow-absolute-paths   Allow absolute paths in @import / @file()\n"
@@ -36,6 +146,7 @@ void jz_cli_print_version(void) {
 
 int jz_cli_parse_options(JZCLIOptions *opts, int argc, char **argv) {
     memset(opts, 0, sizeof(*opts));
+    opts->expansion_limits = (JZExpansionLimits)JZ_EXPANSION_LIMITS_DEFAULT_INIT;
 
     for (int i = 1; i < argc; ++i) {
         const char *arg = argv[i];
@@ -195,6 +306,10 @@ int jz_cli_parse_options(JZCLIOptions *opts, int argc, char **argv) {
             opts->allow_absolute_paths = 1;
         } else if (strcmp(arg, "--allow-traversal") == 0) {
             opts->allow_traversal = 1;
+        } else if (strncmp(arg, "--expansion-limits=", 19) == 0) {
+            if (parse_expansion_limits_arg(&opts->expansion_limits, arg + 19) != 0) {
+                return 1;
+            }
         } else if (strncmp(arg, "--sandbox-root=", 15) == 0) {
             const char *val = arg + 15;
             if (*val && opts->sandbox_root_count < sizeof(opts->sandbox_roots) / sizeof(opts->sandbox_roots[0])) {

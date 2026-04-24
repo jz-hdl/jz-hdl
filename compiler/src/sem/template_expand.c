@@ -23,6 +23,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <stdint.h>
 
 #include "template_expand.h"
 #include "rules.h"
@@ -55,6 +56,7 @@ typedef struct ExpandContext {
     size_t          template_cap;
     JZDiagnosticList *diagnostics;
     const char      *filename;
+    JZExpansionLimits limits;
 
     /* Lightweight CONST/CONFIG table for count evaluation */
     struct { const char *name; long value; } *consts;
@@ -67,6 +69,7 @@ typedef struct ExpandContext {
     size_t      scratch_wire_cap;
 
     int apply_counter;  /* unique callsite id */
+    size_t total_growth;
 } ExpandContext;
 
 static void validate_template_reset_logic(ExpandContext *ctx,
@@ -1347,6 +1350,7 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
     size_t param_count = 0;
     const char *param_names[64]; /* reasonable limit */
     size_t body_start = 0;
+    size_t body_stmt_count = 0;
 
     for (size_t i = 0; i < def->child_count; i++) {
         if (def->children[i]->type == JZ_AST_TEMPLATE_PARAM) {
@@ -1366,6 +1370,8 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
             if (scratch_count < 64) {
                 scratch_names[scratch_count++] = def->children[i]->name;
             }
+        } else if (def->children[i]->type != JZ_AST_TEMPLATE_PARAM) {
+            body_stmt_count++;
         }
     }
 
@@ -1427,6 +1433,43 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
             }
             goto remove_apply;
         }
+    }
+
+    if (count > 0 &&
+        (unsigned long long)count > (unsigned long long)ctx->limits.apply_max_count) {
+        char cnt_msg[512];
+        snprintf(cnt_msg, sizeof(cnt_msg),
+                 "@apply count %ld exceeds the configured limit of %zu iteration(s)",
+                 count, ctx->limits.apply_max_count);
+        report_rule(ctx, apply->loc, "TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED", cnt_msg);
+        goto remove_apply;
+    }
+
+    if (count > 0) {
+        size_t per_iter_growth = scratch_count + body_stmt_count;
+        size_t apply_growth = 0;
+
+        if (per_iter_growth > 0) {
+            if ((size_t)count > SIZE_MAX / per_iter_growth) {
+                apply_growth = SIZE_MAX;
+            } else {
+                apply_growth = (size_t)count * per_iter_growth;
+            }
+        }
+
+        if (apply_growth > ctx->limits.apply_max_growth ||
+            ctx->total_growth > ctx->limits.apply_max_growth - apply_growth) {
+            char growth_msg[512];
+            snprintf(growth_msg, sizeof(growth_msg),
+                     "@apply `%s` would grow template expansion by %zu node(s), exceeding the configured total growth limit of %zu",
+                     apply->name ? apply->name : "?",
+                     apply_growth,
+                     ctx->limits.apply_max_growth);
+            report_rule(ctx, apply->loc, "TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED", growth_msg);
+            goto remove_apply;
+        }
+
+        ctx->total_growth += apply_growth;
     }
 
     /* Validate template body: all identifiers must be params, scratch, or IDX */
@@ -1685,7 +1728,8 @@ static void insert_scratch_wires(JZASTNode *module, JZASTNode **wires, size_t co
 
 int jz_template_expand(JZASTNode *root,
                         JZDiagnosticList *diagnostics,
-                        const char *filename)
+                        const char *filename,
+                        const JZExpansionLimits *limits)
 {
     if (!root) return 0;
 
@@ -1699,6 +1743,7 @@ int jz_template_expand(JZASTNode *root,
     ctx.diagnostics = diagnostics;
     ctx.filename = filename;
     ctx.apply_counter = 0;
+    ctx.limits = limits ? *limits : (JZExpansionLimits)JZ_EXPANSION_LIMITS_DEFAULT_INIT;
 
     /* Collect CONST/CONFIG values for count evaluation */
     collect_consts_from_ast(&ctx, root);

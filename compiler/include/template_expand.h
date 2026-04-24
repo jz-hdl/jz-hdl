@@ -12,6 +12,7 @@
 
 #include "ast.h"
 #include "diagnostic.h"
+#include "expansion_limits.h"
 
 /**
  * @brief Expand all template applications in the AST.
@@ -24,10 +25,12 @@
  * @param root        Root AST node (typically JZ_AST_PROJECT).
  * @param diagnostics Diagnostic list for error collection.
  * @param filename    Primary source filename for diagnostics.
+ * @param limits      Expansion hard limits. If NULL, built-in defaults are used.
  * @return 0 on success, non-zero if errors were found.
  */
 int jz_template_expand(JZASTNode *root,
                         JZDiagnosticList *diagnostics,
-                        const char *filename);
+                        const char *filename,
+                        const JZExpansionLimits *limits);
 
 #endif /* JZ_HDL_TEMPLATE_EXPAND_H */
