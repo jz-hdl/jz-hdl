@@ -28,10 +28,28 @@ Create or overwrite `security-audit/todo.md` with:
 Compute the summary directly from the completed shard reviews:
 
 - Count reviewed shard files
-- Count total confirmed findings/issues
-- Count issues by severity
+- Build a deduplicated issue list before writing any totals or priority buckets
+- Treat shard rows as **raw finding rows**, not automatically as unique issues
+- Merge rows that describe the same underlying bug/root cause, even if they appear in multiple shard files or are phrased differently
+- Only keep separate issues when the bug, affected code path, or remediation is materially different
+- Count total **unique confirmed issues** after deduplication
+- Count unique issues by severity after deduplication
 - Identify the most affected subsystems from issue locations
 - Identify the dominant security themes from the issue labels and evidence
+
+When deduplicating:
+
+- Prefer the most specific wording and strongest evidence among duplicate rows
+- Preserve the highest severity/confidence attached to the underlying bug
+- Do not emit separate issues just because one shard frames the same bug as memory-safety and another as denial-of-service
+- Do not double-count the same location/root cause across summary totals, P0, P1, or fix-order recommendations
+
+If useful, you may mention both numbers in the prose:
+
+- raw finding rows reviewed across shards
+- unique confirmed issues after deduplication
+
+But never present the raw row count as the number of distinct bugs/issues.
 
 Summarize the current compiler security posture concisely:
 
@@ -45,17 +63,17 @@ Do not copy large verbatim blocks from shard reviews.
 
 ### P0
 
-List every confirmed high-severity issue from the shard reviews.
+List every unique confirmed high-severity issue from the shard reviews.
 
-- Group duplicates when they are the same underlying bug
+- Deduplicate first; do not repeat the same underlying bug in multiple bullets
 - Put externally reachable memory-safety and unbounded-input issues first
 
 ### P1
 
-List confirmed medium-severity issues.
+List unique confirmed medium-severity issues.
 
 - Order by blast radius and ease of abuse
-- Group related issues when they share the same fix strategy
+- Deduplicate first; then group related issues when they share the same fix strategy
 
 ### P2
 
@@ -82,3 +100,4 @@ Give a short recommended order of work:
 Write `security-audit/todo.md` from scratch. Overwrite any existing file content.
 
 Keep it concise and practical. The file should read like the next security-fix checklist for the compiler.
+The summary and action lists must not overstate duplicate shard findings as distinct bugs.
