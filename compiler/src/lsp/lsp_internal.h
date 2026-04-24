@@ -21,14 +21,16 @@ typedef struct LspJson {
     char  *data;
     size_t len;
     size_t cap;
+    int    failed;
 } LspJson;
 
 void lsp_json_init(LspJson *j);
 void lsp_json_free(LspJson *j);
-void lsp_json_append(LspJson *j, const char *s);
-void lsp_json_append_char(LspJson *j, char c);
-void lsp_json_append_int(LspJson *j, int v);
-void lsp_json_append_escaped(LspJson *j, const char *s);
+int lsp_json_append(LspJson *j, const char *s);
+int lsp_json_append_char(LspJson *j, char c);
+int lsp_json_append_int(LspJson *j, int v);
+int lsp_json_append_escaped(LspJson *j, const char *s);
+int lsp_json_failed(const LspJson *j);
 
 /* ------------------------------------------------------------------ */
 /*  JSON-RPC I/O                                                      */
@@ -110,7 +112,7 @@ void lsp_docstore_free(LspDocStore *store);
 LspDocument *lsp_docstore_open(LspDocStore *store, const char *uri,
                                const char *content, int version);
 LspDocument *lsp_docstore_find(LspDocStore *store, const char *uri);
-void lsp_docstore_update(LspDocument *doc, const char *content, int version);
+int lsp_docstore_update(LspDocument *doc, const char *content, int version);
 void lsp_docstore_close(LspDocStore *store, const char *uri);
 
 /* ------------------------------------------------------------------ */

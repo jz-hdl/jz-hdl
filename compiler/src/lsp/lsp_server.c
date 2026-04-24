@@ -31,6 +31,44 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int lsp_json_ready(const LspJson *j, const char *context) {
+    if (!lsp_json_failed(j)) return 1;
+    lsp_log("%s: out of memory while building JSON", context);
+    return 0;
+}
+
+static int lsp_resolve_document_position(const LspDocument *doc,
+                                         const char *pos_json,
+                                         const char **out_line_start,
+                                         const char **out_cursor) {
+    int line = 0;
+    int character = 0;
+    const char *line_start;
+    const char *line_end;
+
+    if (!doc || !doc->content) return -1;
+    if (lsp_json_get_int(pos_json, "line", &line) != 0 ||
+        lsp_json_get_int(pos_json, "character", &character) != 0) {
+        return -1;
+    }
+    if (line < 0 || character < 0) return -1;
+
+    line_start = doc->content;
+    for (int cur_line = 0; cur_line < line; ++cur_line) {
+        const char *newline = strchr(line_start, '\n');
+        if (!newline) return -1;
+        line_start = newline + 1;
+    }
+
+    line_end = line_start;
+    while (*line_end && *line_end != '\n') ++line_end;
+    if ((size_t)character > (size_t)(line_end - line_start)) return -1;
+
+    *out_line_start = line_start;
+    *out_cursor = line_start + (size_t)character;
+    return 0;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Forward declarations                                              */
 /* ------------------------------------------------------------------ */
@@ -501,13 +539,16 @@ int jz_lsp_run(void) {
 
 static void send_response(int id, const char *result_json) {
     LspJson j;
+    if (!result_json) result_json = "null";
     lsp_json_init(&j);
     lsp_json_append(&j, "{\"jsonrpc\":\"2.0\",\"id\":");
     lsp_json_append_int(&j, id);
     lsp_json_append(&j, ",\"result\":");
     lsp_json_append(&j, result_json);
     lsp_json_append_char(&j, '}');
-    lsp_io_write_message(j.data, j.len);
+    if (lsp_json_ready(&j, "send_response")) {
+        lsp_io_write_message(j.data, j.len);
+    }
     lsp_json_free(&j);
 }
 
@@ -521,19 +562,27 @@ static void send_error(int id, int code, const char *message) {
     lsp_json_append(&j, ",\"message\":");
     lsp_json_append_escaped(&j, message);
     lsp_json_append(&j, "}}");
-    lsp_io_write_message(j.data, j.len);
+    if (lsp_json_ready(&j, "send_error")) {
+        lsp_io_write_message(j.data, j.len);
+    }
     lsp_json_free(&j);
 }
 
 static void send_notification(const char *method, const char *params_json) {
     LspJson j;
+    if (!params_json) {
+        lsp_log("send_notification: NULL params for method %s", method);
+        return;
+    }
     lsp_json_init(&j);
     lsp_json_append(&j, "{\"jsonrpc\":\"2.0\",\"method\":");
     lsp_json_append_escaped(&j, method);
     lsp_json_append(&j, ",\"params\":");
     lsp_json_append(&j, params_json);
     lsp_json_append_char(&j, '}');
-    lsp_io_write_message(j.data, j.len);
+    if (lsp_json_ready(&j, "send_notification")) {
+        lsp_io_write_message(j.data, j.len);
+    }
     lsp_json_free(&j);
 }
 
@@ -1103,7 +1152,10 @@ static void handle_text_document_did_open(const char *msg, LspDocStore *store) {
 
     lsp_log("didOpen: %s (version %d)", uri, version);
 
-    lsp_docstore_open(store, uri, text, version);
+    if (!lsp_docstore_open(store, uri, text, version)) {
+        lsp_log("didOpen: failed to store document %s", uri);
+        return;
+    }
     publish_diagnostics(uri, store);
 }
 
@@ -1158,7 +1210,10 @@ static void handle_text_document_did_change(const char *msg, LspDocStore *store)
         if (lsp_json_get_string(element, "text", text, sizeof(text)) == 0) {
             LspDocument *doc = lsp_docstore_find(store, uri);
             if (doc) {
-                lsp_docstore_update(doc, text, version);
+                if (lsp_docstore_update(doc, text, version) != 0) {
+                    lsp_log("didChange: failed to update document %s", uri);
+                    return;
+                }
             }
         }
     }
@@ -1213,7 +1268,10 @@ static void handle_text_document_did_save(const char *msg, LspDocStore *store) {
     if (lsp_json_get_string(params, "text", text, sizeof(text)) == 0) {
         LspDocument *doc = lsp_docstore_find(store, uri);
         if (doc) {
-            lsp_docstore_update(doc, text, doc->version);
+            if (lsp_docstore_update(doc, text, doc->version) != 0) {
+                lsp_log("didSave: failed to update document %s", uri);
+                return;
+            }
         }
     }
 
@@ -1297,10 +1355,6 @@ static void handle_text_document_hover(const char *msg, int id,
         return;
     }
 
-    int line = 0, character = 0;
-    lsp_json_get_int(pos_json, "line", &line);
-    lsp_json_get_int(pos_json, "character", &character);
-
     LspDocument *doc = lsp_docstore_find(store, uri);
     if (!doc) {
         send_response(id, "null");
@@ -1308,17 +1362,9 @@ static void handle_text_document_hover(const char *msg, int id,
     }
 
     /* Find the word at the given position. */
-    const char *src = doc->content;
-    int cur_line = 0;
-    const char *line_start = src;
-    while (*line_start && cur_line < line) {
-        if (*line_start == '\n') ++cur_line;
-        ++line_start;
-    }
-
-    /* Find word boundaries at the character offset. */
-    const char *p = line_start + character;
-    if (p >= src + strlen(src)) {
+    const char *line_start = NULL;
+    const char *p = NULL;
+    if (lsp_resolve_document_position(doc, pos_json, &line_start, &p) != 0) {
         send_response(id, "null");
         return;
     }
@@ -1702,10 +1748,6 @@ static void handle_text_document_definition(const char *msg, int id,
         return;
     }
 
-    int line = 0, character = 0;
-    lsp_json_get_int(pos_json, "line", &line);
-    lsp_json_get_int(pos_json, "character", &character);
-
     LspDocument *doc = lsp_docstore_find(store, uri);
     if (!doc) {
         send_response(id, "null");
@@ -1713,22 +1755,15 @@ static void handle_text_document_definition(const char *msg, int id,
     }
 
     /* Find word under cursor. */
-    const char *src = doc->content;
-    int cur_line = 0;
-    const char *line_start = src;
-    while (*line_start && cur_line < line) {
-        if (*line_start == '\n') ++cur_line;
-        ++line_start;
-    }
-
-    const char *p = line_start + character;
-    if (p >= src + strlen(src)) {
+    const char *line_start = NULL;
+    const char *p = NULL;
+    if (lsp_resolve_document_position(doc, pos_json, &line_start, &p) != 0) {
         send_response(id, "null");
         return;
     }
 
     const char *word_start = p;
-    while (word_start > src &&
+    while (word_start > line_start &&
            (word_start[-1] == '_' ||
             (word_start[-1] >= 'a' && word_start[-1] <= 'z') ||
             (word_start[-1] >= 'A' && word_start[-1] <= 'Z') ||
