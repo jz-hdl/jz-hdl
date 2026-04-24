@@ -1,13 +1,13 @@
-// IMPORT_FILE_MULTIPLE_TIMES: Same file imported twice using different path case.
-// Tests case-normalized duplicate detection on case-insensitive filesystems.
+// IMPORT_FILE_MULTIPLE_TIMES: Same file imported twice using different path forms.
+// Tests duplicate detection after traversal-free relative path normalization.
 
 @project IMPORT_FILE_MULTIPLE_TIMES_case_normalized_dup
 
     // Valid: first import of the library file.
     @import "6_2_1_IMPORT_FILE_MULTIPLE_TIMES-case_normalized_dup_lib.jz";
 
-    // Trigger 1: same file imported again with different path casing.
-    @import "6_2_1_import_file_multiple_times-CASE_normalized_DUP_lib.JZ";
+    // Trigger 1: same file imported again via a normalized current-directory path.
+    @import "././6_2_1_IMPORT_FILE_MULTIPLE_TIMES-case_normalized_dup_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;
