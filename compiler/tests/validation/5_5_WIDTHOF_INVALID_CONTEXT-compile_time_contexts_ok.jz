@@ -36,17 +36,16 @@
 @endmod
 
 @module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
     CONST {
         // Valid: widthof() in CONST initializer (already-covered context, baseline).
         DIN_W  = widthof(din);
         // Valid: widthof() as argument to clog2() — compile-time expression.
         ADDR_W = clog2(widthof(din));
-    }
-
-    PORT {
-        IN  [1] clk;
-        IN  [8] din;
-        OUT [8] dout;
     }
 
     WIRE {

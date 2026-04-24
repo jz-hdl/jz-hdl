@@ -61,12 +61,6 @@
 @endmod
 
 @module TopMod
-    CONST {
-        // Valid: clog2() in CONST block
-        LOG_W = clog2(256);
-        // Valid: widthof() in CONST block
-        DIN_W = widthof(din);
-    }
     PORT {
         IN  [1]  clk;
         IN  [8]  din;
@@ -98,6 +92,12 @@
         OUT [1]  out_rand;
         OUT [1]  out_ror;
         OUT [1]  out_rxor;
+    }
+    CONST {
+        // Valid: clog2() in CONST block
+        LOG_W = clog2(256);
+        // Valid: widthof() in CONST block
+        DIN_W = widthof(din);
     }
 
     WIRE {

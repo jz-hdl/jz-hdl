@@ -15,16 +15,16 @@
 @endproj
 
 @module TopMod
+    PORT {
+        IN  [1]            clk;
+        IN  [CONFIG.CFG_W] din;
+        OUT [CONFIG.CFG_W] dout;
+    }
     CONST {
         // Literal width is trivially resolvable.
         LIT_W  = 8;
         // Valid: widthof() on a PORT whose width comes from CONFIG.
         PORT_W = widthof(din);
-    }
-    PORT {
-        IN  [1]            clk;
-        IN  [CONFIG.CFG_W] din;
-        OUT [CONFIG.CFG_W] dout;
     }
     WIRE {
         w_lit [LIT_W];

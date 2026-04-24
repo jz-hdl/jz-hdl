@@ -80,7 +80,12 @@ static unsigned sem_decl_width_resolved(JZASTNode *decl,
     /* Try the full evaluator first (handles CONFIG, CONST, clog2, etc.). */
     if (scope && project_symbols) {
         unsigned w = 0;
-        if (sem_eval_width_expr(decl->width, scope, project_symbols, &w) == 0 && w > 0) {
+        if (sem_eval_width_expr_at_loc(decl->width,
+                                       scope,
+                                       project_symbols,
+                                       &w,
+                                       decl->loc) == 0 &&
+            w > 0) {
             return w;
         }
     }

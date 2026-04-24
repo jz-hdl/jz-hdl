@@ -71,7 +71,8 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
                                      char **out_expanded,
-                                     int depth);
+                                     int depth,
+                                     JZLocation loc);
 int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           const JZModuleScope *scope,
                                           const JZBuffer *project_symbols,
@@ -377,6 +378,54 @@ const JZSymbol *module_scope_lookup(const JZModuleScope *scope,
     return NULL;
 }
 
+static int jz_loc_is_visible_at_use(JZLocation decl_loc, JZLocation use_loc)
+{
+    if (use_loc.line <= 0 || use_loc.column <= 0) return 1;
+    if (!decl_loc.filename || !use_loc.filename) return 1;
+    if (strcmp(decl_loc.filename, use_loc.filename) != 0) return 1;
+    if (decl_loc.line < use_loc.line) return 1;
+    if (decl_loc.line > use_loc.line) return 0;
+    return decl_loc.column <= use_loc.column;
+}
+
+const JZSymbol *module_scope_lookup_visible(const JZModuleScope *scope,
+                                            const char *name,
+                                            JZLocation use_loc)
+{
+    if (!scope || !name) return NULL;
+    size_t count = scope->symbols.len / sizeof(JZSymbol);
+    const JZSymbol *syms = (const JZSymbol *)scope->symbols.data;
+    for (size_t i = 0; i < count; ++i) {
+        if (!syms[i].name || strcmp(syms[i].name, name) != 0) {
+            continue;
+        }
+        if (!syms[i].node || jz_loc_is_visible_at_use(syms[i].node->loc, use_loc)) {
+            return &syms[i];
+        }
+    }
+    return NULL;
+}
+
+const JZSymbol *module_scope_lookup_kind_visible(const JZModuleScope *scope,
+                                                 const char *name,
+                                                 JZSymbolKind kind,
+                                                 JZLocation use_loc)
+{
+    if (!scope || !name) return NULL;
+    size_t count = scope->symbols.len / sizeof(JZSymbol);
+    const JZSymbol *syms = (const JZSymbol *)scope->symbols.data;
+    for (size_t i = 0; i < count; ++i) {
+        if (!syms[i].name || syms[i].kind != kind ||
+            strcmp(syms[i].name, name) != 0) {
+            continue;
+        }
+        if (!syms[i].node || jz_loc_is_visible_at_use(syms[i].node->loc, use_loc)) {
+            return &syms[i];
+        }
+    }
+    return NULL;
+}
+
 const JZSymbol *module_scope_lookup_kind(const JZModuleScope *scope,
                                            const char *name,
                                            JZSymbolKind kind)
@@ -632,7 +681,11 @@ int sem_resolve_bus_access(const JZASTNode *expr,
     int is_array = 0;
     if (port_sym->node->width) {
         unsigned tmp = 0;
-        if (sem_eval_width_expr(port_sym->node->width, mod_scope, project_symbols, &tmp) != 0) {
+        if (sem_eval_width_expr_at_loc(port_sym->node->width,
+                                       mod_scope,
+                                       project_symbols,
+                                       &tmp,
+                                       port_sym->node->loc) != 0) {
             if (diagnostics) {
                 char msg[512];
                 snprintf(msg, sizeof(msg),
@@ -2046,7 +2099,8 @@ int sem_eval_const_expr_in_module(const char *expr,
                                              scope,
                                              project_symbols,
                                              &expanded,
-                                             0) != 0) {
+                                             0,
+                                             (JZLocation){0}) != 0) {
             if (expanded) free(expanded);
             return -1;
         }
@@ -2327,7 +2381,8 @@ int sem_eval_const_expr_in_module(const char *expr,
                                          scope,
                                          project_symbols,
                                          &expanded,
-                                         0) != 0) {
+                                         0,
+                                         (JZLocation){0}) != 0) {
         for (size_t fi = 0; fi < total; ++fi) { if (owned_exprs[fi]) free(owned_exprs[fi]); }
         free(owned_exprs);
         free(defs);

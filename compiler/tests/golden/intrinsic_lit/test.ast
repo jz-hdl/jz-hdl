@@ -40,17 +40,17 @@
     {"type": "PortDecl", "name": "match", "block_kind": "OUT", "text": "flag", "width": "1", "loc": {"line": 42, "column": 17, "file": "test.jz"}}
   ]},
   {"type": "Module", "name": "LitCore", "loc": {"line": 46, "column": 1, "file": "test.jz"}, "children": [
-    {"type": "ConstBlock", "block_kind": "CONST", "loc": {"line": 47, "column": 5, "file": "test.jz"}, "children": [
-      {"type": "ConstDecl", "name": "DEPTH", "text": "200", "loc": {"line": 48, "column": 9, "file": "test.jz"}},
-      {"type": "ConstDecl", "name": "ADDR_W", "text": "clog2 ( DEPTH )", "loc": {"line": 49, "column": 9, "file": "test.jz"}},
-      {"type": "ConstDecl", "name": "DATA_W", "text": "widthof ( data )", "loc": {"line": 50, "column": 9, "file": "test.jz"}}
+    {"type": "PortBlock", "block_kind": "PORT", "loc": {"line": 47, "column": 5, "file": "test.jz"}, "children": [
+      {"type": "PortDecl", "name": "clk", "block_kind": "IN", "width": "1", "loc": {"line": 48, "column": 17, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "rst_n", "block_kind": "IN", "width": "1", "loc": {"line": 49, "column": 17, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "data", "block_kind": "IN", "width": "8", "loc": {"line": 50, "column": 17, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "dout", "block_kind": "OUT", "width": "8", "loc": {"line": 51, "column": 17, "file": "test.jz"}},
+      {"type": "PortDecl", "name": "match", "block_kind": "OUT", "width": "1", "loc": {"line": 52, "column": 17, "file": "test.jz"}}
     ]},
-    {"type": "PortBlock", "block_kind": "PORT", "loc": {"line": 53, "column": 5, "file": "test.jz"}, "children": [
-      {"type": "PortDecl", "name": "clk", "block_kind": "IN", "width": "1", "loc": {"line": 54, "column": 17, "file": "test.jz"}},
-      {"type": "PortDecl", "name": "rst_n", "block_kind": "IN", "width": "1", "loc": {"line": 55, "column": 17, "file": "test.jz"}},
-      {"type": "PortDecl", "name": "data", "block_kind": "IN", "width": "8", "loc": {"line": 56, "column": 17, "file": "test.jz"}},
-      {"type": "PortDecl", "name": "dout", "block_kind": "OUT", "width": "8", "loc": {"line": 57, "column": 17, "file": "test.jz"}},
-      {"type": "PortDecl", "name": "match", "block_kind": "OUT", "width": "1", "loc": {"line": 58, "column": 17, "file": "test.jz"}}
+    {"type": "ConstBlock", "block_kind": "CONST", "loc": {"line": 55, "column": 5, "file": "test.jz"}, "children": [
+      {"type": "ConstDecl", "name": "DEPTH", "text": "200", "loc": {"line": 56, "column": 9, "file": "test.jz"}},
+      {"type": "ConstDecl", "name": "ADDR_W", "text": "clog2 ( DEPTH )", "loc": {"line": 57, "column": 9, "file": "test.jz"}},
+      {"type": "ConstDecl", "name": "DATA_W", "text": "widthof ( data )", "loc": {"line": 58, "column": 9, "file": "test.jz"}}
     ]},
     {"type": "WireBlock", "block_kind": "WIRE", "loc": {"line": 61, "column": 5, "file": "test.jz"}, "children": [
       {"type": "WireDecl", "name": "eq_zero", "width": "1", "loc": {"line": 62, "column": 9, "file": "test.jz"}},

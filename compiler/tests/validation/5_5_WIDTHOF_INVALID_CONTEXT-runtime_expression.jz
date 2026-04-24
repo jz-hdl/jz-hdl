@@ -13,15 +13,15 @@
 
 // Helper module: widthof() in runtime contexts
 @module HelperMod
-    CONST {
-        // Valid: widthof() in CONST (compile-time, no false positive)
-        VAL_W = widthof(val);
-    }
     PORT {
         IN  [1] clk;
         IN  [8] val;
         OUT [8] out_a;
         OUT [8] out_b;
+    }
+    CONST {
+        // Valid: widthof() in CONST (compile-time, no false positive)
+        VAL_W = widthof(val);
     }
     REGISTER {
         r [VAL_W] = 8'd0;
@@ -38,15 +38,15 @@
 @endmod
 
 @module TopMod
-    CONST {
-        // Valid: widthof() in CONST (compile-time, no false positive)
-        DIN_W = widthof(data_in);
-    }
     PORT {
         IN  [1] clk;
         IN  [8] data_in;
         OUT [8] out_a;
         OUT [8] out_b;
+    }
+    CONST {
+        // Valid: widthof() in CONST (compile-time, no false positive)
+        DIN_W = widthof(data_in);
     }
     WIRE {
         ha_a [8];

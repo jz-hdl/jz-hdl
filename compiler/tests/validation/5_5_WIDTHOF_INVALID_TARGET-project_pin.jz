@@ -21,15 +21,15 @@
 @endproj
 
 @module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] led;
+    }
     CONST {
         // Trigger 1: widthof() on a project pin name — not a module-scope signal.
         BAD_W = widthof(clk_pin);
         // Valid: widthof() on a local PORT (no false positive).
         GOOD_W = widthof(clk);
-    }
-    PORT {
-        IN  [1] clk;
-        OUT [1] led;
     }
     REGISTER {
         r [1] = 1'b0;

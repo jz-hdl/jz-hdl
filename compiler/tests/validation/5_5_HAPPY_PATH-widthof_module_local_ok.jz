@@ -11,14 +11,14 @@
 @endproj
 
 @module TopMod
-    CONST {
-        // Single source of truth for this module's working width.
-        W = widthof(din);
-    }
     PORT {
         IN  [1]  clk;
         IN  [24] din;
         OUT [24] dout;
+    }
+    CONST {
+        // Single source of truth for this module's working width.
+        W = widthof(din);
     }
     WIRE {
         // Derived from widthof(din) via W — no duplicated literal.

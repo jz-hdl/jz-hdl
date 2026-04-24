@@ -1830,7 +1830,11 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
             /* Evaluate port width for the mapping entry. */
             unsigned port_width = 0;
             if (bind->width) {
-                sem_eval_width_expr(bind->width, scope, project_symbols, &port_width);
+                sem_eval_width_expr_at_loc(bind->width,
+                                           scope,
+                                           project_symbols,
+                                           &port_width,
+                                           bind->loc);
             }
 
             /* Add mapping entry for each array element. */

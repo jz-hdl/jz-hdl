@@ -12,17 +12,17 @@
 
 // Helper module: widthof() on CONST name
 @module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] val;
+        OUT [8] out_a;
+    }
     CONST {
         MY_CONST = 42;
         // Trigger 1: widthof() on a CONST name in helper
         BAD_W = widthof(MY_CONST);
         // Valid: widthof() on a port (no false positive)
         GOOD_W = widthof(val);
-    }
-    PORT {
-        IN  [1] clk;
-        IN  [8] val;
-        OUT [8] out_a;
     }
     REGISTER {
         r [GOOD_W] = 8'd0;
@@ -36,17 +36,17 @@
 @endmod
 
 @module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] out_a;
+    }
     CONST {
         TOP_CONST = 10;
         // Trigger 2: widthof() on a CONST name in top
         BAD_W2 = widthof(TOP_CONST);
         // Valid: widthof() on a port (no false positive)
         DIN_W = widthof(data_in);
-    }
-    PORT {
-        IN  [1] clk;
-        IN  [8] data_in;
-        OUT [8] out_a;
     }
     WIRE {
         ha_a [8];

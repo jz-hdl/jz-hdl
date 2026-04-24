@@ -17,14 +17,14 @@
 
 // Helper module sizes its ports from CONFIG.DATA_W (shared project-wide).
 @module HelperMod
-    CONST {
-        // Local widthof() for module-internal compile-time use.
-        LOCAL_W = widthof(din);
-    }
     PORT {
         IN  [1]             clk;
         IN  [CONFIG.DATA_W] din;
         OUT [CONFIG.DATA_W] dout;
+    }
+    CONST {
+        // Local widthof() for module-internal compile-time use.
+        LOCAL_W = widthof(din);
     }
     REGISTER {
         r [LOCAL_W] = LOCAL_W'd0;
@@ -38,14 +38,14 @@
 @endmod
 
 @module TopMod
-    CONST {
-        // Local widthof() for module-internal compile-time use.
-        TOP_W = widthof(din);
-    }
     PORT {
         IN  [1]             clk;
         IN  [CONFIG.DATA_W] din;
         OUT [CONFIG.DATA_W] dout;
+    }
+    CONST {
+        // Local widthof() for module-internal compile-time use.
+        TOP_W = widthof(din);
     }
     WIRE {
         h_dout [CONFIG.DATA_W];

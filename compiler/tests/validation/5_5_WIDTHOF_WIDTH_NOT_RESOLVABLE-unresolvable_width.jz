@@ -12,12 +12,6 @@
 
 // Helper module: widthof() on wire with unresolvable width
 @module HelperMod
-    CONST {
-        // Trigger 1: widthof() on wire with undefined CONST width
-        BAD_W = widthof(w_bad);
-        // Valid: widthof() on port with known width (no false positive)
-        GOOD_W = widthof(val);
-    }
     PORT {
         IN  [1] clk;
         IN  [8] val;
@@ -25,6 +19,12 @@
     }
     WIRE {
         w_bad [UNDEFINED_CONST];
+    }
+    CONST {
+        // Trigger 1: widthof() on wire with undefined CONST width
+        BAD_W = widthof(w_bad);
+        // Valid: widthof() on port with known width (no false positive)
+        GOOD_W = widthof(val);
     }
     REGISTER {
         r [GOOD_W] = 8'd0;
@@ -39,13 +39,13 @@
 @endmod
 
 @module TopMod
-    CONST {
-        DIN_W = widthof(data_in);
-    }
     PORT {
         IN  [1] clk;
         IN  [8] data_in;
         OUT [8] out_a;
+    }
+    CONST {
+        DIN_W = widthof(data_in);
     }
     WIRE {
         ha_a [8];

@@ -490,10 +490,11 @@ void sem_check_module_instantiations(const JZModuleScope *scope,
 
                     if (bind->width) {
                         unsigned count = 0;
-                        if (sem_eval_width_expr(bind->width,
-                                                scope,
-                                                project_symbols,
-                                                &count) != 0) {
+                        if (sem_eval_width_expr_at_loc(bind->width,
+                                                       scope,
+                                                       project_symbols,
+                                                       &count,
+                                                       bind->loc) != 0) {
                             sem_report_rule(diagnostics,
                                             bind->loc,
                                             "BUS_PORT_ARRAY_COUNT_INVALID",

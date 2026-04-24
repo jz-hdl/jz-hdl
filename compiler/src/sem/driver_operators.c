@@ -325,7 +325,11 @@ static void infer_identifier_type(JZASTNode *node,
         return; /* unknown width */
     }
 
-    if (sem_eval_width_expr(width_text, mod_scope, project_symbols, &w) != 0) {
+    if (sem_eval_width_expr_at_loc(width_text,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   sym->node->loc) != 0) {
         return; /* expression not yet resolvable; leave width unknown */
     }
 
@@ -376,7 +380,11 @@ static int sem_mux_type_resolve_source_width(const char *name,
 
     unsigned w = 0;
     if (sym->node->width &&
-        sem_eval_width_expr(sym->node->width, mod_scope, project_symbols, &w) == 0 &&
+        sem_eval_width_expr_at_loc(sym->node->width,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   sym->node->loc) == 0 &&
         w > 0) {
         if (out_width) *out_width = w;
         return 1;
@@ -396,7 +404,11 @@ static int sem_mux_type_compute_element_width(const JZASTNode *mux_decl,
     if (strcmp(mux_decl->block_kind, "SLICE") == 0) {
         unsigned elem_w = 0;
         if (mux_decl->width &&
-            sem_eval_width_expr(mux_decl->width, mod_scope, project_symbols, &elem_w) == 0 &&
+            sem_eval_width_expr_at_loc(mux_decl->width,
+                                       mod_scope,
+                                       project_symbols,
+                                       &elem_w,
+                                       mux_decl->loc) == 0 &&
             elem_w > 0) {
             if (out_width) *out_width = elem_w;
             return 1;
@@ -464,10 +476,11 @@ static void infer_qualified_identifier_type(JZASTNode *node,
                 }
                 return;
             }
-            if (sem_eval_width_expr(info.signal_decl->width,
-                                    mod_scope,
-                                    project_symbols,
-                                    &w) == 0) {
+            if (sem_eval_width_expr_at_loc(info.signal_decl->width,
+                                           mod_scope,
+                                           project_symbols,
+                                           &w,
+                                           info.signal_decl->loc) == 0) {
                 jz_type_scalar(w, 0, out);
                 return;
             }
@@ -481,10 +494,11 @@ static void infer_qualified_identifier_type(JZASTNode *node,
                 : inst_info.child_port_decl;
             if (width_source && width_source->width) {
                 unsigned w = 0;
-                if (sem_eval_width_expr(width_source->width,
-                                        mod_scope,
-                                        project_symbols,
-                                        &w) == 0) {
+                if (sem_eval_width_expr_at_loc(width_source->width,
+                                               mod_scope,
+                                               project_symbols,
+                                               &w,
+                                               width_source->loc) == 0) {
                     jz_type_scalar(w, 0, out);
                 }
             }
@@ -608,10 +622,11 @@ static void infer_bus_access_type(JZASTNode *node,
     }
 
     unsigned w = 0;
-    if (sem_eval_width_expr(info.signal_decl->width,
-                            mod_scope,
-                            project_symbols,
-                            &w) == 0) {
+    if (sem_eval_width_expr_at_loc(info.signal_decl->width,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   info.signal_decl->loc) == 0) {
         jz_type_scalar(w, 0, out);
     }
 }
@@ -635,10 +650,11 @@ static void infer_instance_port_access_type(JZASTNode *node,
     if (!width_source || !width_source->width) return;
 
     unsigned w = 0;
-    if (sem_eval_width_expr(width_source->width,
-                            mod_scope,
-                            project_symbols,
-                            &w) == 0) {
+    if (sem_eval_width_expr_at_loc(width_source->width,
+                                   mod_scope,
+                                   project_symbols,
+                                   &w,
+                                   width_source->loc) == 0) {
         jz_type_scalar(w, 0, out);
     }
 }

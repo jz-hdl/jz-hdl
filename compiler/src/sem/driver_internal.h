@@ -212,11 +212,18 @@ int sem_eval_width_expr(const char *expr,
                         const JZBuffer *project_symbols,
                         unsigned *out_width);
 
+int sem_eval_width_expr_at_loc(const char *expr,
+                               const JZModuleScope *scope,
+                               const JZBuffer *project_symbols,
+                               unsigned *out_width,
+                               JZLocation loc);
+
 int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
                                      char **out_expanded,
-                                     int depth);
+                                     int depth,
+                                     JZLocation loc);
 
 int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           const JZModuleScope *scope,
@@ -258,6 +265,15 @@ int module_scope_add_symbol_featured(JZModuleScope *scope,
 
 const JZSymbol *module_scope_lookup(const JZModuleScope *scope,
                                     const char *name);
+
+const JZSymbol *module_scope_lookup_visible(const JZModuleScope *scope,
+                                            const char *name,
+                                            JZLocation use_loc);
+
+const JZSymbol *module_scope_lookup_kind_visible(const JZModuleScope *scope,
+                                                 const char *name,
+                                                 JZSymbolKind kind,
+                                                 JZLocation use_loc);
 
 const JZSymbol *module_scope_lookup_kind(const JZModuleScope *scope,
                                          const char *name,

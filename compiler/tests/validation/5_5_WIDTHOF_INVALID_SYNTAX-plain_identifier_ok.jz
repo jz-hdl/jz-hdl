@@ -11,14 +11,14 @@
 @endproj
 
 @module TopMod
-    CONST {
-        // Valid: plain PORT identifier.
-        W_PORT = widthof(din);
-    }
     PORT {
         IN  [1]  clk;
         IN  [16] din;
         OUT [16] dout;
+    }
+    CONST {
+        // Valid: plain PORT identifier.
+        W_PORT = widthof(din);
     }
     WIRE {
         w_mid [W_PORT];

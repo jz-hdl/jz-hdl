@@ -551,7 +551,8 @@ static int ir_eval_lit_const_expr(const JZASTNode *expr,
                                          mod_scope,
                                          project_symbols,
                                          &expanded,
-                                         0) != 0) {
+                                         0,
+                                         expr->loc) != 0) {
         free(expr_text);
         if (expanded) free(expanded);
         return -1;
@@ -771,8 +772,11 @@ IR_Expr *ir_build_expr(JZArena *arena,
                 int mem_w = (int)t.width;
                 if (mem_w <= 0 && mem_ref.mem_decl->width) {
                     unsigned eval_w = 0;
-                    if (sem_eval_width_expr(mem_ref.mem_decl->width,
-                                            mod_scope, project_symbols, &eval_w) &&
+                    if (sem_eval_width_expr_at_loc(mem_ref.mem_decl->width,
+                                                   mod_scope,
+                                                   project_symbols,
+                                                   &eval_w,
+                                                   mem_ref.mem_decl->loc) &&
                         eval_w > 0) {
                         mem_w = (int)eval_w;
                     }
@@ -1271,8 +1275,11 @@ IR_Expr *ir_build_expr(JZArena *arena,
                         int base_w = (int)base_t.width;
                         if (base_w <= 0 && mem_ref.mem_decl->width) {
                             unsigned eval_w = 0;
-                            if (sem_eval_width_expr(mem_ref.mem_decl->width,
-                                                    mod_scope, project_symbols, &eval_w) &&
+                            if (sem_eval_width_expr_at_loc(mem_ref.mem_decl->width,
+                                                           mod_scope,
+                                                           project_symbols,
+                                                           &eval_w,
+                                                           mem_ref.mem_decl->loc) &&
                                 eval_w > 0) {
                                 base_w = (int)eval_w;
                             }
@@ -1336,8 +1343,11 @@ IR_Expr *ir_build_expr(JZArena *arena,
                 if (sem_match_mem_port_qualified_ident(base, mod_scope, NULL, &mem_ref) &&
                     mem_ref.mem_decl && mem_ref.mem_decl->width) {
                     unsigned eval_w = 0;
-                    if (sem_eval_width_expr(mem_ref.mem_decl->width,
-                                            mod_scope, project_symbols, &eval_w) &&
+                    if (sem_eval_width_expr_at_loc(mem_ref.mem_decl->width,
+                                                   mod_scope,
+                                                   project_symbols,
+                                                   &eval_w,
+                                                   mem_ref.mem_decl->loc) &&
                         eval_w > 0) {
                         mem_width = (int)eval_w;
                     }
@@ -1501,10 +1511,11 @@ IR_Expr *ir_build_expr(JZArena *arena,
 
                     unsigned w = 0;
                     if (src_sym->node->width &&
-                        sem_eval_width_expr(src_sym->node->width,
-                                            mod_scope,
-                                            project_symbols,
-                                            &w) != 0) {
+                        sem_eval_width_expr_at_loc(src_sym->node->width,
+                                                   mod_scope,
+                                                   project_symbols,
+                                                   &w,
+                                                   src_sym->node->loc) != 0) {
                         /* On failure, treat width as unknown (0); semantic
                          * analysis should already have rejected invalid
                          * widths before IR construction.
@@ -1574,20 +1585,22 @@ IR_Expr *ir_build_expr(JZArena *arena,
                 if (!wide_sym || !wide_sym->node) return NULL;
                 unsigned elem_w = 0;
                 if (mux_decl->width &&
-                    sem_eval_width_expr(mux_decl->width,
-                                        mod_scope,
-                                        project_symbols,
-                                        &elem_w) == 0 &&
+                    sem_eval_width_expr_at_loc(mux_decl->width,
+                                               mod_scope,
+                                               project_symbols,
+                                               &elem_w,
+                                               mux_decl->loc) == 0 &&
                     elem_w > 0u) {
                     element_width = (int)elem_w;
                 }
 
                 unsigned wide_w = 0;
                 if (wide_sym->node->width &&
-                    sem_eval_width_expr(wide_sym->node->width,
-                                        mod_scope,
-                                        project_symbols,
-                                        &wide_w) == 0 &&
+                    sem_eval_width_expr_at_loc(wide_sym->node->width,
+                                               mod_scope,
+                                               project_symbols,
+                                               &wide_w,
+                                               wide_sym->node->loc) == 0 &&
                     wide_w > 0u) {
                     (void)wide_w; /* width may be used by future passes */
                 }

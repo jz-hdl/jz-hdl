@@ -921,10 +921,11 @@ int ir_build_memories_for_module(const JZModuleScope *scope,
             /* Resolve word width and depth using semantic helpers. */
             unsigned word_w = 0;
             if (mem_decl->width &&
-                sem_eval_width_expr(mem_decl->width,
-                                     scope,
-                                     project_symbols,
-                                     &word_w) == 0 &&
+                sem_eval_width_expr_at_loc(mem_decl->width,
+                                           scope,
+                                           project_symbols,
+                                           &word_w,
+                                           mem_decl->loc) == 0 &&
                 word_w > 0u) {
                 ir_mem->word_width = (int)word_w;
             } else {

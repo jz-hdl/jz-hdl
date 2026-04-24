@@ -1461,7 +1461,12 @@ void sem_check_module_mem_chip_configs(const JZModuleScope *scope,
             unsigned width = 0;
             unsigned depth = 0;
             long long depth_val = 0;
-            int have_width = (sem_eval_width_expr(mem->width, scope, project_symbols, &width) == 0 && width > 0);
+            int have_width = (sem_eval_width_expr_at_loc(mem->width,
+                                                         scope,
+                                                         project_symbols,
+                                                         &width,
+                                                         mem->loc) == 0 &&
+                              width > 0);
             int have_depth = (sem_eval_const_expr_in_module(mem->text, scope, project_symbols, &depth_val) == 0 && depth_val > 0);
             if (have_depth) {
                 depth = (unsigned)depth_val;
@@ -1921,8 +1926,8 @@ void sem_check_project_mem_resources(JZASTNode *project,
                 unsigned width = 0;
                 unsigned depth = 0;
                 long long depth_val = 0;
-                int have_width = (scope && sem_eval_width_expr(mem->width, scope,
-                                   project_symbols, &width) == 0 && width > 0);
+                int have_width = (scope && sem_eval_width_expr_at_loc(mem->width,
+                                   scope, project_symbols, &width, mem->loc) == 0 && width > 0);
                 int have_depth = (scope && sem_eval_const_expr_in_module(mem->text, scope,
                                    project_symbols, &depth_val) == 0 && depth_val > 0);
                 if (have_depth) depth = (unsigned)depth_val;
