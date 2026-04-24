@@ -1,7 +1,7 @@
-// MEM_SYNC_DATA_IN_ASYNC_BLOCK: Read sync port .data in ASYNCHRONOUS block.
-// Valid sync .data read in SYNC block included for no false positives.
+// HAPPY_PATH: SYNC OUT .data is readable in ASYNCHRONOUS and SYNCHRONOUS blocks.
+// Historical regression fixture retained at the same path.
 
-@project MEM_SYNC_DATA_IN_ASYNC_BLOCK_sync_data_in_async
+@project HAPPY_PATH_sync_data_in_async
     @top TopMod {
         IN  [1] clk = _;
         IN  [4] addr = _;
@@ -9,7 +9,7 @@
     }
 @endproj
 
-// Helper: read sync .data in ASYNC block
+// Helper: consume the same SYNC read port from both runtime contexts.
 @module HelperMod
     PORT {
         IN  [1] clk;
@@ -27,14 +27,13 @@
         };
     }
 
-    ASYNCHRONOUS {
-        // Trigger 1: sync .data in ASYNC block
-        data = mem_a.rd.data;
+    SYNCHRONOUS(CLK=clk) {
+        mem_a.rd.addr <= addr;
+        r <= mem_a.rd.data;
     }
 
-    SYNCHRONOUS(CLK=clk) {
-        r <= r;
-        mem_a.rd.addr <= addr;
+    ASYNCHRONOUS {
+        data = mem_a.rd.data ^ r;
     }
 @endmod
 
@@ -61,13 +60,12 @@
         OUT [8] data = _;
     };
 
-    ASYNCHRONOUS {
-        // Trigger 2: sync .data in ASYNC block in top module
-        data = mem_b.rd.data;
+    SYNCHRONOUS(CLK=clk) {
+        mem_b.rd.addr <= addr;
+        r <= mem_b.rd.data;
     }
 
-    SYNCHRONOUS(CLK=clk) {
-        r <= r;
-        mem_b.rd.addr <= addr;
+    ASYNCHRONOUS {
+        data = mem_b.rd.data ^ inst_h.data ^ r;
     }
 @endmod

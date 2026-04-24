@@ -408,7 +408,6 @@ const JZRuleInfo jz_rule_table[] = {
     { "MEM_ACCESS", "MEM_ASYNC_PORT_FIELD_DATA",                    0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.1/S7.7.2 ASYNC read ports must be indexed; mem.port.data is SYNC-only" },
     { "MEM_ACCESS", "MEM_SYNC_ADDR_INVALID_PORT",                   0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 mem.port.addr is only valid for SYNC OUT ports" },
     { "MEM_ACCESS", "MEM_SYNC_ADDR_IN_ASYNC_BLOCK",                 0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 SYNC read addresses must be assigned in SYNCHRONOUS blocks" },
-    { "MEM_ACCESS", "MEM_SYNC_DATA_IN_ASYNC_BLOCK",                 0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2/S7.7.2 SYNC MEM read data (mem.port.data) may not be read in ASYNCHRONOUS blocks" },
     { "MEM_ACCESS", "MEM_SYNC_ADDR_WITHOUT_RECEIVE",                0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2 MEM read address must use `<=` in SYNCHRONOUS block; did you mean `<=` instead of `=`?" },
     { "MEM_ACCESS", "MEM_READ_SYNC_WITH_EQUALS",                    0, JZ_RULE_MODE_ERR, "S7.2.1/S7.3.2 Synchronous MEM read used `=` in SYNCHRONOUS block; did you mean `<=`?" },
     { "MEM_ACCESS", "MEM_IN_PORT_FIELD_ACCESS",                      0, JZ_RULE_MODE_ERR, "S7.2.2/S7.3.3 IN (write) port requires bracket syntax mem.port[addr] <= data; .addr/.data fields are not valid" },

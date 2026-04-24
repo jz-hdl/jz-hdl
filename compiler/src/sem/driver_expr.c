@@ -664,17 +664,6 @@ static void sem_check_expr_read_rules_recursive(JZASTNode *expr,
                                     expr->loc,
                                     "MEM_ASYNC_PORT_FIELD_DATA",
                                     msg);
-                } else if (ref.field == MEM_PORT_FIELD_DATA &&
-                           ref.port->text && strcmp(ref.port->text, "SYNC") == 0 &&
-                           !ctx->is_sync_context) {
-                    snprintf(msg, sizeof(msg),
-                             "%s.%s.data is a SYNC read output and may not be read in ASYNCHRONOUS blocks\n"
-                             "move the read into a SYNCHRONOUS block",
-                             mem_name, port_name);
-                    sem_report_rule(diagnostics,
-                                    expr->loc,
-                                    "MEM_SYNC_DATA_IN_ASYNC_BLOCK",
-                                    msg);
                 }
             } else if (strcmp(ref.port->block_kind, "INOUT") == 0) {
                 if (ctx->is_instance_binding) {

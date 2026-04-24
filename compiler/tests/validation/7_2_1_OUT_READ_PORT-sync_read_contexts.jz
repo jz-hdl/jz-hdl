@@ -1,6 +1,6 @@
 // OUT (Read Port): SYNC read-port access contexts for §7.2.1.
-// Includes valid SYNC `.addr`/`.data` usage and exploratory invalid uses
-// across ASYNC, @new, @check, and @feature contexts.
+// Includes valid SYNC `.addr`/`.data` usage and invalid uses
+// across @new, @check, and @feature contexts.
 
 @project OUT_READ_PORT_sync_read_contexts
     CONFIG {
@@ -81,7 +81,7 @@
     @endfeat
 
     ASYNCHRONOUS {
-        // Trigger 7 (async-expr): SYNC read data in ASYNCHRONOUS block.
+        // Valid: SYNC read data is available as a readable net in ASYNCHRONOUS blocks.
         data = mem_t.rd.data ^ r;
     }
 
