@@ -30,6 +30,7 @@ PROMPT_STEP_RE = re.compile(r"^(\d+)-.+\.md$")
 COMMON_OPTION_NAMES = {
     "filter",
     "start",
+    "end",
     "start_at",
     "dry_run",
     "list",
@@ -37,6 +38,7 @@ COMMON_OPTION_NAMES = {
 OPTION_DEFAULTS: dict[str, Any] = {
     "filter": None,
     "start": None,
+    "end": None,
     "start_at": None,
     "dry_run": False,
     "list": False,
@@ -307,6 +309,7 @@ def apply_common_filters(
     filter_pattern: str | None,
     start_at: str | None,
     start: int | None,
+    end: int | None,
     unit_name: str,
 ) -> tuple[list[ResolvedTarget], int, int]:
     if filter_pattern:
@@ -356,6 +359,29 @@ def apply_common_filters(
         else:
             start_offset += idx
             targets = targets[idx:]
+
+    if end is not None:
+        if end < 1:
+            print(
+                f"Warning: --end={end} is < 1, treating as 1.",
+                file=sys.stderr,
+            )
+            end = 1
+        if end > total_matched:
+            print(
+                f"Warning: --end={end} exceeds {total_matched} matched "
+                f"{unit_name}(s); treating as {total_matched}.",
+                file=sys.stderr,
+            )
+            end = total_matched
+        if end < start_offset + 1:
+            print(
+                f"Warning: --end={end} is before selected start position "
+                f"{start_offset + 1}; no {unit_name}(s) will run.",
+                file=sys.stderr,
+            )
+            return [], start_offset, total_matched
+        targets = targets[: end - start_offset]
 
     return targets, start_offset, total_matched
 
@@ -420,6 +446,7 @@ def resolve_spec_targets(
         filter_pattern=args.filter,
         start_at=args.start_at,
         start=args.start,
+        end=args.end,
         unit_name=config.targeting["unit_name"],
     )
 
@@ -535,6 +562,7 @@ def resolve_security_targets(
         filter_pattern=args.filter,
         start_at=args.start_at,
         start=args.start,
+        end=args.end,
         unit_name=config.targeting["unit_name"],
     )
 
@@ -707,10 +735,13 @@ def run_pipeline(config: PipelineConfig, args: argparse.Namespace) -> int:
             + " -> ".join(os.path.basename(path) for path, _ in post_prompt_steps)
         )
 
-    if start_offset > 0:
+    selected_first = start_offset + 1
+    selected_last = start_offset + len(targets)
+
+    if selected_first != 1 or selected_last != total_matched:
         print(
             f"Found {len(targets)} {summary_label} "
-            f"({unit_name}s {start_offset + 1}-{total_matched} of "
+            f"({unit_name}s {selected_first}-{selected_last} of "
             f"{total_matched}).\n"
         )
     else:
@@ -803,6 +834,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         metavar="N",
         help="Start at the N-th matched target (1-based). "
         "Mutually exclusive with --start-at.",
+    )
+    parser.add_argument(
+        "--end",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Stop after the N-th matched target (1-based, inclusive).",
     )
     parser.add_argument(
         "--start-at",

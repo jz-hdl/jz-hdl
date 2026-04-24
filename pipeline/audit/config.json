@@ -37,6 +37,7 @@
       "spec",
       "filter",
       "start",
+      "end",
       "start_at",
       "include_parents"
     ],
