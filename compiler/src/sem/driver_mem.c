@@ -132,6 +132,547 @@ static unsigned long long sem_mem_count_bits_mem_file(FILE *fp)
     return bits;
 }
 
+typedef enum {
+    SEM_MEM_RADIX_NONE = 0,
+    SEM_MEM_RADIX_BIN = 2,
+    SEM_MEM_RADIX_OCT = 8,
+    SEM_MEM_RADIX_DEC = 10,
+    SEM_MEM_RADIX_HEX = 16,
+    SEM_MEM_RADIX_UNS = 100
+} SemMemRadix;
+
+static int sem_mem_ci_char_eq(char a, char b)
+{
+    return tolower((unsigned char)a) == tolower((unsigned char)b);
+}
+
+static int sem_mem_ci_prefix_eq(const char *text, const char *prefix)
+{
+    while (*text && *prefix) {
+        if (!sem_mem_ci_char_eq(*text, *prefix)) return 0;
+        ++text;
+        ++prefix;
+    }
+    return *prefix == '\0';
+}
+
+static int sem_mem_is_ident_char(char ch)
+{
+    return isalnum((unsigned char)ch) || ch == '_';
+}
+
+static const char *sem_mem_find_keyword_ci(const char *text, const char *keyword)
+{
+    size_t key_len;
+    if (!text || !keyword) return NULL;
+    key_len = strlen(keyword);
+    if (key_len == 0) return NULL;
+
+    for (const char *p = text; *p; ++p) {
+        if ((p == text || !sem_mem_is_ident_char(p[-1])) &&
+            sem_mem_ci_prefix_eq(p, keyword) &&
+            !sem_mem_is_ident_char(p[key_len])) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+static void sem_mem_trim_span(const char **start, const char **end)
+{
+    while (*start < *end && isspace((unsigned char)**start)) {
+        (*start)++;
+    }
+    while (*end > *start && isspace((unsigned char)(*end)[-1])) {
+        (*end)--;
+    }
+}
+
+static char *sem_mem_dup_span(const char *start, const char *end)
+{
+    size_t len;
+    char *copy;
+    if (!start || !end || end < start) return NULL;
+    len = (size_t)(end - start);
+    copy = (char *)malloc(len + 1);
+    if (!copy) return NULL;
+    memcpy(copy, start, len);
+    copy[len] = '\0';
+    return copy;
+}
+
+static int sem_mem_extract_assignment(const char *text,
+                                      const char *keyword,
+                                      const char **value_start,
+                                      const char **value_end)
+{
+    size_t key_len;
+    const char *stmt;
+    if (!text || !keyword || !value_start || !value_end) return -1;
+    *value_start = NULL;
+    *value_end = NULL;
+    key_len = strlen(keyword);
+
+    stmt = text;
+    while (*stmt) {
+        const char *stmt_end = strchr(stmt, ';');
+        const char *lhs_start;
+        const char *lhs_end;
+        const char *rhs_start;
+        const char *rhs_end;
+        const char *eq;
+
+        if (!stmt_end) stmt_end = stmt + strlen(stmt);
+        lhs_start = stmt;
+        lhs_end = stmt_end;
+        sem_mem_trim_span(&lhs_start, &lhs_end);
+        if (lhs_start < lhs_end) {
+            eq = memchr(lhs_start, '=', (size_t)(lhs_end - lhs_start));
+            if (eq) {
+                lhs_end = eq;
+                rhs_start = eq + 1;
+                rhs_end = stmt_end;
+                sem_mem_trim_span(&lhs_start, &lhs_end);
+                sem_mem_trim_span(&rhs_start, &rhs_end);
+                if ((size_t)(lhs_end - lhs_start) == key_len &&
+                    sem_mem_ci_prefix_eq(lhs_start, keyword)) {
+                    *value_start = rhs_start;
+                    *value_end = rhs_end;
+                    return 0;
+                }
+            }
+        }
+        stmt = *stmt_end ? stmt_end + 1 : stmt_end;
+    }
+    return -1;
+}
+
+static char *sem_mem_read_entire_fp(FILE *fp, size_t *size_out)
+{
+    long sz;
+    char *buf;
+    size_t nread;
+    if (!fp) return NULL;
+    if (fseek(fp, 0, SEEK_END) != 0) return NULL;
+    sz = ftell(fp);
+    if (sz < 0) return NULL;
+    if (fseek(fp, 0, SEEK_SET) != 0) return NULL;
+    buf = (char *)malloc((size_t)sz + 1);
+    if (!buf) return NULL;
+    nread = fread(buf, 1, (size_t)sz, fp);
+    buf[nread] = '\0';
+    if (size_out) *size_out = nread;
+    return buf;
+}
+
+static char *sem_mem_strip_mif_comments(const char *contents, size_t size)
+{
+    char *out = (char *)malloc(size + 1);
+    size_t in = 0;
+    size_t out_len = 0;
+    if (!out) return NULL;
+
+    while (in < size) {
+        if (contents[in] == '%') {
+            ++in;
+            while (in < size && contents[in] != '%') {
+                ++in;
+            }
+            if (in < size) ++in;
+            continue;
+        }
+        if (contents[in] == '-' && in + 1 < size && contents[in + 1] == '-') {
+            in += 2;
+            while (in < size && contents[in] != '\n' && contents[in] != '\r') {
+                ++in;
+            }
+            continue;
+        }
+        out[out_len++] = contents[in++];
+    }
+
+    out[out_len] = '\0';
+    return out;
+}
+
+static int sem_mem_token_has_xz(const char *start, const char *end)
+{
+    for (const char *p = start; p < end; ++p) {
+        if (*p == 'x' || *p == 'X' || *p == 'z' || *p == 'Z') {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int sem_mem_parse_radix_string(const char *start,
+                                      const char *end,
+                                      SemMemRadix *out_radix)
+{
+    char *copy;
+    SemMemRadix radix = SEM_MEM_RADIX_NONE;
+    if (!start || !end || !out_radix) return -1;
+    copy = sem_mem_dup_span(start, end);
+    if (!copy) return -1;
+
+    if (sem_mem_ci_prefix_eq(copy, "BIN") && strlen(copy) == 3) {
+        radix = SEM_MEM_RADIX_BIN;
+    } else if (sem_mem_ci_prefix_eq(copy, "OCT") && strlen(copy) == 3) {
+        radix = SEM_MEM_RADIX_OCT;
+    } else if (sem_mem_ci_prefix_eq(copy, "DEC") && strlen(copy) == 3) {
+        radix = SEM_MEM_RADIX_DEC;
+    } else if (sem_mem_ci_prefix_eq(copy, "HEX") && strlen(copy) == 3) {
+        radix = SEM_MEM_RADIX_HEX;
+    } else if (sem_mem_ci_prefix_eq(copy, "UNS") && strlen(copy) == 3) {
+        radix = SEM_MEM_RADIX_UNS;
+    }
+
+    free(copy);
+    if (radix == SEM_MEM_RADIX_NONE) return -1;
+    *out_radix = radix;
+    return 0;
+}
+
+static int sem_mem_parse_coe_radix(const char *start,
+                                   const char *end,
+                                   SemMemRadix *out_radix)
+{
+    char *copy;
+    if (!start || !end || !out_radix) return -1;
+    copy = sem_mem_dup_span(start, end);
+    if (!copy) return -1;
+
+    if (strcmp(copy, "2") == 0) {
+        *out_radix = SEM_MEM_RADIX_BIN;
+    } else if (strcmp(copy, "10") == 0) {
+        *out_radix = SEM_MEM_RADIX_DEC;
+    } else if (strcmp(copy, "16") == 0) {
+        *out_radix = SEM_MEM_RADIX_HEX;
+    } else {
+        free(copy);
+        return -1;
+    }
+
+    free(copy);
+    return 0;
+}
+
+static int sem_mem_parse_unsigned_value(const char *start,
+                                        const char *end,
+                                        SemMemRadix radix,
+                                        unsigned long long *out_value)
+{
+    char *copy;
+    char *clean;
+    char *dst;
+    char *endptr;
+    int base;
+    unsigned long long value;
+
+    if (!start || !end || !out_value) return -1;
+    copy = sem_mem_dup_span(start, end);
+    if (!copy) return -1;
+    clean = (char *)malloc(strlen(copy) + 1);
+    if (!clean) {
+        free(copy);
+        return -1;
+    }
+
+    dst = clean;
+    for (const char *src = copy; *src; ++src) {
+        if (*src != '_') {
+            *dst++ = *src;
+        }
+    }
+    *dst = '\0';
+    free(copy);
+
+    if (clean[0] == '\0' || clean[0] == '-') {
+        free(clean);
+        return -1;
+    }
+
+    if (radix == SEM_MEM_RADIX_BIN) base = 2;
+    else if (radix == SEM_MEM_RADIX_OCT) base = 8;
+    else if (radix == SEM_MEM_RADIX_HEX) base = 16;
+    else if (radix == SEM_MEM_RADIX_DEC || radix == SEM_MEM_RADIX_UNS) base = 10;
+    else {
+        free(clean);
+        return -1;
+    }
+
+    value = strtoull(clean, &endptr, base);
+    if (!endptr || *endptr != '\0') {
+        free(clean);
+        return -1;
+    }
+    free(clean);
+    *out_value = value;
+    return 0;
+}
+
+static void sem_mem_mark_addr(unsigned char *assigned,
+                              unsigned depth,
+                              unsigned long long addr,
+                              unsigned long long *count,
+                              int *overflow)
+{
+    if (addr >= (unsigned long long)depth) {
+        *overflow = 1;
+        return;
+    }
+    if (!assigned[addr]) {
+        assigned[addr] = 1;
+        (*count)++;
+    }
+}
+
+static int sem_mem_count_bits_coe_file(FILE *fp,
+                                       unsigned word_w,
+                                       unsigned long long *file_bits,
+                                       int *found_xz)
+{
+    size_t size = 0;
+    char *contents = sem_mem_read_entire_fp(fp, &size);
+    const char *radix_start;
+    const char *radix_end;
+    const char *vec_start;
+    const char *vec_end;
+    SemMemRadix radix;
+    unsigned long long words = 0ull;
+
+    if (!contents) return -1;
+
+    if (memset(found_xz, 0, sizeof(*found_xz)),
+        sem_mem_extract_assignment(contents, "memory_initialization_radix",
+                                   &radix_start, &radix_end) != 0 ||
+        sem_mem_parse_coe_radix(radix_start, radix_end, &radix) != 0 ||
+        sem_mem_extract_assignment(contents, "memory_initialization_vector",
+                                   &vec_start, &vec_end) != 0) {
+        free(contents);
+        return -1;
+    }
+
+    (void)radix;
+    while (vec_start < vec_end) {
+        const char *tok_start;
+        const char *tok_end;
+        while (vec_start < vec_end &&
+               (isspace((unsigned char)*vec_start) || *vec_start == ',')) {
+            ++vec_start;
+        }
+        tok_start = vec_start;
+        while (vec_start < vec_end &&
+               !isspace((unsigned char)*vec_start) &&
+               *vec_start != ',') {
+            ++vec_start;
+        }
+        tok_end = vec_start;
+        if (tok_start == tok_end) continue;
+        if (sem_mem_token_has_xz(tok_start, tok_end)) {
+            *found_xz = 1;
+        }
+        ++words;
+    }
+
+    free(contents);
+    *file_bits = words * (unsigned long long)word_w;
+    return 0;
+}
+
+static int sem_mem_count_bits_mif_file(FILE *fp,
+                                       unsigned word_w,
+                                       unsigned depth,
+                                       unsigned long long *file_bits,
+                                       int *found_xz)
+{
+    size_t size = 0;
+    char *contents = sem_mem_read_entire_fp(fp, &size);
+    char *stripped = NULL;
+    const char *addr_radix_start;
+    const char *addr_radix_end;
+    const char *data_radix_start;
+    const char *data_radix_end;
+    const char *content_kw;
+    const char *begin_kw;
+    const char *end_kw;
+    SemMemRadix addr_radix = SEM_MEM_RADIX_NONE;
+    SemMemRadix data_radix = SEM_MEM_RADIX_NONE;
+    unsigned char *assigned = NULL;
+    unsigned long long assigned_words = 0ull;
+    int overflow = 0;
+
+    if (!contents) return -1;
+    stripped = sem_mem_strip_mif_comments(contents, size);
+    free(contents);
+    if (!stripped) return -1;
+
+    if (sem_mem_extract_assignment(stripped, "ADDRESS_RADIX",
+                                   &addr_radix_start, &addr_radix_end) != 0 ||
+        sem_mem_parse_radix_string(addr_radix_start, addr_radix_end,
+                                   &addr_radix) != 0 ||
+        sem_mem_extract_assignment(stripped, "DATA_RADIX",
+                                   &data_radix_start, &data_radix_end) != 0 ||
+        sem_mem_parse_radix_string(data_radix_start, data_radix_end,
+                                   &data_radix) != 0) {
+        free(stripped);
+        return -1;
+    }
+
+    content_kw = sem_mem_find_keyword_ci(stripped, "CONTENT");
+    begin_kw = content_kw ? sem_mem_find_keyword_ci(content_kw, "BEGIN") : NULL;
+    end_kw = begin_kw ? sem_mem_find_keyword_ci(begin_kw, "END") : NULL;
+    if (!content_kw || !begin_kw || !end_kw || end_kw <= begin_kw) {
+        free(stripped);
+        return -1;
+    }
+
+    assigned = (unsigned char *)calloc(depth > 0 ? depth : 1u, 1);
+    if (!assigned) {
+        free(stripped);
+        return -1;
+    }
+    *found_xz = 0;
+    (void)data_radix;
+
+    {
+        const char *cursor = begin_kw + strlen("BEGIN");
+        while (cursor < end_kw) {
+            const char *stmt_end = strchr(cursor, ';');
+            const char *entry_start;
+            const char *entry_end;
+            const char *colon;
+            const char *addr_spec_start;
+            const char *addr_spec_end;
+            const char *data_spec_start;
+            const char *data_spec_end;
+            unsigned long long start_addr = 0;
+            unsigned long long end_addr = 0;
+            int is_range = 0;
+            int token_count = 0;
+
+            if (!stmt_end || stmt_end > end_kw) break;
+            entry_start = cursor;
+            entry_end = stmt_end;
+            cursor = stmt_end + 1;
+            sem_mem_trim_span(&entry_start, &entry_end);
+            if (entry_start >= entry_end) continue;
+
+            colon = memchr(entry_start, ':', (size_t)(entry_end - entry_start));
+            if (!colon) continue;
+
+            addr_spec_start = entry_start;
+            addr_spec_end = colon;
+            data_spec_start = colon + 1;
+            data_spec_end = entry_end;
+            sem_mem_trim_span(&addr_spec_start, &addr_spec_end);
+            sem_mem_trim_span(&data_spec_start, &data_spec_end);
+
+            if (addr_spec_start < addr_spec_end && *addr_spec_start == '[') {
+                const char *inner_start = addr_spec_start + 1;
+                const char *inner_end = addr_spec_end;
+                const char *dots = NULL;
+                if (addr_spec_end <= addr_spec_start + 2 || addr_spec_end[-1] != ']') {
+                    free(assigned);
+                    free(stripped);
+                    return -1;
+                }
+                inner_end--;
+                for (const char *p = inner_start; p + 1 < inner_end; ++p) {
+                    if (p[0] == '.' && p[1] == '.') {
+                        dots = p;
+                        break;
+                    }
+                }
+                if (!dots) {
+                    free(assigned);
+                    free(stripped);
+                    return -1;
+                }
+                {
+                    const char *lhs_start = inner_start;
+                    const char *lhs_end = dots;
+                    const char *rhs_start = dots + 2;
+                    const char *rhs_end = inner_end;
+                    sem_mem_trim_span(&lhs_start, &lhs_end);
+                    sem_mem_trim_span(&rhs_start, &rhs_end);
+                    if (sem_mem_parse_unsigned_value(lhs_start, lhs_end, addr_radix, &start_addr) != 0 ||
+                        sem_mem_parse_unsigned_value(rhs_start, rhs_end, addr_radix, &end_addr) != 0 ||
+                        end_addr < start_addr) {
+                        free(assigned);
+                        free(stripped);
+                        return -1;
+                    }
+                }
+                is_range = 1;
+            } else {
+                if (sem_mem_parse_unsigned_value(addr_spec_start, addr_spec_end,
+                                                 addr_radix, &start_addr) != 0) {
+                    free(assigned);
+                    free(stripped);
+                    return -1;
+                }
+                end_addr = start_addr;
+            }
+
+            {
+                const char *p = data_spec_start;
+                while (p <= data_spec_end) {
+                    const char *tok_start = NULL;
+                    const char *tok_end = NULL;
+                    while (p < data_spec_end &&
+                           (isspace((unsigned char)*p) || *p == ',')) {
+                        ++p;
+                    }
+                    tok_start = p;
+                    while (p < data_spec_end &&
+                           !isspace((unsigned char)*p) &&
+                           *p != ',') {
+                        ++p;
+                    }
+                    tok_end = p;
+                    if (tok_start < tok_end) {
+                        if (sem_mem_token_has_xz(tok_start, tok_end)) {
+                            *found_xz = 1;
+                        }
+                        ++token_count;
+                    }
+                    if (p == data_spec_end) break;
+                    ++p;
+                }
+            }
+
+            if (token_count <= 0) {
+                free(assigned);
+                free(stripped);
+                return -1;
+            }
+
+            if (is_range) {
+                unsigned long long span = end_addr - start_addr + 1ull;
+                for (unsigned long long off = 0; off < span; ++off) {
+                    sem_mem_mark_addr(assigned, depth, start_addr + off,
+                                      &assigned_words, &overflow);
+                }
+            } else {
+                for (int idx = 0; idx < token_count; ++idx) {
+                    sem_mem_mark_addr(assigned, depth, start_addr + (unsigned long long)idx,
+                                      &assigned_words, &overflow);
+                }
+            }
+        }
+    }
+
+    free(assigned);
+    free(stripped);
+    if (overflow) {
+        *file_bits = ((unsigned long long)depth + 1ull) * (unsigned long long)word_w;
+    } else {
+        *file_bits = assigned_words * (unsigned long long)word_w;
+    }
+    return 0;
+}
+
 /* Validate a file-based MEM initializer against the declared word width and
  * depth, emitting MEM_INIT_FILE_NOT_FOUND, MEM_INIT_FILE_TOO_LARGE, or
  * MEM_WARN_PARTIAL_INIT as appropriate.
@@ -142,7 +683,10 @@ static unsigned long long sem_mem_count_bits_mem_file(FILE *fp)
  *            each hex digit contributes 4 bits.
  *   - .mem : Base-2 text (0/1, _ and whitespace ignored);
  *            each binary digit contributes 1 bit.
- *   - .bin or anything else : raw binary; file size in bytes is used.
+ *   - .bin : raw binary; file size in bytes is used.
+ *   - .mif : Intel/Altera memory initialization file.
+ *   - .coe : Xilinx/AMD coefficient memory init file.
+ *   - anything else : raw binary; file size in bytes is used.
  */
 static void sem_check_mem_file_init(JZASTNode *mem,
                                     JZASTNode *init_expr,
@@ -204,7 +748,8 @@ static void sem_check_mem_file_init(JZASTNode *mem,
     unsigned long long file_bits = 0ull;
 
     /* MEM_INIT_FILE_CONTAINS_X: scan text-format files for x/z values. */
-    if (ext && (sem_mem_ext_equals(ext, "hex") || sem_mem_ext_equals(ext, "mem"))) {
+    if (ext && (sem_mem_ext_equals(ext, "hex") ||
+                sem_mem_ext_equals(ext, "mem"))) {
         int ch;
         int found_xz = 0;
         while ((ch = fgetc(fp)) != EOF) {
@@ -230,6 +775,32 @@ static void sem_check_mem_file_init(JZASTNode *mem,
         /* Textual binary: count '0'/'1' digits as 1 bit each. */
         file_bits = sem_mem_count_bits_mem_file(fp);
         fclose(fp);
+    } else if (ext && sem_mem_ext_equals(ext, "coe")) {
+        int found_xz = 0;
+        if (sem_mem_count_bits_coe_file(fp, word_w, &file_bits, &found_xz) != 0) {
+            fclose(fp);
+            return;
+        }
+        fclose(fp);
+        if (found_xz) {
+            sem_report_rule(diagnostics,
+                            init_expr->loc,
+                            "MEM_INIT_FILE_CONTAINS_X",
+                            "memory initialization file contains x or z values");
+        }
+    } else if (ext && sem_mem_ext_equals(ext, "mif")) {
+        int found_xz = 0;
+        if (sem_mem_count_bits_mif_file(fp, word_w, depth, &file_bits, &found_xz) != 0) {
+            fclose(fp);
+            return;
+        }
+        fclose(fp);
+        if (found_xz) {
+            sem_report_rule(diagnostics,
+                            init_expr->loc,
+                            "MEM_INIT_FILE_CONTAINS_X",
+                            "memory initialization file contains x or z values");
+        }
     } else {
         /* Default/binary: capacity is based on raw byte size. */
         if (fseek(fp, 0, SEEK_END) != 0) {

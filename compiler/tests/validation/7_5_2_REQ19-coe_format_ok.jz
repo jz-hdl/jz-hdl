@@ -1,0 +1,64 @@
+// REQ19: Valid .coe file loads through file-backed MEM initialization.
+// Exercises MEMORY_INITIALIZATION_RADIX and MEMORY_INITIALIZATION_VECTOR.
+
+@project REQ19_coe_format_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        OUT [8] data = _;
+        OUT [8] mirror = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+    }
+
+    MEM {
+        helper_mem [8] [4] = @file("mem_clean_data.coe") {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = helper_mem.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        helper_mem.wr[addr] <= 8'h00;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        OUT [8] data;
+        OUT [8] mirror;
+    }
+
+    MEM {
+        top_mem [8] [4] = @file("mem_clean_data.coe") {
+            OUT rd_top ASYNC;
+            IN  wr_top;
+        };
+    }
+
+    @new helper HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] addr = addr;
+        OUT [8] data = mirror;
+    };
+
+    ASYNCHRONOUS {
+        data = top_mem.rd_top[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        top_mem.wr_top[addr] <= 8'h00;
+    }
+@endmod

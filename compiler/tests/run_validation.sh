@@ -27,7 +27,8 @@ fail=0
 skip=0
 
 tmp_out="$(mktemp)"
-trap 'rm -f "${tmp_out}"' EXIT
+tmp_err="$(mktemp)"
+trap 'rm -f "${tmp_out}" "${tmp_err}"' EXIT
 
 copy_generated_mem_sidecars() {
   local src_dir="$1"
@@ -47,6 +48,18 @@ cleanup_generated_mem_sidecars() {
     [[ -n "${sidecar}" ]] || continue
     rm -f "${sidecar}"
   done
+}
+
+run_backend_emit() {
+  local mode="$1"
+  local file="$2"
+  local out_path="$3"
+
+  rm -f "${out_path}"
+  : > "${tmp_err}"
+
+  (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --"${mode}" -o "${out_path}" "$(basename "${file}")") \
+    >/dev/null 2>"${tmp_err}"
 }
 
 echo "Running validation lint tests..."
@@ -154,7 +167,12 @@ if [[ -d "${GOLDEN_DIR}" ]]; then
         # filename, matching what the golden files contain.  Use -o so
         # that only the actual output (IR/Verilog/AST) ends up in the
         # file; diagnostics stay on stderr and are not compared.
-        (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --${mode} -o "${tmp_out}" "$(basename "${file}")") 2>/dev/null || true
+        if ! run_backend_emit "${mode}" "${file}" "${tmp_out}"; then
+          echo "FAIL ${rel_path} (--${mode})"
+          cat "${tmp_err}"
+          ((golden_fail++))
+          continue
+        fi
 
         # Filter out the version line before comparing so that golden
         # files are not invalidated by version string changes.
@@ -222,7 +240,12 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
       if [[ -f "${verilog_file}" ]]; then
         copied_sidecars=""
         # Generate fresh Verilog output
-        (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --verilog -o "${tmp_out}" "$(basename "${file}")") 2>/dev/null || true
+        if ! run_backend_emit "verilog" "${file}" "${tmp_out}"; then
+          echo "FAIL ${rel_path} (yosys read_verilog)"
+          cat "${tmp_err}"
+          ((yosys_fail++))
+          continue
+        fi
         copied_sidecars="$(copy_generated_mem_sidecars "$(dirname "${file}")" "$(dirname "${tmp_out}")")"
         if (cd "$(dirname "${file}")" && "${YOSYS_BIN}" -p "read_verilog ${tmp_out}") >/dev/null 2>&1; then
           echo "PASS ${rel_path} (yosys read_verilog)"
@@ -243,7 +266,12 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
       rtlil_file="${base_no_ext}.il"
       if [[ -f "${rtlil_file}" ]]; then
         # Generate fresh RTLIL output
-        (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --rtlil -o "${tmp_out}" "$(basename "${file}")") 2>/dev/null || true
+        if ! run_backend_emit "rtlil" "${file}" "${tmp_out}"; then
+          echo "FAIL ${rel_path} (yosys read_rtlil)"
+          cat "${tmp_err}"
+          ((yosys_fail++))
+          continue
+        fi
         if (cd "$(dirname "${file}")" && "${YOSYS_BIN}" -p "read_rtlil ${tmp_out}") >/dev/null 2>&1; then
           echo "PASS ${rel_path} (yosys read_rtlil)"
           ((yosys_pass++))
@@ -279,7 +307,7 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
 
   tmp_v=$(mktemp "${TMPDIR:-/tmp}/jzhdl_equiv_v.XXXXXX")
   tmp_il=$(mktemp "${TMPDIR:-/tmp}/jzhdl_equiv_il.XXXXXX")
-  trap "rm -f '${tmp_out}' '${tmp_v}' '${tmp_il}'" EXIT
+  trap "rm -f '${tmp_out}' '${tmp_err}' '${tmp_v}' '${tmp_il}'" EXIT
 
   for dir in "${GOLDEN_DIR}"/*/; do
     golden_files=("${dir}"*.jz)
@@ -301,8 +329,18 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
 
       # Generate fresh outputs
       copied_sidecars=""
-      (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --verilog -o "${tmp_v}" "$(basename "${file}")") 2>/dev/null || true
-      (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --rtlil -o "${tmp_il}" "$(basename "${file}")") 2>/dev/null || true
+      if ! run_backend_emit "verilog" "${file}" "${tmp_v}"; then
+        echo "FAIL ${rel_path} (equiv verilog<->rtlil)"
+        cat "${tmp_err}"
+        ((equiv_fail++))
+        continue
+      fi
+      if ! run_backend_emit "rtlil" "${file}" "${tmp_il}"; then
+        echo "FAIL ${rel_path} (equiv verilog<->rtlil)"
+        cat "${tmp_err}"
+        ((equiv_fail++))
+        continue
+      fi
       copied_sidecars="$(copy_generated_mem_sidecars "$(dirname "${file}")" "$(dirname "${tmp_v}")")"
 
       # Run equivalence check via yosys

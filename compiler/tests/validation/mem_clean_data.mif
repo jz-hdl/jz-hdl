@@ -1,0 +1,9 @@
+DEPTH = 4;
+WIDTH = 8;
+ADDRESS_RADIX = HEX;
+DATA_RADIX = HEX;
+CONTENT BEGIN
+    0 : 12;
+    1 : 34;
+    [2..3] : 56 78;
+END;

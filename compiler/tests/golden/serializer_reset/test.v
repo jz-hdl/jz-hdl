@@ -1,5 +1,5 @@
 // This Verilog was transpiled from JZ-HDL.
-// jz-hdl version: Version 0.1.7 (b3ac38a)
+// jz-hdl version: jz-hdl 0.1 (prototype)
 // Intended for use with yosys.
 
 `default_nettype none
