@@ -963,7 +963,7 @@ int ir_build_memories_for_module(const JZModuleScope *scope,
              * sem_check_module_mem_and_mux_decls has already validated the
              * forms, so here we only distinguish literal vs. @file payload.
              */
-            ir_mem->init_is_file = false;
+            ir_mem->init_kind = MEM_INIT_NONE;
             memset(ir_mem->init.literal.words, 0, sizeof(ir_mem->init.literal.words));
             ir_mem->init.literal.width = 0;
 
@@ -992,14 +992,14 @@ int ir_build_memories_for_module(const JZModuleScope *scope,
                                                 project_symbols,
                                                 &lit) == 0) {
                         ir_mem->init.literal = lit;
-                        ir_mem->init_is_file = false;
+                        ir_mem->init_kind = MEM_INIT_LITERAL;
                     } else {
                         raw_file_path = init_expr->text;
                     }
                 }
 
                 if (raw_file_path) {
-                    ir_mem->init_is_file = true;
+                    ir_mem->init_kind = MEM_INIT_FILE;
                     /* Resolve relative path against the source file's
                      * directory so the backend can open it from any CWD. */
                     if (raw_file_path[0] != '/' && mem_decl->loc.filename) {

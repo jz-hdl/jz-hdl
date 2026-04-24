@@ -29,6 +29,26 @@ skip=0
 tmp_out="$(mktemp)"
 trap 'rm -f "${tmp_out}"' EXIT
 
+copy_generated_mem_sidecars() {
+  local src_dir="$1"
+  local dst_dir="$2"
+  local sidecar
+
+  for sidecar in "${src_dir}"/jz_mem_init__*.hex; do
+    [[ -f "${sidecar}" ]] || continue
+    cp "${sidecar}" "${dst_dir}/"
+    printf '%s\n' "${dst_dir}/$(basename "${sidecar}")"
+  done
+}
+
+cleanup_generated_mem_sidecars() {
+  local sidecar
+  for sidecar in "$@"; do
+    [[ -n "${sidecar}" ]] || continue
+    rm -f "${sidecar}"
+  done
+}
+
 echo "Running validation lint tests..."
 
 for file in "${validation_files[@]}"; do
@@ -200,8 +220,10 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
       # Verify Verilog output
       verilog_file="${base_no_ext}.v"
       if [[ -f "${verilog_file}" ]]; then
+        copied_sidecars=""
         # Generate fresh Verilog output
         (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --verilog -o "${tmp_out}" "$(basename "${file}")") 2>/dev/null || true
+        copied_sidecars="$(copy_generated_mem_sidecars "$(dirname "${file}")" "$(dirname "${tmp_out}")")"
         if (cd "$(dirname "${file}")" && "${YOSYS_BIN}" -p "read_verilog ${tmp_out}") >/dev/null 2>&1; then
           echo "PASS ${rel_path} (yosys read_verilog)"
           ((yosys_pass++))
@@ -209,6 +231,11 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
           echo "FAIL ${rel_path} (yosys read_verilog)"
           (cd "$(dirname "${file}")" && "${YOSYS_BIN}" -p "read_verilog ${tmp_out}") 2>&1 | grep -i error || true
           ((yosys_fail++))
+        fi
+        if [[ -n "${copied_sidecars}" ]]; then
+          while IFS= read -r sidecar; do
+            cleanup_generated_mem_sidecars "${sidecar}"
+          done <<< "${copied_sidecars}"
         fi
       fi
 
@@ -273,8 +300,10 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
       fi
 
       # Generate fresh outputs
+      copied_sidecars=""
       (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --verilog -o "${tmp_v}" "$(basename "${file}")") 2>/dev/null || true
       (cd "$(dirname "${file}")" && "${JZ_HDL_BIN}" --rtlil -o "${tmp_il}" "$(basename "${file}")") 2>/dev/null || true
+      copied_sidecars="$(copy_generated_mem_sidecars "$(dirname "${file}")" "$(dirname "${tmp_v}")")"
 
       # Run equivalence check via yosys
       # Each backend is loaded, elaborated, and stashed separately so that
@@ -310,6 +339,11 @@ if [[ -d "${GOLDEN_DIR}" ]] && [[ -n "${YOSYS_BIN}" ]]; then
         echo "FAIL ${rel_path} (equiv verilog<->rtlil)"
         echo "${equiv_out}" | grep -iE '(error|equiv|assert|fail)' || true
         ((equiv_fail++))
+      fi
+      if [[ -n "${copied_sidecars}" ]]; then
+        while IFS= read -r sidecar; do
+          cleanup_generated_mem_sidecars "${sidecar}"
+        done <<< "${copied_sidecars}"
       fi
     done
   done

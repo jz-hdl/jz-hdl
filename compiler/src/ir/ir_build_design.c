@@ -1042,7 +1042,7 @@ int jz_ir_build_design(JZASTNode *root,
                          * CONST name matches a string override in this spec,
                          * update the file_path to the overridden value.
                          */
-                        if (m->init_is_file && m->init.file_path) {
+                        if (m->init_kind == MEM_INIT_FILE && m->init.file_path) {
                             JZASTNode *init_expr = NULL;
                             if (mem_decl->child_count > 0) {
                                 JZASTNode *first = mem_decl->children[0];

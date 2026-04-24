@@ -62,6 +62,22 @@ int jz_ir_differential_lowering(IR_Design *design,
                                  JZDiagnosticList *diagnostics);
 
 /**
+ * @brief Lower supported file-backed memory initialization into raw bytes.
+ *
+ * Converts `.mem`, `.hex`, and `.bin` `@file(...)` memory initializers into
+ * canonical `IR_MemoryInitBlob` payloads so backends consume bytes only and
+ * never read source filenames directly.
+ *
+ * @param design       IR design to update in place.
+ * @param arena        Arena used for lowered blob allocations.
+ * @param diagnostics  Diagnostic list for lowering failures.
+ * @return 0 on success, non-zero on failure.
+ */
+int jz_ir_init_lowering(IR_Design *design,
+                        JZArena *arena,
+                        JZDiagnosticList *diagnostics);
+
+/**
  * @brief Print a post-transform tri-state report from the IR.
  *
  * Shows the state of all signals after the tristate transform pass:

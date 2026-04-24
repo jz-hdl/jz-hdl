@@ -66,6 +66,19 @@ static int ensure_backend_ir(JZCompiler *compiler, const JZCLIOptions *opts) {
                 jz_cli_elapsed_ms(phase_t0));
     }
 
+    if (rc == 0) {
+        phase_t0 = clock();
+        if (jz_ir_init_lowering(compiler->ir_root,
+                                &compiler->ir_arena,
+                                &compiler->diagnostics) != 0) {
+            rc = 1;
+        }
+        if (opts->verbose) {
+            fprintf(stderr, "[verbose] init_lowering: %.1f ms\n",
+                    jz_cli_elapsed_ms(phase_t0));
+        }
+    }
+
     return rc;
 }
 

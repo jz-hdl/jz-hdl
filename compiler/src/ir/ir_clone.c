@@ -437,9 +437,23 @@ static int clone_memories(const IR_Memory *src,
         dst[i].name = clone_string(arena, src[i].name);
         if (src[i].name && !dst[i].name) return -1;
 
-        if (src[i].init_is_file) {
+        if (src[i].init_kind == MEM_INIT_FILE) {
             dst[i].init.file_path = clone_string(arena, src[i].init.file_path);
             if (src[i].init.file_path && !dst[i].init.file_path) return -1;
+        } else if (src[i].init_kind == MEM_INIT_BLOB && src[i].init.blob) {
+            dst[i].init.blob = (IR_MemoryInitBlob *)jz_arena_alloc(
+                arena, sizeof(IR_MemoryInitBlob));
+            if (!dst[i].init.blob) return -1;
+            dst[i].init.blob->num_bytes = src[i].init.blob->num_bytes;
+            dst[i].init.blob->bytes = NULL;
+            if (src[i].init.blob->num_bytes > 0) {
+                dst[i].init.blob->bytes = (uint8_t *)jz_arena_alloc(
+                    arena, (size_t)src[i].init.blob->num_bytes);
+                if (!dst[i].init.blob->bytes) return -1;
+                memcpy(dst[i].init.blob->bytes,
+                       src[i].init.blob->bytes,
+                       (size_t)src[i].init.blob->num_bytes);
+            }
         }
 
         if (src[i].num_ports > 0) {

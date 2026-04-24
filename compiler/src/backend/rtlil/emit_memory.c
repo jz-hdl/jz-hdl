@@ -19,6 +19,74 @@
 
 /* Forward declaration. */
 static void const_val_sigspec_zero(char *buf, int buf_size, int width);
+static int s_mem_emit_errors = 0;
+
+static unsigned mem_init_word_bit(const uint8_t *word_bytes,
+                                  int bytes_per_word,
+                                  int word_width,
+                                  int bit_from_msb)
+{
+    int target_bit = word_width - 1 - bit_from_msb;
+    int byte_in_word = bytes_per_word - 1 - (target_bit / 8);
+    int bit_in_byte = target_bit % 8;
+    return (unsigned)((word_bytes[byte_in_word] >> bit_in_byte) & 1u);
+}
+
+static void rtlil_emit_blob_word_const(FILE *out,
+                                       const uint8_t *word_bytes,
+                                       int bytes_per_word,
+                                       int word_width)
+{
+    fprintf(out, "%d'", word_width);
+    for (int bit = 0; bit < word_width; ++bit) {
+        fputc(mem_init_word_bit(word_bytes, bytes_per_word,
+                                word_width, bit) ? '1' : '0',
+              out);
+    }
+}
+
+static void emit_meminit_cell(FILE *out,
+                              const IR_Memory *mem,
+                              int addr)
+{
+    if (!out || !mem || !mem->name || !mem->init.blob) return;
+
+    int width = mem->word_width > 0 ? mem->word_width : 1;
+    int addr_width = mem->address_width > 0 ? mem->address_width : 1;
+    int bytes_per_word = (width + 7) / 8;
+    const uint8_t *word = mem->init.blob->bytes +
+                          ((size_t)addr * (size_t)bytes_per_word);
+
+    int id = rtlil_next_id();
+    rtlil_indent(out, 1);
+    fprintf(out, "cell $meminit_v2 $auto$%d\n", id);
+    rtlil_indent(out, 2);
+    fprintf(out, "parameter \\MEMID \"\\\\%s\"\n", mem->name);
+    rtlil_indent(out, 2);
+    fprintf(out, "parameter \\ABITS %d\n", addr_width);
+    rtlil_indent(out, 2);
+    fprintf(out, "parameter \\WIDTH %d\n", width);
+    rtlil_indent(out, 2);
+    fprintf(out, "parameter \\WORDS 1\n");
+    rtlil_indent(out, 2);
+    fprintf(out, "parameter \\PRIORITY 0\n");
+    rtlil_indent(out, 2);
+    fprintf(out, "connect \\ADDR ");
+    rtlil_emit_const_val(out, addr_width, (uint64_t)addr);
+    fputc('\n', out);
+    rtlil_indent(out, 2);
+    fprintf(out, "connect \\DATA ");
+    rtlil_emit_blob_word_const(out, word, bytes_per_word, width);
+    fputc('\n', out);
+    rtlil_indent(out, 2);
+    fprintf(out, "connect \\EN %d'", width);
+    for (int bit = 0; bit < width; ++bit) {
+        fputc('1', out);
+    }
+    fputc('\n', out);
+    rtlil_indent(out, 1);
+    fprintf(out, "end\n");
+}
 
 /* -------------------------------------------------------------------------
  * Collect memory write statements from the statement tree
@@ -216,6 +284,16 @@ static void const_val_sigspec_zero(char *buf, int buf_size, int width)
     buf[pos] = '\0';
 }
 
+void rtlil_reset_memory_emit_errors(void)
+{
+    s_mem_emit_errors = 0;
+}
+
+int rtlil_memory_emit_errors(void)
+{
+    return s_mem_emit_errors;
+}
+
 /* -------------------------------------------------------------------------
  * Main entry point
  * -------------------------------------------------------------------------
@@ -225,6 +303,24 @@ void rtlil_emit_memory_cells(FILE *out, const IR_Module *mod)
 {
     if (!out || !mod) return;
     if (mod->num_memories <= 0) return;
+
+    for (int i = 0; i < mod->num_memories; ++i) {
+        const IR_Memory *mem = &mod->memories[i];
+        if (mem->init_kind == MEM_INIT_FILE) {
+            fprintf(stderr,
+                    "error: unresolved file-based memory init for memory %s in module %s\n",
+                    mem->name ? mem->name : "jz_mem",
+                    mod->name ? mod->name : "?");
+            s_mem_emit_errors++;
+            continue;
+        }
+        if (mem->init_kind != MEM_INIT_BLOB || !mem->init.blob) {
+            continue;
+        }
+        for (int addr = 0; addr < mem->depth; ++addr) {
+            emit_meminit_cell(out, mem, addr);
+        }
+    }
 
     /* Collect all memory write statements from clock domains. */
     s_mem_writes_count = 0;

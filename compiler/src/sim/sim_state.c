@@ -281,7 +281,8 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
             me->depth = mem->depth;
             me->cells = calloc((size_t)mem->depth, sizeof(SimValue));
             for (int j = 0; j < mem->depth; j++) {
-                if (mem->init_is_file) {
+                if (mem->init_kind == MEM_INIT_FILE ||
+                    mem->init_kind == MEM_INIT_BLOB) {
                     /* File-initialized memories (ROM) keep their data;
                      * actual file loading is handled elsewhere. Zero here
                      * as a safe default if file data isn't loaded yet. */
