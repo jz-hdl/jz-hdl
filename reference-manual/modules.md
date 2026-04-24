@@ -276,8 +276,10 @@ Key rules
 * Auto-slice requires wide\_source width to be an exact multiple of element\_width.
 * Index out of range:
   * If statically provable → compile error.
-  * Otherwise → behavior is hardware implementation-defined at runtime. Simulation tools must abort on out-of-range access.
-* Selector width must be >= clog2(N) (implicit zero-extend if narrower).
+  * Otherwise → runtime out-of-range selects return `0`.
+* Required selector width = `clog2(N)` with `clog2(1) = 1`.
+* Runtime selector width must match exactly; explicitly widen or slice before access if needed.
+* Runtime MUX selectors are ordinary runtime bit-vectors. Compile-time constructs such as `IDX` are elaborated earlier and do not use these runtime width rules.
 
 Usage
 
@@ -353,7 +355,7 @@ Highlights
 
 * MEM blocks are declared inside modules to define block/distributed RAM.
 * MEM declares word width, depth, initial content (literal, `@file("path")`, or `@file(CONST/CONFIG)` reference), and ports (`OUT` ASYNC|SYNC, `IN` write ports).
-* Address widths are computed as clog2(depth) (0 if depth==1).
+* Address widths are computed as `clog2(depth)` with a minimum width of 1 bit, and runtime addresses must match exactly unless you widen or slice explicitly.
 * MEM names and port names are local to the module and must be unique.
 
 For full details, see the Memory reference page (link from site).

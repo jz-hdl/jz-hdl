@@ -29,6 +29,21 @@ Two project files target the Tang Nano 20K and 9K. Both map two buttons — one 
 ::: code-group
 
 ```jz
+// Latch example — demonstrates a D latch.
+//
+// A 27-bit counter free-runs at the clock rate. Six LEDs show the
+// D latch output:
+//
+//   leds[5]   — raw btn state (direct passthrough).
+//   leds[4:0] — D latch (display_buffer[4:0]). While btn is held,
+//               the latch is transparent and the LEDs follow
+//               ~counter[26:22] (inverted upper counter bits).
+//               Releasing btn freezes the pattern.
+//
+// Button behavior:
+//   Hold    — latch is transparent, LEDs track counter.
+//   Release — latch holds its last value, LEDs freeze.
+
 @module latch_test
     PORT {
         IN  [1] clk;
@@ -45,10 +60,10 @@ Two project files target the Tang Nano 20K and 9K. Both map two buttons — one 
     REGISTER {
         counter [27] = 27'b1;
     }
-    
+
     LATCH {
         // Explicit storage for the 6-bit LED pattern
-        display_buffer [6] D; 
+        display_buffer [6] D;
     }
 
     ASYNCHRONOUS {

@@ -31,24 +31,29 @@ MEM(type=[BLOCK|DISTRIBUTED]) {
 ```
 
 * `type` is optional. When omitted: depth <= 16 infers DISTRIBUTED; depth > 16 with all SYNC OUT ports infers BLOCK.
-* Address width is `clog2(depth)`. Minimum address width is 1 bit; a single-word memory (depth=1) uses a 1-bit address (the sole word lives at address `1'b0`).
+* Address width is `clog2(depth)`, with a minimum of 1 bit. A single-word memory (depth=1) uses a 1-bit address and the sole word lives at address `1'b0`.
 * OUT ports are read ports; IN ports are write ports; INOUT ports are combined read/write.
 * At least one port (IN, OUT, or INOUT) is required.
 * `INOUT` ports cannot be mixed with `IN` or `OUT` ports in the same MEM declaration.
 
 ## Port types
 
+Runtime memory addresses are width-checked as ordinary runtime bit-vectors.
+Compile-time indexing constructs such as `IDX` are elaborated earlier and do not use these runtime width rules.
+
 ### OUT ASYNC (asynchronous read)
 
 * Combinational address-to-data path.
 * Used in `ASYNCHRONOUS` blocks only.
 * Access: `mem.port[address]`
+* `address` width must exactly match the derived address width. Widen or slice explicitly before access if needed.
 * Result width equals word\_width.
 
 ### OUT SYNC (synchronous read)
 
 * Exposes two pseudo-fields: `.addr` and `.data`.
 * `.addr` is assigned in `SYNCHRONOUS` blocks with `<=`.
+* The value assigned to `.addr` must have exact address width. Use `<=z` for narrower values or an explicit slice for wider values.
 * `.data` is the read result, valid the cycle after `.addr` is sampled.
 * `.data` is readable in any block (ASYNCHRONOUS or SYNCHRONOUS).
 * `mem.port[addr]` indexing is illegal for SYNC ports (use `.addr`/`.data` instead).
@@ -59,6 +64,8 @@ MEM(type=[BLOCK|DISTRIBUTED]) {
 * Always synchronous; address and data sampled at clock edge.
 * Used only in `SYNCHRONOUS` blocks.
 * Access: `mem.port[address] <= value;`
+* `address` width must exactly match the derived address width.
+* Bare `<=` requires `value` width to equal `word_width`. Use `<=z` for narrower values and an explicit slice for wider values.
 * Each IN port may be written at most once per synchronous execution path.
 
 ### INOUT (read/write port)
@@ -71,6 +78,7 @@ MEM(type=[BLOCK|DISTRIBUTED]) {
   * `.wdata` — write data input, assigned via `<=` in `SYNCHRONOUS` blocks
 * If `.wdata` is not assigned in a given execution path, no write occurs (read-only cycle).
 * `.addr` and `.wdata` may each be assigned at most once per execution path.
+* `.addr` must have exact address width. Bare `<=` to `.wdata` requires exact `word_width`; use `<=z` for narrower values or slice wider values explicitly.
 * `mem.port[addr]` indexing syntax is illegal on `INOUT` ports (must use `.addr`).
 * Write modes (`WRITE_FIRST`, `READ_FIRST`, `NO_CHANGE`) apply to `INOUT` ports.
 * Cannot be mixed with `IN` or `OUT` ports in the same MEM declaration.
@@ -129,6 +137,13 @@ For `INOUT` ports, write mode controls what `.data` shows when `.wdata` is assig
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ASYNCHRONOUS | `mem.port[addr]` (read) | illegal | read OK | illegal | illegal | read OK | illegal |
 | SYNCHRONOUS | illegal | `<= addr` | read OK | `mem.port[addr] <= val` | `<= addr` | read OK | `<= val` |
+
+### Width rules summary
+
+* Runtime addresses must match the derived address width exactly.
+* Bare `<=` writes require exact `word_width` data.
+* Use `<=z` for narrower synchronous address/data assignments where zero-extension is intended.
+* Use explicit slices when a runtime address or data expression is wider than the required width.
 
 ## Scope and uniqueness
 

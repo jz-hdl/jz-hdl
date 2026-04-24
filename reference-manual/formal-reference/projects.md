@@ -136,12 +136,14 @@ CLOCK_GEN {
 * `standard` required for all pins. Accepted single-ended standards: `LVTTL`, `LVCMOS33`, `LVCMOS25`, `LVCMOS18`, `LVCMOS15`, `LVCMOS12`, `PCI33`, `SSTL25_I`, `SSTL25_II`, `SSTL18_I`, `SSTL18_II`, `SSTL15`, `SSTL135`, `HSTL18_I`, `HSTL18_II`, `HSTL15_I`, `HSTL15_II`. Accepted differential standards: `LVDS25`, `LVDS33`, `BLVDS25`, `EXT_LVDS25`, `TMDS33`, `RSDS`, `MINI_LVDS`, `PPDS`, `SUB_LVDS`, `SLVS`, `LVPECL33`, `DIFF_SSTL25_I`, `DIFF_SSTL25_II`, `DIFF_SSTL18_I`, `DIFF_SSTL18_II`, `DIFF_SSTL15`, `DIFF_SSTL135`, `DIFF_HSTL18_I`, `DIFF_HSTL18_II`, `DIFF_HSTL15_I`, `DIFF_HSTL15_II`.
 * `drive` required for OUT and INOUT pins (milliamps, may be fractional e.g. `3.5`).
 * `mode` optional: `SINGLE` (default) or `DIFFERENTIAL`. Must be consistent with standard.
+* `width` optional with `mode=DIFFERENTIAL`; when present it sets the logical parallel data width seen by the module and `@top` binding. Backend code generation selects the smallest supported serializer/deserializer ratio greater than or equal to that logical width.
 * `term` optional: `ON` or `OFF` (default `OFF`). Valid for `mode=DIFFERENTIAL` and single-ended SSTL/HSTL standards.
 * `pull` optional: `UP`, `DOWN`, or `NONE` (default `NONE`). Not valid on `OUT_PINS`.
-* `fclk`, `pclk`, `reset`: required when `mode=DIFFERENTIAL` on output pins.
-  * `fclk`: fast serialization clock (must be an integer multiple of `pclk` matching the chip's serializer ratio).
+* `fclk`, `pclk`, `reset`: required according to the selected differential serializer/deserializer primitive. On `GENERIC`, all three are required.
+  * `fclk`: fast serialization clock (must be an integer multiple of `pclk` matching the selected serializer/deserializer ratio).
   * `pclk`: parallel data clock at which the module produces data.
   * `reset`: serializer reset signal, typically a `CLOCK_GEN` `LOCK` wire output. The compiler automatically inverts this signal — the serializer is held in reset while the lock signal is low (PLL not locked) and released when it goes high.
+* For differential outputs and bidirectional pins, `drive` is still required even if the selected primitive ignores the numeric value.
 * All declared pins must be mapped in `MAP`.
 * Pin names must be unique across all PIN blocks.
 

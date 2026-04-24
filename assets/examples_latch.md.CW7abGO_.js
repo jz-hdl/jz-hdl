@@ -49,7 +49,22 @@ import{_ as i,o as a,c as n,ai as l}from"./chunks/framework.C4ntERNc.js";const c
 <span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;">        IN</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">  [1] btn   </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> KEY[1];</span></span>
 <span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;">        OUT</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> [6] leds  </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> LED;</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    }</span></span>
-<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">@endproj</span></span></code></pre></div><div class="language-jz"><button title="Copy Code" class="copy"></button><span class="lang">jz</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">@module</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> latch_test</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">@endproj</span></span></code></pre></div><div class="language-jz"><button title="Copy Code" class="copy"></button><span class="lang">jz</span><pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e;" tabindex="0" dir="ltr"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// Latch example — demonstrates a D latch.</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// A 27-bit counter free-runs at the clock rate. Six LEDs show the</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// D latch output:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//   leds[5]   — raw btn state (direct passthrough).</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//   leds[4:0] — D latch (display_buffer[4:0]). While btn is held,</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//               the latch is transparent and the LEDs follow</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//               ~counter[26:22] (inverted upper counter bits).</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//               Releasing btn freezes the pattern.</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// Button behavior:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//   Hold    — latch is transparent, LEDs track counter.</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">//   Release — latch holds its last value, LEDs freeze.</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">@module</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> latch_test</span></span>
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">    PORT</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> {</span></span>
 <span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;">        IN</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">  [1] clk;</span></span>
 <span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;">        IN</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">  [1] por;</span></span>
@@ -65,10 +80,10 @@ import{_ as i,o as a,c as n,ai as l}from"./chunks/framework.C4ntERNc.js";const c
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">    REGISTER</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> {</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">        counter [27] </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> 27&#39;b1</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">;</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    }</span></span>
-<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    </span></span>
+<span class="line"></span>
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">    LATCH</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> {</span></span>
 <span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">        // Explicit storage for the 6-bit LED pattern</span></span>
-<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">        display_buffer [6] D; </span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">        display_buffer [6] D;</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    }</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">    ASYNCHRONOUS</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> {</span></span>

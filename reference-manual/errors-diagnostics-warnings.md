@@ -57,11 +57,11 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Cause: Structural directives (@project, @module, @import, @new, @blackbox, @endproj, @endmod, etc.) placed where not allowed.
 * Fix: Place directives only in permitted locations per the spec (e.g., @import only immediately inside @project).
 
-### LEXICAL.ID\_SYNTAX\_INVALID — Identifier invalid
+### LEXICAL.ID\_SYNTAX\_INVALID — Identifier exceeds 255 characters
 
 * Severity: ERROR
-* Cause: Identifier violates regex (bad characters, starts with digit) or length > 255.
-* Fix: Rename to valid identifier per rules: \[A‑Za‑z\_]\[A‑Za‑z0‑9\_]{0,254} and not a single underscore.
+* Cause: Identifier length exceeds the 255-character maximum. Character-class and leading-digit violations are caught earlier by the lexer/parser as PARSE000.
+* Fix: Shorten the identifier to 255 characters or fewer.
 
 ### LEXICAL.ID\_SINGLE\_UNDERSCORE — Illegal use of single underscore
 
@@ -226,6 +226,11 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Severity: ERROR
 * Fix: The third argument to sbit() must be a 1-bit expression.
 
+### OPERATORS\_AND\_EXPRESSIONS.SBIT\_INVALID\_SOURCE — sbit source kind is not writable
+
+* Severity: ERROR
+* Fix: Use a wire or register as the first `sbit(...)` argument.
+
 ### OPERATORS\_AND\_EXPRESSIONS.GBIT\_INDEX\_OUT\_OF\_RANGE — gbit() index out of range
 
 * Severity: ERROR
@@ -304,7 +309,7 @@ The sections below list all diagnostic rules organized by category. Each entry s
 ### IDENTIFIERS\_AND\_SCOPE.UNDECLARED\_IDENTIFIER — Undeclared name used
 
 * Severity: ERROR
-* Fix: Declare the identifier or correct the name.
+* Fix: Declare the identifier before use or correct the name. This also covers `widthof(...)` targets that are missing or only declared later.
 
 ### IDENTIFIERS\_AND\_SCOPE.AMBIGUOUS\_REFERENCE — Ambiguous reference
 
@@ -450,6 +455,11 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Severity: ERROR
 * Fix: Ensure parent signal has the width declared in instantiation clause (check parent's CONST resolution).
 
+### MODULE\_AND\_INSTANTIATION.INSTANCE\_INTERNAL\_ACCESS — Cannot access internal signal of instance
+
+* Severity: ERROR
+* Fix: Only PORT members are accessible via `inst.name` in synthesizable code. WIRE, REGISTER, and LATCH signals inside a child module are internal and not visible to the parent. Use an OUT port to expose values, or access internals in simulation mode only.
+
 ***
 
 ## MUX Rules
@@ -473,6 +483,11 @@ The sections below list all diagnostic rules organized by category. Each entry s
 
 * Severity: ERROR
 * Fix: Correct selector width or bounds; ensure compile-time indices fall within valid range.
+
+### MUX\_RULES.MUX\_SELECTOR\_WIDTH\_MISMATCH — Runtime selector width does not match MUX width
+
+* Severity: ERROR
+* Fix: Make the runtime selector exactly `clog2(N)` bits wide, or widen/slice it explicitly before the MUX access.
 
 ***
 
@@ -675,7 +690,7 @@ The sections below list all diagnostic rules organized by category. Each entry s
 ### FUNCTIONS\_AND\_CLOG2.CLOG2\_NONPOSITIVE\_ARG — clog2 arg ≤ 0
 
 * Severity: ERROR
-* Fix: Provide positive integer argument.
+* Fix: Provide a positive integer argument. `clog2(1)` is valid and evaluates to `1`; only zero or negative arguments are rejected.
 
 ### FUNCTIONS\_AND\_CLOG2.CLOG2\_INVALID\_CONTEXT — clog2 used at runtime
 
@@ -879,10 +894,10 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Severity: ERROR
 * Fix: Perform writes in SYNCHRONOUS blocks only.
 
-### MEM\_ACCESS.MEM\_ADDR\_WIDTH\_TOO\_WIDE / MEM\_CONST\_ADDR\_OUT\_OF\_RANGE — Address width / const address out-of-range
+### MEM\_ACCESS.MEM\_ADDR\_WIDTH\_MISMATCH / MEM\_CONST\_ADDR\_OUT\_OF\_RANGE — Address width / const address out-of-range
 
 * Severity: ERROR
-* Fix: Use address width ≤ ceil(log2(depth)); ensure constant addresses < depth.
+* Fix: Runtime addresses must exactly match `clog2(depth)` (minimum 1 bit). Use explicit widening or slicing when needed, and ensure constant addresses remain < depth.
 
 ### MEM\_ACCESS.MEM\_MULTIPLE\_WRITES\_SAME\_IN — Multiple writes to same IN port in one block
 
