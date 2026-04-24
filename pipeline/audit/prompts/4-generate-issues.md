@@ -4,7 +4,7 @@ For spec section: `<SPEC_SECTION_TARGET>`
 
 ## Inputs
 
-- `/tmp/spec_rules.md` — the completed requirements table from steps 1–3. This file must already exist and contain `Requirement`, `Category`, `Coverage Domain`, `Applicable Contexts`, `Split ID`, `Primary Rule ID`, `Tests`, and `Coverage` columns.
+- `<OUTPUT_FILE>` — the completed requirements table from steps 1–3. This file must already exist and contain `Requirement`, `Category`, `Coverage Domain`, `Applicable Contexts`, `Split ID`, `Primary Rule ID`, `Tests`, and `Coverage` columns.
 - The target spec section named at the top of this prompt (used to identify which section to process).
 
 ## Explicit Non-Inputs
@@ -21,7 +21,7 @@ For spec section: `<SPEC_SECTION_TARGET>`
 
 These rules are **mechanical**. Follow them literally.
 
-1. Read the target section from `/tmp/spec_rules.md`.
+1. Read the target section from `<OUTPUT_FILE>`.
 2. Process only rows whose `Coverage Domain` is `validation`.
 3. Skip rows where `Coverage` is `N/A`.
 4. Skip rows where Coverage indicates all applicable coverage is already present.
@@ -36,15 +36,36 @@ Generate one issue per gap found. A single requirement may produce multiple issu
 |-------------|---------------|-----------------|
 | `none` (no tests at all) | `missing-coverage` | Coverage column is `none` |
 | No `negative` in test types | `missing-negative` | Coverage shows test types but `negative` is absent, and the row has a primary rule ID |
-| No `happy` in test types | `missing-happy-path` | Coverage shows test types but `happy` is absent, unless the requirement is inherently negative-only |
+| No `happy` in test types | `missing-happy-path` | Coverage shows test types but `happy` is absent, and the row is explicitly happy-path-eligible under the rules below |
 | Missing contexts | `missing-context` | Coverage lists one or more missing contexts |
 | Missing enumerated items | `missing-items` | Coverage lists `items missing: X, Y, Z` |
 
-### Negative-only happy-path suppression
+### Happy-path eligibility and suppression
 
-Do **not** generate a `missing-happy-path` issue when the requirement text is inherently negative-only.
+Do **not** treat `missing-happy-path` as the default. Generate it **only** when the requirement is explicitly happy-path-eligible.
 
-Common signals: `forbidden`, `not allowed`, `may not`, `must not`, `compile error`, `invalid`, `rejected`
+Generate `missing-happy-path` **only** when the requirement text defines a positive, validation-observable behavior that can be demonstrated by a clean fixture, such as:
+
+- accepted syntax
+- allowed usage
+- valid form
+- positive semantic guarantee
+- explicit "may", "can", "is allowed", "uses", "has form", or equivalent positive rule text
+
+Do **not** generate a `missing-happy-path` issue for rows that are any of the following:
+
+- inherently negative-only
+- descriptive, organizational, or rationale-only
+- umbrella, summary, or parent-introducer rows
+- transform, warning, backend, or output-shape oriented
+- context fences or applicability statements whose positive case is already implied elsewhere
+- ownership-only rows where the positive case is just "absence of the diagnostic"
+
+Common negative/context-fence signals: `forbidden`, `not allowed`, `may not`, `must not`, `compile error`, `invalid`, `rejected`, `only`, `only in`, `applicable`, `non-applicable`
+
+Rows with `Primary Rule ID` of `—` are **not** automatically happy-path-eligible. For those rows, emit `missing-happy-path` only when the requirement text itself states a concrete valid form or accepted behavior that a clean fixture can directly demonstrate.
+
+If there is any reasonable doubt whether a clean happy-path fixture would prove the row as an independently meaningful validation target, suppress `missing-happy-path`.
 
 ### Issue format
 
@@ -75,7 +96,7 @@ Use these templates exactly, filling in the blanks:
 
 ## Output
 
-Append an issues section to the bottom of the target section in `/tmp/spec_rules.md`, below the requirements table. Do not modify the table itself.
+Append an issues section to the bottom of the target section in `<OUTPUT_FILE>`, below the requirements table. Do not modify the table itself.
 
 ### Output format
 

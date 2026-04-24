@@ -7,7 +7,7 @@ Files in scope:
 
 ## Inputs
 
-- `/tmp/security_findings.md` — the attack-surface map from step 1. This file must already exist.
+- `<OUTPUT_FILE>` — the attack-surface map from step 1. This file must already exist.
 - The files listed at the top of this prompt, plus directly related repo files needed to confirm a finding.
 
 ## Explicit Non-Inputs
@@ -32,7 +32,7 @@ If a site is suspicious but you cannot support it with concrete evidence from co
 
 ## Output
 
-Update the target section in `/tmp/security_findings.md` in place by appending a `### Findings` section below the step 1 content. Do not delete the attack-surface table.
+Update the target section in `<OUTPUT_FILE>` in place by appending a `### Findings` section below the step 1 content. Do not delete the attack-surface table.
 
 ## Report Format
 

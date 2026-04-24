@@ -36,7 +36,7 @@ Look for candidate sites involving:
 
 ## Output
 
-Write the attack-surface map to `/tmp/security_findings.md`. **Always create the file from scratch** with a `# Security Review` H1 header followed by the single target section. If the file already exists, overwrite it entirely.
+Write the attack-surface map to `<OUTPUT_FILE>`. **Always create the file from scratch** with a `# Security Review` H1 header followed by the single target section. If the file already exists, overwrite it entirely.
 
 ## Report Format
 

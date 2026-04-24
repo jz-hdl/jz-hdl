@@ -4,9 +4,9 @@ For spec section: `<SPEC_SECTION_TARGET>`
 
 ## Inputs
 
-- `/tmp/spec_rules.md` — the requirements list from step 1. This file must already exist.
+- `<OUTPUT_FILE>` — the requirements list from step 1. This file must already exist.
 - `compiler/src/rules.c` — the rule table. Each entry has a category, rule ID, and a message containing a spec reference (e.g. `S1.1`, `S4.2/S8.1`).
-- The target spec section named at the top of this prompt (used only to identify which section in `spec_rules.md` to update).
+- The target spec section named at the top of this prompt (used only to identify which section in `<OUTPUT_FILE>` to update).
 
 ## Explicit Non-Inputs
 
@@ -15,14 +15,14 @@ For spec section: `<SPEC_SECTION_TARGET>`
 - **Do not read** `pipeline/test_*.md`, `pipeline/rule_coverage.md`, `compiler/tests/issues.md`, `compiler/tests/sweep.md`.
 - **Do not read, glob, or search** files under any directory containing `old`.
 - **Do not assess coverage.**
-- **Do not modify the Requirement, Category, Coverage Domain, or Applicable Contexts columns.** You are only adding `Split ID` and `Primary Rule ID` columns, unless you must split a row as described below.
+- **Do not modify the Requirement, Category, Coverage Domain, Applicable Contexts, or Coverage Keys columns.** You are only adding `Split ID` and `Primary Rule ID` columns, unless you must split a row as described below.
 
 ## Matching Rules
 
 These rules are **mechanical**. Follow them literally.
 
 1. Read `compiler/src/rules.c` and extract every rule entry in file order: `{ "CATEGORY", "RULE_ID", N, MODE, "message" }`.
-2. Read the target section from `/tmp/spec_rules.md`.
+2. Read the target section from `<OUTPUT_FILE>`.
 3. For each requirement row, find candidate matches using these criteria in priority order:
    a. **Cross-reference and non-validation rows:** If `Coverage Domain` is `cross-reference`, `golden`, `simulation`, or `non-actionable`, the Primary Rule ID is `N/A`. Skip all further matching for that row.
    b. **Explicit diagnostic code in requirement text:** If the requirement text contains a backtick-quoted rule ID (e.g. `` `ID_SYNTAX_INVALID` ``), match the rule entry whose `RULE_ID` matches exactly. This is the strongest match.
@@ -55,7 +55,7 @@ You may split a row **only** if all of the following are true:
 If you split:
 
 - Duplicate the row once per independent condition.
-- Preserve `Requirement`, `Category`, `Coverage Domain`, and `Applicable Contexts` exactly.
+- Preserve `Requirement`, `Category`, `Coverage Domain`, `Applicable Contexts`, and `Coverage Keys` exactly.
 - Assign a stable `Split ID` to every output row:
   - Use `base` for rows that were not split.
   - For split rows, use `split-1`, `split-2`, ... in the duplicated row order.
@@ -69,7 +69,7 @@ If you do not split:
 
 ## Output
 
-**Replace** the target section in `/tmp/spec_rules.md` in-place with the updated table that now includes the `Split ID` and `Primary Rule ID` columns. Do not change the `# Spec Section Requirements` H1 header. Do not change other sections.
+**Replace** the target section in `<OUTPUT_FILE>` in-place with the updated table that now includes the `Split ID` and `Primary Rule ID` columns while preserving `Coverage Keys`. Do not change the `# Spec Section Requirements` H1 header. Do not change other sections.
 
 ## Report Format
 
@@ -80,17 +80,17 @@ The updated section must use this format:
 
 Source: `<spec-file-relpath>` lines <start>–<end>
 
-| # | Requirement | Category | Coverage Domain | Applicable Contexts | Split ID | Primary Rule ID |
-|---|-------------|----------|-----------------|---------------------|----------|-----------------|
-| 1 | <unchanged requirement text> | <unchanged category> | <unchanged coverage domain> | <unchanged contexts> | base or split-N | CATEGORY.RULE_ID or — or N/A |
-| 2 | ... | ... | ... | ... | ... | ... |
+| # | Requirement | Category | Coverage Domain | Applicable Contexts | Coverage Keys | Split ID | Primary Rule ID |
+|---|-------------|----------|-----------------|---------------------|---------------|----------|-----------------|
+| 1 | <unchanged requirement text> | <unchanged category> | <unchanged coverage domain> | <unchanged contexts> | <unchanged keys> | base or split-N | CATEGORY.RULE_ID or — or N/A |
+| 2 | ... | ... | ... | ... | ... | ... | ... |
 
 Total: N requirements
 ```
 
 ## Rules
 
-- **Do not modify extracted content.** The Requirement, Category, Coverage Domain, and Applicable Contexts columns must be identical to the step 1 output, character for character, unless you split a row under the Optional Row Splitting rule.
+- **Do not modify extracted content.** The Requirement, Category, Coverage Domain, Applicable Contexts, and Coverage Keys columns must be identical to the step 1 output, character for character, unless you split a row under the Optional Row Splitting rule.
 - **Stable row identity:** Every output row must have a `Split ID`. Use `base` when unsplit, or `split-N` when split.
 - **Prefer no row splitting.** Keep the row count the same unless splitting is necessary to avoid a dishonest primary-rule assignment.
 - **Do not reorder rows.** Preserve document order.

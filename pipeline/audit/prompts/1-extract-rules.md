@@ -17,7 +17,7 @@ For spec section: `<SPEC_SECTION_TARGET>`
 
 ## Output
 
-Write the requirements list to `/tmp/spec_rules.md`. **Always create the file from scratch** with a `# Spec Section Requirements` H1 header followed by the single target section. If the file already exists, **overwrite it entirely** — do not preserve content from other sections.
+Write the requirements list to `<OUTPUT_FILE>`. **Always create the file from scratch** with a `# Spec Section Requirements` H1 header followed by the single target section. If the file already exists, **overwrite it entirely** — do not preserve content from other sections.
 
 ## Extraction Rules
 
@@ -26,7 +26,7 @@ These rules are **mechanical**. They leave zero room for interpretation. Follow 
 1. Read the target spec section from its heading through the next heading of the same or higher level.
 2. Walk every line of the section text in document order.
 3. For each line, apply the **classification rules** below to decide whether it produces a requirement row.
-4. For each extracted row, assign a `Category`, `Coverage Domain`, and `Applicable Contexts` value using the rules below.
+4. For each extracted row, assign a `Category`, `Coverage Domain`, `Applicable Contexts`, and `Coverage Keys` value using the rules below.
 5. Output every requirement row in document order. Do not reorder, merge, split, group, or editorialize.
 
 ### Classification Rules
@@ -109,6 +109,37 @@ Fallback rules:
 - If the row is `validation` and the requirement appears context-sensitive but the exact tracked context cannot be determined from the single line alone, prefer the nearest explicit tracked context named in the surrounding syntax or allowed-context text.
 - If the row is `validation` and no such surrounding explicit tracked context exists, use `N/A` rather than inventing contexts.
 
+### Coverage Keys Assignment
+
+Assign `Coverage Keys` to help downstream test mapping find existing semantic coverage across sections. These keys are **not** coverage judgments. They are compact search hints extracted from the requirement text and nearby syntax.
+
+Format rules:
+
+- Use a comma-separated list of `type:value` keys.
+- Use lowercase kebab-case for every `value`.
+- Use only these key types: `construct`, `form`, `behavior`, `diagnostic`, `context`.
+- Keep keys compact and literal. Do not write prose sentences.
+- Emit 2-6 keys for `validation` rows when possible.
+- If `Coverage Domain` is `cross-reference`, `non-actionable`, `golden`, or `simulation`, use `N/A`.
+
+Assignment rules for `validation` rows:
+
+1. Always emit at least one `construct:` key naming the main language construct or feature under discussion.
+   - Examples: `construct:mem-sync-read`, `construct:template-apply`, `construct:feature-guard`, `construct:tristate-net`, `construct:identifier-scope`
+2. If the row defines a concrete syntax form, emit one or more `form:` keys for that form.
+   - Examples: `form:mem-port-addr-assign`, `form:mem-port-data-read`, `form:new-binding`, `form:check-expr`, `form:feature-cond`
+3. If the row states an observable semantic rule or allowed/forbidden behavior, emit a `behavior:` key for that behavior.
+   - Examples: `behavior:zero-extend-narrow-addr`, `behavior:single-write-per-path`, `behavior:sync-read-requires-receive`, `behavior:nested-feature-forbidden`
+4. If the requirement text itself contains a backtick-quoted diagnostic code, emit `diagnostic:<rule-id>` using lowercase kebab-case.
+5. If `Applicable Contexts` is not `N/A`, also emit matching `context:` keys for those exact tracked contexts.
+6. If multiple keys of the same type apply, list the most specific ones first.
+
+Fallback rules:
+
+- When uncertain, prefer broader but still truthful keys over inventing narrow ones.
+- Reuse the nearest surrounding syntax or allowed-form text when the single requirement line is too short to produce a meaningful `construct:` or `form:` key on its own.
+- Do not emit placeholder keys like `construct:general-rule` or `behavior:valid`.
+
 ## Report Format
 
 ```markdown
@@ -116,10 +147,10 @@ Fallback rules:
 
 Source: `<spec-file-relpath>` lines <start>–<end>
 
-| # | Requirement | Category | Coverage Domain | Applicable Contexts |
-|---|-------------|----------|-----------------|---------------------|
-| 1 | <verbatim spec text> | constraint / diagnostic-mapping / behavioral / enumerated-list / cross-reference / syntax-definition | validation / golden / simulation / non-actionable / cross-reference | context list or N/A |
-| 2 | ... | ... | ... | ... |
+| # | Requirement | Category | Coverage Domain | Applicable Contexts | Coverage Keys |
+|---|-------------|----------|-----------------|---------------------|---------------|
+| 1 | <verbatim spec text> | constraint / diagnostic-mapping / behavioral / enumerated-list / cross-reference / syntax-definition | validation / golden / simulation / non-actionable / cross-reference | context list or N/A | comma-separated `type:value` keys or N/A |
+| 2 | ... | ... | ... | ... | ... |
 
 Total: N requirements
 ```

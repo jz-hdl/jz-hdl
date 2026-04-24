@@ -1,0 +1,35 @@
+{
+  "name": "project_ready",
+  "description": "Project-wide 1.0.0 readiness review pipeline",
+  "default_cli": "codex",
+  "output_dir": ".",
+  "placeholders": {
+    "output_file": "<OUTPUT_FILE>"
+  },
+  "options": [
+    "filter",
+    "start",
+    "start_at",
+    "dry_run",
+    "list"
+  ],
+  "targeting": {
+    "discover": {
+      "type": "singleton"
+    },
+    "group": {
+      "type": "singleton"
+    },
+    "label": "project readiness review",
+    "output_path": "release-todo.md",
+    "unit_name": "target",
+    "summary_label": "project readiness review to run"
+  },
+  "steps": [
+    {
+      "path": "pipeline/project_ready/prompts/1-review-plan.md",
+      "effort": "high",
+      "kind": "target_prompt"
+    }
+  ]
+}
