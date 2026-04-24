@@ -1,0 +1,31 @@
+// HAPPY_PATH: compile-time-dead ternary branches containing `x` literals are
+// structurally masked for observability and must not trigger
+// OBS_X_TO_OBSERVABLE_SINK.
+
+@project TERNARY_DEAD_BRANCH_MASKED_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= (1'b1 ? din : 8'b0000_xxxx);
+    }
+@endmod

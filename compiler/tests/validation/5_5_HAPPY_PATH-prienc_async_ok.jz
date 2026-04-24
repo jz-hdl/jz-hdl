@@ -1,0 +1,44 @@
+// HAPPY_PATH: prienc(source) used on the RHS of an ASYNCHRONOUS assignment.
+// Exercises §5.5.14 Reqs #1, #2, #3, #5 in the async-expr context:
+// - Req #1 syntax `prienc(<source>)`
+// - Req #2 result width = clog2(width(source)) (16->4, 8->3, 4->2, 2->1)
+// - Req #3 source width >= 2 (valid for 2,4,8,16)
+// - Req #5 ASYNCHRONOUS RHS allowed context
+// No diagnostics expected.
+
+@project HAPPY_PATH_prienc_async_ok
+    @top TopMod {
+        IN  [16] wide = _;
+        IN  [8]  mid = _;
+        IN  [4]  narrow = _;
+        IN  [2]  pair = _;
+        OUT [4]  out_wide = _;
+        OUT [3]  out_mid = _;
+        OUT [2]  out_narrow = _;
+        OUT [1]  out_pair = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [16] wide;
+        IN  [8]  mid;
+        IN  [4]  narrow;
+        IN  [2]  pair;
+        OUT [4]  out_wide;
+        OUT [3]  out_mid;
+        OUT [2]  out_narrow;
+        OUT [1]  out_pair;
+    }
+
+    ASYNCHRONOUS {
+        // Trigger 1: prienc(16-bit) -> 4-bit result
+        out_wide = prienc(wide);
+        // Trigger 2: prienc(8-bit) -> 3-bit result
+        out_mid = prienc(mid);
+        // Trigger 3: prienc(4-bit) -> 2-bit result
+        out_narrow = prienc(narrow);
+        // Trigger 4: prienc(2-bit) -> 1-bit result (minimum source width)
+        out_pair = prienc(pair);
+    }
+@endmod

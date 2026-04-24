@@ -1,6 +1,6 @@
 // HAPPY_PATH: Valid @check expressions — all allowed operand types produce no diagnostics.
 // Exercises literals, CONST, CONFIG, clog2, comparisons, logical operators,
-// and nested expressions mixing allowed operands.
+// parentheses, and nested expressions mixing allowed operands.
 
 @project HAPPY_PATH_check_expression_ok
     CONFIG {
@@ -22,6 +22,9 @@
 
     // Valid: logical OR of CONFIG comparisons
     @check (CONFIG.WIDTH == 8 || CONFIG.WIDTH == 16, "valid width");
+
+    // Valid: parenthesized CONFIG subexpression
+    @check ((CONFIG.WIDTH + 0) == 8, "parenthesized config ok");
 
     @top TopMod {
         IN  [1] clk = _;
@@ -45,6 +48,9 @@
 
     // Valid: nested CONST + literal
     @check (LOCAL_W + 4 == 8, "const plus literal ok");
+
+    // Valid: parenthesized CONST arithmetic
+    @check (((LOCAL_W + 4) / 2) == 4, "parenthesized const ok");
 
     ASYNCHRONOUS {
         data = din;
@@ -71,6 +77,9 @@
 
     // Valid: nested clog2 + CONFIG + CONST
     @check (clog2(SIZE) + CONFIG.WIDTH > 0, "nested ok");
+
+    // Valid: parenthesized mixed constant expression
+    @check (((clog2(SIZE) + CONFIG.WIDTH) - SIZE) == -4, "parenthesized mixed ok");
 
     // Valid: comparison operators
     @check (SIZE >= 16, "gte ok");

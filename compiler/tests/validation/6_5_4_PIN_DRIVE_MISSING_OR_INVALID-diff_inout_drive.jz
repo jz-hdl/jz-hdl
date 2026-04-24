@@ -1,0 +1,74 @@
+// PIN_DRIVE_MISSING_OR_INVALID: Differential standards still require drive on INOUT pins.
+// Triggers cover missing, zero, and negative drive values for differential
+// INOUT declarations. Valid single-ended and differential controls verify the
+// differential requirement does not regress accepted cases.
+
+@project PIN_DRIVE_MISSING_OR_INVALID_diff_inout_drive
+    CLOCKS {
+        sys_clk = { period=10 };
+    }
+
+    IN_PINS {
+        sys_clk = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        led = { standard=LVCMOS33, drive=8 };
+    }
+
+    INOUT_PINS {
+        valid_diff = { mode=DIFFERENTIAL, standard=LVDS25, drive=8 };
+        valid_single = { standard=LVCMOS33, drive=4 };
+        // Trigger 1: missing drive on differential INOUT pin.
+        diff_no_drive = { mode=DIFFERENTIAL, standard=LVDS25 };
+        // Trigger 2: zero drive on differential INOUT pin.
+        diff_zero_drive = { mode=DIFFERENTIAL, standard=LVDS25, drive=0 };
+        // Trigger 3: negative drive on differential INOUT pin.
+        diff_neg_drive = { mode=DIFFERENTIAL, standard=LVDS25, drive=-2 };
+    }
+
+    MAP {
+        sys_clk = 1;
+        led = 2;
+        valid_diff = { P=3, N=4 };
+        valid_single = 5;
+        diff_no_drive = { P=6, N=7 };
+        diff_zero_drive = { P=8, N=9 };
+        diff_neg_drive = { P=10, N=11 };
+    }
+
+    @top TopMod {
+        IN    [1] clk = sys_clk;
+        OUT   [1] data = led;
+        INOUT [1] io_diff = valid_diff;
+        INOUT [1] io_single = valid_single;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN    [1] clk;
+        OUT   [1] data;
+        INOUT [1] io_diff;
+        INOUT [1] io_single;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+        IF (r) {
+            io_diff <= 1'bz;
+            io_single <= 1'b1;
+        } ELSE {
+            io_diff <= 1'b0;
+            io_single <= 1'bz;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

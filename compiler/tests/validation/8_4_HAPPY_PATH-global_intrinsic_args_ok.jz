@@ -1,0 +1,82 @@
+// HAPPY_PATH: Global constants used as arguments to intrinsic operators.
+// Exercises §8.4 Req #4 with globals in runtime-value argument positions for
+// arithmetic, bit-selection, slicing, overwrite, and reduction intrinsics.
+// No diagnostics expected.
+
+@global INTR
+    SRC16  = 16'hA55A;
+    ADD8   = 8'h12;
+    IDX4   = 4'd5;
+    VAL4   = 4'b1100;
+    MASK8  = 8'hF0;
+@endglob
+
+@project HAPPY_PATH_global_intrinsic_args_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] dyn_idx = _;
+        OUT [9] out_sum = _;
+        OUT [1] out_bit = _;
+        OUT [4] out_slice = _;
+        OUT [16] out_patch = _;
+        OUT [1] out_reduce = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        OUT [9] out_sum;
+        OUT [1] out_reduce;
+    }
+    ASYNCHRONOUS {
+        // Valid: global used as arithmetic intrinsic operand.
+        out_sum <= uadd(INTR.ADD8, INTR.MASK8);
+        // Valid: global used as reduction intrinsic argument.
+        out_reduce = reduce_or(INTR.MASK8);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] dyn_idx;
+        OUT [9] out_sum;
+        OUT [1] out_bit;
+        OUT [4] out_slice;
+        OUT [16] out_patch;
+        OUT [1] out_reduce;
+    }
+
+    WIRE {
+        helper_sum    [9];
+        helper_reduce [1];
+    }
+
+    REGISTER {
+        r_bit   [1]  = 1'b0;
+        r_slice [4]  = 4'b0000;
+        r_patch [16] = 16'h0000;
+    }
+
+    @new inst_h Helper {
+        OUT [9] out_sum = helper_sum;
+        OUT [1] out_reduce = helper_reduce;
+    };
+
+    ASYNCHRONOUS {
+        out_sum = helper_sum;
+        out_bit = r_bit;
+        out_slice = r_slice;
+        out_patch = r_patch;
+        out_reduce = helper_reduce;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: globals used as source and index arguments.
+        r_bit <= gbit(INTR.SRC16, INTR.IDX4);
+        // Valid: global used as intrinsic source argument with dynamic index.
+        r_slice <= gslice(INTR.SRC16, dyn_idx, 4);
+        // Valid: globals used as source and value arguments.
+        r_patch <= sslice(INTR.SRC16, dyn_idx, 4, INTR.VAL4);
+    }
+@endmod

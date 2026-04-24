@@ -1,0 +1,39 @@
+// INSTANCE_ARRAY_BUS: Happy path for arrayed @new BUS port bindings.
+
+@project INSTANCE_ARRAY_BUS_instance_array_bus_ok
+    BUS FABRIC_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        OUT [1] observed = _;
+    }
+@endproj
+
+@module BusArrayChild
+    PORT {
+        BUS FABRIC_BUS SOURCE [2] lanes;
+        OUT [1] status;
+    }
+    ASYNCHRONOUS {
+        lanes[0].tx <= 8'h12;
+        lanes[1].tx <= 8'h34;
+        status <= 1'b1;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        OUT [1] observed;
+    }
+
+    @new drivers[2] BusArrayChild {
+        BUS FABRIC_BUS SOURCE [2] lanes = _;
+        OUT [1] status = _;
+    };
+
+    ASYNCHRONOUS {
+        observed <= 1'b0;
+    }
+@endmod

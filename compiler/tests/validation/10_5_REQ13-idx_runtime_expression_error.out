@@ -1,0 +1,2 @@
+File: 10_5_REQ13-idx_runtime_expression_error.jz
+      14:12   error LIT_BARE_INTEGER S2.1 Bare integer literal in runtime expression; use a sized literal (e.g. 4'd1) or lit(width, value)

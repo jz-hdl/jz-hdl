@@ -9,6 +9,322 @@
 #include "rules.h"
 #include "driver_internal.h"
 
+static const JZASTNode *sem_find_global_const_decl_for_observability(
+    const char *qname,
+    const JZBuffer *project_symbols)
+{
+    if (!qname || !project_symbols || !project_symbols->data) return NULL;
+
+    const char *dot = strchr(qname, '.');
+    if (!dot || dot == qname || dot[1] == '\0' || strchr(dot + 1, '.')) {
+        return NULL;
+    }
+
+    char ns[128];
+    size_t ns_len = (size_t)(dot - qname);
+    if (ns_len == 0 || ns_len >= sizeof(ns)) return NULL;
+    memcpy(ns, qname, ns_len);
+    ns[ns_len] = '\0';
+
+    const char *const_name = dot + 1;
+    const JZSymbol *syms = (const JZSymbol *)project_symbols->data;
+    size_t count = project_symbols->len / sizeof(JZSymbol);
+
+    for (size_t i = 0; i < count; ++i) {
+        const JZSymbol *sym = &syms[i];
+        if (!sym->name || sym->kind != JZ_SYM_GLOBAL ||
+            strcmp(sym->name, ns) != 0 || !sym->node ||
+            sym->node->type != JZ_AST_GLOBAL_BLOCK) {
+            continue;
+        }
+
+        for (size_t j = 0; j < sym->node->child_count; ++j) {
+            const JZASTNode *decl = sym->node->children[j];
+            if (decl && decl->type == JZ_AST_CONST_DECL && decl->name &&
+                strcmp(decl->name, const_name) == 0) {
+                return decl;
+            }
+        }
+        break;
+    }
+
+    return NULL;
+}
+
+static int sem_eval_const_expr_u64_for_observability(
+    const JZASTNode *expr,
+    const JZModuleScope *mod_scope,
+    const JZBuffer *project_symbols,
+    unsigned long long *out)
+{
+    if (!expr || !out) return 0;
+
+    switch (expr->type) {
+    case JZ_AST_EXPR_LITERAL: {
+        if (!expr->text) return 0;
+        unsigned value = 0;
+        if (!parse_literal_unsigned_value(expr->text, &value)) {
+            return 0;
+        }
+        *out = (unsigned long long)value;
+        return 1;
+    }
+
+    case JZ_AST_EXPR_IDENTIFIER: {
+        if (!expr->name || !mod_scope) return 0;
+        long long value = 0;
+        if (sem_eval_const_expr_in_module(expr->name,
+                                          mod_scope,
+                                          project_symbols,
+                                          &value) != 0 ||
+            value < 0) {
+            return 0;
+        }
+        *out = (unsigned long long)value;
+        return 1;
+    }
+
+    case JZ_AST_EXPR_QUALIFIED_IDENTIFIER: {
+        if (!expr->name) return 0;
+
+        const JZASTNode *decl =
+            sem_find_global_const_decl_for_observability(expr->name,
+                                                         project_symbols);
+        if (decl && decl->text) {
+            unsigned value = 0;
+            if (parse_literal_unsigned_value(decl->text, &value)) {
+                *out = (unsigned long long)value;
+                return 1;
+            }
+        }
+
+        if (project_symbols) {
+            long long value = 0;
+            if (sem_eval_const_expr_in_project(expr->name,
+                                               project_symbols,
+                                               &value) == 0 &&
+                value >= 0) {
+                *out = (unsigned long long)value;
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    case JZ_AST_EXPR_UNARY: {
+        if (!expr->block_kind || expr->child_count < 1 || !expr->children[0]) {
+            return 0;
+        }
+
+        unsigned long long operand = 0;
+        if (!sem_eval_const_expr_u64_for_observability(expr->children[0],
+                                                       mod_scope,
+                                                       project_symbols,
+                                                       &operand)) {
+            return 0;
+        }
+
+        if (strcmp(expr->block_kind, "LOG_NOT") == 0) {
+            *out = operand ? 0ull : 1ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_NOT") == 0) {
+            *out = ~operand;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "POS") == 0) {
+            *out = operand;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "NEG") == 0) {
+            *out = 0ull - operand;
+            return 1;
+        }
+        return 0;
+    }
+
+    case JZ_AST_EXPR_BINARY: {
+        if (!expr->block_kind || expr->child_count < 2 ||
+            !expr->children[0] || !expr->children[1]) {
+            return 0;
+        }
+
+        unsigned long long lhs = 0;
+        unsigned long long rhs = 0;
+        if (!sem_eval_const_expr_u64_for_observability(expr->children[0],
+                                                       mod_scope,
+                                                       project_symbols,
+                                                       &lhs) ||
+            !sem_eval_const_expr_u64_for_observability(expr->children[1],
+                                                       mod_scope,
+                                                       project_symbols,
+                                                       &rhs)) {
+            return 0;
+        }
+
+        if (strcmp(expr->block_kind, "ADD") == 0) {
+            *out = lhs + rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "SUB") == 0) {
+            *out = lhs - rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "MUL") == 0) {
+            *out = lhs * rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "DIV") == 0) {
+            if (rhs == 0ull) return 0;
+            *out = lhs / rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "MOD") == 0) {
+            if (rhs == 0ull) return 0;
+            *out = lhs % rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "SHL") == 0) {
+            if (rhs >= 64ull) return 0;
+            *out = lhs << rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "SHR") == 0) {
+            if (rhs >= 64ull) return 0;
+            *out = lhs >> rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "ASHR") == 0) {
+            if (rhs >= 64ull) return 0;
+            *out = (unsigned long long)(((long long)lhs) >> rhs);
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LT") == 0) {
+            *out = lhs < rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LE") == 0) {
+            *out = lhs <= rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "GT") == 0) {
+            *out = lhs > rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "GE") == 0) {
+            *out = lhs >= rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "EQ") == 0) {
+            *out = lhs == rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "NEQ") == 0) {
+            *out = lhs != rhs ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_AND") == 0) {
+            *out = lhs & rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_OR") == 0) {
+            *out = lhs | rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "BIT_XOR") == 0) {
+            *out = lhs ^ rhs;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LOG_AND") == 0) {
+            *out = (lhs && rhs) ? 1ull : 0ull;
+            return 1;
+        }
+        if (strcmp(expr->block_kind, "LOG_OR") == 0) {
+            *out = (lhs || rhs) ? 1ull : 0ull;
+            return 1;
+        }
+        return 0;
+    }
+
+    default:
+        return 0;
+    }
+}
+
+static int sem_expr_const_truthy_for_observability(
+    const JZASTNode *expr,
+    const JZModuleScope *mod_scope,
+    const JZBuffer *project_symbols,
+    int *out_known)
+{
+    unsigned long long value = 0;
+    if (out_known) *out_known = 0;
+
+    if (!sem_eval_const_expr_u64_for_observability(expr,
+                                                   mod_scope,
+                                                   project_symbols,
+                                                   &value)) {
+        return 0;
+    }
+
+    if (out_known) *out_known = 1;
+    return value != 0ull;
+}
+
+static int sem_expr_contains_observable_x_literal(
+    const JZASTNode *expr,
+    const JZModuleScope *mod_scope,
+    const JZBuffer *project_symbols)
+{
+    if (!expr) return 0;
+
+    if (expr->type == JZ_AST_EXPR_LITERAL && expr->text) {
+        return sem_literal_has_x_bits(expr->text);
+    }
+
+    if (expr->type == JZ_AST_EXPR_TERNARY && expr->child_count >= 3) {
+        if (sem_expr_contains_observable_x_literal(expr->children[0],
+                                                   mod_scope,
+                                                   project_symbols)) {
+            return 1;
+        }
+
+        int cond_known = 0;
+        int cond_truthy = sem_expr_const_truthy_for_observability(expr->children[0],
+                                                                  mod_scope,
+                                                                  project_symbols,
+                                                                  &cond_known);
+        if (cond_known) {
+            JZASTNode *live_branch = expr->children[cond_truthy ? 1 : 2];
+            return sem_expr_contains_observable_x_literal(live_branch,
+                                                          mod_scope,
+                                                          project_symbols);
+        }
+
+        return sem_expr_contains_observable_x_literal(expr->children[1],
+                                                      mod_scope,
+                                                      project_symbols) ||
+               sem_expr_contains_observable_x_literal(expr->children[2],
+                                                      mod_scope,
+                                                      project_symbols);
+    }
+
+    size_t end = expr->child_count;
+    if (expr->type == JZ_AST_EXPR_SLICE && expr->child_count >= 1) {
+        end = 1;
+    }
+
+    for (size_t i = 0; i < end; ++i) {
+        if (sem_expr_contains_observable_x_literal(expr->children[i],
+                                                   mod_scope,
+                                                   project_symbols)) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void sem_check_runtime_const_config_expr(const JZASTNode *node,
                                                 const JZModuleScope *mod_scope,
                                                 JZDiagnosticList *diagnostics)
@@ -1149,7 +1465,9 @@ static void sem_check_block_expressions_inner(JZASTNode *block,
              * If the RHS expression tree contains any binary literal with 'x'
              * bits, it may not directly feed these sinks.
              */
-            if (sem_expr_contains_x_literal_anywhere(rhs)) {
+            if (sem_expr_contains_observable_x_literal(rhs,
+                                                       mod_scope,
+                                                       project_symbols)) {
                 int has_reg = 0;
                 int has_out_inout = 0;
                 int has_mem = 0;
@@ -1666,9 +1984,11 @@ static void sem_check_feature_cond_recursive(JZASTNode *node,
  * contain x literals, but checking all directions is uniform and safe.
  */
 static void sem_check_instance_bindings_for_x_taint(JZASTNode *mod,
+                                                    const JZModuleScope *mod_scope,
+                                                    const JZBuffer *project_symbols,
                                                     JZDiagnosticList *diagnostics)
 {
-    if (!mod || !diagnostics) return;
+    if (!mod || !mod_scope || !diagnostics) return;
     for (size_t i = 0; i < mod->child_count; ++i) {
         JZASTNode *inst = mod->children[i];
         if (!inst || inst->type != JZ_AST_MODULE_INSTANCE) continue;
@@ -1679,7 +1999,11 @@ static void sem_check_instance_bindings_for_x_taint(JZASTNode *mod,
             if (bind->child_count == 0) continue;
             JZASTNode *rhs = bind->children[0];
             if (!rhs) continue;
-            if (!sem_expr_contains_x_literal_anywhere(rhs)) continue;
+            if (!sem_expr_contains_observable_x_literal(rhs,
+                                                        mod_scope,
+                                                        project_symbols)) {
+                continue;
+            }
 
             JZLocation loc = rhs->loc.line ? rhs->loc : bind->loc;
             char explain[320];
@@ -1763,7 +2087,7 @@ void sem_check_module_expressions(const JZModuleScope *scope,
     }
 
     /* OBS_X_TO_OBSERVABLE_SINK at @new instance port bindings. */
-    sem_check_instance_bindings_for_x_taint(mod, diagnostics);
+    sem_check_instance_bindings_for_x_taint(mod, scope, project_symbols, diagnostics);
 }
 
 void sem_check_expressions(JZASTNode *root,

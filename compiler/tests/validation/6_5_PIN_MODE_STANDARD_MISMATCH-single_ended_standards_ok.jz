@@ -1,0 +1,68 @@
+// HAPPY_PATH: single-ended standards are accepted with mode=SINGLE.
+// Covers the listed non-differential standards for pin-mode compatibility.
+
+@project PIN_MODE_STANDARD_MISMATCH_single_ended_standards_ok
+    IN_PINS {
+        lvttl_in = { standard=LVTTL, mode=SINGLE };
+        lvcmos33_in = { standard=LVCMOS33, mode=SINGLE };
+        lvcmos25_in = { standard=LVCMOS25, mode=SINGLE };
+        lvcmos18_in = { standard=LVCMOS18, mode=SINGLE };
+        lvcmos15_in = { standard=LVCMOS15, mode=SINGLE };
+        lvcmos12_in = { standard=LVCMOS12, mode=SINGLE };
+        pci33_in = { standard=PCI33, mode=SINGLE };
+        sstl25_i_in = { standard=SSTL25_I, mode=SINGLE };
+        sstl25_ii_in = { standard=SSTL25_II, mode=SINGLE };
+        sstl18_i_in = { standard=SSTL18_I, mode=SINGLE };
+        sstl18_ii_in = { standard=SSTL18_II, mode=SINGLE };
+        sstl15_in = { standard=SSTL15, mode=SINGLE };
+        sstl135_in = { standard=SSTL135, mode=SINGLE };
+        hstl18_i_in = { standard=HSTL18_I, mode=SINGLE };
+        hstl18_ii_in = { standard=HSTL18_II, mode=SINGLE };
+        hstl15_i_in = { standard=HSTL15_I, mode=SINGLE };
+        hstl15_ii_in = { standard=HSTL15_II, mode=SINGLE };
+    }
+
+    MAP {
+        lvttl_in = 1;
+        lvcmos33_in = 2;
+        lvcmos25_in = 3;
+        lvcmos18_in = 4;
+        lvcmos15_in = 5;
+        lvcmos12_in = 6;
+        pci33_in = 7;
+        sstl25_i_in = 8;
+        sstl25_ii_in = 9;
+        sstl18_i_in = 10;
+        sstl18_ii_in = 11;
+        sstl15_in = 12;
+        sstl135_in = 13;
+        hstl18_i_in = 14;
+        hstl18_ii_in = 15;
+        hstl15_i_in = 16;
+        hstl15_ii_in = 17;
+    }
+
+    @top TopMod {
+        IN  [1] clk = lvttl_in;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

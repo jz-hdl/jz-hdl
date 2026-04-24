@@ -1,0 +1,71 @@
+// CHECK_INVALID_EXPR_TYPE: parenthesized runtime signal used in @check.
+// S9.4 allows parentheses, but they do not make runtime operands constant.
+// Valid parenthesized CONST arithmetic is included to avoid false positives.
+
+@project CHECK_INVALID_EXPR_TYPE_parenthesized_runtime_signal
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    CONST {
+        DEPTH = 16;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    // Valid: parenthesized CONST arithmetic remains allowed.
+    @check (((DEPTH + 4) / 2) == 10, "parenthesized const ok");
+
+    // Trigger 1: parenthesized runtime signal in @check.
+    @check (((din) + DEPTH) > 0, "parenthesized port in check");
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] data;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    @new inst_a HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        OUT [8] data = _;
+    };
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod

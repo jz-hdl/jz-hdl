@@ -1,0 +1,77 @@
+// HAPPY_PATH: Global constants used as operands to operators.
+// Exercises §8.4 Req #3 with valid unary, binary, shift, comparison, and
+// ternary expressions that consume sized @global values as operator operands.
+// No diagnostics expected.
+
+@global OPS
+    MASK4  = 4'b1010;
+    SHIFT1 = 2'd1;
+    LIMIT4 = 4'd9;
+    FLAG1  = 1'b1;
+@endglob
+
+@project HAPPY_PATH_global_operator_operands_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [4] out_mix = _;
+        OUT [4] out_shift = _;
+        OUT [1] out_cmp = _;
+        OUT [4] out_sel = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [4] din;
+        OUT [4] out_mix;
+        OUT [4] out_shift;
+    }
+    ASYNCHRONOUS {
+        // Valid: globals as binary operator operands.
+        out_mix = din ^ OPS.MASK4;
+        // Valid: global as shift amount operand.
+        out_shift = OPS.MASK4 >> OPS.SHIFT1;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [4] out_mix;
+        OUT [4] out_shift;
+        OUT [1] out_cmp;
+        OUT [4] out_sel;
+    }
+
+    WIRE {
+        helper_mix   [4];
+        helper_shift [4];
+    }
+
+    REGISTER {
+        r_cmp [1] = 1'b0;
+        r_sel [4] = 4'b0000;
+    }
+
+    @new inst_h Helper {
+        IN  [4] din = din;
+        OUT [4] out_mix = helper_mix;
+        OUT [4] out_shift = helper_shift;
+    };
+
+    ASYNCHRONOUS {
+        out_mix = helper_mix;
+        out_shift = helper_shift;
+        out_cmp = r_cmp;
+        out_sel = r_sel;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: global as comparison operand.
+        r_cmp <= (din < OPS.LIMIT4);
+        // Valid: globals in unary and ternary operator operands.
+        r_sel <= OPS.FLAG1 ? (~OPS.MASK4) : din;
+    }
+@endmod

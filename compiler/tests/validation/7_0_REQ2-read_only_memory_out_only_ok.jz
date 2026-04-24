@@ -1,0 +1,57 @@
+// REQ2: Valid §7.0 read-only memory mode using only OUT ports.
+// Exercises power-on initialized MEM with only ASYNC read ports and no write ports.
+
+@project REQ2_read_only_memory_out_only_ok
+    CONFIG {
+        ADDR_W = 4;
+        DATA_W = 8;
+    }
+
+    @top TopMod {
+        IN  [ADDR_W] addr = _;
+        IN  [ADDR_W] helper_addr = _;
+        OUT [DATA_W] data = _;
+        OUT [DATA_W] mirrored = _;
+    }
+@endproj
+
+@module RomHelper
+    PORT {
+        IN  [4] addr;
+        OUT [8] data;
+    }
+
+    MEM(TYPE=DISTRIBUTED) {
+        rom [8] [16] = 8'h3C {
+            OUT rd ASYNC;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = rom.rd[addr];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [4] addr;
+        IN  [4] helper_addr;
+        OUT [8] data;
+        OUT [8] mirrored;
+    }
+
+    MEM(TYPE=DISTRIBUTED) {
+        rom [8] [16] = 8'hA5 {
+            OUT rd ASYNC;
+        };
+    }
+
+    @new helper RomHelper {
+        IN  [4] addr = helper_addr;
+        OUT [8] data = mirrored;
+    };
+
+    ASYNCHRONOUS {
+        data = rom.rd[addr];
+    }
+@endmod

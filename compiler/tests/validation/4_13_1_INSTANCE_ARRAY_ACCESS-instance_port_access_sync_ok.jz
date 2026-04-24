@@ -1,0 +1,48 @@
+// INSTANCE_ARRAY_ACCESS: Happy path for arrayed instance port access in SYNCHRONOUS blocks.
+
+@project INSTANCE_ARRAY_ACCESS_instance_port_access_sync_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module BitChild
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] din;
+        OUT [1] data;
+    }
+    REGISTER {
+        sampled [1] = 1'b0;
+    }
+    @new inst_arr[2] BitChild {
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX];
+        OUT [1] data = _;
+    };
+    ASYNCHRONOUS {
+        data = sampled;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        sampled <= inst_arr[1].data;
+    }
+@endmod

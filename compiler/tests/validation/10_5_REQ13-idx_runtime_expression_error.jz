@@ -1,0 +1,28 @@
+// Req #13: using IDX in a runtime expression must fail after @apply expansion.
+// Valid companion logic is included to avoid unrelated diagnostics.
+
+@project REQ13_idx_runtime_expression_error
+    @top TopMod {
+        IN  [1] src = _;
+        OUT [1] data = _;
+        OUT [1] echo = _;
+    }
+@endproj
+
+@template bad_idx(dst)
+    // Trigger 1: IDX is substituted to a bare integer in a runtime assignment.
+    dst <= IDX;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] src;
+        OUT [1] data;
+        OUT [1] echo;
+    }
+
+    ASYNCHRONOUS {
+        echo <= src;
+        @apply[1] bad_idx(data);
+    }
+@endmod

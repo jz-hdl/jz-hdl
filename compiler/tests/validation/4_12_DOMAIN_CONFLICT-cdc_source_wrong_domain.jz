@@ -1,0 +1,82 @@
+// DOMAIN_CONFLICT: CDC source register used in a SYNCHRONOUS block whose CLK
+// does not match the source clock declared by the CDC entry.
+// Valid source-domain writes and destination-alias reads are included to avoid
+// false positives and isolate the CDC-defined home-domain check.
+
+@project DOMAIN_CONFLICT_cdc_source_wrong_domain
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        OUT [1] out_top = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] helper_out;
+    }
+
+    REGISTER {
+        src_flag [1] = 1'b0;
+        helper_seen [1] = 1'b0;
+        helper_bad [1] = 1'b0;
+    }
+
+    CDC {
+        BIT src_flag (clk_a) => src_sync (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        helper_out = helper_seen ^ helper_bad;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        src_flag <= ~src_flag;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        helper_seen <= src_sync;
+        // Trigger 1: CDC source register read in the wrong SYNCHRONOUS domain.
+        helper_bad <= src_flag;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] out_top;
+    }
+
+    REGISTER {
+        top_src [1] = 1'b0;
+        top_seen [1] = 1'b0;
+        top_bad [1] = 1'b0;
+    }
+
+    CDC {
+        BIT top_src (clk_a) => top_sync (clk_b);
+    }
+
+    @new helper HelperMod {
+        IN  [1] clk_a = clk_a;
+        IN  [1] clk_b = clk_b;
+        OUT [1] helper_out = _;
+    };
+
+    ASYNCHRONOUS {
+        out_top = top_seen ^ top_bad;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        top_src <= ~top_src;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        top_seen <= top_sync;
+        // Trigger 2: CDC source register read in the wrong SYNCHRONOUS domain.
+        top_bad <= top_src;
+    }
+@endmod

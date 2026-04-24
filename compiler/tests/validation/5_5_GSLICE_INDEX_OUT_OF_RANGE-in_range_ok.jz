@@ -1,0 +1,67 @@
+// HAPPY_PATH for GSLICE_INDEX_OUT_OF_RANGE: gslice() with constant indices
+// that are strictly within [0, W) must not trigger the diagnostic in any
+// allowed context (ASYNCHRONOUS RHS, SYNCHRONOUS RHS).
+
+@project GSLICE_INDEX_OUT_OF_RANGE_in_range_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] data = _;
+        OUT [4] out_a = _;
+        OUT [4] out_b = _;
+    }
+@endproj
+
+// Helper module: in-range constant indices across ASYNC and SYNC
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] src;
+        OUT [4] out_a;
+        OUT [4] out_b;
+    }
+    REGISTER {
+        r [4] = 4'd0;
+    }
+    ASYNCHRONOUS {
+        // Valid: index 0 on 8-bit source (min valid).
+        out_a <= gslice(src, 3'd0, 4);
+        out_b = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: index 4 on 8-bit source, still in range for the diagnostic.
+        r <= gslice(src, 3'd4, 4);
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] data;
+        OUT [4] out_a;
+        OUT [4] out_b;
+    }
+    WIRE {
+        ha_a [4];
+        ha_b [4];
+    }
+    REGISTER {
+        r [4] = 4'd0;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [8] src = data;
+        OUT [4] out_a = ha_a;
+        OUT [4] out_b = ha_b;
+    };
+
+    ASYNCHRONOUS {
+        // Valid: mid-range constant index.
+        out_a <= gslice(data, 3'd3, 4);
+        out_b = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: max constant index accepted by the current rule check.
+        r <= gslice(data, 3'd7, 4);
+    }
+@endmod

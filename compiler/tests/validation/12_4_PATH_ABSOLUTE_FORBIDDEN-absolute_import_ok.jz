@@ -1,0 +1,24 @@
+// PATH_ABSOLUTE_FORBIDDEN: --allow-absolute-paths permits absolute imports that
+// still resolve inside the default sandbox root. No diagnostics expected.
+
+@project PATH_ABSOLUTE_FORBIDDEN_absolute_import_ok
+
+    @import "/Users/justinzaun/Development/jz-hdl-dev/compiler/tests/validation/12_4_PATH_SECURITY-valid_lib.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_abs PathSecurityImported {
+        IN  [1] din = clk;
+        OUT [1] dout = data;
+    };
+@endmod

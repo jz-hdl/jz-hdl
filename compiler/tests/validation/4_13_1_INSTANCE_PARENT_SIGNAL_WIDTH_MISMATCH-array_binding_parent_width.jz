@@ -1,0 +1,38 @@
+// INSTANCE_PARENT_SIGNAL_WIDTH_MISMATCH: bound parent signal width must match the instantiated port width.
+// Target diagnostic: INSTANCE_PARENT_SIGNAL_WIDTH_MISMATCH.
+// Non-target diagnostics expected: none. The child port width and the binding
+// width agree; only the parent signal declaration width is mismatched.
+
+@project INSTANCE_PARENT_SIGNAL_WIDTH_MISMATCH_array_binding_parent_width
+    @top TopMod {
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Child
+    PORT {
+        IN  [2] din;
+        OUT [1] data;
+    }
+    ASYNCHRONOUS {
+        data = din[0];
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        OUT [1] data;
+    }
+    WIRE {
+        parent_bus [3];
+    }
+    @new inst_arr[2] Child {
+        // Trigger 1: parent_bus is 3 bits wide, but the instantiated port width is 2.
+        IN  [2] din = parent_bus;
+        OUT [1] data = _;
+    };
+    ASYNCHRONOUS {
+        parent_bus <= 3'b000;
+        data <= 1'b0;
+    }
+@endmod

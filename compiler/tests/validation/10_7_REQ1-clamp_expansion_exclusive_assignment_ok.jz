@@ -1,0 +1,47 @@
+// REQ1: §10.7 example expansion remains subject to normal exclusive
+// assignment analysis. The CLAMP example is valid in a SYNCHRONOUS block
+// when the expanded branches are the only assignments to the target register.
+
+@project REQ1_clamp_expansion_exclusive_assignment_ok
+    CONFIG {
+        WIDTH = 16;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [16] in_val = _;
+        OUT [16] data = _;
+    }
+@endproj
+
+@template CLAMP(val, lo, hi, out)
+    IF (val < lo) {
+        out <= lo;
+    } ELIF (val > hi) {
+        out <= hi;
+    } ELSE {
+        out <= val;
+    }
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [16] in_val;
+        OUT [16] data;
+    }
+
+    REGISTER {
+        counter [16] = 16'h0000;
+    }
+
+    ASYNCHRONOUS {
+        data = counter;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: expanded CLAMP assignments are branch-exclusive and the
+        // only writes to counter on this execution path.
+        @apply CLAMP(in_val, 16'h0004, 16'h0FFF, counter);
+    }
+@endmod
