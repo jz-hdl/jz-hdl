@@ -5,7 +5,7 @@
 @project PATH_ABSOLUTE_FORBIDDEN_allow_absolute_still_sandboxed
 
     // Trigger 1: absolute path remains subject to sandbox validation.
-    @import "/Users/justinzaun/Development/jz-hdl-dev/compiler/tests/path_security_escape_target.jz";
+    @import "__JZ_COMPILER_TESTS_DIR__/path_security_escape_target.jz";
 
     @top TopMod {
         IN  [1] clk = _;

@@ -3,7 +3,7 @@
 
 @project PATH_ABSOLUTE_FORBIDDEN_absolute_import_ok
 
-    @import "/Users/justinzaun/Development/jz-hdl-dev/compiler/tests/validation/12_4_PATH_SECURITY-valid_lib.jz";
+    @import "__JZ_VALIDATION_DIR__/12_4_PATH_SECURITY-valid_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

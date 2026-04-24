@@ -68,6 +68,9 @@ for file in "${validation_files[@]}"; do
   rel_path="${file#${ROOT_DIR}/}"
   base_no_ext="${file%.jz}"
   expected_out="${base_no_ext}.out"
+  input_file="${file}"
+  temp_input=""
+  temp_input_dir=""
 
   if [[ ! -f "${expected_out}" ]]; then
     echo "SKIP ${rel_path} (no $(basename "${expected_out}"))"
@@ -83,8 +86,27 @@ for file in "${validation_files[@]}"; do
     12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
     12_4_HAPPY_PATH-textual_normalization_nonexistent_outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
     12_4_REQ11-additional_sandbox_root_ok.jz) extra_flags+=(--allow-traversal "--sandbox-root=${ROOT_DIR}/tests") ;;
-    12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz) extra_flags+=(--allow-absolute-paths) ;;
-    12_4_PATH_ABSOLUTE_FORBIDDEN-absolute_import_ok.jz) extra_flags+=(--allow-absolute-paths) ;;
+    12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz)
+      extra_flags+=(--allow-absolute-paths)
+      temp_input_dir="$(mktemp -d "${VALIDATION_DIR}/.allow_absolute_still_sandboxed.XXXXXX")"
+      temp_input="${temp_input_dir}/$(basename "${file}")"
+      if ! sed "s|__JZ_COMPILER_TESTS_DIR__|${ROOT_DIR}/tests|g" "${file}" > "${temp_input}"; then
+        rm -rf "${temp_input_dir}"
+        echo "error: failed to materialize ${rel_path}" >&2
+        exit 1
+      fi
+      input_file="${temp_input}"
+      ;;
+    12_4_PATH_ABSOLUTE_FORBIDDEN-absolute_import_ok.jz)
+      extra_flags+=(--allow-absolute-paths)
+      temp_input="$(mktemp "${VALIDATION_DIR}/.absolute_import_ok.XXXXXX.jz")"
+      if ! sed "s|__JZ_VALIDATION_DIR__|${VALIDATION_DIR}|g" "${file}" > "${temp_input}"; then
+        rm -f "${temp_input}"
+        echo "error: failed to materialize ${rel_path}" >&2
+        exit 1
+      fi
+      input_file="${temp_input}"
+      ;;
     12_4_PATH_TRAVERSAL_FORBIDDEN-traversal_import_ok.jz) extra_flags+=(--allow-traversal) ;;
   esac
 
@@ -107,10 +129,16 @@ for file in "${validation_files[@]}"; do
   # diagnostics and/or non-zero exit codes, so we do not treat a non-zero status
   # as a test failure by itself.
   if [[ -n "${tmp_artifact}" ]]; then
-    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_artifact}" "${file}" >"${tmp_out}" 2>&1 || true
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_artifact}" "${input_file}" >"${tmp_out}" 2>&1 || true
     rm -f "${tmp_artifact}"
   else
-    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} "${file}" >"${tmp_out}" 2>&1 || true
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} "${input_file}" >"${tmp_out}" 2>&1 || true
+  fi
+  if [[ -n "${temp_input}" ]]; then
+    rm -f "${temp_input}"
+  fi
+  if [[ -n "${temp_input_dir}" ]]; then
+    rm -rf "${temp_input_dir}"
   fi
 
   if diff -u "${expected_out}" "${tmp_out}" > /dev/null; then
