@@ -1,5 +1,5 @@
 // This Verilog was transpiled from JZ-HDL.
-// jz-hdl version: jz-hdl 0.1 (prototype)
+// jz-hdl version: Version 0.1.7 (da930e3)
 // Intended for use with yosys.
 
 `default_nettype none
@@ -36,6 +36,7 @@ module slice_demo (
     reg [31:0] wide_reg;
     reg gbit_result;
     reg [3:0] gslice_result;
+    reg [7:0] sbit_src;
     reg [7:0] sbit_result;
     reg [15:0] sslice_result;
     reg [15:0] lhs_target;
@@ -71,7 +72,8 @@ module slice_demo (
         mem_out = test_mem[mem_addr];
         gbit_result = ((\input  >> select[0]) & 1'b1);
         gslice_result = ((\input  >> (select * 4)) & {4{1'b1}});
-        sbit_result = ((\input  & ~(8'b00000001 << 2'b00)) | (({8{1'b1}} & (8'b00000001 << 2'b00))));
+        sbit_src = \input ;
+        sbit_result = ((sbit_src & ~(8'b00000001 << 2'b00)) | (({8{1'b1}} & (8'b00000001 << 2'b00))));
         sslice_result = ((lhs_target & ~({16{1'b1}} << 3'b000)) | (({{12{1'b0}}, 4'b1111}) << 3'b000) & ({16{1'b1}} << 3'b000));
         expr_slice_hi = (((\input  + 8'b00010000) >> 4) & {4{1'b1}});
         expr_slice_lo = (((\input  + 8'b00010000) >> 0) & {4{1'b1}});

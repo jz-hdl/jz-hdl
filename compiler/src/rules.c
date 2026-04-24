@@ -8,6 +8,14 @@
  *   WARN   -> JZ_RULE_MODE_WRN
  *   IGNORE -> JZ_RULE_MODE_WRN (still present in the table but may be
  *              suppressed by higher-level policy).
+ *
+ * Rule priorities are consumed by diagnostic.c only:
+ *   - at the same file/line/column, higher-priority diagnostics sort first
+ *   - at the same file+line, only the line's highest-priority diagnostics are
+ *     printed, plus the highest-priority errors so a warning cannot hide all
+ *     errors on that line
+ * They do not change severity and they do not suppress diagnostics on other
+ * source lines.
  */
 
 /* ASSIGN_CONCAT_WIDTH_MISMATCH > ASSIGN_WIDTH_NO_MODIFIER > WIDTH_ASSIGN_MISMATCH_NO_EXT */
@@ -57,6 +65,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_CONCAT",     0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in concatenations" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_SLICED",        0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not be sliced or indexed" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_INDEX",      0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in slice/index expressions" },
+    { "OPERATORS_AND_EXPRESSIONS", "SBIT_INVALID_SOURCE",         0, JZ_RULE_MODE_ERR, "S5.5.7 sbit() first argument (source) must be a readable WIRE or REGISTER" },
     { "OPERATORS_AND_EXPRESSIONS", "SBIT_SET_WIDTH_NOT_1",        0, JZ_RULE_MODE_ERR, "S5.5.7 sbit() third argument (set) must be a width-1 expression" },
     { "OPERATORS_AND_EXPRESSIONS", "GBIT_INDEX_OUT_OF_RANGE",     0, JZ_RULE_MODE_ERR, "S5.5.6 gbit() index is out of range for source width" },
     { "OPERATORS_AND_EXPRESSIONS", "SBIT_INDEX_OUT_OF_RANGE",     0, JZ_RULE_MODE_ERR, "S5.5.7 sbit() index is out of range for source width" },

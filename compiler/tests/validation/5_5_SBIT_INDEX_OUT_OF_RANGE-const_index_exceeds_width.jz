@@ -19,17 +19,21 @@
         OUT [8] out_a;
         OUT [8] out_b;
     }
+    WIRE {
+        src_w [8];
+    }
     REGISTER {
         r [8] = 8'd0;
     }
     ASYNCHRONOUS {
+        src_w = src;
         // Trigger 1: sbit() index 8 on 8-bit source in helper ASYNC
-        out_a <= sbit(src, 4'd8, 1'b1);
+        out_a <= sbit(src_w, 4'd8, 1'b1);
         out_b = r;
     }
     SYNCHRONOUS(CLK=clk) {
         // Trigger 2: sbit() index 8 in helper SYNC
-        r <= sbit(src, 4'd8, 1'b1);
+        r <= sbit(src_w, 4'd8, 1'b1);
     }
 @endmod
 
@@ -41,6 +45,7 @@
         OUT [8] out_b;
     }
     WIRE {
+        src_w [8];
         ha_a [8];
         ha_b [8];
     }
@@ -56,12 +61,13 @@
     };
 
     ASYNCHRONOUS {
+        src_w = data;
         // Trigger 3: sbit() index 8 in top ASYNC
-        out_a <= sbit(data, 4'd8, 1'b1);
+        out_a <= sbit(src_w, 4'd8, 1'b1);
         out_b = r;
     }
     SYNCHRONOUS(CLK=clk) {
         // Trigger 4: sbit() index 8 in top SYNC
-        r <= sbit(data, 4'd8, 1'b1);
+        r <= sbit(src_w, 4'd8, 1'b1);
     }
 @endmod

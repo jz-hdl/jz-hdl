@@ -290,6 +290,22 @@ static int sem_lit_eval_const_expr(const JZASTNode *expr,
     return rc;
 }
 
+static int sem_sbit_source_is_valid(const JZASTNode *expr,
+                                    const JZModuleScope *mod_scope)
+{
+    if (!expr || !mod_scope) return 0;
+    if (expr->type != JZ_AST_EXPR_IDENTIFIER || !expr->name) {
+        return 0;
+    }
+
+    const JZSymbol *sym = module_scope_lookup(mod_scope, expr->name);
+    if (!sym) {
+        return 1;
+    }
+
+    return sym->kind == JZ_SYM_WIRE || sym->kind == JZ_SYM_REGISTER;
+}
+
 static void infer_identifier_type(JZASTNode *node,
                                   const JZModuleScope *mod_scope,
                                   const JZBuffer *project_symbols,
@@ -1027,6 +1043,14 @@ void infer_expr_type(JZASTNode *expr,
         if (strcmp(fname, "sbit") == 0) {
             if (expr->child_count < 3) return;
             JZBitvecType src_t, idx_t, set_t;
+
+            if (diagnostics && !sem_sbit_source_is_valid(expr->children[0], mod_scope)) {
+                sem_report_rule(diagnostics,
+                                expr->children[0]->loc,
+                                "SBIT_INVALID_SOURCE",
+                                "sbit() first argument (source) must be a readable WIRE or REGISTER");
+            }
+
             infer_expr_type(expr->children[0], mod_scope, project_symbols, diagnostics, &src_t);
             infer_expr_type(expr->children[1], mod_scope, project_symbols, diagnostics, &idx_t);
             infer_expr_type(expr->children[2], mod_scope, project_symbols, diagnostics, &set_t);

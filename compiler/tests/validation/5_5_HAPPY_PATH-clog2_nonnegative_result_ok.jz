@@ -1,7 +1,7 @@
-// HAPPY_PATH: Req #4 — clog2() returns a nonnegative integer `w`.
+// HAPPY_PATH: Req #4 and Req #6 for §5.5.5 clog2().
 // Uses @check to assert the result is >= 0 across a range of positive
 // arguments including the smallest positive value, powers of two, and
-// non-power-of-two values.
+// non-power-of-two values, and that clog2(1) specifically evaluates to 1.
 
 @project HAPPY_PATH_clog2_nonnegative_result_ok
     @top TopMod {
@@ -29,6 +29,8 @@
     @check (W_255  >= 0, "clog2(255) must be nonnegative");
     @check (W_256  >= 0, "clog2(256) must be nonnegative");
     @check (W_1024 >= 0, "clog2(1024) must be nonnegative");
+    // Req #6: value == 1 must produce 1, not 0.
+    @check (W_1 == 1, "clog2(1) must equal 1");
 
     PORT {
         IN  [1] clk;

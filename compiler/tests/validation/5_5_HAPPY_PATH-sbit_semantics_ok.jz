@@ -36,24 +36,29 @@
         OUT [8] out_replace;
     }
 
+    WIRE {
+        src_w [8];
+    }
+
     REGISTER {
         r_src [8] = 8'h00;
     }
 
     ASYNCHRONOUS {
+        src_w = src8;
         // Req #7: 2-bit index < clog2(8)=3, implicit zero-extend allowed.
-        out_narrow = sbit(src8, narrow, bitval);
+        out_narrow = sbit(src_w, narrow, bitval);
         // Req #10: 5-bit index > clog2(8)=3, high bits may encode values
         //          >= 8 at runtime; allowed, the bit write is ignored.
-        out_wide   = sbit(src8, wide, bitval);
+        out_wide   = sbit(src_w, wide, bitval);
         // Req #11/#12: sbit used purely combinationally in ASYNCHRONOUS RHS
         //              with no register storage, replacing one bit of source.
-        out_replace <= sbit(src8, 3'd3, 1'b1);
+        out_replace <= sbit(src_w, 3'd3, 1'b1);
         out_combo  = r_src;
     }
 
     SYNCHRONOUS(CLK=clk) {
         // Req #7: narrower index feeding a register path.
-        r_src <= sbit(src8, narrow, bitval);
+        r_src <= sbit(src_w, narrow, bitval);
     }
 @endmod

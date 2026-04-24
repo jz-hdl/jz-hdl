@@ -191,8 +191,8 @@
         r_smax <= smax(din, din);
         // Valid: gbit(8, 3-bit idx) -> 1 bit
         r_gbit <= gbit(din, narrow_in[2:0]);
-        // Valid: sbit(8, 3-bit idx, 1-bit val) -> 8 bits
-        r_sbit <= sbit(din, narrow_in[2:0], 1'b1);
+        // Valid: sbit(register, 3-bit idx, 1-bit val) -> 8 bits
+        r_sbit <= sbit(r_sbit, narrow_in[2:0], 1'b1);
         // Valid: gslice(16, 4-bit idx, W=4) -> 4 bits
         r_gslice <= gslice(wide_in, narrow_in, 4);
         // Valid: sslice(16, 4-bit idx, W=4, 4-bit val) -> 16 bits

@@ -19,17 +19,21 @@
         OUT [8] out_a;
         OUT [8] out_b;
     }
+    WIRE {
+        src_w [8];
+    }
     REGISTER {
         r [8] = 8'd0;
     }
     ASYNCHRONOUS {
+        src_w = src;
         // Valid: index 0 on 8-bit source (min valid).
-        out_a <= sbit(src, 3'd0, 1'b1);
+        out_a <= sbit(src_w, 3'd0, 1'b1);
         out_b = r;
     }
     SYNCHRONOUS(CLK=clk) {
         // Valid: index 7 on 8-bit source (max valid).
-        r <= sbit(src, 3'd7, 1'b0);
+        r <= sbit(src_w, 3'd7, 1'b0);
     }
 @endmod
 
@@ -41,6 +45,7 @@
         OUT [8] out_b;
     }
     WIRE {
+        src_w [8];
         ha_a [8];
         ha_b [8];
     }
@@ -56,12 +61,13 @@
     };
 
     ASYNCHRONOUS {
+        src_w = data;
         // Valid: mid-range constant index.
-        out_a <= sbit(data, 3'd3, 1'b1);
+        out_a <= sbit(src_w, 3'd3, 1'b1);
         out_b = r;
     }
     SYNCHRONOUS(CLK=clk) {
         // Valid: max in-range index.
-        r <= sbit(data, 3'd7, 1'b0);
+        r <= sbit(src_w, 3'd7, 1'b0);
     }
 @endmod
