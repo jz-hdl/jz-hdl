@@ -978,59 +978,11 @@ static void emit_diff_from_template(FILE *out,
     }
 }
 
-/* Find the data width of the top module signal bound to a pin/bit.
- * Returns 0 if no binding found. */
-static int find_signal_width_for_pin(const IR_Design *design,
-                                      const IR_Project *proj,
-                                      int pin_idx, int pin_bit)
-{
-    if (!design || !proj) return 0;
-    const IR_Module *top_mod = NULL;
-    if (proj->top_module_id >= 0 && proj->top_module_id < design->num_modules) {
-        top_mod = &design->modules[proj->top_module_id];
-    }
-    if (!top_mod) return 0;
-
-    for (int t = 0; t < proj->num_top_bindings; ++t) {
-        const IR_TopBinding *tb = &proj->top_bindings[t];
-        if (tb->pin_id == pin_idx && tb->pin_bit_index == pin_bit) {
-            /* Found the binding - look up the signal width */
-            for (int s = 0; s < top_mod->num_signals; ++s) {
-                if (top_mod->signals[s].id == tb->top_port_signal_id) {
-                    return top_mod->signals[s].width;
-                }
-            }
-        }
-    }
-    /* Try scalar binding (pin_bit_index == -1) */
-    for (int t = 0; t < proj->num_top_bindings; ++t) {
-        const IR_TopBinding *tb = &proj->top_bindings[t];
-        if (tb->pin_id == pin_idx && tb->pin_bit_index == -1) {
-            for (int s = 0; s < top_mod->num_signals; ++s) {
-                if (top_mod->signals[s].id == tb->top_port_signal_id) {
-                    return top_mod->signals[s].width;
-                }
-            }
-        }
-    }
-    return 0;
-}
-
-/* Check if a differential pin needs a serializer.
- * A serializer is needed when at least one serialization clock is present.
- * Which clocks are required is chip-specific (validated by the semantic pass). */
-static int pin_needs_serializer(const IR_Pin *pin)
-{
-    if (!pin) return 0;
-    int has_fclk = pin->fclk_name && pin->fclk_name[0] != '\0';
-    int has_pclk = pin->pclk_name && pin->pclk_name[0] != '\0';
-    return has_fclk || has_pclk;
-}
-
-
 void emit_project_wrapper(FILE *out, const IR_Design *design,
                           JZDiagnosticList *diagnostics)
 {
+    (void)diagnostics;
+
     if (!out || !design || !design->project) {
         return;
     }
@@ -1420,8 +1372,7 @@ void emit_project_wrapper(FILE *out, const IR_Design *design,
         const char *name = pin->name ? pin->name : "jz_pin";
 
         if (pin->kind == PIN_OUT) {
-            int has_any_ser = have_proj_chip && jz_chip_diff_serializer_ratio(&proj_chip_data) > 0;
-            int needs_ser = pin_needs_serializer(pin) && has_any_ser;
+            int needs_ser = pin->diff_out_uses_serializer;
 
             for (int bit = 0; bit < pin->width; ++bit) {
                 char suffix[32];
@@ -1442,32 +1393,13 @@ void emit_project_wrapper(FILE *out, const IR_Design *design,
                 }
 
                 if (needs_ser) {
-                    /* Determine actual data width: prefer pin's width= attribute,
-                     * then top module signal width, then chip default. */
-                    int data_width = pin->ser_width > 0 ? pin->ser_width
-                                   : find_signal_width_for_pin(design, proj, i, bit);
-                    if (data_width <= 0) data_width = jz_chip_diff_serializer_ratio(&proj_chip_data);
-
-                    /* Find best serializer with ratio >= data_width */
-                    int sel_ratio = jz_chip_diff_best_serializer_ratio(&proj_chip_data, data_width);
+                    int sel_ratio = pin->diff_out_serializer_ratio;
                     const char *sel_template = sel_ratio > 0
-                        ? jz_chip_diff_best_serializer_map(&proj_chip_data, data_width, "verilog-2005")
+                        ? jz_chip_diff_best_serializer_map(&proj_chip_data, sel_ratio, "verilog-2005")
                         : NULL;
 
                     if (sel_ratio <= 0 || !sel_template) {
-                        /* No serializer supports this width - ERROR */
                         if (!sel_template) sel_template = fallback_oser;
-                        if (diagnostics) {
-                            JZLocation loc = {0};
-                            char msg[256];
-                            int max_ratio = jz_chip_diff_max_serializer_ratio(&proj_chip_data);
-                            snprintf(msg, sizeof(msg),
-                                     "Port width %d exceeds maximum serializer ratio %d for pin %s%s",
-                                     data_width, max_ratio, name, suffix);
-                            jz_diagnostic_report(diagnostics, loc, JZ_SEVERITY_ERROR,
-                                                 "SERIALIZER_WIDTH_EXCEEDS_RATIO", msg);
-                        }
-                        /* Fall back to largest available */
                         sel_ratio = jz_chip_diff_max_serializer_ratio(&proj_chip_data);
                         if (sel_ratio <= 0) sel_ratio = 10; /* ultimate fallback */
                         sel_template = jz_chip_diff_best_serializer_map(&proj_chip_data, 1, "verilog-2005");
@@ -1475,17 +1407,6 @@ void emit_project_wrapper(FILE *out, const IR_Design *design,
                     }
 
                     int wire_width = sel_ratio;
-
-                    /* Emit INFO when selected ratio differs from data width */
-                    if (diagnostics && sel_ratio != data_width) {
-                        JZLocation loc = {0};
-                        char msg[256];
-                        snprintf(msg, sizeof(msg),
-                                 "Pin %s%s: using %d:1 serializer for %d-bit data",
-                                 name, suffix, sel_ratio, data_width);
-                        jz_diagnostic_report(diagnostics, loc, JZ_SEVERITY_NOTE,
-                                             "INFO_SERIALIZER_CASCADE", msg);
-                    }
 
                     /* Intermediate wire from top module → serializer */
                     char diff_wire[128], ser_wire[128];

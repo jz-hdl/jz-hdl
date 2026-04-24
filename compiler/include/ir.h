@@ -719,6 +719,10 @@ typedef struct IR_Pin {
     char      *pclk_name; /**< Parallel data clock name; NULL if none. */
     char      *reset_name; /**< Reset signal name for serializer; NULL if none. */
     int        ser_width;  /**< Serialization width from width= attribute; 0 if unset. */
+    int        diff_out_uses_serializer; /**< Lowered: non-zero when output wrapper must instantiate a serializer. */
+    int        diff_out_data_width; /**< Lowered: logical parallel width for differential output serialization. */
+    int        diff_out_serializer_ratio; /**< Lowered: selected serializer ratio for differential output. */
+    int        diff_out_surplus_lanes; /**< Lowered: extra serializer lanes beyond logical width. */
 } IR_Pin;
 
 /**

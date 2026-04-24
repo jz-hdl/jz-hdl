@@ -1903,6 +1903,11 @@ int jz_ir_build_design(JZASTNode *root,
                         }
                     }
 
+                    p->diff_out_uses_serializer = 0;
+                    p->diff_out_data_width = 0;
+                    p->diff_out_serializer_ratio = 0;
+                    p->diff_out_surplus_lanes = 0;
+
                     ++pi;
                 }
 

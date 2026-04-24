@@ -13,8 +13,7 @@
 #include "sim/sim_waveform.h"
 
 /**
- * Build IR if not already built, apply tristate transform and division guard.
- * Common preamble for most backend modes.
+ * Build IR if not already built, apply shared semantic IR passes.
  * Returns 0 on success, non-zero on failure.
  */
 static int ensure_ir(JZCompiler *compiler, const JZCLIOptions *opts) {
@@ -48,6 +47,23 @@ static int ensure_ir(JZCompiler *compiler, const JZCLIOptions *opts) {
         phase_t0 = clock();
         jz_ir_div_guard_check(compiler->ir_root, &compiler->diagnostics);
         if (opts->verbose) fprintf(stderr, "[verbose] div_guard_check: %.1f ms\n", jz_cli_elapsed_ms(phase_t0));
+    }
+
+    return rc;
+}
+
+static int ensure_backend_ir(JZCompiler *compiler, const JZCLIOptions *opts) {
+    int rc = ensure_ir(compiler, opts);
+    if (rc != 0 || !compiler->ir_root) return rc;
+
+    clock_t phase_t0 = clock();
+    if (jz_ir_differential_lowering(compiler->ir_root,
+                                    &compiler->diagnostics) != 0) {
+        rc = 1;
+    }
+    if (opts->verbose) {
+        fprintf(stderr, "[verbose] differential_lowering: %.1f ms\n",
+                jz_cli_elapsed_ms(phase_t0));
     }
 
     return rc;
@@ -137,7 +153,7 @@ int jz_cli_run_ir_emit(JZCompiler *compiler, const JZCLIOptions *opts) {
 }
 
 int jz_cli_run_verilog(JZCompiler *compiler, const JZCLIOptions *opts) {
-    int rc = ensure_ir(compiler, opts);
+    int rc = ensure_backend_ir(compiler, opts);
     if (rc != 0) return rc;
     if (!compiler->ir_root) return 1;
 
@@ -155,7 +171,7 @@ int jz_cli_run_verilog(JZCompiler *compiler, const JZCLIOptions *opts) {
 }
 
 int jz_cli_run_rtlil(JZCompiler *compiler, const JZCLIOptions *opts) {
-    int rc = ensure_ir(compiler, opts);
+    int rc = ensure_backend_ir(compiler, opts);
     if (rc != 0) return rc;
     if (!compiler->ir_root) return 1;
 

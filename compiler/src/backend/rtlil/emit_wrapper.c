@@ -581,52 +581,6 @@ static int pin_has_diff_mapping(const IR_Project *proj, const IR_Pin *pin)
     return 0;
 }
 
-/* Check if a differential pin needs a serializer.
- * A serializer is needed when at least one serialization clock is present.
- * Which clocks are required is chip-specific (validated by the semantic pass). */
-static int pin_needs_serializer(const IR_Pin *pin)
-{
-    if (!pin) return 0;
-    int has_fclk = pin->fclk_name && pin->fclk_name[0] != '\0';
-    int has_pclk = pin->pclk_name && pin->pclk_name[0] != '\0';
-    return has_fclk || has_pclk;
-}
-
-/* Find the data width of the top module signal bound to a pin/bit. */
-static int find_signal_width_for_pin(const IR_Design *design,
-                                      const IR_Project *proj,
-                                      int pin_idx, int pin_bit)
-{
-    if (!design || !proj) return 0;
-    const IR_Module *top_mod = NULL;
-    if (proj->top_module_id >= 0 && proj->top_module_id < design->num_modules) {
-        top_mod = &design->modules[proj->top_module_id];
-    }
-    if (!top_mod) return 0;
-
-    for (int t = 0; t < proj->num_top_bindings; ++t) {
-        const IR_TopBinding *tb = &proj->top_bindings[t];
-        if (tb->pin_id == pin_idx && tb->pin_bit_index == pin_bit) {
-            for (int s = 0; s < top_mod->num_signals; ++s) {
-                if (top_mod->signals[s].id == tb->top_port_signal_id) {
-                    return top_mod->signals[s].width;
-                }
-            }
-        }
-    }
-    for (int t = 0; t < proj->num_top_bindings; ++t) {
-        const IR_TopBinding *tb = &proj->top_bindings[t];
-        if (tb->pin_id == pin_idx && tb->pin_bit_index == -1) {
-            for (int s = 0; s < top_mod->num_signals; ++s) {
-                if (top_mod->signals[s].id == tb->top_port_signal_id) {
-                    return top_mod->signals[s].width;
-                }
-            }
-        }
-    }
-    return 0;
-}
-
 /* -------------------------------------------------------------------------
  * Project wrapper emission
  * -------------------------------------------------------------------------
@@ -964,8 +918,7 @@ void rtlil_emit_project_wrapper(FILE *out, const IR_Design *design)
         const char *name = pin->name ? pin->name : "jz_pin";
 
         if (pin->kind == PIN_OUT) {
-            int has_any_ser = have_chip_data && jz_chip_diff_serializer_ratio(&chip_data) > 0;
-            int needs_ser = pin_needs_serializer(pin) && has_any_ser;
+            int needs_ser = pin->diff_out_uses_serializer;
 
             for (int bit = 0; bit < pin->width; ++bit) {
                 char suffix[32];
@@ -985,16 +938,9 @@ void rtlil_emit_project_wrapper(FILE *out, const IR_Design *design)
                 }
 
                 if (needs_ser) {
-                    /* Determine actual data width: prefer pin's width= attribute,
-                     * then top module signal width, then chip default. */
-                    int data_width = pin->ser_width > 0 ? pin->ser_width
-                                   : find_signal_width_for_pin(design, proj, i, bit);
-                    if (data_width <= 0) data_width = jz_chip_diff_serializer_ratio(&chip_data);
-
-                    /* Find best serializer with ratio >= data_width */
-                    int sel_ratio = jz_chip_diff_best_serializer_ratio(&chip_data, data_width);
+                    int sel_ratio = pin->diff_out_serializer_ratio;
                     const char *sel_template = sel_ratio > 0
-                        ? jz_chip_diff_best_serializer_map(&chip_data, data_width, "rtlil")
+                        ? jz_chip_diff_best_serializer_map(&chip_data, sel_ratio, "rtlil")
                         : NULL;
 
                     if (sel_ratio <= 0 || !sel_template) {

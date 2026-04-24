@@ -47,6 +47,21 @@ int jz_ir_tristate_transform(IR_Design *design,
                               JZDiagnosticList *diagnostics);
 
 /**
+ * @brief Resolve backend-neutral differential output serializer lowering.
+ *
+ * Computes selected serializer ratios, logical data widths, and surplus
+ * lane counts for differential output pins so backend emitters can
+ * consume pre-lowered metadata instead of re-implementing chip selection.
+ *
+ * @param design       IR design to update in place.
+ * @param diagnostics  Diagnostic list for serializer notes/errors.
+ * @return 0 on success, non-zero if unsupported differential serializer
+ *         widths were found.
+ */
+int jz_ir_differential_lowering(IR_Design *design,
+                                 JZDiagnosticList *diagnostics);
+
+/**
  * @brief Print a post-transform tri-state report from the IR.
  *
  * Shows the state of all signals after the tristate transform pass:
