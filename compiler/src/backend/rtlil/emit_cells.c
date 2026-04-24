@@ -35,6 +35,34 @@ static int signal_width_from_mod(const IR_Module *mod, int signal_id)
  * -------------------------------------------------------------------------
  */
 
+static int append_sigspec_text(char *buf,
+                               size_t buf_size,
+                               size_t *pos,
+                               const char *text)
+{
+    if (!buf || buf_size == 0 || !pos || !text) {
+        return -1;
+    }
+    if (*pos >= buf_size) {
+        buf[buf_size - 1] = '\0';
+        return -1;
+    }
+
+    int written = snprintf(buf + *pos, buf_size - *pos, "%s", text);
+    if (written < 0) {
+        buf[*pos] = '\0';
+        return -1;
+    }
+    if ((size_t)written >= buf_size - *pos) {
+        *pos = buf_size - 1;
+        buf[*pos] = '\0';
+        return -1;
+    }
+
+    *pos += (size_t)written;
+    return 0;
+}
+
 static void make_temp_wire(FILE *out, int width, char *out_sigspec, int sigspec_size)
 {
     int id = rtlil_next_id();
@@ -295,19 +323,29 @@ int rtlil_emit_expr(FILE *out, const IR_Module *mod, const IR_Expr *expr,
     case EXPR_CONCAT: {
         /* RTLIL concat: { sigspec sigspec ... } */
         char result[RTLIL_SIGSPEC_MAX];
-        int pos = 0;
-        pos += snprintf(result + pos, sizeof(result) - (size_t)pos, "{ ");
+        size_t pos = 0;
+        int overflow = append_sigspec_text(result, sizeof(result), &pos, "{ ");
         for (int i = 0; i < expr->u.concat.num_operands; ++i) {
             char child_ss[RTLIL_SIGSPEC_MAX];
             rtlil_emit_expr(out, mod, expr->u.concat.operands[i],
                             child_ss, sizeof(child_ss));
-            if (i > 0) {
-                pos += snprintf(result + pos, sizeof(result) - (size_t)pos, " ");
+            if (i > 0 && overflow == 0) {
+                overflow = append_sigspec_text(result, sizeof(result), &pos, " ");
             }
-            pos += snprintf(result + pos, sizeof(result) - (size_t)pos, "%s", child_ss);
+            if (overflow == 0) {
+                overflow = append_sigspec_text(result, sizeof(result), &pos,
+                                               child_ss);
+            }
         }
-        pos += snprintf(result + pos, sizeof(result) - (size_t)pos, " }");
-        snprintf(out_sigspec, sigspec_size, "%s", result);
+        if (overflow == 0) {
+            overflow = append_sigspec_text(result, sizeof(result), &pos, " }");
+        }
+        if (overflow != 0) {
+            const_val_sigspec(out_sigspec, sigspec_size,
+                              expr->width > 0 ? expr->width : 1, 0);
+        } else {
+            snprintf(out_sigspec, sigspec_size, "%s", result);
+        }
         return 0;
     }
 

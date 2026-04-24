@@ -17,6 +17,34 @@
 /* Forward declarations for TB helpers we reuse */
 extern int parse_tb_wire_block_body_impl(Parser *p, JZASTNode *parent);
 
+static int append_bounded_text(char *buf,
+                               size_t buf_size,
+                               size_t *len,
+                               const char *text)
+{
+    if (!buf || buf_size == 0 || !len || !text) {
+        return -1;
+    }
+    if (*len >= buf_size) {
+        buf[buf_size - 1] = '\0';
+        return -1;
+    }
+
+    int written = snprintf(buf + *len, buf_size - *len, "%s", text);
+    if (written < 0) {
+        buf[*len] = '\0';
+        return -1;
+    }
+    if ((size_t)written >= buf_size - *len) {
+        *len = buf_size - 1;
+        buf[*len] = '\0';
+        return -1;
+    }
+
+    *len += (size_t)written;
+    return 0;
+}
+
 /* ---------- helpers ---------- */
 
 /**
@@ -94,16 +122,31 @@ static int parse_sim_clock_block_body(Parser *p, JZASTNode *parent)
 
             /* Build value string */
             char val_buf[64];
+            size_t val_len = 0;
             val_buf[0] = '\0';
             for (size_t i = val_start; i < val_end; ++i) {
                 const JZToken *vt = &p->tokens[i];
-                if (vt->lexeme) strcat(val_buf, vt->lexeme);
+                if (vt->lexeme &&
+                    append_bounded_text(val_buf, sizeof(val_buf),
+                                        &val_len, vt->lexeme) != 0) {
+                    parser_error(p, "simulation CLOCK parameter value is too long");
+                    return -1;
+                }
             }
 
             /* Append "key=value " to attrs_buf */
             size_t cur_len = strlen(attrs_buf);
-            snprintf(attrs_buf + cur_len, sizeof(attrs_buf) - cur_len,
-                     "%s%s=%s", cur_len > 0 ? " " : "", param_name, val_buf);
+            int written = snprintf(attrs_buf + cur_len,
+                                   sizeof(attrs_buf) - cur_len,
+                                   "%s%s=%s",
+                                   cur_len > 0 ? " " : "",
+                                   param_name,
+                                   val_buf);
+            if (written < 0 ||
+                (size_t)written >= sizeof(attrs_buf) - cur_len) {
+                parser_error(p, "simulation CLOCK attributes are too long");
+                return -1;
+            }
 
             if (strcmp(param_name, "period") == 0) have_period = 1;
 
