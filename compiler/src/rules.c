@@ -494,6 +494,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "REPEAT", "RPT_NO_MATCHING_END",            0, JZ_RULE_MODE_ERR, "RPT-002 @repeat without matching @end" },
     { "REPEAT", "RPT_COUNT_LIMIT_EXCEEDED",       0, JZ_RULE_MODE_ERR, "RPT-003 @repeat count exceeds the configured hard limit" },
     { "REPEAT", "RPT_EXPANDED_SIZE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "RPT-004 @repeat expansion exceeds the configured expanded-size limit" },
+    { "REPEAT", "RPT_INTERNAL",                   0, JZ_RULE_MODE_ERR, "RPT-005 Internal failure during @repeat expansion" },
 
     /* [GENERAL_WARNINGS] */
     { "GENERAL_WARNINGS", "WARN_UNUSED_REGISTER",                   0, JZ_RULE_MODE_WRN, "S8.3 Register is never read or written; remove it if unused" },

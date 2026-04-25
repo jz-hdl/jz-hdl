@@ -63,6 +63,13 @@ static void report_repeat_rule(RepeatExpandContext *ctx,
     jz_diagnostic_report(ctx->diagnostics, loc, JZ_SEVERITY_ERROR, rule_id, message);
 }
 
+static void report_repeat_internal_failure(RepeatExpandContext *ctx,
+                                           const char *at,
+                                           const char *message)
+{
+    report_repeat_rule(ctx, at, "RPT_INTERNAL", message);
+}
+
 static int sb_append_limited(StrBuf *sb,
                              const char *s,
                              size_t n,
@@ -84,6 +91,12 @@ static int sb_append_limited(StrBuf *sb,
         return 1;
     }
 
+    if (sb->len > SIZE_MAX - n - 1) {
+        report_repeat_internal_failure(ctx, limit_at,
+                                       "internal error: @repeat expansion size overflow");
+        return 1;
+    }
+
     needed = sb->len + n + 1;
     while (needed > sb->cap) {
         size_t new_cap = sb->cap ? sb->cap : 4096;
@@ -98,7 +111,11 @@ static int sb_append_limited(StrBuf *sb,
         }
 
         new_data = realloc(sb->data, new_cap);
-        if (!new_data) return 1;
+        if (!new_data) {
+            report_repeat_internal_failure(ctx, limit_at,
+                                           "out of memory during @repeat expansion");
+            return 1;
+        }
         sb->data = new_data;
         sb->cap = new_cap;
     }
@@ -343,7 +360,11 @@ static int expand_region(const char *start,
             StrBuf nested;
 
             sb_init(&nested);
-            if (!nested.data) return 1;
+            if (!nested.data) {
+                report_repeat_internal_failure(ctx, repeat_at,
+                                               "out of memory during @repeat expansion");
+                return 1;
+            }
             if (expand_region(body_start, end_at, ctx, &nested) != 0) {
                 free(nested.data);
                 return 1;
@@ -406,7 +427,11 @@ char *jz_repeat_expand(const char *source,
     size_t src_len = strlen(source);
     StrBuf out;
     sb_init(&out);
-    if (!out.data) return NULL;
+    if (!out.data) {
+        report_repeat_internal_failure(&ctx, source,
+                                       "out of memory during @repeat expansion");
+        return NULL;
+    }
 
     if (expand_region(source, source + src_len, &ctx, &out) != 0) {
         free(out.data);
