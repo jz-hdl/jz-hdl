@@ -16,6 +16,7 @@
 #include "ir_library.h"
 #include "chip_data.h"
 #include "compiler.h"
+#include "../parser/parser_internal.h"
 
 /**
  * @brief Copy a string while trimming leading and trailing whitespace.
@@ -36,6 +37,27 @@ static int ir_override_name_cmp(const void *a, const void *b)
     if (!oa->name) return -1;
     if (!ob->name) return 1;
     return strcmp(oa->name, ob->name);
+}
+
+static const char *ir_resolve_imported_filename(const char *filename)
+{
+    if (!filename || !*filename) return filename;
+    if (strchr(filename, '/')) return filename;
+
+    size_t count = g_imported_filenames_len;
+    if (g_imported_resolved_paths_len < count) {
+        count = g_imported_resolved_paths_len;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (g_imported_filenames[i] &&
+            strcmp(g_imported_filenames[i], filename) == 0 &&
+            g_imported_resolved_paths[i] &&
+            *g_imported_resolved_paths[i]) {
+            return g_imported_resolved_paths[i];
+        }
+    }
+
+    return filename;
 }
 
 static void ir_trim_copy(const char *src, char *dst, size_t dst_size)
@@ -1065,12 +1087,14 @@ int jz_ir_build_design(JZASTNode *root,
                                          */
                                         const char *ov_path = spec->overrides[oi].string_value;
                                         if (ov_path[0] != '/' && mem_decl->loc.filename) {
-                                            const char *sl = strrchr(mem_decl->loc.filename, '/');
+                                            const char *resolved_filename =
+                                                ir_resolve_imported_filename(mem_decl->loc.filename);
+                                            const char *sl = strrchr(resolved_filename, '/');
                                             if (sl) {
-                                                size_t dlen = (size_t)(sl - mem_decl->loc.filename);
+                                                size_t dlen = (size_t)(sl - resolved_filename);
                                                 char rbuf[1024];
                                                 snprintf(rbuf, sizeof(rbuf), "%.*s/%s",
-                                                         (int)dlen, mem_decl->loc.filename, ov_path);
+                                                         (int)dlen, resolved_filename, ov_path);
                                                 char *absp = realpath(rbuf, NULL);
                                                 if (absp) {
                                                     m->init.file_path = ir_strdup_arena(arena, absp);

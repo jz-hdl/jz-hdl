@@ -16,6 +16,7 @@
 
 #include "../../include/ast.h"
 #include "../../include/ir_mem_bind.h"
+#include "../parser/parser_internal.h"
 #include "../sem/driver_internal.h"
 #include "ir_internal.h"
 
@@ -59,6 +60,27 @@ static IR_MemoryPort *ir_find_memory_port_by_name(IR_Memory *mem, const char *po
         }
     }
     return NULL;
+}
+
+static const char *ir_resolve_imported_filename(const char *filename)
+{
+    if (!filename || !*filename) return filename;
+    if (strchr(filename, '/')) return filename;
+
+    size_t count = g_imported_filenames_len;
+    if (g_imported_resolved_paths_len < count) {
+        count = g_imported_resolved_paths_len;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (g_imported_filenames[i] &&
+            strcmp(g_imported_filenames[i], filename) == 0 &&
+            g_imported_resolved_paths[i] &&
+            *g_imported_resolved_paths[i]) {
+            return g_imported_resolved_paths[i];
+        }
+    }
+
+    return filename;
 }
 
 /**
@@ -1003,12 +1025,14 @@ int ir_build_memories_for_module(const JZModuleScope *scope,
                     /* Resolve relative path against the source file's
                      * directory so the backend can open it from any CWD. */
                     if (raw_file_path[0] != '/' && mem_decl->loc.filename) {
-                        const char *slash = strrchr(mem_decl->loc.filename, '/');
+                        const char *resolved_filename =
+                            ir_resolve_imported_filename(mem_decl->loc.filename);
+                        const char *slash = strrchr(resolved_filename, '/');
                         if (slash) {
-                            size_t dir_len = (size_t)(slash - mem_decl->loc.filename);
+                            size_t dir_len = (size_t)(slash - resolved_filename);
                             char rel_buf[1024];
                             snprintf(rel_buf, sizeof(rel_buf), "%.*s/%s",
-                                     (int)dir_len, mem_decl->loc.filename, raw_file_path);
+                                     (int)dir_len, resolved_filename, raw_file_path);
                             char *abs = realpath(rel_buf, NULL);
                             if (abs) {
                                 ir_mem->init.file_path = ir_strdup_arena(arena, abs);

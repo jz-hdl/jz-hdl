@@ -10,6 +10,7 @@
 #include "driver_internal.h"
 #include "chip_data.h"
 #include "path_security.h"
+#include "../parser/parser_internal.h"
 
 /* Provided by driver.c; used here to enforce x-free MEM initialization
  * literals consistent with the Observability Rule and literal semantics.
@@ -92,6 +93,39 @@ static int sem_mem_ext_equals(const char *ext, const char *want)
         ++want;
     }
     return *ext == '\0' && *want == '\0';
+}
+
+static void sem_base_dir_from_filename_resolved(const char *filename,
+                                                char *buf,
+                                                size_t bufsz)
+{
+    const char *path = filename;
+    buf[0] = '\0';
+    if (!path || !*path || bufsz == 0) return;
+
+    if (!strchr(path, '/')) {
+        size_t count = g_imported_filenames_len;
+        if (g_imported_resolved_paths_len < count) {
+            count = g_imported_resolved_paths_len;
+        }
+        for (size_t i = 0; i < count; ++i) {
+            if (g_imported_filenames[i] &&
+                strcmp(g_imported_filenames[i], path) == 0 &&
+                g_imported_resolved_paths[i] &&
+                *g_imported_resolved_paths[i]) {
+                path = g_imported_resolved_paths[i];
+                break;
+            }
+        }
+    }
+
+    const char *slash = strrchr(path, '/');
+    if (!slash) return;
+
+    size_t dir_len = (size_t)(slash - path);
+    if (dir_len >= bufsz) dir_len = bufsz - 1;
+    memcpy(buf, path, dir_len);
+    buf[dir_len] = '\0';
 }
 
 /* Count logical bits in a hex text file: 0-9, A-F, a-f are treated as
@@ -765,16 +799,9 @@ static void sem_check_mem_file_init(JZASTNode *mem,
 
     /* Validate the @file() path against security policy. */
     char base_dir[512];
-    base_dir[0] = '\0';
-    if (mem->loc.filename) {
-        const char *slash = strrchr(mem->loc.filename, '/');
-        if (slash) {
-            size_t dir_len = (size_t)(slash - mem->loc.filename);
-            if (dir_len >= sizeof(base_dir)) dir_len = sizeof(base_dir) - 1;
-            memcpy(base_dir, mem->loc.filename, dir_len);
-            base_dir[dir_len] = '\0';
-        }
-    }
+    sem_base_dir_from_filename_resolved(mem->loc.filename,
+                                        base_dir,
+                                        sizeof(base_dir));
 
     char *validated = jz_path_validate(init_expr->text,
                                         base_dir[0] ? base_dir : NULL,
