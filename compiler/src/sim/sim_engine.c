@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <errno.h>
 #include <math.h>
 #include <math.h>
 
@@ -439,6 +441,27 @@ static int count_bus_signals(const JZASTNode *bus_def) {
     return n;
 }
 
+static int parse_tb_bus_array_count(const JZASTNode *decl, int *out_count) {
+    long arr_count = 1;
+
+    if (decl && decl->width) {
+        errno = 0;
+        arr_count = strtol(decl->width, NULL, 10);
+        if (errno == ERANGE || arr_count > INT_MAX) {
+            fprintf(stderr,
+                    "error: BUS wire '%s' array count exceeds supported size\n",
+                    decl->name ? decl->name : "?");
+            return -1;
+        }
+    }
+
+    if (arr_count <= 0)
+        arr_count = 1;
+
+    *out_count = (int)arr_count;
+    return 0;
+}
+
 /**
  * Unified declaration collector for both @testbench and @simulation.
  * The only difference is the AST node types for clock blocks/decls:
@@ -446,12 +469,18 @@ static int count_bus_signals(const JZASTNode *bus_def) {
  *   - Simulation: JZ_AST_SIM_CLOCK_BLOCK / JZ_AST_SIM_CLOCK_DECL
  * Wire blocks use JZ_AST_TB_WIRE_BLOCK / JZ_AST_TB_WIRE_DECL in both cases.
  */
-static void collect_decls(SimTestState *ts, const JZASTNode *container,
-                           const JZASTNode *root,
-                           JZASTNodeType clock_block_type,
-                           JZASTNodeType clock_decl_type) {
+static int collect_decls(SimTestState *ts, const JZASTNode *container,
+                         const JZASTNode *root,
+                         JZASTNodeType clock_block_type,
+                         JZASTNodeType clock_decl_type) {
     /* Count clocks and wires */
-    int num_clocks = 0, num_wires = 0;
+    size_t num_clocks = 0, num_wires = 0;
+    size_t total = 0;
+    const size_t size_max = (size_t)-1;
+    int idx = 0;
+
+    ts->num_tb_wires = 0;
+    ts->tb_wires = NULL;
 
     for (size_t i = 0; i < container->child_count; i++) {
         const JZASTNode *child = container->children[i];
@@ -459,28 +488,60 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
         if (child->type == clock_block_type) {
             for (size_t j = 0; j < child->child_count; j++)
                 if (child->children[j] &&
-                    child->children[j]->type == clock_decl_type)
+                    child->children[j]->type == clock_decl_type) {
+                    if (num_clocks == (size_t)INT_MAX) {
+                        fprintf(stderr,
+                                "error: too many simulator declarations to allocate\n");
+                        return -1;
+                    }
                     num_clocks++;
+                }
         } else if (child->type == JZ_AST_TB_WIRE_BLOCK) {
             for (size_t j = 0; j < child->child_count; j++) {
                 const JZASTNode *wd = child->children[j];
                 if (!wd || wd->type != JZ_AST_TB_WIRE_DECL) continue;
                 if (wd->block_kind && strcmp(wd->block_kind, "BUS") == 0) {
-                    int arr_count = wd->width ? (int)strtol(wd->width, NULL, 10) : 1;
-                    if (arr_count <= 0) arr_count = 1;
+                    int arr_count = 1;
+                    size_t bus_signals;
+
+                    if (parse_tb_bus_array_count(wd, &arr_count) != 0)
+                        return -1;
+
                     const JZASTNode *bus_def = find_bus_def(root, wd->text);
-                    num_wires += arr_count * count_bus_signals(bus_def);
+                    bus_signals = (size_t)count_bus_signals(bus_def);
+                    if (bus_signals != 0 &&
+                        (size_t)arr_count > (size_max - num_wires) / bus_signals) {
+                        fprintf(stderr,
+                                "error: BUS wire '%s' expands beyond supported allocation size\n",
+                                wd->name ? wd->name : "?");
+                        return -1;
+                    }
+                    num_wires += (size_t)arr_count * bus_signals;
                 } else {
+                    if (num_wires == size_max) {
+                        fprintf(stderr,
+                                "error: too many simulator declarations to allocate\n");
+                        return -1;
+                    }
                     num_wires++;
                 }
             }
         }
     }
 
-    int total = num_clocks + num_wires;
-    ts->num_tb_wires = total;
-    ts->tb_wires = calloc((size_t)(total > 0 ? total : 1), sizeof(SimTbWire));
-    int idx = 0;
+    if (num_clocks > size_max - num_wires || num_clocks + num_wires > (size_t)INT_MAX) {
+        fprintf(stderr, "error: too many simulator declarations to allocate\n");
+        return -1;
+    }
+
+    total = num_clocks + num_wires;
+    ts->num_tb_wires = (int)total;
+    ts->tb_wires = calloc(total > 0 ? total : 1, sizeof(SimTbWire));
+    if (!ts->tb_wires) {
+        fprintf(stderr, "error: failed to allocate simulator declarations\n");
+        ts->num_tb_wires = 0;
+        return -1;
+    }
 
     /* Clocks first */
     for (size_t i = 0; i < container->child_count; i++) {
@@ -489,6 +550,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
         for (size_t j = 0; j < child->child_count; j++) {
             const JZASTNode *decl = child->children[j];
             if (!decl || decl->type != clock_decl_type) continue;
+            if ((size_t)idx >= total) {
+                fprintf(stderr, "error: declaration expansion count mismatch\n");
+                goto fail;
+            }
             ts->tb_wires[idx].name = decl->name;
             ts->tb_wires[idx].width = 1;
             ts->tb_wires[idx].is_clock = 1;
@@ -506,9 +571,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
             if (!decl || decl->type != JZ_AST_TB_WIRE_DECL) continue;
 
             if (decl->block_kind && strcmp(decl->block_kind, "BUS") == 0) {
-                int arr_count = decl->width ? (int)strtol(decl->width, NULL, 10) : 1;
-                if (arr_count <= 0) arr_count = 1;
+                int arr_count = 1;
                 const JZASTNode *bus_def = find_bus_def(root, decl->text);
+                if (parse_tb_bus_array_count(decl, &arr_count) != 0)
+                    goto fail;
                 if (!bus_def) continue;
 
                 for (int ai = 0; ai < arr_count; ai++) {
@@ -516,6 +582,11 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
                         const JZASTNode *bd = bus_def->children[bi];
                         if (!bd || bd->type != JZ_AST_BUS_DECL) continue;
                         int w = parse_width_text(bd->width);
+
+                        if ((size_t)idx >= total) {
+                            fprintf(stderr, "error: declaration expansion count mismatch\n");
+                            goto fail;
+                        }
 
                         char namebuf[128];
                         if (arr_count > 1)
@@ -526,6 +597,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
                                      decl->name, bd->name);
 
                         ts->tb_wires[idx].name = strdup(namebuf);
+                        if (!ts->tb_wires[idx].name) {
+                            fprintf(stderr, "error: failed to allocate simulator wire name\n");
+                            goto fail;
+                        }
                         ts->tb_wires[idx].width = w;
                         ts->tb_wires[idx].is_clock = 0;
                         ts->tb_wires[idx].owns_name = 1;
@@ -535,6 +610,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
                 }
             } else {
                 int w = parse_width_text(decl->width);
+                if ((size_t)idx >= total) {
+                    fprintf(stderr, "error: declaration expansion count mismatch\n");
+                    goto fail;
+                }
                 ts->tb_wires[idx].name = decl->name;
                 ts->tb_wires[idx].width = w;
                 ts->tb_wires[idx].is_clock = 0;
@@ -544,6 +623,17 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
         }
     }
     ts->num_tb_wires = idx; /* actual count after expansion */
+    return 0;
+
+fail:
+    for (int i = 0; i < idx; i++) {
+        if (ts->tb_wires[i].owns_name)
+            free((char *)ts->tb_wires[i].name);
+    }
+    free(ts->tb_wires);
+    ts->tb_wires = NULL;
+    ts->num_tb_wires = 0;
+    return -1;
 }
 
 /* ---- Build port bindings from @new ---- */
@@ -1108,7 +1198,9 @@ static int sim_run_test(const JZASTNode *root,
     ts.test_passed = 1;
 
     /* Collect clocks and wires from the testbench level */
-    collect_decls(&ts, tb_node, root, JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL);
+    if (collect_decls(&ts, tb_node, root,
+                      JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL) != 0)
+        return 1;
 
     /* Find @new instance in this test */
     const JZASTNode *instance_node = NULL;
@@ -1597,7 +1689,9 @@ static int sim_run_simulation(const JZASTNode *root,
     ts.test_passed = 1;
 
     /* Collect clocks and wires */
-    collect_decls(&ts, sim_node, root, JZ_AST_SIM_CLOCK_BLOCK, JZ_AST_SIM_CLOCK_DECL);
+    if (collect_decls(&ts, sim_node, root,
+                      JZ_AST_SIM_CLOCK_BLOCK, JZ_AST_SIM_CLOCK_DECL) != 0)
+        return 1;
 
     /* Find @new instance */
     const JZASTNode *instance_node = NULL;

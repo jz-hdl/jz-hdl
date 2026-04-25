@@ -92,13 +92,19 @@ static void jzw_maybe_commit(JZWWriter *w)
 /**
  * @brief Format a value as a binary string (MSB first).
  */
-static void value_to_binstr(char *buf, uint64_t value, int width)
+static char *value_to_binstr(uint64_t value, int width)
 {
-    for (int i = 0; i < width; i++) {
-        int bit = (width - 1) - i;
-        buf[i] = (value >> bit) & 1 ? '1' : '0';
+    size_t width_u = width > 0 ? (size_t)width : 1;
+    char *buf = malloc(width_u + 1);
+    if (!buf) return NULL;
+
+    for (size_t i = 0; i < width_u; i++) {
+        size_t bit = width_u - 1 - i;
+        int set = (bit < 64U) ? (int)((value >> bit) & 1U) : 0;
+        buf[i] = set ? '1' : '0';
     }
-    buf[width] = '\0';
+    buf[width_u] = '\0';
+    return buf;
 }
 
 /* ---- Public API ---- */
@@ -327,8 +333,11 @@ void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width)
     sig->has_value = 1;
 
     /* Format value as binary string */
-    char buf[65];
-    value_to_binstr(buf, value, width);
+    char *buf = value_to_binstr(value, width);
+    if (!buf) {
+        fprintf(stderr, "JZW: failed to allocate value buffer for width %d\n", width);
+        return;
+    }
 
     if (!w->in_transaction) {
         jzw_begin(w);
@@ -339,6 +348,7 @@ void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width)
     sqlite3_bind_int(w->insert_change, 2, sig_id + 1); /* 1-based */
     sqlite3_bind_text(w->insert_change, 3, buf, -1, SQLITE_TRANSIENT);
     sqlite3_step(w->insert_change);
+    free(buf);
 
     w->batch_count++;
     jzw_maybe_commit(w);

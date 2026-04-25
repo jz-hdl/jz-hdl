@@ -5,6 +5,7 @@
 
 #include "sim_state.h"
 #include "sim_perf.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -211,12 +212,40 @@ static void build_async_chunks(SimContext *ctx) {
 
 SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
                            uint32_t rng_seed) {
+    const int max_sim_width = SIM_VAL_WORDS * 64;
     SimContext *ctx = calloc(1, sizeof(SimContext));
     if (!ctx) return NULL;
 
     ctx->module = module;
     ctx->design = design;
     ctx->rng_state = rng_seed;
+
+    for (int i = 0; i < module->num_signals; i++) {
+        const IR_Signal *sig = &module->signals[i];
+        if (sig->width > max_sim_width) {
+            fprintf(stderr,
+                    "error: signal '%s' width %d exceeds simulator capacity (%d bits)\n",
+                    sig->name ? sig->name : "?",
+                    sig->width,
+                    max_sim_width);
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+    }
+
+    for (int i = 0; i < module->num_memories; i++) {
+        const IR_Memory *mem = &module->memories[i];
+        if (mem->word_width > max_sim_width) {
+            fprintf(stderr,
+                    "error: memory '%s' word width %d exceeds simulator capacity (%d bits)\n",
+                    mem->name ? mem->name : "?",
+                    mem->word_width,
+                    max_sim_width);
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+    }
+
     ctx->num_signals = module->num_signals;
     ctx->signals = calloc((size_t)module->num_signals, sizeof(SimSignalEntry));
 
