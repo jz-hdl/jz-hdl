@@ -134,7 +134,7 @@ static int append_bits_from_value(uint8_t *blob_bytes,
         }
         (*bit_index)++;
     }
-    return -1;
+    return 0;
 }
 
 static int mem_init_ci_char_eq(char a, char b)
