@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <time.h>
@@ -1480,7 +1481,30 @@ void sem_check_module_const_blocks(const JZModuleScope *scope,
                      * 3. Any CONST reachable from itself (adj[i][i]) is in
                      *    a cycle — mark ok[i] = -1.
                      */
-                    int *adj = (int *)calloc(decl_count * decl_count, sizeof(int));
+                    size_t adj_elems = 0;
+                    size_t adj_bytes = 0;
+                    int *adj = NULL;
+                    int adj_overflow = 0;
+
+                    if (decl_count != 0 && decl_count > SIZE_MAX / decl_count) {
+                        adj_overflow = 1;
+                    } else {
+                        adj_elems = decl_count * decl_count;
+                        if (adj_elems > SIZE_MAX / sizeof(int)) {
+                            adj_overflow = 1;
+                        } else {
+                            adj_bytes = adj_elems * sizeof(int);
+                            adj = (int *)calloc(1, adj_bytes);
+                        }
+                    }
+
+                    if (adj_overflow && diagnostics) {
+                        sem_report_rule(
+                            diagnostics,
+                            blk->loc,
+                            "CONST_CYCLE_ANALYSIS_OVERFLOW",
+                            "too many CONST definitions to build the cycle-detection adjacency matrix safely");
+                    }
                     if (adj) {
                         /* Build adjacency matrix. */
                         for (size_t di2 = 0; di2 < decl_count; ++di2) {
@@ -3007,11 +3031,19 @@ int jz_sem_run(JZASTNode *root,
         if (chip_status == JZ_CHIP_LOAD_OK) {
             chip_ptr = &chip;
         } else if (chip_status == JZ_CHIP_LOAD_NOT_FOUND) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "no chip data found for '%s'\n"
-                     "provide a local .json file or use a supported built-in chip name",
-                     root->text);
+            const char *detail = jz_chip_data_last_error();
+            char msg[768];
+            if (detail && detail[0] != '\0') {
+                snprintf(msg, sizeof(msg),
+                         "no chip data found for '%s'\n"
+                         "%s",
+                         root->text, detail);
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "no chip data found for '%s'\n"
+                         "provide a local .json file or use a supported built-in chip name",
+                         root->text);
+            }
             sem_report_rule(diagnostics,
                             root->loc,
                             "PROJECT_CHIP_DATA_NOT_FOUND",

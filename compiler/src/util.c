@@ -1,13 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include "../include/util.h"
+
+static int jz_size_add_checked(size_t a, size_t b, size_t *out)
+{
+    if (!out) return -1;
+    if (a > SIZE_MAX - b) return -1;
+    *out = a + b;
+    return 0;
+}
 
 char *jz_strdup(const char *s) {
     if (!s) return NULL;
     size_t len = strlen(s);
-    char *copy = (char *)malloc(len + 1);
+    size_t alloc_size = 0;
+    if (jz_size_add_checked(len, 1, &alloc_size) != 0) return NULL;
+    char *copy = (char *)malloc(alloc_size);
     if (!copy) return NULL;
     memcpy(copy, s, len + 1);
     return copy;
@@ -28,7 +40,13 @@ char *jz_read_entire_file(const char *filename, size_t *out_size) {
     }
     rewind(f);
 
-    char *buf = (char *)malloc((size_t)len + 1);
+    size_t alloc_size = 0;
+    if (jz_size_add_checked((size_t)len, 1, &alloc_size) != 0) {
+        fclose(f);
+        return NULL;
+    }
+
+    char *buf = (char *)malloc(alloc_size);
     if (!buf) {
         fclose(f);
         return NULL;
@@ -52,6 +70,10 @@ int jz_buf_reserve(JZBuffer *buf, size_t new_cap)
     if (new_cap <= buf->cap) return 0;
     size_t cap = buf->cap ? buf->cap : 16;
     while (cap < new_cap) {
+        if (cap > SIZE_MAX / 2) {
+            cap = new_cap;
+            break;
+        }
         cap *= 2;
     }
     unsigned char *data = (unsigned char *)realloc(buf->data, cap);
@@ -65,9 +87,11 @@ int jz_buf_append(JZBuffer *buf, const void *data, size_t len)
 {
     if (!buf || (!data && len != 0)) return -1;
     if (len == 0) return 0;
-    if (jz_buf_reserve(buf, buf->len + len) != 0) return -1;
+    size_t new_len = 0;
+    if (jz_size_add_checked(buf->len, len, &new_len) != 0) return -1;
+    if (jz_buf_reserve(buf, new_len) != 0) return -1;
     memcpy(buf->data + buf->len, data, len);
-    buf->len += len;
+    buf->len = new_len;
     return 0;
 }
 

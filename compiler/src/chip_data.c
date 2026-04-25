@@ -3,8 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include "chip_data.h"
+#include "path_security.h"
 #include "util.h"
 
 #define JSMN_IMPLEMENTATION
@@ -101,6 +104,7 @@ static char *jz_build_chip_json_path(const char *project_filename,
                                      const char *chip_id)
 {
     if (!chip_id || !chip_id[0]) return NULL;
+    char *base_dir = NULL;
     const char *slash = NULL;
     if (project_filename) {
         slash = strrchr(project_filename, '/');
@@ -111,23 +115,37 @@ static char *jz_build_chip_json_path(const char *project_filename,
     }
 
     const char *dir = ".";
-    size_t dir_len = 1;
     if (slash) {
-        dir = project_filename;
-        dir_len = (size_t)(slash - project_filename);
+        size_t dir_len = (size_t)(slash - project_filename);
+        if (dir_len == 0) {
+            dir = "/";
+        } else {
+            base_dir = (char *)malloc(dir_len + 1);
+            if (!base_dir) return NULL;
+            memcpy(base_dir, project_filename, dir_len);
+            base_dir[dir_len] = '\0';
+            dir = base_dir;
+        }
     }
 
     size_t chip_len = strlen(chip_id);
-    size_t total = dir_len + 1 + chip_len + 5 + 1;
-    char *out = (char *)malloc(total);
-    if (!out) return NULL;
+    if (chip_len > SIZE_MAX - 6) return NULL;
 
-    memcpy(out, dir, dir_len);
-    out[dir_len] = '\0';
-    strcat(out, "/");
-    strcat(out, chip_id);
-    strcat(out, ".json");
-    return out;
+    char *raw = (char *)malloc(chip_len + 6);
+    if (!raw) return NULL;
+
+    memcpy(raw, chip_id, chip_len);
+    memcpy(raw + chip_len, ".json", 6);
+
+    JZLocation loc = {
+        project_filename ? project_filename : "<chip-data>",
+        1,
+        1
+    };
+    char *validated = jz_path_validate(raw, dir, loc, NULL);
+    free(base_dir);
+    free(raw);
+    return validated;
 }
 
 /* Check if chip_id is a prefix of target (case-insensitive).
@@ -2086,12 +2104,18 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
     if (path) {
         json = jz_read_entire_file(path, NULL);
     }
+    if (!json && path == NULL) {
+        jz_chip_set_error("local chip JSON path for '%s' could not be resolved safely", chip_id);
+    }
     if (!json) {
         char *lower = jz_strdup_lower(chip_id);
         if (lower) {
             path_lower = jz_build_chip_json_path(project_filename, lower);
             if (path_lower) {
                 json = jz_read_entire_file(path_lower, NULL);
+            }
+            if (!json && !path_lower) {
+                jz_chip_set_error("local chip JSON path for '%s' could not be resolved safely", chip_id);
             }
         }
         free(lower);
@@ -2105,10 +2129,16 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
         if (!builtin_json) {
             builtin_json = jz_chip_builtin_json(out->chip_id);
         }
+        if (builtin_json) {
+            jz_chip_clear_error();
+        }
     }
 
     const char *json_source = json ? json : builtin_json;
     if (!json_source) {
+        if (!jz_chip_data_last_error()) {
+            jz_chip_set_error("no built-in or local chip JSON found for '%s'", chip_id);
+        }
         jz_chip_data_free(out);
         return JZ_CHIP_LOAD_NOT_FOUND;
     }

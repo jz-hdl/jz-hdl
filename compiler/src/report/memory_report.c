@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include "sem_driver.h"
 #include "chip_data.h"
+#include "path_security.h"
 #include "util.h"
 #include "../sem/driver_internal.h"
 #include "../chip_data_internal.h"
@@ -97,6 +100,7 @@ static char *jz_build_chip_json_path(const char *project_filename,
                                      const char *chip_id)
 {
     if (!chip_id || !chip_id[0]) return NULL;
+    char *base_dir = NULL;
     const char *slash = NULL;
     if (project_filename) {
         slash = strrchr(project_filename, '/');
@@ -107,23 +111,37 @@ static char *jz_build_chip_json_path(const char *project_filename,
     }
 
     const char *dir = ".";
-    size_t dir_len = 1;
     if (slash) {
-        dir = project_filename;
-        dir_len = (size_t)(slash - project_filename);
+        size_t dir_len = (size_t)(slash - project_filename);
+        if (dir_len == 0) {
+            dir = "/";
+        } else {
+            base_dir = (char *)malloc(dir_len + 1);
+            if (!base_dir) return NULL;
+            memcpy(base_dir, project_filename, dir_len);
+            base_dir[dir_len] = '\0';
+            dir = base_dir;
+        }
     }
 
     size_t chip_len = strlen(chip_id);
-    size_t total = dir_len + 1 + chip_len + 5;
-    char *out = (char *)malloc(total);
-    if (!out) return NULL;
+    if (chip_len > SIZE_MAX - 6) return NULL;
 
-    memcpy(out, dir, dir_len);
-    out[dir_len] = '\0';
-    strcat(out, "/");
-    strcat(out, chip_id);
-    strcat(out, ".json");
-    return out;
+    char *raw = (char *)malloc(chip_len + 6);
+    if (!raw) return NULL;
+
+    memcpy(raw, chip_id, chip_len);
+    memcpy(raw + chip_len, ".json", 6);
+
+    JZLocation loc = {
+        project_filename ? project_filename : "<memory-report>",
+        1,
+        1
+    };
+    char *validated = jz_path_validate(raw, dir, loc, NULL);
+    free(base_dir);
+    free(raw);
+    return validated;
 }
 
 static const char *jz_load_chip_json(const char *chip_id,

@@ -92,6 +92,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "CONST_RULES", "CONST_NEGATIVE_OR_NONINT",                    0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST initialized with negative or non-integer value where nonnegative integer required" },
     { "CONST_RULES", "CONST_UNDEFINED_IN_WIDTH_OR_SLICE",           0, JZ_RULE_MODE_ERR, "S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly" },
     { "CONST_RULES", "CONST_CIRCULAR_DEP",                         1, JZ_RULE_MODE_ERR, "S4.3/S7.10 Circular dependency in CONST/CONFIG definitions" },
+    { "CONST_RULES", "CONST_CYCLE_ANALYSIS_OVERFLOW",              0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST cycle analysis exceeds safe adjacency-matrix size limits" },
 
     /* [PORT_WIRE_REGISTER_DECLS] */
     { "PORT_WIRE_REGISTER_DECLS", "PORT_MISSING_WIDTH",             0, JZ_RULE_MODE_ERR, "S4.4/S8.1 Port declaration without mandatory `[N]` width" },
