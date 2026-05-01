@@ -1,0 +1,2 @@
+File: 12_4_TEXTUAL_NORMALIZATION_NONEXISTENT_OUTSIDE_SANDBOX-textual_normalization_nonexistent_outside_sandbox.jz
+       8:5    error PATH_OUTSIDE_SANDBOX S12.2 Resolved path falls outside all permitted sandbox roots

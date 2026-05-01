@@ -1,4 +1,0 @@
-File: 11_5_GND_REQ3-pure_conditions_ok.jz
-      14:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      27:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      49:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

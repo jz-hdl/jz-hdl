@@ -9,7 +9,7 @@
     }
 
     // Trigger 1: @import after CONFIG block (must come before CONFIG)
-    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-import_after_config_lib.jz";
+    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-happy_path_import_after_config_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

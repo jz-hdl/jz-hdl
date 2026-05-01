@@ -5,7 +5,7 @@
 @project IMPORT_FILE_HAS_PROJECT_imported_has_project
 
     // Trigger 1: imported file contains @project
-    @import "6_2_IMPORT_FILE_HAS_PROJECT-imported_has_project_lib.jz";
+    @import "6_2_IMPORT_FILE_HAS_PROJECT-happy_path_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

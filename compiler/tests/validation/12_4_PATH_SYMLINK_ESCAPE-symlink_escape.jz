@@ -4,7 +4,7 @@
 @project PATH_SYMLINK_ESCAPE_symlink_escape
 
     // Trigger 1: symlink target is outside compiler/tests/validation.
-    @import "12_4_PATH_SYMLINK_ESCAPE-escape_lib.jz";
+    @import "12_4_PATH_SYMLINK_ESCAPE-happy_path_escape_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

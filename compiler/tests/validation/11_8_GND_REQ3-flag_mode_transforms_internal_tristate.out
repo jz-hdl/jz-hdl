@@ -1,4 +1,0 @@
-File: 11_8_GND_REQ3-flag_mode_transforms_internal_tristate.jz
-      13:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      26:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      48:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

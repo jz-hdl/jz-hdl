@@ -5,10 +5,10 @@
 @project IMPORT_FILE_MULTIPLE_TIMES_duplicate_import
 
     // Valid: first import of this file
-    @import "6_2_IMPORT_FILE_MULTIPLE_TIMES-duplicate_import_lib.jz";
+    @import "6_2_IMPORT_FILE_MULTIPLE_TIMES-happy_path_lib.jz";
 
     // Trigger 1: same file imported again
-    @import "6_2_IMPORT_FILE_MULTIPLE_TIMES-duplicate_import_lib.jz";
+    @import "6_2_IMPORT_FILE_MULTIPLE_TIMES-happy_path_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

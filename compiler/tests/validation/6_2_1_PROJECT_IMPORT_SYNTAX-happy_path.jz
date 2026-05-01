@@ -1,0 +1,19 @@
+// HAPPY_PATH: Valid @project with immediate @import directives, CONFIG, and @endproj.
+// Covers the canonical §6.2.1 syntax with multiple imports and a top module
+// resolved from an imported file.
+// No diagnostics expected.
+
+@project IMPORT_DIRECTIVE_project_import_syntax_ok
+
+    @import "6_2_1_PROJECT_IMPORT_SYNTAX-happy_path_top_lib.jz";
+    @import "6_2_1_PROJECT_IMPORT_SYNTAX-happy_path_project_import_syntax_helper_lib.jz";
+
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top ImportedTop {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj

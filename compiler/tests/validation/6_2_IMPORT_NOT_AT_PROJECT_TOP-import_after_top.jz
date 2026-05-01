@@ -13,7 +13,7 @@
     }
 
     // Trigger: @import after @top declaration (must come before @top)
-    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-import_after_top_lib.jz";
+    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-happy_path_top_lib.jz";
 
 @endproj
 

@@ -1,4 +1,0 @@
-File: 10_9_REQ2-no_storage_in_templates.jz
-      24:5    error TEMPLATE_FORBIDDEN_DECL S10.4 Declaration blocks (WIRE, REGISTER, etc.) are not allowed inside template body; use @scratch for temporary signals
-      32:5    error TEMPLATE_FORBIDDEN_DECL S10.4 Declaration blocks (WIRE, REGISTER, etc.) are not allowed inside template body; use @scratch for temporary signals
-      40:5    error TEMPLATE_FORBIDDEN_DECL S10.4 Declaration blocks (WIRE, REGISTER, etc.) are not allowed inside template body; use @scratch for temporary signals

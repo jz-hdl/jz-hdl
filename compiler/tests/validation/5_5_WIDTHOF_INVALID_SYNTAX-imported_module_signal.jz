@@ -4,7 +4,7 @@
 
 @project WIDTHOF_INVALID_SYNTAX_imported_module_signal
 
-    @import "5_5_WIDTHOF_INVALID_SYNTAX-imported_module_signal_lib.jz";
+    @import "5_5_WIDTHOF_INVALID_SYNTAX-happy_path_lib.jz";
 
     @top TopMod {
         IN  [1]  clk = _;

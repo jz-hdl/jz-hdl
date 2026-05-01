@@ -5,10 +5,10 @@
 @project IMPORT_FILE_MULTIPLE_TIMES_normalized_path_dup
 
     // Valid: first import of the library file
-    @import "6_2_IMPORT_FILE_MULTIPLE_TIMES-duplicate_import_lib.jz";
+    @import "6_2_IMPORT_FILE_MULTIPLE_TIMES-happy_path_lib.jz";
 
     // Trigger: same file imported via ./ prefix path normalization
-    @import "./6_2_IMPORT_FILE_MULTIPLE_TIMES-duplicate_import_lib.jz";
+    @import "./6_2_IMPORT_FILE_MULTIPLE_TIMES-happy_path_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

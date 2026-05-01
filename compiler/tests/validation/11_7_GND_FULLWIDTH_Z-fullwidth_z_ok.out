@@ -1,0 +1,5 @@
+File: 11_7_GND_FULLWIDTH_Z-fullwidth_z_ok.jz
+      14:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      22:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC
+      31:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      40:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC

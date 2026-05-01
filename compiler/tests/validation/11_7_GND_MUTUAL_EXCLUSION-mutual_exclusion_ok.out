@@ -1,0 +1,5 @@
+File: 11_7_GND_MUTUAL_EXCLUSION-mutual_exclusion_ok.jz
+      14:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      26:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      38:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      60:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

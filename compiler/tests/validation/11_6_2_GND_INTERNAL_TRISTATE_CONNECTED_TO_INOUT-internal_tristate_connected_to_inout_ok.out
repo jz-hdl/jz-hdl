@@ -1,0 +1,3 @@
+File: 11_6_2_GND_INTERNAL_TRISTATE_CONNECTED_TO_INOUT-internal_tristate_connected_to_inout_ok.jz
+      29:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      45:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC

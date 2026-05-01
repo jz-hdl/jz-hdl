@@ -3,7 +3,7 @@
 // Non-target diagnostics: none; the project and imported module are otherwise valid.
 
 @project COMPILE_ERRORS_imported_file_preserves_written_path
-    @import "./12_1_COMPILE_ERRORS-imported_file_preserves_written_path_lib.jz";
+    @import "./12_1_COMPILE_ERRORS-happy_path_imported_file_preserves_written_path_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

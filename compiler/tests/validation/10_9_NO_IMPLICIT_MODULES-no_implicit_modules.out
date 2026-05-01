@@ -1,0 +1,2 @@
+File: 10_9_NO_IMPLICIT_MODULES-no_implicit_modules.jz
+      17:5    error TEMPLATE_FORBIDDEN_DIRECTIVE S10.4 Structural directives (@new, @module, @feature, etc.) are not allowed inside template body

@@ -1,0 +1,2 @@
+File: 11_1_DEFAULT_ALLOWS_Z-default_allows_z_ok.jz
+      28:9    warn  WARN_INTERNAL_TRISTATE S11 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC

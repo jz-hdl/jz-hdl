@@ -1156,7 +1156,7 @@ _None._
 |---------|---------|------|
 | DIRECTIVE_INVALID_CONTEXT | @endmod inside module body | 4_1_DIRECTIVE_INVALID_CONTEXT-endmod_in_body.jz |
 | DUPLICATE_BLOCK | same clock with different EDGE/RESET params | 4_1_DUPLICATE_BLOCK-same_clock_different_params.jz |
-| MODULE_PORT_IN_ONLY | INOUT-only module (negative test) | 4_1_MODULE_PORT_IN_ONLY-inout_only_ok.jz |
+| MODULE_PORT_IN_ONLY | INOUT-only module (negative test) | 4_1_MODULE_PORT_IN_ONLY_INOUT_ONLY-happy_path.jz |
 
 ### Skipped Files
 | Rule ID | Recommended filename | Reason |
@@ -1543,7 +1543,7 @@ _None._
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
 | MUX_NAME_DUPLICATE | 4_6_MUX_NAME_DUPLICATE-dup_instance.jz | rule-not-fired | Compiler fires INSTANCE_NAME_CONFLICT instead of MUX_NAME_DUPLICATE when a MUX name collides with an instance name. Tested both declaration orders (MUX before instance and instance before MUX) — INSTANCE_NAME_CONFLICT always fires. The instance-name checker catches the collision before the MUX-name checker runs. |
-| MUX_AGG_SOURCE_INVALID | 4_6_MUX_AGG_SOURCE_INVALID-output_port_source.jz | rule-not-fired | Compiler does not fire MUX_AGG_SOURCE_INVALID when an output port is used as a MUX aggregation source. Output ports are apparently valid readable signals in module scope for MUX purposes (the module can read the value it is driving). No diagnostic emitted at all. |
+| MUX_AGG_SOURCE_INVALID | 4_6_MUX_AGG_SOURCE_INVALID-happy_path.jz | rule-not-fired | Compiler does not fire MUX_AGG_SOURCE_INVALID when an output port is used as a MUX aggregation source. Output ports are apparently valid readable signals in module scope for MUX purposes (the module can read the value it is driving). No diagnostic emitted at all. |
 
 ### Parser Recovery Findings (for next audit to log)
 _None._
@@ -1574,7 +1574,7 @@ _None._
 ### Skipped Files
 | Rule ID | Recommended filename | Reason |
 |---------|----------------------|--------|
-| REG_HAPPY_PATH | 4_7_REG_HAPPY_PATH-register_ok.jz | already exists — audit recommends updating existing file to add GND/VCC keyword reset contexts, but sweep cannot overwrite existing files |
+| REG_HAPPY_PATH | 4_7_REG_REGISTER-happy_path.jz | already exists — audit recommends updating existing file to add GND/VCC keyword reset contexts, but sweep cannot overwrite existing files |
 
 ### Scaffolding or Compiler Bugs Found
 _None._
@@ -2390,9 +2390,9 @@ _None._
 |---------|---------|------|
 | MEM_BLOCK_MULTI | width-tiling | 7_11_MEM_BLOCK_MULTI-width_tiling.jz |
 | MEM_BLOCK_RESOURCE_EXCEEDED | single module with multiple BLOCK MEMs | 7_11_MEM_BLOCK_RESOURCE_EXCEEDED-single_module_multi_mem.jz |
-| MEM_BLOCK_RESOURCE_EXCEEDED | at-limit boundary (exactly at limit passes) | 7_11_MEM_BLOCK_RESOURCE_EXCEEDED-at_limit_ok.jz |
+| MEM_BLOCK_RESOURCE_EXCEEDED | at-limit boundary (exactly at limit passes) | 7_11_MEM_BLOCK_RESOURCE_EXCEEDED-happy_path.jz |
 | MEM_DISTRIBUTED_RESOURCE_EXCEEDED | single module exceeding capacity | 7_11_MEM_DISTRIBUTED_RESOURCE_EXCEEDED-single_module.jz |
-| MEM_DISTRIBUTED_RESOURCE_EXCEEDED | at-limit boundary | 7_11_MEM_DISTRIBUTED_RESOURCE_EXCEEDED-at_limit_ok.jz |
+| MEM_DISTRIBUTED_RESOURCE_EXCEEDED | at-limit boundary | 7_11_MEM_DISTRIBUTED_RESOURCE_EXCEEDED-happy_path.jz |
 
 ### Skipped Files
 _None._
@@ -2868,7 +2868,7 @@ _None._
 ### Files Created
 | Rule ID | Context | File |
 |---------|---------|------|
-| CHECK_INVALID_EXPR_TYPE | transitive CONST resolution | 9_5_HAPPY_PATH-check_transitive_const_ok.jz |
+| CHECK_INVALID_EXPR_TYPE | transitive CONST resolution | 9_5_CHECK_TRANSITIVE_CONST-happy_path.jz |
 
 ### Skipped Files
 | Rule ID | Recommended filename | Reason |

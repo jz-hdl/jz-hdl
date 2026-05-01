@@ -1,0 +1,2 @@
+File: 1_6_8_OUT_PORT_CONDITIONAL_DRIVE_Z_RELEASE-out_port_conditional_drive_z_release_ok.jz
+      22:17   warn  WARN_INTERNAL_TRISTATE S11 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC

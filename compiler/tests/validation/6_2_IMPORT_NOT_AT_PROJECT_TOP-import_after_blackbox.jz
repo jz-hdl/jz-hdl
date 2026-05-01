@@ -15,7 +15,7 @@
     }
 
     // Trigger: @import after @blackbox declaration (must come before @blackbox)
-    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-import_after_blackbox_lib.jz";
+    @import "6_2_IMPORT_NOT_AT_PROJECT_TOP-happy_path_import_after_blackbox_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

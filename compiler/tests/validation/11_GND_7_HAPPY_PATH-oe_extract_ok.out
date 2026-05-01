@@ -1,4 +1,0 @@
-File: 11_GND_7_HAPPY_PATH-oe_extract_ok.jz
-      14:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      26:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      47:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

@@ -4,10 +4,10 @@
 @project IMPORT_FILE_MULTIPLE_TIMES_case_normalized_dup
 
     // Valid: first import of the library file.
-    @import "6_2_1_IMPORT_FILE_MULTIPLE_TIMES-case_normalized_dup_lib.jz";
+    @import "6_2_1_IMPORT_FILE_MULTIPLE_TIMES-happy_path_case_normalized_dup_lib.jz";
 
     // Trigger 1: same file imported again via a normalized current-directory path.
-    @import "././6_2_1_IMPORT_FILE_MULTIPLE_TIMES-case_normalized_dup_lib.jz";
+    @import "././6_2_1_IMPORT_FILE_MULTIPLE_TIMES-happy_path_case_normalized_dup_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;

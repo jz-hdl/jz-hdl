@@ -3,7 +3,7 @@
 // file's source location in diagnostics.
 
 @project COMPILE_ERRORS_error_in_imported_file
-    @import "12_1_COMPILE_ERRORS-error_in_imported_file_lib.jz";
+    @import "12_1_COMPILE_ERRORS-happy_path_error_in_imported_file_lib.jz";
 
     @top TopMod {
         IN  [1] clk = _;
