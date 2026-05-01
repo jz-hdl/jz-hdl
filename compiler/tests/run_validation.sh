@@ -110,9 +110,14 @@ for file in "${validation_files[@]}"; do
     12_4_PATH_TRAVERSAL_FORBIDDEN-traversal_import_ok.jz) extra_flags+=(--allow-traversal) ;;
   esac
 
-  # Run linter by default; serializer coverage needs backend emission because
-  # those diagnostics are produced while generating wrapper code.
+  # Run linter by default. Filename markers can opt into testbench/simulation
+  # mode, and serializer coverage needs backend emission because those
+  # diagnostics are produced while generating wrapper code.
   cmd_flags=(--info --lint)
+  case "$(basename "${file}")" in
+    *_TMODE_*) cmd_flags=(--test) ;;
+    *_SMODE_*) cmd_flags=(--simulate) ;;
+  esac
   tmp_artifact=""
   case "$(basename "${file}")" in
     misc_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)

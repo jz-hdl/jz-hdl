@@ -1,0 +1,76 @@
+// HAPPY_PATH: @repeat expands before lexing/parsing and substitutes standalone IDX.
+// Covers pre-parser duplication, IDX substitution, nesting, and ignored
+// comment/string occurrences without emitting unrelated diagnostics.
+
+@project repeat_expansion_ok
+    CONFIG {
+        WIDTH = 2;
+    }
+
+    // Valid: @repeat text inside a string literal is not expanded.
+    @check (CONFIG.WIDTH == 2, "@repeat 99 IDX @end stays inside this string");
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] din = _;
+        OUT [2] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] din;
+        OUT [2] data;
+    }
+
+    CONST {
+        WIDTH_OK = CONFIG.WIDTH;
+    }
+
+    // Valid: a second string literal containing @repeat text is also ignored.
+    @check (WIDTH_OK == 2, "module string keeps @repeat 7 IDX @end intact");
+
+    REGISTER {
+        nested_bits [2] = 2'b00;
+        idx_capture [1] = 1'b0;
+    }
+
+    WIRE {
+        expanded_bits [2];
+        IDX_guard     [1];
+    }
+
+    ASYNCHRONOUS {
+        // Valid: @repeat in a comment is ignored by the repeat scanner.
+        // @repeat 123
+        //     expanded_bits[0:0] <= 1'b0;
+        // @end
+
+        // Valid: @repeat duplicates the body twice, and standalone IDX is
+        // substituted before the compiler checks wire drivenness.
+        @repeat 2
+            expanded_bits[IDX:IDX] <= din[IDX:IDX];
+        @end
+
+        @repeat 1
+            IDX_guard <= din[0:0];
+        @end
+
+        data <= nested_bits | {1'b0, idx_capture};
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: nesting is supported, and IDX in an identifier is not
+        // substituted because it is not a whole-word match.
+        @repeat 1
+            @repeat 2
+                nested_bits[IDX:IDX] <= expanded_bits[IDX:IDX];
+            @end
+        @end
+
+        @repeat 1
+            idx_capture <= IDX_guard;
+        @end
+    }
+@endmod

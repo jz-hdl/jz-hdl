@@ -1,0 +1,71 @@
+// DIV_UNGUARDED_RUNTIME_ZERO: `IF (sig <= N) ... ELSE { divide }` proves the
+// divisor is nonzero in the ELSE branch because `sig > N >= 1`.
+
+@project DIV_UNGUARDED_RUNTIME_ZERO_less_equal_else_guard_ok
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] num = _;
+        IN  [8] den = _;
+        OUT [8] out_div = _;
+        OUT [8] out_mod = _;
+    }
+@endproj
+
+@module GuardHelper
+    PORT {
+        IN  [1] clk;
+        IN  [8] num;
+        IN  [8] den;
+        OUT [8] out_div;
+    }
+    REGISTER {
+        r_div [8] = 8'd0;
+    }
+    ASYNCHRONOUS {
+        out_div = r_div;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: ELSE branch proves den > 5, therefore nonzero.
+        IF (den <= 8'd5) {
+            r_div <= 8'd0;
+        } ELSE {
+            r_div <= num / den;
+        }
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] num;
+        IN  [8] den;
+        OUT [8] out_div;
+        OUT [8] out_mod;
+    }
+    WIRE {
+        helper_div [8];
+    }
+    REGISTER {
+        r_mod [8] = 8'd0;
+    }
+
+    @new guard_ok GuardHelper {
+        IN  [1] clk = clk;
+        IN  [8] num = num;
+        IN  [8] den = den;
+        OUT [8] out_div = helper_div;
+    };
+
+    ASYNCHRONOUS {
+        out_div = helper_div;
+        out_mod = r_mod;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: ELSE branch proves den > 0, therefore nonzero.
+        IF (den <= 8'd0) {
+            r_mod <= 8'd0;
+        } ELSE {
+            r_mod <= num % den;
+        }
+    }
+@endmod
