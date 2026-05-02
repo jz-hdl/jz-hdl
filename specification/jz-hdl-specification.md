@@ -256,6 +256,7 @@ These rules apply uniformly to WIREs, OUT ports, INOUT ports, and BUS signals th
 #### 1.6.5 Tri‑State Ports
 - **OUT ports** may assign `z` to release the port.
 - **INOUT ports** may assign `z` to release the port and may be read when released.
+- Only **IN ports** are non-tri-state ports and may not assign `z`.
 - A released port participates in tri‑state resolution with external or peer drivers.
 
 Example:
