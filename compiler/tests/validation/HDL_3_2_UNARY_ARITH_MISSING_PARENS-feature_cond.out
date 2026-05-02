@@ -1,0 +1,3 @@
+File: HDL_3_2_UNARY_ARITH_MISSING_PARENS-feature_cond.jz
+      24:19   error UNARY_ARITH_MISSING_PARENS S3.2/S8.1 Unary arithmetic `-flag`/`+flag` used without required parentheses
+      31:19   error UNARY_ARITH_MISSING_PARENS S3.2/S8.1 Unary arithmetic `-flag`/`+flag` used without required parentheses

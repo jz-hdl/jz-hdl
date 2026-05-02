@@ -1,3 +1,0 @@
-File: 1_2_NET_FLOATING_WITH_SINK-instance_port_binding.jz
-      37:9    error NET_FLOATING_WITH_SINK S1.2/S4.10 Signal is read but never driven (floating net); add a driver or remove the read
-      68:9    error NET_FLOATING_WITH_SINK S1.2/S4.10 Signal is read but never driven (floating net); add a driver or remove the read

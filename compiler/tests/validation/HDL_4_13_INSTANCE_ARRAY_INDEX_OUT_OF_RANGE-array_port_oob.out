@@ -1,0 +1,2 @@
+File: HDL_4_13_INSTANCE_ARRAY_INDEX_OUT_OF_RANGE-array_port_oob.jz
+      36:16   error INSTANCE_ARRAY_INDEX_OUT_OF_RANGE S4.13.1 Instance array port index is outside the declared instance count

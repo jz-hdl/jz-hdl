@@ -1,0 +1,49 @@
+// LIT_DECIMAL_HAS_XZ: z digit in decimal literal, inside @check expression
+// and @feature condition. Covers the check-expr and feature-cond contexts
+// not exercised by HDL_1_6_LIT_DECIMAL_HAS_XZ-z_in_decimal_literal.jz.
+
+@project LIT_DECIMAL_HAS_XZ_z_in_decimal_check_feature
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger 1 (check-expr): z in decimal literal inside @check expression
+    @check (VAL == 8'dz, "z in decimal inside check");
+
+    // Trigger 2 (feature-cond): z in decimal literal inside @feature condition
+    @feature VAL == 8'dz
+        CONST { UNUSED_A = 1; }
+    @else
+        CONST { UNUSED_A = 0; }
+    @endfeat
+
+    @check (UNUSED_A <= 1, "tag ok");
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

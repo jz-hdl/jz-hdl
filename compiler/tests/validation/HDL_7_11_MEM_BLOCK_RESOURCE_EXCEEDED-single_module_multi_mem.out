@@ -1,0 +1,2 @@
+File: HDL_7_11_MEM_BLOCK_RESOURCE_EXCEEDED-single_module_multi_mem.jz
+       6:5    error MEM_BLOCK_RESOURCE_EXCEEDED S7.1/S6.1 Total BLOCK memory usage exceeds chip resources

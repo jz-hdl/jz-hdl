@@ -1,3 +1,0 @@
-File: 8_4_GLOBAL_USED_WHERE_FORBIDDEN-missing_contexts.jz
-      44:13   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)
-      47:14   error FEATURE_EXPR_INVALID_CONTEXT S4.14 Feature guard condition may only reference CONFIG.<name>, module CONST, and literals

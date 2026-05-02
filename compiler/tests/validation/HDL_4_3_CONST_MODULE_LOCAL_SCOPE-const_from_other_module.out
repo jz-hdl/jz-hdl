@@ -1,0 +1,2 @@
+File: HDL_4_3_CONST_MODULE_LOCAL_SCOPE-const_from_other_module.jz
+      52:9    error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly

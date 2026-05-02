@@ -1,0 +1,30 @@
+// IMPORT_DUP_MODULE_OR_BLACKBOX: Imported module name duplicates an imported blackbox.
+// The first import contributes SharedCross as a blackbox; the second import
+// triggers the collision with a module of the same name.
+
+@project IMPORT_DUP_MODULE_OR_BLACKBOX_module_blackbox_cross
+    @import "HDL_6_2_IMPORT_DUP_MODULE_OR_BLACKBOX-module_blackbox_cross_blackbox.jz";
+    @import "HDL_6_2_IMPORT_DUP_MODULE_OR_BLACKBOX-module_blackbox_cross_module.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

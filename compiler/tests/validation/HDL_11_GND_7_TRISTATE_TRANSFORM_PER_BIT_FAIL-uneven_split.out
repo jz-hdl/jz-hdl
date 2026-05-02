@@ -1,0 +1,2 @@
+File: HDL_11_GND_7_TRISTATE_TRANSFORM_PER_BIT_FAIL-uneven_split.jz
+      38:0    error TRISTATE_TRANSFORM_PER_BIT_FAIL S11.7 Per-bit tri-state pattern detected; only full-width z assignments can be transformed

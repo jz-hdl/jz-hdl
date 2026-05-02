@@ -1,5 +1,0 @@
-File: 7_3_MEM_ADDR_WIDTH_TOO_WIDE-wide_address.jz
-      40:16   error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access
-      48:9    error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access
-      83:16   error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access
-      90:28   error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access

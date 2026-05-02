@@ -83,10 +83,10 @@ for file in "${validation_files[@]}"; do
   case "$(basename "${file}")" in
     *_GND_*) extra_flags+=(--tristate-default=GND) ;;
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
-    12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
-    12_4_TEXTUAL_NORMALIZATION_NONEXISTENT_OUTSIDE_SANDBOX-textual_normalization_nonexistent_outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
-    12_4_ADDITIONAL_SANDBOX_ROOT-happy_path.jz) extra_flags+=(--allow-traversal "--sandbox-root=${ROOT_DIR}/tests") ;;
-    12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz)
+    HDL_12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    HDL_12_4_TEXTUAL_NORMALIZATION_NONEXISTENT_OUTSIDE_SANDBOX-textual_normalization_nonexistent_outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    HDL_12_4_ADDITIONAL_SANDBOX_ROOT-happy_path.jz) extra_flags+=(--allow-traversal "--sandbox-root=${ROOT_DIR}/tests") ;;
+    HDL_12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz)
       extra_flags+=(--allow-absolute-paths)
       temp_input_dir="$(mktemp -d "${VALIDATION_DIR}/.allow_absolute_still_sandboxed.XXXXXX")"
       temp_input="${temp_input_dir}/$(basename "${file}")"
@@ -97,7 +97,7 @@ for file in "${validation_files[@]}"; do
       fi
       input_file="${temp_input}"
       ;;
-    12_4_PATH_ABSOLUTE_FORBIDDEN-happy_path.jz)
+    HDL_12_4_PATH_ABSOLUTE_FORBIDDEN-happy_path.jz)
       extra_flags+=(--allow-absolute-paths)
       temp_input="$(mktemp "${VALIDATION_DIR}/.absolute_import_ok.XXXXXX.jz")"
       if ! sed "s|__JZ_VALIDATION_DIR__|${VALIDATION_DIR}|g" "${file}" > "${temp_input}"; then
@@ -107,7 +107,7 @@ for file in "${validation_files[@]}"; do
       fi
       input_file="${temp_input}"
       ;;
-    12_4_PATH_TRAVERSAL_FORBIDDEN-happy_path.jz) extra_flags+=(--allow-traversal) ;;
+    HDL_12_4_PATH_TRAVERSAL_FORBIDDEN-happy_path.jz) extra_flags+=(--allow-traversal) ;;
   esac
 
   # Run linter by default. Filename markers can opt into testbench/simulation
@@ -120,11 +120,11 @@ for file in "${validation_files[@]}"; do
   esac
   tmp_artifact=""
   case "$(basename "${file}")" in
-    misc_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
+    CHIP_10_4_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
       cmd_flags=(--info --verilog)
       tmp_artifact="$(mktemp)"
       ;;
-    misc_SERIALIZER_WIDTH_EXCEEDS_RATIO-width_exceeds_ratio.jz)
+    CHIP_10_4_SERIALIZER_WIDTH_EXCEEDS_RATIO-width_exceeds_ratio.jz)
       cmd_flags=(--verilog)
       tmp_artifact="$(mktemp)"
       ;;

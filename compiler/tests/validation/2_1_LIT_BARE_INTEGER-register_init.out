@@ -1,2 +1,0 @@
-File: 2_1_LIT_BARE_INTEGER-register_init.jz
-      20:23   error LIT_BARE_INTEGER S2.1 Bare integer literal in runtime expression; use a sized literal (e.g. 4'd1) or lit(width, value)

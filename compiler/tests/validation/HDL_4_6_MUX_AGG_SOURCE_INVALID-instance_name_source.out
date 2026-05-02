@@ -1,0 +1,2 @@
+File: HDL_4_6_MUX_AGG_SOURCE_INVALID-instance_name_source.jz
+      59:9    error MUX_AGG_SOURCE_INVALID S4.6 Aggregation source not a valid readable signal in module scope

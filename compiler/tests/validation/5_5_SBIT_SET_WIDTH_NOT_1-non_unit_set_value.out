@@ -1,5 +1,0 @@
-File: 5_5_SBIT_SET_WIDTH_NOT_1-non_unit_set_value.jz
-      33:35   error SBIT_SET_WIDTH_NOT_1 S5.5.7 sbit() third argument (set) must be a width-1 expression
-      38:31   error SBIT_SET_WIDTH_NOT_1 S5.5.7 sbit() third argument (set) must be a width-1 expression
-      70:35   error SBIT_SET_WIDTH_NOT_1 S5.5.7 sbit() third argument (set) must be a width-1 expression
-      75:31   error SBIT_SET_WIDTH_NOT_1 S5.5.7 sbit() third argument (set) must be a width-1 expression

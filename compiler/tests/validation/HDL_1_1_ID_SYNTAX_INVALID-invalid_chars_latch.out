@@ -1,0 +1,2 @@
+File: HDL_1_1_ID_SYNTAX_INVALID-invalid_chars_latch.jz
+      24:11   error PARSE000 parse error near token '-': expected '[' after latch name (orig: PARSE000)

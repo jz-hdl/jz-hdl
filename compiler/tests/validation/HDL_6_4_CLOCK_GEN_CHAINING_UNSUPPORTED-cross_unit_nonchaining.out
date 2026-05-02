@@ -1,0 +1,2 @@
+File: HDL_6_4_CLOCK_GEN_CHAINING_UNSUPPORTED-cross_unit_nonchaining.jz
+      37:13   error CLOCK_GEN_CHAINING_UNSUPPORTED S6.4.1 CLOCK_GEN chaining is only allowed when the target chip explicitly supports it

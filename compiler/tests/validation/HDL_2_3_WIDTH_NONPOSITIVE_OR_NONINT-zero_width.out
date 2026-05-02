@@ -1,0 +1,7 @@
+File: HDL_2_3_WIDTH_NONPOSITIVE_OR_NONINT-zero_width.jz
+      24:9    error WIDTH_NONPOSITIVE_OR_NONINT S2.2/S8.1 Declared width <= 0 or not an integer
+      24:9    warn  WARN_UNUSED_WIRE S12.3 WIRE declared but never driven or read; remove it if unused
+      29:9    error WIDTH_NONPOSITIVE_OR_NONINT S2.2/S8.1 Declared width <= 0 or not an integer
+      48:9    error WIDTH_NONPOSITIVE_OR_NONINT S2.2/S8.1 Declared width <= 0 or not an integer
+      48:9    warn  WARN_UNUSED_WIRE S12.3 WIRE declared but never driven or read; remove it if unused
+      53:9    error WIDTH_NONPOSITIVE_OR_NONINT S2.2/S8.1 Declared width <= 0 or not an integer

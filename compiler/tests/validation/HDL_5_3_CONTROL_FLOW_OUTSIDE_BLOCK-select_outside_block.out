@@ -1,0 +1,5 @@
+File: HDL_5_3_CONTROL_FLOW_OUTSIDE_BLOCK-select_outside_block.jz
+      24:5    error CONTROL_FLOW_OUTSIDE_BLOCK S5.3/S5.4/S8.1 Control-flow statements (IF/SELECT) used outside ASYNCHRONOUS or SYNCHRONOUS block
+      25:9    error CONTROL_FLOW_OUTSIDE_BLOCK S5.3/S5.4/S8.1 Control-flow statements (IF/SELECT) used outside ASYNCHRONOUS or SYNCHRONOUS block
+      28:9    error CONTROL_FLOW_OUTSIDE_BLOCK S5.3/S5.4/S8.1 Control-flow statements (IF/SELECT) used outside ASYNCHRONOUS or SYNCHRONOUS block
+      31:9    error CONTROL_FLOW_OUTSIDE_BLOCK S5.3/S5.4/S8.1 Control-flow statements (IF/SELECT) used outside ASYNCHRONOUS or SYNCHRONOUS block

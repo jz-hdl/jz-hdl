@@ -1,0 +1,2 @@
+File: HDL_12_2_COMB_LOOP_UNCONDITIONAL-cycle_through_instance.jz
+      39:5    error COMB_LOOP_UNCONDITIONAL S5.3/S8.2 Combinational loop: signal feeds back to itself through ASYNCHRONOUS assignments

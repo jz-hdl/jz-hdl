@@ -1,4 +1,0 @@
-File: 5_0_WIDTH_ASSIGN_MISMATCH_NO_EXT-alias_width_mismatch.jz
-      30:9    error WIDTH_ASSIGN_MISMATCH_NO_EXT S4.10/S5.0/S5.1 Width mismatch in assignment; add `=z` (zero-extend), `=s` (sign-extend), or use a slice
-      32:9    error WIDTH_ASSIGN_MISMATCH_NO_EXT S4.10/S5.0/S5.1 Width mismatch in assignment; add `=z` (zero-extend), `=s` (sign-extend), or use a slice
-      56:9    error WIDTH_ASSIGN_MISMATCH_NO_EXT S4.10/S5.0/S5.1 Width mismatch in assignment; add `=z` (zero-extend), `=s` (sign-extend), or use a slice

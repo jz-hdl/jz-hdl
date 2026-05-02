@@ -1,0 +1,2 @@
+File: HDL_4_12_CDC_SOURCE_NOT_PLAIN_REG-concat_source.jz
+      33:13   error CDC_SOURCE_NOT_PLAIN_REG S4.12 CDC source must be a plain register identifier, not a slice or expression

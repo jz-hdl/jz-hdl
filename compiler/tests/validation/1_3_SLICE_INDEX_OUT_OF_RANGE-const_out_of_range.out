@@ -1,3 +1,0 @@
-File: 1_3_SLICE_INDEX_OUT_OF_RANGE-const_out_of_range.jz
-      27:17   error SLICE_INDEX_OUT_OF_RANGE S1.3/S8.1 Slice indices are < 0 or >= signal width
-      54:17   error SLICE_INDEX_OUT_OF_RANGE S1.3/S8.1 Slice indices are < 0 or >= signal width

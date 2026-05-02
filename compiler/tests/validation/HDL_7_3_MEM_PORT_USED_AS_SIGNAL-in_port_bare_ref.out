@@ -1,0 +1,2 @@
+File: HDL_7_3_MEM_PORT_USED_AS_SIGNAL-in_port_bare_ref.jz
+      38:14   error MEM_PORT_USED_AS_SIGNAL S7.2.1/S7.3.2/S7.7.2 MEM ports are not signals; use mem.port.addr or mem.port.data

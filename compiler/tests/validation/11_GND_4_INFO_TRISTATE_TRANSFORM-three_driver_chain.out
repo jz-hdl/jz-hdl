@@ -1,5 +1,0 @@
-File: 11_GND_4_INFO_TRISTATE_TRANSFORM-three_driver_chain.jz
-      16:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      28:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      40:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      62:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

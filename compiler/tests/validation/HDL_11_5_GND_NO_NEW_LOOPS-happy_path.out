@@ -1,0 +1,4 @@
+File: HDL_11_5_GND_NO_NEW_LOOPS-happy_path.jz
+      16:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      31:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      57:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

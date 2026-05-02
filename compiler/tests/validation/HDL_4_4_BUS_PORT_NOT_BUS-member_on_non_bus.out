@@ -1,0 +1,2 @@
+File: HDL_4_4_BUS_PORT_NOT_BUS-member_on_non_bus.jz
+      38:21   error BUS_PORT_NOT_BUS S4.4.1 BUS member access used on non-BUS port

@@ -1,0 +1,4 @@
+File: HDL_10_8_TEMPLATE_APPLY_OUTSIDE_BLOCK-apply_outside_error.jz
+      21:1    error TEMPLATE_APPLY_OUTSIDE_BLOCK S10.5 @apply may only appear inside ASYNCHRONOUS or SYNCHRONOUS blocks
+      34:5    error TEMPLATE_APPLY_OUTSIDE_BLOCK S10.5 @apply may only appear inside ASYNCHRONOUS or SYNCHRONOUS blocks
+      63:5    error TEMPLATE_APPLY_OUTSIDE_BLOCK S10.5 @apply may only appear inside ASYNCHRONOUS or SYNCHRONOUS blocks

@@ -1,4 +1,0 @@
-File: 7_1_MEM_PORT_NAME_CONFLICT_MODULE_ID-latch_mem_mux_conflict.jz
-      43:17   error MEM_PORT_NAME_CONFLICT_MODULE_ID S7.1/S7.7.1 MEM port name conflicts with module-level identifier
-      45:17   error MEM_PORT_NAME_CONFLICT_MODULE_ID S7.1/S7.7.1 MEM port name conflicts with module-level identifier
-      47:17   error MEM_PORT_NAME_CONFLICT_MODULE_ID S7.1/S7.7.1 MEM port name conflicts with module-level identifier

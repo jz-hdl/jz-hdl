@@ -1,3 +1,0 @@
-File: 1_1_ID_SYNTAX_INVALID-invalid_chars_non_ascii.jz
-      23:12   error PARSE000 unrecognized character 'Ã' (orig: PARSE000)
-      23:13   error PARSE000 unrecognized character '©' (orig: PARSE000)

@@ -1,0 +1,3 @@
+File: HDL_6_4_CLOCK_SOURCE_AMBIGUOUS-dual_source.jz
+      31:13   error CLOCK_SOURCE_AMBIGUOUS S6.4 Clock declared as both IN_PINS and CLOCK_GEN output
+      33:13   error CLOCK_SOURCE_AMBIGUOUS S6.4 Clock declared as both IN_PINS and CLOCK_GEN output

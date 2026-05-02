@@ -1,0 +1,5 @@
+File: HDL_4_2_ID_DUP_IN_MODULE-port_register_collision.jz
+      21:9    error ID_DUP_IN_MODULE S4.2/S8.1 Duplicate identifier within module (ports, wires, registers, consts, instances)
+      43:17   error ID_DUP_IN_MODULE S4.2/S8.1 Duplicate identifier within module (ports, wires, registers, consts, instances)
+      74:9    error ID_DUP_IN_MODULE S4.2/S8.1 Duplicate identifier within module (ports, wires, registers, consts, instances)
+     105:9    error ID_DUP_IN_MODULE S4.2/S8.1 Duplicate identifier within module (ports, wires, registers, consts, instances)

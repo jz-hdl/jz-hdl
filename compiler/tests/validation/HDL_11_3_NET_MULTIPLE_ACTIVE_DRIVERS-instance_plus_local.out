@@ -1,0 +1,2 @@
+File: HDL_11_3_NET_MULTIPLE_ACTIVE_DRIVERS-instance_plus_local.jz
+      34:9    error NET_MULTIPLE_ACTIVE_DRIVERS S1.2/S1.5/S4.10 Multiple active drivers on same signal; for tri-state, all but one must assign `z`

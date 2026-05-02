@@ -139,12 +139,13 @@ Use these rules mechanically. Do not improvise from existing corpus patterns whe
 ### Canonical basename pattern
 
 ```text
-compiler/tests/validation/<section><optional_runner_markers>_<TARGET_ID>-<scenario>.jz
-compiler/tests/validation/<section><optional_runner_markers>_<TARGET_ID>-<scenario>.out
+compiler/tests/validation/<source>_<section><optional_runner_markers>_<TARGET_ID>-<scenario>.jz
+compiler/tests/validation/<source>_<section><optional_runner_markers>_<TARGET_ID>-<scenario>.out
 ```
 
 Where:
 
+- `<source>` is the spec the test is for `HDL`, `CHIP`, `SIM`, `TB`, `JZW`.
 - `<section>` is the spec section with dots replaced by underscores, for example `1_1`, `4_13`, `11_7_2`
 - `<optional_runner_markers>` is empty or one of `_TMODE`, `_SMODE`, `_GND`, `_VCC`
 - `<TARGET_ID>` is an uppercase snake_case identifier naming the exact rule or positive behavior the fixture owns
@@ -179,7 +180,7 @@ Forbidden placeholders for `<TARGET_ID>`:
 
 ### Happy-path uniqueness rule
 
-There must not be multiple files whose basenames would collapse to the same `<section><optional_runner_markers>_<TARGET_ID>-happy_path`.
+There must not be multiple files whose basenames would collapse to the same `<source>_<section><optional_runner_markers>_<TARGET_ID>-happy_path`.
 
 If you need more than one positive fixture for the same broad section topic, do **not** use `HAPPY_PATH` as a bucket and do **not** invent `REQ<number>` placeholders. Instead:
 
@@ -190,12 +191,12 @@ If you need more than one positive fixture for the same broad section topic, do 
 Examples:
 
 ```text
-compiler/tests/validation/1_1_ID_SYNTAX_INVALID-bad_leading_digit.jz
-compiler/tests/validation/1_1_ID_SYNTAX_INVALID-happy_path.jz
-compiler/tests/validation/10_3_TEMPLATE_ALLOWED_CONTENT-happy_path.jz
-compiler/tests/validation/10_3_TEMPLATE_CONST_CONFIG_REFS-happy_path.jz
-compiler/tests/validation/11_1_GND_TRISTATE_DEFAULT_GND-happy_path.jz
-compiler/tests/validation/11_1_VCC_TRISTATE_DEFAULT_VCC-happy_path.jz
+compiler/tests/validation/HDL_1_1_ID_SYNTAX_INVALID-bad_leading_digit.jz
+compiler/tests/validation/HDL_1_1_ID_SYNTAX_INVALID-happy_path.jz
+compiler/tests/validation/HDL_HDL_10_3_TEMPLATE_ALLOWED_CONTENT-happy_path.jz
+compiler/tests/validation/HDL_HDL_10_3_TEMPLATE_CONST_CONFIG_REFS-happy_path.jz
+compiler/tests/validation/HDL_11_1_GND_TRISTATE_DEFAULT_GND-happy_path.jz
+compiler/tests/validation/HDL_11_1_VCC_TRISTATE_DEFAULT_VCC-happy_path.jz
 ```
 
 ### Helper and imported library files
@@ -205,8 +206,8 @@ Files that exist only to be imported by another validation fixture are not stand
 Name helper files by extending the owning test basename, for example:
 
 ```text
-compiler/tests/validation/6_2_1_IMPORTED_NAMESPACE-happy_path_helper_lib.jz
-compiler/tests/validation/6_2_1_IMPORTED_NAMESPACE-happy_path_content_lib.jz
+compiler/tests/validation/HDL_6_2_1_IMPORTED_NAMESPACE-happy_path_helper_lib.jz
+compiler/tests/validation/HDL_HDL_6_2_1_IMPORTED_NAMESPACE-happy_path_content_lib.jz
 ```
 
 ### Runner filename markers
@@ -221,10 +222,10 @@ compiler/tests/validation/6_2_1_IMPORTED_NAMESPACE-happy_path_content_lib.jz
 Use these markers only when the test genuinely needs that runner mode or flag. Put the marker directly in the normal validation basename, for example:
 
 ```text
-compiler/tests/validation/6_4_TMODE_CLOCK_DIRECTIVE_FORM-clock_directive_form.jz
-compiler/tests/validation/4_12_SMODE_MARK_IF_CONDITION_COLOR-mark_if_condition_color_form.jz
-compiler/tests/validation/11_1_GND_TRISTATE_DEFAULT_GND-happy_path.jz
-compiler/tests/validation/11_1_VCC_TRISTATE_DEFAULT_VCC-happy_path.jz
+compiler/tests/validation/TB_6_4_TMODE_CLOCK_DIRECTIVE_FORM-clock_directive_form.jz
+compiler/tests/validation/SIM_4_12_SMODE_MARK_IF_CONDITION_COLOR-mark_if_condition_color_form.jz
+compiler/tests/validation/HDL_11_1_GND_TRISTATE_DEFAULT_GND-happy_path.jz
+compiler/tests/validation/HDL_11_1_VCC_TRISTATE_DEFAULT_VCC-happy_path.jz
 ```
 
 Do not add `_TMODE_`, `_SMODE_`, `_GND_`, or `_VCC_` to unrelated tests, because doing so changes how the validation runner executes the file.

@@ -1,0 +1,4 @@
+File: HDL_1_5_ASSIGN_MULTIPLE_SAME_BITS-inside_branch.jz
+      35:13   error ASSIGN_MULTIPLE_SAME_BITS S1.5/S5.2 Same bits assigned more than once on a single execution path (exclusive assignment violation)
+      45:13   error ASSIGN_MULTIPLE_SAME_BITS S1.5/S5.2 Same bits assigned more than once on a single execution path (exclusive assignment violation)
+      52:17   error ASSIGN_MULTIPLE_SAME_BITS S1.5/S5.2 Same bits assigned more than once on a single execution path (exclusive assignment violation)

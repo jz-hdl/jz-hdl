@@ -1,0 +1,2 @@
+File: HDL_6_3_CONFIG_USED_WHERE_FORBIDDEN-operator_operand.jz
+      29:20   error CONFIG_USED_WHERE_FORBIDDEN S6.3 CONFIG.<name> used outside compile-time constant expression contexts (runtime expression)

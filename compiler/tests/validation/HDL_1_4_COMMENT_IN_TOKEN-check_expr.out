@@ -1,0 +1,2 @@
+File: HDL_1_4_COMMENT_IN_TOKEN-check_expr.jz
+      29:16   error COMMENT_IN_TOKEN S1.4 Comment appears inside a token (identifier/number/operator/literal)

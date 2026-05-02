@@ -1,0 +1,2 @@
+File: HDL_1_6_3_TRI_STATE_RESOLUTION-zero_versus_one_prohibited.jz
+      20:19   error NET_MULTIPLE_ACTIVE_DRIVERS S1.2/S1.5/S4.10 Multiple active drivers on same signal; for tri-state, all but one must assign `z`

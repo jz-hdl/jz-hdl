@@ -1,0 +1,2 @@
+File: HDL_12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz
+       7:5    error PATH_OUTSIDE_SANDBOX S12.2 Resolved path falls outside all permitted sandbox roots

@@ -1,3 +1,0 @@
-File: 1_3_SLICE_MSB_LESS_THAN_LSB-new_binding.jz
-      56:23   error SLICE_MSB_LESS_THAN_LSB S1.3/S8.1 Slice uses MSB < LSB
-      63:23   error SLICE_MSB_LESS_THAN_LSB S1.3/S8.1 Slice uses MSB < LSB

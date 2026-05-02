@@ -1,2 +1,0 @@
-File: 4_2_AMBIGUOUS_REFERENCE-two_instances_same_port.jz
-      56:18   error AMBIGUOUS_REFERENCE S4.2/S8.1 Identifier reference ambiguous without instance prefix

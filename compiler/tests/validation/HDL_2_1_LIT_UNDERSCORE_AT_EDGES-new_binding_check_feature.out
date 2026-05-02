@@ -1,0 +1,4 @@
+File: HDL_2_1_LIT_UNDERSCORE_AT_EDGES-new_binding_check_feature.jz
+      32:20   error LIT_UNDERSCORE_AT_EDGES S2.1 Literal has underscore as first or last character of value
+      35:21   error LIT_UNDERSCORE_AT_EDGES S2.1 Literal has underscore as first or last character of value
+      47:23   error LIT_UNDERSCORE_AT_EDGES S2.1 Literal has underscore as first or last character of value

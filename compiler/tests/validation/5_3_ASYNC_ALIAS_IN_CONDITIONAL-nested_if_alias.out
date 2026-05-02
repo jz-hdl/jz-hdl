@@ -1,2 +1,0 @@
-File: 5_3_ASYNC_ALIAS_IN_CONDITIONAL-nested_if_alias.jz
-      25:17   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?

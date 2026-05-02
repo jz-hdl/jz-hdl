@@ -1,0 +1,2 @@
+File: HDL_1_1_ID_SYNTAX_INVALID-invalid_chars_instance.jz
+      35:12   error PARSE000 parse error near token '-': expected module or blackbox name after instance name (orig: PARSE000)

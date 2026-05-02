@@ -1,0 +1,5 @@
+File: HDL_1_5_NET_PORT_ASYNC_REQUIRES_FULL_COVERAGE-wire_and_port.jz
+      26:17   error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
+      27:17   error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
+      30:9    error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
+      48:9    warn  WARN_INCOMPLETE_SELECT_ASYNC S5.4/S8.3 Incomplete SELECT coverage without DEFAULT in ASYNCHRONOUS block

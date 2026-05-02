@@ -1,0 +1,8 @@
+File: HDL_2_1_LIT_WIDTH_NOT_POSITIVE-new_binding_check_feature.jz
+      34:20   error LIT_WIDTH_NOT_POSITIVE S2.1 Literal width is non-positive or non-integer
+      37:5    error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)
+      37:20   error LIT_UNDEFINED_CONST_WIDTH S2.1 Width uses undefined CONST name
+      40:21   error LIT_WIDTH_NOT_POSITIVE S2.1 Literal width is non-positive or non-integer
+      47:21   error LIT_UNDEFINED_CONST_WIDTH S2.1 Width uses undefined CONST name
+      60:25   error LIT_WIDTH_NOT_POSITIVE S2.1 Literal width is non-positive or non-integer
+      61:25   error LIT_UNDEFINED_CONST_WIDTH S2.1 Width uses undefined CONST name

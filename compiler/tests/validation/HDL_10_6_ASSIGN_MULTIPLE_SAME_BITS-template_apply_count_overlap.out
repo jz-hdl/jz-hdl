@@ -1,0 +1,2 @@
+File: HDL_10_6_ASSIGN_MULTIPLE_SAME_BITS-template_apply_count_overlap.jz
+      16:5    error ASSIGN_MULTIPLE_SAME_BITS S1.5/S5.2 Same bits assigned more than once on a single execution path (exclusive assignment violation)

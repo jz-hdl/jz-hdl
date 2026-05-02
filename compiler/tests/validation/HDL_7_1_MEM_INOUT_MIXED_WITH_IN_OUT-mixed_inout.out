@@ -1,0 +1,4 @@
+File: HDL_7_1_MEM_INOUT_MIXED_WITH_IN_OUT-mixed_inout.jz
+      27:9    error MEM_INOUT_MIXED_WITH_IN_OUT S7.1 INOUT ports cannot be mixed with IN/OUT ports in the same MEM declaration
+      59:9    error MEM_INOUT_MIXED_WITH_IN_OUT S7.1 INOUT ports cannot be mixed with IN/OUT ports in the same MEM declaration
+      67:9    error MEM_INOUT_MIXED_WITH_IN_OUT S7.1 INOUT ports cannot be mixed with IN/OUT ports in the same MEM declaration

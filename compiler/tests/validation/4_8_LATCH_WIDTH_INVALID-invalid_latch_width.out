@@ -1,5 +1,0 @@
-File: 4_8_LATCH_WIDTH_INVALID-invalid_latch_width.jz
-      25:9    warn  NET_DANGLING_UNUSED S5.1/S8.3 Signal is neither driven nor read; remove it or connect it
-      25:9    error LATCH_WIDTH_INVALID S4.8 LATCH width must be a positive integer
-      51:9    warn  NET_DANGLING_UNUSED S5.1/S8.3 Signal is neither driven nor read; remove it or connect it
-      51:9    error LATCH_WIDTH_INVALID S4.8 LATCH width must be a positive integer

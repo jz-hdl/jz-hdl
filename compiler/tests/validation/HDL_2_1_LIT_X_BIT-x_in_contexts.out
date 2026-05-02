@@ -1,0 +1,7 @@
+File: HDL_2_1_LIT_X_BIT-x_in_contexts.jz
+      33:20   error LIT_DECIMAL_HAS_XZ S2.1 Decimal literal with `x` or `z` digits (e.g. `8'd10x`)
+      36:20   error LIT_INVALID_DIGIT_FOR_BASE S2.1 Literal contains digit not allowed for its base (b/d/h)
+      39:21   error LIT_DECIMAL_HAS_XZ S2.1 Decimal literal with `x` or `z` digits (e.g. `8'd10x`)
+      46:21   error LIT_INVALID_DIGIT_FOR_BASE S2.1 Literal contains digit not allowed for its base (b/d/h)
+      59:27   error LIT_DECIMAL_HAS_XZ S2.1 Decimal literal with `x` or `z` digits (e.g. `8'd10x`)
+      60:27   error LIT_INVALID_DIGIT_FOR_BASE S2.1 Literal contains digit not allowed for its base (b/d/h)

@@ -1,0 +1,2 @@
+File: HDL_12_3_WARN_DEAD_CODE_UNREACHABLE-nested_dead_code.jz
+      34:13   warn  WARN_DEAD_CODE_UNREACHABLE S7.7.3/S8.3 Dead code (unreachable statements detected by analysis)

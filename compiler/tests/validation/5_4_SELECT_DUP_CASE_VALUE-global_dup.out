@@ -1,3 +1,0 @@
-File: 5_4_SELECT_DUP_CASE_VALUE-global_dup.jz
-      31:18   error SELECT_DUP_CASE_VALUE S5.4/S8.1 Multiple CASE labels with same value in SELECT
-      67:18   error SELECT_DUP_CASE_VALUE S5.4/S8.1 Multiple CASE labels with same value in SELECT

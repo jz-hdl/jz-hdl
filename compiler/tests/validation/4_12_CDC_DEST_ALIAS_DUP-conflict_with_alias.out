@@ -1,3 +1,0 @@
-File: 4_12_CDC_DEST_ALIAS_DUP-conflict_with_alias.jz
-      28:30   error ID_DUP_IN_MODULE S4.2/S8.1 Duplicate identifier within module (ports, wires, registers, consts, instances)
-      28:30   error CDC_DEST_ALIAS_DUP S4.12 CDC destination alias name conflicts with an existing identifier in module scope

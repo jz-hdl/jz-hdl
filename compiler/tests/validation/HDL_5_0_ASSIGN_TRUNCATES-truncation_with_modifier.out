@@ -1,0 +1,9 @@
+File: HDL_5_0_ASSIGN_TRUNCATES-truncation_with_modifier.jz
+      40:9    error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier
+      42:9    error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier
+      49:9    error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier
+      93:17   error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier
+      99:9    error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier
+     101:9    error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier
+     103:9    error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier
+     110:9    error ASSIGN_TRUNCATES S4.10/S5.0 Assignment truncates RHS into smaller LHS; use a slice or explicit truncation modifier

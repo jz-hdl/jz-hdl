@@ -1,3 +1,0 @@
-File: 3_2_SPECIAL_DRIVER_IN_INDEX-vcc_sync_range.jz
-      34:20   error SPECIAL_DRIVER_IN_INDEX S2.3 GND/VCC may not appear in slice/index expressions
-      73:22   error SPECIAL_DRIVER_IN_INDEX S2.3 GND/VCC may not appear in slice/index expressions

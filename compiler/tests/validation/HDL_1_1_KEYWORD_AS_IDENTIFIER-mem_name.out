@@ -1,0 +1,4 @@
+File: HDL_1_1_KEYWORD_AS_IDENTIFIER-mem_name.jz
+      29:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      30:17   warn  MEM_WARN_PORT_NEVER_ACCESSED S7.7.3 MEM IN/OUT/INOUT port declared but never used
+      31:17   warn  MEM_WARN_PORT_NEVER_ACCESSED S7.7.3 MEM IN/OUT/INOUT port declared but never used

@@ -1,0 +1,49 @@
+// LIT_INVALID_DIGIT_FOR_BASE: z digit in hex literal, inside @check expression
+// and @feature condition. Covers the check-expr and feature-cond contexts
+// not exercised by HDL_1_6_LIT_INVALID_DIGIT_FOR_BASE-z_in_hex_literal.jz.
+
+@project LIT_INVALID_DIGIT_FOR_BASE_z_in_hex_check_feature
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [8] data;
+    }
+
+    CONST {
+        VAL = 8;
+    }
+
+    // Trigger 1 (check-expr): z in hex literal inside @check expression
+    @check (VAL == 8'hzz, "z in hex inside check");
+
+    // Trigger 2 (feature-cond): z in hex literal inside @feature condition
+    @feature VAL == 8'hzz
+        CONST { UNUSED_A = 1; }
+    @else
+        CONST { UNUSED_A = 0; }
+    @endfeat
+
+    @check (UNUSED_A <= 1, "tag ok");
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,4 +1,0 @@
-File: 2_1_LIT_INVALID_DIGIT_FOR_BASE-binary_new_binding_check_feature.jz
-      32:20   error LIT_INVALID_DIGIT_FOR_BASE S2.1 Literal contains digit not allowed for its base (b/d/h)
-      35:21   error LIT_INVALID_DIGIT_FOR_BASE S2.1 Literal contains digit not allowed for its base (b/d/h)
-      47:23   error LIT_INVALID_DIGIT_FOR_BASE S2.1 Literal contains digit not allowed for its base (b/d/h)

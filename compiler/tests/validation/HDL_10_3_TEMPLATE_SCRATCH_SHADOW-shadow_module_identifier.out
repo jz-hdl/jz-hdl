@@ -1,0 +1,2 @@
+File: HDL_10_3_TEMPLATE_SCRATCH_SHADOW-shadow_module_identifier.jz
+      28:9    error TEMPLATE_SCRATCH_SHADOW S10.3 @scratch name may not shadow a template parameter, another @scratch, or an existing identifier in the enclosing module scope

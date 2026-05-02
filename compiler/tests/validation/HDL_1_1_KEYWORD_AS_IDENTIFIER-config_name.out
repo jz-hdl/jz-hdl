@@ -1,0 +1,8 @@
+File: HDL_1_1_KEYWORD_AS_IDENTIFIER-config_name.jz
+      11:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      13:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      15:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      17:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      19:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      21:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      23:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier

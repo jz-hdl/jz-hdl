@@ -1,5 +1,0 @@
-File: 1_1_KEYWORD_AS_IDENTIFIER-more_contexts.jz
-      46:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
-      52:17   error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
-      59:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
-      63:5    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier

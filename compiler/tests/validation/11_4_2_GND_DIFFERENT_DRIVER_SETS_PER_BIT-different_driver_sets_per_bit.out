@@ -1,3 +1,0 @@
-File: 11_4_2_GND_DIFFERENT_DRIVER_SETS_PER_BIT-different_driver_sets_per_bit.jz
-      20:0    error TRISTATE_TRANSFORM_PER_BIT_FAIL S11.7 Per-bit tri-state pattern detected; only full-width z assignments can be transformed
-      50:0    error TRISTATE_TRANSFORM_PER_BIT_FAIL S11.7 Per-bit tri-state pattern detected; only full-width z assignments can be transformed

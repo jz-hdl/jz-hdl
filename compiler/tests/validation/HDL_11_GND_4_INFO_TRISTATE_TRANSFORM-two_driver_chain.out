@@ -1,0 +1,4 @@
+File: HDL_11_GND_4_INFO_TRISTATE_TRANSFORM-two_driver_chain.jz
+      15:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      27:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      48:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

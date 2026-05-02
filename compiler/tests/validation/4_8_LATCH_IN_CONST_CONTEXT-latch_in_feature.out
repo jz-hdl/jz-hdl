@@ -1,3 +1,0 @@
-File: 4_8_LATCH_IN_CONST_CONTEXT-latch_in_feature.jz
-      45:18   error LATCH_IN_CONST_CONTEXT S4.8 LATCH identifier may not be used in compile-time constant contexts (@check/@feature conditions)
-      79:18   error LATCH_IN_CONST_CONTEXT S4.8 LATCH identifier may not be used in compile-time constant contexts (@check/@feature conditions)

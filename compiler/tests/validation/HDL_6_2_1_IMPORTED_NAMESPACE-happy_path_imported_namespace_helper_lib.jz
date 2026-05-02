@@ -1,0 +1,13 @@
+// Library file for HDL_6_2_1_IMPORTED_NAMESPACE-happy_path.jz
+// Defines an imported helper module used by the imported top module.
+
+@module ImportedHelper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod

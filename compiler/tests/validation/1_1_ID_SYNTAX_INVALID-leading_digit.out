@@ -1,2 +1,0 @@
-File: 1_1_ID_SYNTAX_INVALID-leading_digit.jz
-      18:17   error PARSE000 parse error near token '1foo': expected port name after width in PORT block (orig: PARSE000)

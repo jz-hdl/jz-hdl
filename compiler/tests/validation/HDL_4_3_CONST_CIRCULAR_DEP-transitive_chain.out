@@ -1,0 +1,4 @@
+File: HDL_4_3_CONST_CIRCULAR_DEP-transitive_chain.jz
+      18:9    error CONST_CIRCULAR_DEP S4.3/S7.10 Circular dependency in CONST/CONFIG definitions
+      19:9    error CONST_CIRCULAR_DEP S4.3/S7.10 Circular dependency in CONST/CONFIG definitions
+      20:9    error CONST_CIRCULAR_DEP S4.3/S7.10 Circular dependency in CONST/CONFIG definitions

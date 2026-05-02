@@ -1,5 +1,0 @@
-File: 4_6_MUX_SELECTOR_WIDTH_MISMATCH-selector_width_mismatch.jz
-      38:16   error MUX_SELECTOR_WIDTH_MISMATCH S4.6 Runtime MUX selector width must equal clog2(N); widen or slice explicitly before access
-      43:14   error MUX_SELECTOR_WIDTH_MISMATCH S4.6 Runtime MUX selector width must equal clog2(N); widen or slice explicitly before access
-      85:16   error MUX_SELECTOR_WIDTH_MISMATCH S4.6 Runtime MUX selector width must equal clog2(N); widen or slice explicitly before access
-      90:14   error MUX_SELECTOR_WIDTH_MISMATCH S4.6 Runtime MUX selector width must equal clog2(N); widen or slice explicitly before access

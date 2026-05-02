@@ -1,2 +1,0 @@
-File: 4_4_PORT_MISSING_WIDTH-inout_missing_width.jz
-      18:15   error PORT_MISSING_WIDTH S4.4/S8.1 Port declaration without mandatory `[N]` width

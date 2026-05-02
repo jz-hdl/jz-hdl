@@ -1,0 +1,2 @@
+File: HDL_6_8_BUS_DEF_INVALID_DIR-invalid_direction.jz
+       7:19   error BUS_DEF_INVALID_DIR S6.8 BUS signal direction must be IN, OUT, or INOUT

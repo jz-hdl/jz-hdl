@@ -1,0 +1,5 @@
+File: HDL_11_5_GND_VALID_TERNARY_NESTING-happy_path.jz
+      15:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      28:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      41:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      64:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
