@@ -1,0 +1,6 @@
+
+=== @testbench TbBusWireWidthPreservationDut ===
+  PASS  "bus wire widths follow the BUS definition" (5/5 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

@@ -1,0 +1,67 @@
+// BUS_PORT_SHORTHAND_BINDING: testbench BUS shorthand binding expands all
+// matching DUT BUS port signals and rewrites the prefix to the testbench wire
+// prefix.
+
+BUS CTRL_BUS {
+    IN  [8] DATA;
+    IN  [1] VALID;
+    OUT [1] READY;
+}
+
+@module TbBusPortShorthandBindingDut
+    PORT {
+        IN  [1] clk;
+        BUS CTRL_BUS SOURCE src;
+        OUT [8] seen_data;
+        OUT [1] seen_valid;
+    }
+
+    REGISTER {
+        latched_data [8] = 8'h00;
+        latched_valid [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        seen_data = latched_data;
+        seen_valid = latched_valid;
+        src.READY = latched_valid;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        latched_data <= src.DATA;
+        latched_valid <= src.VALID;
+    }
+@endmod
+
+@testbench TbBusPortShorthandBindingDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        seen_data [8];
+        seen_valid [1];
+        tb_DATA [8];
+        tb_VALID [1];
+        tb_READY [1];
+    }
+
+    TEST "BUS shorthand binds all expanded BUS port signals" {
+        @new dut TbBusPortShorthandBindingDut {
+            clk [1] = clk;
+            BUS CTRL_BUS src = tb;
+            seen_data [8] = seen_data;
+            seen_valid [1] = seen_valid;
+        }
+
+        @setup {
+            tb_DATA <= 8'hA5;
+            tb_VALID <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(seen_data, 8'hA5)
+        @expect_equal(seen_valid, 1'b1)
+        @expect_equal(tb_READY, 1'b1)
+    }
+@endtb

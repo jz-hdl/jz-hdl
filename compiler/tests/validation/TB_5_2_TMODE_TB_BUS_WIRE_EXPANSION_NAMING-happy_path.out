@@ -1,0 +1,6 @@
+
+=== @testbench TbBusWireExpansionNamingDut ===
+  PASS  "bus wire names expand for scalar and array declarations" (10/10 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

@@ -1,0 +1,63 @@
+// GLOBAL_CONSTANTS_AVAILABLE_IN_TESTBENCH_CONTEXTS: @global constants are
+// available in testbench expression contexts.
+// Exercises GLOBAL.CONST in @setup assignments, @update assignments,
+// and @expect_equal values.
+
+@global CMD
+    IDLE  = 2'b00;
+    READ  = 2'b01;
+    WRITE = 2'b10;
+@endglob
+
+@module TbGlobalConstantsInTestbenchDut
+    PORT {
+        IN  [1] clk;
+        IN  [2] cmd;
+        OUT [2] seen_cmd;
+    }
+
+    REGISTER {
+        state [2] = CMD.IDLE;
+    }
+
+    ASYNCHRONOUS {
+        seen_cmd = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= cmd;
+    }
+@endmod
+
+@testbench TbGlobalConstantsInTestbenchDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        cmd [2];
+        seen_cmd [2];
+    }
+
+    TEST "globals are valid in testbench expressions" {
+        @new dut TbGlobalConstantsInTestbenchDut {
+            clk [1] = clk;
+            cmd [2] = cmd;
+            seen_cmd [2] = seen_cmd;
+        }
+
+        @setup {
+            cmd <= CMD.WRITE;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(seen_cmd, CMD.WRITE)
+
+        @update {
+            cmd <= CMD.READ;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(seen_cmd, CMD.READ)
+    }
+@endtb

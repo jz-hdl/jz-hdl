@@ -1,0 +1,63 @@
+// MULTIPLE_TESTBENCHES_INDEPENDENT: multiple @testbench blocks may target the
+// same module, and each testbench keeps its own independent declarations and
+// test execution.
+
+@testbench MultipleIndependentTestbenchesDut
+    @import "TB_3_1_TMODE_MULTIPLE_TESTBENCHES_INDEPENDENT-happy_path_helper_lib.jz";
+
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        en [1];
+        din [1];
+        q [1];
+    }
+
+    TEST "first testbench drives one" {
+        @new dut MultipleIndependentTestbenchesDut {
+            clk [1] = clk;
+            en [1] = en;
+            din [1] = din;
+            q [1] = q;
+        }
+
+        @setup {
+            en <= 1'b1;
+            din <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(q, 1'b1)
+    }
+@endtb
+
+@testbench MultipleIndependentTestbenchesDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        en [1];
+        din [1];
+        q [1];
+    }
+
+    TEST "second testbench drives zero" {
+        @new dut MultipleIndependentTestbenchesDut {
+            clk [1] = clk;
+            en [1] = en;
+            din [1] = din;
+            q [1] = q;
+        }
+
+        @setup {
+            en <= 1'b1;
+            din <= 1'b0;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(q, 1'b0)
+    }
+@endtb

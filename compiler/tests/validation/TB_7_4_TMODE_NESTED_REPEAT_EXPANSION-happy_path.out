@@ -1,0 +1,6 @@
+
+=== @testbench NestedRepeatCounterDut ===
+  PASS  "nested @repeat expands inner blocks per outer iteration" (1/1 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000
