@@ -1,0 +1,44 @@
+// PRINT_ARGUMENT_COUNT_MISMATCH: missing @print_if arguments in @simulation
+// must emit only PRT_ARG_COUNT_MISMATCH.
+// Target diagnostic: PRT_ARG_COUNT_MISMATCH on the @print_if directive.
+// Non-target diagnostics: none.
+// Fixture plan: keep the simulation structure valid, then call @print_if with
+// two value-consuming format specifiers but only one argument.
+
+@module PrintArgCountMismatchSimDut
+    PORT {
+        IN  [1] clk;
+        OUT [8] count;
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        count = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= state + 8'h01;
+    }
+@endmod
+
+@simulation PrintArgCountMismatchSimDut
+    CLOCK {
+        clk = { period=10.0 };
+    }
+
+    WIRE {
+        count [8];
+    }
+
+    @new dut PrintArgCountMismatchSimDut {
+        clk [1] = clk;
+        count [8] = count;
+    }
+
+    // Trigger 1: %h and %d each consume an argument, but only one is provided.
+    @print_if(count == 8'h00, "count=%h again=%d", count)
+    @run(ns=10)
+@endsim

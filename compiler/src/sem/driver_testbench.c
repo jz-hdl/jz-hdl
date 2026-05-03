@@ -38,6 +38,74 @@ static void tb_report_rule(JZDiagnosticList *diagnostics,
     jz_diagnostic_report(diagnostics, loc, sev, rule_id, msg);
 }
 
+static int tb_count_print_value_specifiers(const char *fmt)
+{
+    int count = 0;
+
+    if (!fmt) return 0;
+
+    for (const char *p = fmt; *p; ++p) {
+        if (*p != '%') continue;
+
+        if (strncmp(p, "%tick", 5) == 0) {
+            p += 4;
+            continue;
+        }
+        if (strncmp(p, "%ms", 3) == 0) {
+            p += 2;
+            continue;
+        }
+        if (p[1] == 'h' || p[1] == 'd' || p[1] == 'b') {
+            ++count;
+            ++p;
+        }
+    }
+
+    return count;
+}
+
+static void check_print_directive_args(const JZASTNode *node,
+                                       JZDiagnosticList *diagnostics)
+{
+    int value_spec_count;
+    int arg_offset;
+    int arg_count;
+    char msg[512];
+
+    if (!node || (node->type != JZ_AST_PRINT && node->type != JZ_AST_PRINT_IF)) {
+        return;
+    }
+
+    value_spec_count = tb_count_print_value_specifiers(node->text);
+    arg_offset = (node->type == JZ_AST_PRINT_IF) ? 1 : 0;
+    arg_count = (int)node->child_count - arg_offset;
+    if (arg_count < 0) arg_count = 0;
+
+    if (value_spec_count == arg_count) {
+        return;
+    }
+
+    snprintf(msg, sizeof(msg),
+             "@print format string consumes %d argument%s but %d argument%s %s provided;\n"
+             "match each %%h/%%d/%%b with one argument and do not count %%tick/%%ms",
+             value_spec_count, value_spec_count == 1 ? "" : "s",
+             arg_count, arg_count == 1 ? "" : "s",
+             arg_count == 1 ? "is" : "are");
+    tb_report_rule(diagnostics, node->loc, "PRT_ARG_COUNT_MISMATCH", msg);
+}
+
+static void check_print_directives_recursive(const JZASTNode *node,
+                                             JZDiagnosticList *diagnostics)
+{
+    if (!node) return;
+
+    check_print_directive_args(node, diagnostics);
+
+    for (size_t i = 0; i < node->child_count; ++i) {
+        check_print_directives_recursive(node->children[i], diagnostics);
+    }
+}
+
 static int tb_has_decl(const JZASTNode *tb,
                        JZASTNodeType block_type,
                        JZASTNodeType decl_type,
@@ -991,6 +1059,18 @@ static void check_test_block_semantics(const JZASTNode *tb,
             check_expect_widths(root, tb, test, child, project_symbols, diagnostics);
         }
     }
+
+    check_print_directives_recursive(test, diagnostics);
+}
+
+static void check_simulation_semantics(const JZASTNode *sim,
+                                       const JZASTNode *root,
+                                       JZDiagnosticList *diagnostics)
+{
+    if (!sim || !root) return;
+
+    check_tb_bus_wire_declarations(sim, root, diagnostics);
+    check_print_directives_recursive(sim, diagnostics);
 }
 
 static void validate_testbench(JZASTNode *tb, JZASTNode *root,
@@ -1035,6 +1115,8 @@ int jz_sem_run_testbench(JZASTNode *root,
 
         if (child->type == JZ_AST_TESTBENCH) {
             validate_testbench(child, root, project_symbols, diagnostics);
+        } else if (child->type == JZ_AST_SIMULATION) {
+            check_simulation_semantics(child, root, diagnostics);
         }
     }
 
