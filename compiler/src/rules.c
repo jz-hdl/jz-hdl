@@ -481,6 +481,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "TESTBENCH", "TB_EXPECT_WIDTH_MISMATCH",     0, JZ_RULE_MODE_ERR, "TB-011 @expect value width must match signal width" },
     { "TESTBENCH", "TB_NO_TEST_BLOCKS",            0, JZ_RULE_MODE_ERR, "TB-012 @testbench must contain at least one TEST block" },
     { "TESTBENCH", "TB_MULTIPLE_NEW",              0, JZ_RULE_MODE_ERR, "TB-013 Each TEST must contain exactly one @new instantiation" },
+    { "TESTBENCH", "TB_DECL_ORDER",                0, JZ_RULE_MODE_ERR, "TB-022 @import and BUS must appear before CLOCK, WIRE, and TEST blocks in @testbench" },
 
     /* [SIMULATION] */
     { "SIMULATION", "SIM_WRONG_TOOL",             0, JZ_RULE_MODE_ERR, "File contains @simulation blocks; use --simulate to run simulations" },

@@ -1,0 +1,36 @@
+// TB_DECL_ORDER: @import inside @testbench must appear before CLOCK/WIRE/TEST.
+// Trigger 1: @import appears after the CLOCK block.
+
+@module DeclOrderImportDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] out;
+    }
+
+    ASYNCHRONOUS {
+        out <= clk;
+    }
+@endmod
+
+@testbench DeclOrderImportDut
+    CLOCK {
+        clk;
+    }
+
+    // Trigger 1: @import after CLOCK is not allowed.
+    @import "TB_3_1_TMODE_TB_DECL_ORDER-import_after_clock_helper_lib.jz";
+
+    WIRE {
+        out [1];
+    }
+
+    TEST "late import is rejected" {
+        @new dut DeclOrderImportDut {
+            clk [1] = clk;
+            out [1] = out;
+        }
+
+        @setup {
+        }
+    }
+@endtb

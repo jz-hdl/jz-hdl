@@ -786,6 +786,7 @@ static int parse_test_body(Parser *p, JZASTNode *test_node)
 JZASTNode *parse_testbench(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* @testbench already consumed */
+    int saw_non_prefix_decl = 0;
 
     /* Module name */
     const JZToken *mod_name = peek(p);
@@ -813,6 +814,7 @@ JZASTNode *parse_testbench(Parser *p)
             jz_ast_free(tb);
             return NULL;
         } else if (t->type == JZ_TOK_IDENTIFIER && t->lexeme && strcmp(t->lexeme, "CLOCK") == 0) {
+            saw_non_prefix_decl = 1;
             advance(p);
             JZASTNode *clk_block = jz_ast_new(JZ_AST_TB_CLOCK_BLOCK, t->loc);
             if (!clk_block) { jz_ast_free(tb); return NULL; }
@@ -829,6 +831,7 @@ JZASTNode *parse_testbench(Parser *p)
             }
             jz_ast_add_child(tb, clk_block);
         } else if (t->type == JZ_TOK_KW_WIRE) {
+            saw_non_prefix_decl = 1;
             advance(p);
             JZASTNode *wire_block = jz_ast_new(JZ_AST_TB_WIRE_BLOCK, t->loc);
             if (!wire_block) { jz_ast_free(tb); return NULL; }
@@ -845,6 +848,13 @@ JZASTNode *parse_testbench(Parser *p)
             }
             jz_ast_add_child(tb, wire_block);
         } else if (t->type == JZ_TOK_KW_IMPORT) {
+            if (saw_non_prefix_decl) {
+                parser_report_rule(p, t, "TB_DECL_ORDER",
+                                   "@import must appear before any CLOCK, WIRE, or TEST block\n"
+                                   "inside @testbench; move imports to the top of the testbench body");
+                jz_ast_free(tb);
+                return NULL;
+            }
             /* @import "path"; inside @testbench — imports modules into tb node */
             advance(p);
             const JZToken *path_tok = peek(p);
@@ -861,6 +871,13 @@ JZASTNode *parse_testbench(Parser *p)
             }
             match(p, JZ_TOK_SEMICOLON); /* optional */
         } else if (t->type == JZ_TOK_IDENTIFIER && t->lexeme && strcmp(t->lexeme, "BUS") == 0) {
+            if (saw_non_prefix_decl) {
+                parser_report_rule(p, t, "TB_DECL_ORDER",
+                                   "BUS definitions must appear before any CLOCK, WIRE, or TEST block\n"
+                                   "inside @testbench; move this BUS definition to the top of the testbench body");
+                jz_ast_free(tb);
+                return NULL;
+            }
             /* BUS definition inside @testbench */
             advance(p);
             JZASTNode *bus = parse_bus_definition(p, t);
@@ -868,6 +885,7 @@ JZASTNode *parse_testbench(Parser *p)
             jz_ast_add_child(tb, bus);
         } else if (t->type == JZ_TOK_KW_TEST ||
                    (t->type == JZ_TOK_IDENTIFIER && t->lexeme && strcmp(t->lexeme, "TEST") == 0)) {
+            saw_non_prefix_decl = 1;
             advance(p);
             const JZToken *desc = peek(p);
             if (desc->type != JZ_TOK_STRING || !desc->lexeme) {

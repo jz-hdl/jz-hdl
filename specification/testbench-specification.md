@@ -1060,6 +1060,7 @@ Seed: 0xDEADBEEF
 | TB-019 | Observing a signal containing `z` in an assertion is a runtime error (aborts test case) |
 | TB-020 | A file may not contain both RTL definitions (`@module`/`@project`) and verification constructs (`@testbench`) |
 | TB-021 | `@expect_tristate` asserts all bits of the signal are `z`; it is the only assertion that accepts `z` values |
+| TB-022 | `@import` directives and `BUS` definitions inside `@testbench` must appear before any `CLOCK`, `WIRE`, or `TEST` block |
 | PRT-001 | Number of non-autonomous format specifiers in `@print` / `@print_if` must match the number of arguments |
 | PRT-002 | `@print` / `@print_if` may not appear inside `@setup` or `@update` blocks |
 
