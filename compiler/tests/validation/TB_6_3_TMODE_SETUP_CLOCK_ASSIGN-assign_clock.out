@@ -1,0 +1,2 @@
+File: TB_6_3_TMODE_SETUP_CLOCK_ASSIGN-assign_clock.jz
+      37:13   error TB_SETUP_CLOCK_ASSIGN S4.2/S6.3 @setup may not assign clock signals

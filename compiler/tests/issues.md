@@ -82,8 +82,6 @@
   (`error`, `S-tb`) — no validation file exists. This rule fires under `--info --lint` (per plan section 6.1) and IS testable by the standard validation harness. Recommended: `tb_TB_PROJECT_MIXED-project_and_testbench.jz`.
 * TB_SETUP_POSITION : missing-coverage
   (`error`, `S-tb`) — no validation file exists. Requires `--test` mode. Recommended: `tb_TB_SETUP_POSITION-before_new.jz`, `tb_TB_SETUP_POSITION-duplicate.jz`.
-* TB_UPDATE_CLOCK_ASSIGN : missing-coverage
-  (`error`, `S-tb`) — no validation file exists. Requires `--test` mode. Recommended: `tb_TB_UPDATE_CLOCK_ASSIGN-assign_clock.jz`.
 * TB_UPDATE_NOT_WIRE : missing-coverage
   (`error`, `S-tb`) — no validation file exists. Requires `--test` mode. Recommended: `tb_TB_UPDATE_NOT_WIRE-assign_nonwire.jz`.
 * TB_CLOCK_CYCLE_NOT_POSITIVE : missing-happy-path

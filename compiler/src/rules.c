@@ -474,6 +474,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "TESTBENCH", "TB_PORT_WIDTH_MISMATCH",       0, JZ_RULE_MODE_ERR, "TB-003 Port width must match module declared width" },
     { "TESTBENCH", "TB_NEW_RHS_INVALID",           0, JZ_RULE_MODE_ERR, "TB-004 @new RHS must be a testbench CLOCK or WIRE" },
     { "TESTBENCH", "TB_SETUP_POSITION",            0, JZ_RULE_MODE_ERR, "TB-005 @setup must appear exactly once per TEST, after @new, before other directives" },
+    { "TESTBENCH", "TB_SETUP_CLOCK_ASSIGN",        0, JZ_RULE_MODE_ERR, "S4.2/S6.3 @setup may not assign clock signals" },
     { "TESTBENCH", "TB_CLOCK_NOT_DECLARED",        0, JZ_RULE_MODE_ERR, "TB-007 @clock clock identifier must refer to a declared CLOCK" },
     { "TESTBENCH", "TB_CLOCK_CYCLE_NOT_POSITIVE",  0, JZ_RULE_MODE_ERR, "TB-008 @clock cycle count must be a positive integer" },
     { "TESTBENCH", "TB_UPDATE_NOT_WIRE",           0, JZ_RULE_MODE_ERR, "TB-009 @update may only assign testbench WIRE identifiers" },
@@ -481,7 +482,6 @@ const JZRuleInfo jz_rule_table[] = {
     { "TESTBENCH", "TB_EXPECT_WIDTH_MISMATCH",     0, JZ_RULE_MODE_ERR, "TB-011 @expect value width must match signal width" },
     { "TESTBENCH", "TB_NO_TEST_BLOCKS",            0, JZ_RULE_MODE_ERR, "TB-012 @testbench must contain at least one TEST block" },
     { "TESTBENCH", "TB_MULTIPLE_NEW",              0, JZ_RULE_MODE_ERR, "TB-013 Each TEST must contain exactly one @new instantiation" },
-    { "TESTBENCH", "TB_DECL_ORDER",                0, JZ_RULE_MODE_ERR, "TB-022 @import and BUS must appear before CLOCK, WIRE, and TEST blocks in @testbench" },
 
     /* [SIMULATION] */
     { "SIMULATION", "SIM_WRONG_TOOL",             0, JZ_RULE_MODE_ERR, "File contains @simulation blocks; use --simulate to run simulations" },

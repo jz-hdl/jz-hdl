@@ -1182,6 +1182,10 @@ The sections below list all diagnostic rules organized by category. Each entry s
 - Severity: ERROR
 - Fix: @setup must appear exactly once per TEST, after @new, before other directives.
 
+### TESTBENCH.TB_SETUP_CLOCK_ASSIGN — @setup assigns clock
+- Severity: ERROR
+- Fix: @setup may not assign clock signals.
+
 ### TESTBENCH.TB_CLOCK_NOT_DECLARED — Clock not declared
 - Severity: ERROR
 - Fix: @clock clock identifier must refer to a declared CLOCK.

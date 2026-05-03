@@ -1,0 +1,44 @@
+// TB_UPDATE_CLOCK_ASSIGN: @update may not assign testbench clocks.
+// Target diagnostic: TB_UPDATE_CLOCK_ASSIGN on the clk assignment in @update.
+// Non-target diagnostics: none.
+// Fixture plan: keep @setup valid, then perform a single invalid clock write
+// inside @update.
+
+@module UpdateClockAssignDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] data_in;
+        OUT [1] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out = data_in;
+    }
+@endmod
+
+@testbench UpdateClockAssignDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [1];
+        data_out [1];
+    }
+
+    TEST "update assigns a clock" {
+        @new dut UpdateClockAssignDut {
+            clk [1] = clk;
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+
+        @setup {
+            data_in <= 1'b0;
+        }
+
+        @update {
+            clk <= 1'b1;
+        }
+    }
+@endtb

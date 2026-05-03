@@ -35,6 +35,79 @@ static void tb_report_rule(JZDiagnosticList *diagnostics,
     jz_diagnostic_report(diagnostics, loc, sev, rule_id, msg);
 }
 
+static int tb_has_decl(const JZASTNode *tb,
+                       JZASTNodeType block_type,
+                       JZASTNodeType decl_type,
+                       const char *name)
+{
+    if (!tb || !name) return 0;
+
+    for (size_t i = 0; i < tb->child_count; ++i) {
+        const JZASTNode *block = tb->children[i];
+        if (!block || block->type != block_type) continue;
+
+        for (size_t j = 0; j < block->child_count; ++j) {
+            const JZASTNode *decl = block->children[j];
+            if (!decl || decl->type != decl_type || !decl->name) continue;
+            if (strcmp(decl->name, name) == 0) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int tb_has_clock_decl(const JZASTNode *tb, const char *name)
+{
+    return tb_has_decl(tb, JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL, name);
+}
+
+static void check_stimulus_clock_assignments(const JZASTNode *tb,
+                                             const JZASTNode *block,
+                                             JZDiagnosticList *diagnostics)
+{
+    const char *rule_id;
+    const char *directive_name;
+
+    if (!tb || !block) return;
+
+    if (block->type == JZ_AST_TB_SETUP) {
+        rule_id = "TB_SETUP_CLOCK_ASSIGN";
+        directive_name = "@setup";
+    } else if (block->type == JZ_AST_TB_UPDATE) {
+        rule_id = "TB_UPDATE_CLOCK_ASSIGN";
+        directive_name = "@update";
+    } else {
+        return;
+    }
+
+    for (size_t i = 0; i < block->child_count; ++i) {
+        const JZASTNode *stmt = block->children[i];
+        const JZASTNode *lhs;
+        char msg[512];
+
+        if (!stmt || stmt->type != JZ_AST_STMT_ASSIGN || stmt->child_count < 1) {
+            continue;
+        }
+
+        lhs = stmt->children[0];
+        if (!lhs || lhs->type != JZ_AST_EXPR_IDENTIFIER || !lhs->name) {
+            continue;
+        }
+
+        if (!tb_has_clock_decl(tb, lhs->name)) {
+            continue;
+        }
+
+        snprintf(msg, sizeof(msg),
+                 "%s may not assign clock signal `%s`; clocks are driven exclusively\n"
+                 "by @clock directives",
+                 directive_name, lhs->name);
+        tb_report_rule(diagnostics, lhs->loc, rule_id, msg);
+    }
+}
+
 /**
  * @brief Check that a @testbench's module name refers to a module defined
  *        as a sibling child of the root.
@@ -137,6 +210,22 @@ static void check_test_block(JZASTNode *test, JZDiagnosticList *diagnostics)
 /**
  * @brief Validate a @testbench block.
  */
+static void check_test_block_semantics(const JZASTNode *tb,
+                                       const JZASTNode *test,
+                                       JZDiagnosticList *diagnostics)
+{
+    if (!tb || !test) return;
+
+    for (size_t i = 0; i < test->child_count; ++i) {
+        const JZASTNode *child = test->children[i];
+        if (!child) continue;
+
+        if (child->type == JZ_AST_TB_SETUP || child->type == JZ_AST_TB_UPDATE) {
+            check_stimulus_clock_assignments(tb, child, diagnostics);
+        }
+    }
+}
+
 static void validate_testbench(JZASTNode *tb, JZASTNode *root,
                                JZDiagnosticList *diagnostics)
 {
@@ -154,6 +243,7 @@ static void validate_testbench(JZASTNode *tb, JZASTNode *root,
         if (child->type == JZ_AST_TB_TEST) {
             test_count++;
             check_test_block(child, diagnostics);
+            check_test_block_semantics(tb, child, diagnostics);
         }
     }
 

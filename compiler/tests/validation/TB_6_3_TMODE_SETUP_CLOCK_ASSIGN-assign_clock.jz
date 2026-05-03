@@ -1,0 +1,41 @@
+// TB_SETUP_CLOCK_ASSIGN: @setup may not assign testbench clocks.
+// Target diagnostic: TB_SETUP_CLOCK_ASSIGN on the clk assignment in @setup.
+// Non-target diagnostics: none.
+// Fixture plan: one valid module, one valid TEST, valid @new wiring, and a
+// single invalid clock write in @setup.
+
+@module SetupClockAssignDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] data_in;
+        OUT [1] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out = data_in;
+    }
+@endmod
+
+@testbench SetupClockAssignDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [1];
+        data_out [1];
+    }
+
+    TEST "setup assigns a clock" {
+        @new dut SetupClockAssignDut {
+            clk [1] = clk;
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+
+        @setup {
+            clk <= 1'b1;
+            data_in <= 1'b0;
+        }
+    }
+@endtb
