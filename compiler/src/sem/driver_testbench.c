@@ -64,6 +64,11 @@ static int tb_has_clock_decl(const JZASTNode *tb, const char *name)
     return tb_has_decl(tb, JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL, name);
 }
 
+static int tb_has_wire_decl(const JZASTNode *tb, const char *name)
+{
+    return tb_has_decl(tb, JZ_AST_TB_WIRE_BLOCK, JZ_AST_TB_WIRE_DECL, name);
+}
+
 static void check_clock_directive(const JZASTNode *tb,
                                   const JZASTNode *clock_adv,
                                   const JZBuffer *project_symbols,
@@ -188,6 +193,23 @@ static void check_stimulus_clock_assignments(const JZASTNode *tb,
 
         lhs = stmt->children[0];
         if (!lhs || lhs->type != JZ_AST_EXPR_IDENTIFIER || !lhs->name) {
+            continue;
+        }
+
+        if (block->type == JZ_AST_TB_UPDATE && !tb_has_wire_decl(tb, lhs->name)) {
+            if (tb_has_clock_decl(tb, lhs->name)) {
+                snprintf(msg, sizeof(msg),
+                         "%s may not assign clock signal `%s`; clocks are driven exclusively\n"
+                         "by @clock directives",
+                         directive_name, lhs->name);
+                tb_report_rule(diagnostics, lhs->loc, rule_id, msg);
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "@update may only assign testbench WIRE identifier `%s`;\n"
+                         "declare `%s` in the WIRE block or assign a declared testbench wire",
+                         lhs->name, lhs->name);
+                tb_report_rule(diagnostics, lhs->loc, "TB_UPDATE_NOT_WIRE", msg);
+            }
             continue;
         }
 
