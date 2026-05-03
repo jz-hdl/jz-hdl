@@ -569,6 +569,9 @@ static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
                                            char *path_buf,
                                            size_t path_buf_size)
 {
+    FILE *fout = NULL;
+    char tmp_path[1024];
+
     if (!mod || !mem || !mem->init.blob || !path_buf || path_buf_size == 0) {
         return -1;
     }
@@ -587,8 +590,7 @@ static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
         return -1;
     }
 
-    FILE *fout = fopen(path_buf, "w");
-    if (!fout) {
+    if (jz_open_exclusive_temp_output(path_buf, &fout, tmp_path, sizeof(tmp_path)) != 0) {
         return -1;
     }
 
@@ -613,11 +615,10 @@ static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
         fputc('\n', fout);
     }
 
-    if (fflush(fout) != 0 || ferror(fout)) {
-        fclose(fout);
+    if (jz_commit_exclusive_temp_output(fout, tmp_path, path_buf) != 0) {
         return -1;
     }
-    return fclose(fout) == 0 ? 0 : -1;
+    return 0;
 }
 
 int emit_memory_initialization(FILE *out, const IR_Module *mod)

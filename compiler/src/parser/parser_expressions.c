@@ -22,6 +22,8 @@
 
 #include "parser_internal.h"
 
+static unsigned g_parser_expr_depth = 0;
+
 /**
  * @brief Parse postfix expressions such as slicing and indexing.
  *
@@ -1087,5 +1089,18 @@ JZASTNode *parse_simple_index_expr(Parser *p) {
  * @return Expression AST node, or NULL on error
  */
 JZASTNode *parse_expression(Parser *p) {
-    return parse_ternary_expr(p);
+    JZASTNode *expr = NULL;
+
+    if (g_parser_expr_depth >= JZ_MAX_PARSER_EXPR_DEPTH) {
+        parser_report_rule(p,
+                           peek(p),
+                           "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",
+                           "expression nesting exceeds the parser safety limit");
+        return NULL;
+    }
+
+    g_parser_expr_depth++;
+    expr = parse_ternary_expr(p);
+    g_parser_expr_depth--;
+    return expr;
 }

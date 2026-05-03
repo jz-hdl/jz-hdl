@@ -18,9 +18,15 @@ typedef struct LexerState {
     JZTokenStream   *out;
     JZDiagnosticList *diagnostics;
     int              had_error;
+    int              stop_lexing;
     size_t           last_token_end;
     int              last_token_valid;
 } LexerState;
+
+static void lexer_report_rule(LexerState *st,
+                              JZLocation loc,
+                              const char *rule_id,
+                              const char *fallback_message);
 
 static int lexer_ensure_capacity(JZTokenStream *s) {
     if (s->count == s->capacity) {
@@ -56,12 +62,22 @@ static void lexer_report_parse_error(LexerState *st,
 }
 
 static void emit_token(LexerState *st, JZTokenType type, const char *start, size_t length, JZLocation loc) {
+    if (st->out->count >= JZ_MAX_SOURCE_TOKENS) {
+        lexer_report_rule(st,
+                          loc,
+                          "SOURCE_TOKEN_LIMIT_EXCEEDED",
+                          "source file token count exceeds the compiler safety limit");
+        st->stop_lexing = 1;
+        return;
+    }
     if (lexer_ensure_capacity(st->out) != 0) {
         st->had_error = 1;
+        st->stop_lexing = 1;
         return;
     }
     if (st->out->count >= st->out->capacity) {
         st->had_error = 1;
+        st->stop_lexing = 1;
         return;
     }
     JZToken *t = &st->out->tokens[st->out->count++];
@@ -364,18 +380,59 @@ static int skip_block_comment(LexerState *st, JZLocation start_loc) {
 static void lex_one_token(LexerState *st) {
     const char *src = st->src;
 
-    while (st->pos < st->len) {
-        char c = src[st->pos];
-        if (c == ' ' || c == '\t' || c == '\r') {
-            st->pos++;
-            st->column++;
-            continue;
+    if (st->stop_lexing) {
+        return;
+    }
+
+    for (;;) {
+        while (st->pos < st->len) {
+            char c = src[st->pos];
+            if (c == ' ' || c == '\t' || c == '\r') {
+                st->pos++;
+                st->column++;
+                continue;
+            }
+            if (c == '\n') {
+                st->pos++;
+                st->line++;
+                st->column = 1;
+                continue;
+            }
+            break;
         }
-        if (c == '\n') {
-            st->pos++;
-            st->line++;
-            st->column = 1;
-            continue;
+
+        if (st->pos >= st->len) {
+            break;
+        }
+
+        /* Comments */
+        if (src[st->pos] == '/' && st->pos + 1 < st->len) {
+            JZLocation loc = { st->filename, st->line, st->column };
+            char n = src[st->pos + 1];
+            if (n == '/' || n == '*') {
+                int in_token = st->last_token_valid && (st->last_token_end == st->pos);
+                if (in_token) {
+                    JZLocation loc_comment = loc;
+                    lexer_report_parse_error(st, loc_comment, "COMMENT_IN_TOKEN",
+                                             "comment appears immediately adjacent to a token (inside token)");
+                }
+            }
+            if (n == '/') {
+                st->pos += 2;
+                st->column += 2;
+                skip_line_comment(st);
+                if (st->stop_lexing) return;
+                continue;
+            } else if (n == '*') {
+                JZLocation comment_loc = loc;
+                st->pos += 2;
+                st->column += 2;
+                if (skip_block_comment(st, comment_loc) != 0) {
+                    return;
+                }
+                if (st->stop_lexing) return;
+                continue;
+            }
         }
         break;
     }
@@ -388,40 +445,6 @@ static void lex_one_token(LexerState *st) {
 
     JZLocation loc = { st->filename, st->line, st->column };
     char c = src[st->pos];
-
-    /* Comments */
-    if (c == '/' && st->pos + 1 < st->len) {
-        char n = src[st->pos + 1];
-        if (n == '/' || n == '*') {
-            int in_token = st->last_token_valid && (st->last_token_end == st->pos);
-            if (in_token) {
-                JZLocation loc_comment = loc;
-                lexer_report_parse_error(st, loc_comment, "COMMENT_IN_TOKEN",
-                                         "comment appears immediately adjacent to a token (inside token)");
-            }
-        }
-        if (n == '/') {
-            st->pos += 2;
-            st->column += 2;
-            skip_line_comment(st);
-            if (!st->had_error) {
-                lex_one_token(st);
-            }
-            return;
-        } else if (n == '*') {
-            JZLocation comment_loc = loc;
-            st->pos += 2;
-            st->column += 2;
-            if (skip_block_comment(st, comment_loc) != 0) {
-                /* Nested or unterminated block comment: error already reported. */
-                return;
-            }
-            if (!st->had_error) {
-                lex_one_token(st);
-            }
-            return;
-        }
-    }
 
     /* String literal with minimal escape support (\\, \", \n). */
     if (c == '"') {
@@ -970,15 +993,26 @@ int jz_lex_source(const char *filename,
     st.out = out_stream;
     st.diagnostics = diagnostics;
     st.had_error = 0;
+    st.stop_lexing = 0;
     st.last_token_end = 0;
     st.last_token_valid = 0;
 
     while (1) {
         lex_one_token(&st);
+        if (st.stop_lexing) {
+            break;
+        }
         if (st.out->count > 0 &&
             st.out->tokens[st.out->count - 1].type == JZ_TOK_EOF) {
             break;
         }
+    }
+
+    if ((st.out->count == 0 ||
+         st.out->tokens[st.out->count - 1].type != JZ_TOK_EOF) &&
+        st.out->count < JZ_MAX_SOURCE_TOKENS) {
+        JZLocation loc = { filename, st.line, st.column };
+        emit_token(&st, JZ_TOK_EOF, NULL, 0, loc);
     }
 
     /* Propagate an overall failure status when any lexical error was

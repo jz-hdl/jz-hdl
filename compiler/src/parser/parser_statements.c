@@ -16,6 +16,8 @@
 
 #include "parser_internal.h"
 
+static unsigned g_parser_stmt_depth = 0;
+
 
 /**
  * @brief Parse the primary form of an assignment lvalue.
@@ -956,15 +958,24 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
  * @return 0 on success, -1 on error
  */
 int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, int is_sync) {
+    if (g_parser_stmt_depth >= JZ_MAX_PARSER_STATEMENT_DEPTH) {
+        parser_report_rule(p,
+                           peek(p),
+                           "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",
+                           "statement nesting exceeds the parser safety limit");
+        return -1;
+    }
+
+    g_parser_stmt_depth++;
     for (;;) {
         const JZToken *t = peek(p);
         if (t->type == terminator) {
             advance(p); /* consume terminator */
-            return 0;
+            break;
         }
         if (t->type == JZ_TOK_EOF) {
             parser_error(p, "unterminated block (missing closing terminator)");
-            return -1;
+            goto fail;
         }
         if (t->type == JZ_TOK_SEMICOLON) {
             advance(p);
@@ -973,13 +984,13 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
 
         if (t->type == JZ_TOK_KW_IF) {
             if (parse_if_chain(p, parent, is_sync) != 0) {
-                return -1;
+                goto fail;
             }
             continue;
         }
         if (t->type == JZ_TOK_KW_SELECT) {
             if (parse_select_stmt(p, parent, is_sync) != 0) {
-                return -1;
+                goto fail;
             }
             continue;
         }
@@ -993,15 +1004,15 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
                                "CASE/DEFAULT must appear inside a SELECT (...) { ... } block;\n"
                                "they cannot be used outside of a SELECT statement");
             advance(p);
-            return -1;
+            goto fail;
         }
         if (t->type == JZ_TOK_KW_APPLY) {
             advance(p);
             JZASTNode *apply = parse_apply_stmt(p);
-            if (!apply) return -1;
+            if (!apply) goto fail;
             if (jz_ast_add_child(parent, apply) != 0) {
                 jz_ast_free(apply);
-                return -1;
+                goto fail;
             }
             continue;
         }
@@ -1022,7 +1033,7 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
         }
         if (t->type == JZ_TOK_KW_FEATURE) {
             if (parse_feature_guard_stmt(p, parent, is_sync) != 0) {
-                return -1;
+                goto fail;
             }
             continue;
         }
@@ -1030,7 +1041,7 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
             /* @else or @endfeat without matching @feature in this block. */
             parser_error(p, "unexpected feature directive without matching @feature");
             advance(p);
-            return -1;
+            goto fail;
         }
         if (t->type == JZ_TOK_KW_CHECK) {
             /* @check is not allowed inside ASYNCHRONOUS/SYNCHRONOUS blocks. */
@@ -1092,10 +1103,17 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
 
         /* Fallback: assignment statement. */
         JZASTNode *stmt = parse_assignment_stmt(p, is_sync);
-        if (!stmt) return -1;
+        if (!stmt) goto fail;
         if (jz_ast_add_child(parent, stmt) != 0) {
             jz_ast_free(stmt);
-            return -1;
+            goto fail;
         }
     }
+
+    g_parser_stmt_depth--;
+    return 0;
+
+fail:
+    g_parser_stmt_depth--;
+    return -1;
 }

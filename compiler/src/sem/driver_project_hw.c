@@ -2,6 +2,7 @@
 #include <strings.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdio.h>
 
 #include "sem_driver.h"
 #include "sem.h"
@@ -1322,6 +1323,15 @@ void sem_check_project_pins(JZASTNode *project,
                                     decl->loc,
                                     "PIN_BUS_WIDTH_INVALID",
                                     "bus pin width must be a positive integer");
+                } else if (rc == 1 && w > JZ_MAX_MAP_PIN_WIDTH) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "pin width %u exceeds the compiler safety limit of %u bits",
+                             w, (unsigned)JZ_MAX_MAP_PIN_WIDTH);
+                    sem_report_rule(diagnostics,
+                                    decl->loc,
+                                    "PIN_WIDTH_LIMIT_EXCEEDED",
+                                    msg);
                 } else if (rc == 0) {
                     long long sval = 0;
                     if (parse_simple_signed_int(decl->width, &sval) && sval <= 0) {
@@ -1681,6 +1691,7 @@ void sem_check_project_map(JZASTNode *project,
     } JZPinCoverage;
 
     JZPinCoverage *pins = (JZPinCoverage *)calloc(pin_count, sizeof(JZPinCoverage));
+    size_t total_bitmap_bytes = 0;
     if (!pins) return;
 
     size_t pi = 0;
@@ -1693,6 +1704,17 @@ void sem_check_project_map(JZASTNode *project,
             int rc = eval_simple_positive_decl_int(syms[i].node->width, &w);
             if (rc == 1 && w > 0u) {
                 pins[pi].width = w;
+                if (w > JZ_MAX_MAP_PIN_WIDTH) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "pin width %u exceeds the compiler safety limit of %u bits",
+                             w, (unsigned)JZ_MAX_MAP_PIN_WIDTH);
+                    sem_report_rule(diagnostics,
+                                    syms[i].node->loc,
+                                    "PIN_WIDTH_LIMIT_EXCEEDED",
+                                    msg);
+                    pins[pi].width = 0u;
+                }
             } else if (rc == -1) {
                 sem_report_rule(diagnostics,
                                 syms[i].node->loc,
@@ -1707,7 +1729,23 @@ void sem_check_project_map(JZASTNode *project,
          * reporting MAP_PIN_DECLARED_NOT_MAPPED.
          */
         if (pins[pi].width >= 1u) {
-            pins[pi].bit_mapped = (unsigned char *)calloc(pins[pi].width, sizeof(unsigned char));
+            if (jz_size_add_checked(total_bitmap_bytes,
+                                    (size_t)pins[pi].width,
+                                    &total_bitmap_bytes) != 0 ||
+                total_bitmap_bytes > JZ_MAX_MAP_BITMAP_BYTES) {
+                char msg[256];
+                snprintf(msg, sizeof(msg),
+                         "MAP pin coverage bitmap footprint exceeds the compiler safety limit of %u byte(s)",
+                         (unsigned)JZ_MAX_MAP_BITMAP_BYTES);
+                sem_report_rule(diagnostics,
+                                syms[i].node ? syms[i].node->loc : project->loc,
+                                "MAP_BITMAP_FOOTPRINT_LIMIT_EXCEEDED",
+                                msg);
+                pins[pi].width = 0u;
+            } else {
+                pins[pi].bit_mapped =
+                    (unsigned char *)calloc(pins[pi].width, sizeof(unsigned char));
+            }
         }
         ++pi;
     }

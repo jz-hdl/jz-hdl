@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/ast.h"
+#include "../../include/util.h"
 
 static void print_escaped_string(FILE *out, const char *s) {
     fputc('"', out);
@@ -149,7 +150,7 @@ static void indent(FILE *out, int level) {
     for (int i = 0; i < level; ++i) fputs("  ", out);
 }
 
-static void print_node(FILE *out, const JZASTNode *node, int level) {
+static void print_node(FILE *out, const JZASTNode *node, int level, unsigned depth) {
     indent(out, level);
     fputc('{', out);
 
@@ -197,11 +198,17 @@ static void print_node(FILE *out, const JZASTNode *node, int level) {
     }
     fputc('}', out);
 
+    if (depth >= JZ_MAX_AST_DEPTH) {
+        fputs(", \"truncated\": true", out);
+        fputc('}', out);
+        return;
+    }
+
     /* children */
     if (node->child_count > 0) {
         fputs(", \"children\": [\n", out);
         for (size_t i = 0; i < node->child_count; ++i) {
-            print_node(out, node->children[i], level + 1);
+            print_node(out, node->children[i], level + 1, depth + 1);
             if (i + 1 < node->child_count) fputc(',', out);
             fputc('\n', out);
         }
@@ -217,6 +224,6 @@ void jz_ast_print_json(FILE *out, const JZASTNode *root) {
         fputs("null\n", out);
         return;
     }
-    print_node(out, root, 0);
+    print_node(out, root, 0, 0);
     fputc('\n', out);
 }

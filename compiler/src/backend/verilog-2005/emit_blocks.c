@@ -18,12 +18,17 @@
 
 #include "verilog_internal.h"
 #include "ir.h"
+#include "../../../include/util.h"
 
 /* Global flag for skipping BLOCK memory accesses in main block. */
 int g_skip_block_mem_accesses = 0;
 
 /* Global flag for skipping INOUT port assignments in async block. */
 int g_skip_inout_port_assigns = 0;
+
+static unsigned s_emit_blocks_expr_depth = 0;
+static unsigned s_emit_blocks_stmt_depth = 0;
+static int s_emit_blocks_depth_hit = 0;
 
 /* -------------------------------------------------------------------------
  * BLOCK memory helpers for BSRAM inference
@@ -56,7 +61,24 @@ int stmt_is_skipped_block_mem_write(const IR_Module *mod, const IR_Stmt *stmt)
 }
 
 /* Check if an expression contains a BLOCK memory read. */
+static int expr_has_block_mem_read_impl(const IR_Module *mod, const IR_Expr *expr);
+
 static int expr_has_block_mem_read(const IR_Module *mod, const IR_Expr *expr)
+{
+    if (!mod || !expr) {
+        return 0;
+    }
+    if (s_emit_blocks_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+        s_emit_blocks_depth_hit = 1;
+        return 0;
+    }
+    ++s_emit_blocks_expr_depth;
+    int rc = expr_has_block_mem_read_impl(mod, expr);
+    --s_emit_blocks_expr_depth;
+    return rc;
+}
+
+static int expr_has_block_mem_read_impl(const IR_Module *mod, const IR_Expr *expr)
 {
     if (!mod || !expr) {
         return 0;
@@ -242,11 +264,33 @@ static void collect_from_block_internal(const IR_Module *mod, const IR_BlockStmt
     }
 }
 
+static void collect_block_mem_accesses_internal_impl(const IR_Module *mod, const IR_Stmt *stmt,
+                                                     const IR_Expr *cond,
+                                                     const IR_Expr *select_selector,
+                                                     const IR_Expr *case_value,
+                                                     BlockMemAccessList *list);
+
 static void collect_block_mem_accesses_internal(const IR_Module *mod, const IR_Stmt *stmt,
                                                 const IR_Expr *cond,
                                                 const IR_Expr *select_selector,
                                                 const IR_Expr *case_value,
                                                 BlockMemAccessList *list)
+{
+    if (!mod || !stmt) return;
+    if (s_emit_blocks_stmt_depth >= JZ_MAX_IR_STMT_DEPTH) {
+        s_emit_blocks_depth_hit = 1;
+        return;
+    }
+    ++s_emit_blocks_stmt_depth;
+    collect_block_mem_accesses_internal_impl(mod, stmt, cond, select_selector, case_value, list);
+    --s_emit_blocks_stmt_depth;
+}
+
+static void collect_block_mem_accesses_internal_impl(const IR_Module *mod, const IR_Stmt *stmt,
+                                                     const IR_Expr *cond,
+                                                     const IR_Expr *select_selector,
+                                                     const IR_Expr *case_value,
+                                                     BlockMemAccessList *list)
 {
     if (!mod || !stmt) return;
 
@@ -394,7 +438,14 @@ static void collect_block_mem_accesses_internal(const IR_Module *mod, const IR_S
 static void collect_block_mem_accesses(const IR_Module *mod, const IR_Stmt *stmt,
                                        const IR_Expr *cond, BlockMemAccessList *list)
 {
+    s_emit_blocks_expr_depth = 0;
+    s_emit_blocks_stmt_depth = 0;
+    s_emit_blocks_depth_hit = 0;
     collect_block_mem_accesses_internal(mod, stmt, cond, NULL, NULL, list);
+    if (s_emit_blocks_depth_hit) {
+        access_list_free(list);
+        access_list_init(list);
+    }
 }
 
 /* -------------------------------------------------------------------------
@@ -443,8 +494,27 @@ static void emit_mem_access_stmt(FILE *out, const IR_Module *mod,
  * (to skip reset assignments like addr_reg <= 0). Returns the first
  * non-literal RHS found.
  */
+static const IR_Expr *find_addr_capture_rhs_impl(const IR_Stmt *stmt,
+                                                 int addr_reg_signal_id);
+
 static const IR_Expr *find_addr_capture_rhs(const IR_Stmt *stmt,
-                                             int addr_reg_signal_id)
+                                            int addr_reg_signal_id)
+{
+    if (!stmt || addr_reg_signal_id < 0) {
+        return NULL;
+    }
+    if (s_emit_blocks_stmt_depth >= JZ_MAX_IR_STMT_DEPTH) {
+        s_emit_blocks_depth_hit = 1;
+        return NULL;
+    }
+    ++s_emit_blocks_stmt_depth;
+    const IR_Expr *result = find_addr_capture_rhs_impl(stmt, addr_reg_signal_id);
+    --s_emit_blocks_stmt_depth;
+    return result;
+}
+
+static const IR_Expr *find_addr_capture_rhs_impl(const IR_Stmt *stmt,
+                                                 int addr_reg_signal_id)
 {
     if (!stmt || addr_reg_signal_id < 0) {
         return NULL;
@@ -573,9 +643,11 @@ static void emit_bsram_read_blocks(FILE *out, const IR_Module *mod,
             /* Find the address capture expression by walking the IR tree
              * for assignments to the addr_reg signal outside reset.
              */
+            s_emit_blocks_stmt_depth = 0;
+            s_emit_blocks_depth_hit = 0;
             const IR_Expr *addr_rhs = find_addr_capture_rhs(cd->statements,
                                                               mp->addr_reg_signal_id);
-            if (!addr_rhs) {
+            if (!addr_rhs || s_emit_blocks_depth_hit) {
                 continue;
             }
 

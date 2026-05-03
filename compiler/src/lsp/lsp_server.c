@@ -597,12 +597,18 @@ static void send_notification(const char *method, const char *params_json) {
 
 static void handle_initialize(const char *msg, int id, LspDocStore *store) {
     (void)store;
+    (void)id;
     lsp_log("received initialize request");
 
     /* Extract workspace root from params.rootUri (preferred) or
      * params.rootPath (deprecated fallback). */
-    char params[4096];
-    if (lsp_json_get_object(msg, "params", params, sizeof(params)) == 0) {
+    char params[4096] = {0};
+    if (lsp_json_get_object(msg, "params", params, sizeof(params)) != 0) {
+        lsp_log("initialize request missing valid params object");
+        return;
+    }
+
+    {
         char root_uri[2048] = {0};
         if (lsp_json_get_string(params, "rootUri", root_uri, sizeof(root_uri)) == 0 &&
             root_uri[0] != '\0') {
@@ -741,7 +747,22 @@ static void publish_diagnostics_via_project(const char *uri,
 
     /* Read the project file from disk. */
     size_t proj_size = 0;
-    char *proj_source = jz_read_entire_file(project_path, &proj_size);
+    if (jz_get_file_size(project_path, &proj_size) == 0 &&
+        proj_size > JZ_MAX_SOURCE_FILE_BYTES) {
+        lsp_log("project file exceeds safety limit: %s (%zu bytes)",
+                project_path, proj_size);
+        jz_compiler_dispose(&compiler);
+        jz_path_security_cleanup();
+        LspJson j;
+        lsp_json_init(&j);
+        lsp_json_append(&j, "{\"uri\":");
+        lsp_json_append_escaped(&j, uri);
+        lsp_json_append(&j, ",\"diagnostics\":[]}");
+        send_notification("textDocument/publishDiagnostics", j.data);
+        lsp_json_free(&j);
+        return;
+    }
+    char *proj_source = jz_read_entire_file_limit(project_path, JZ_MAX_SOURCE_FILE_BYTES, &proj_size);
     if (!proj_source) {
         lsp_log("failed to read project file: %s", project_path);
         jz_compiler_dispose(&compiler);

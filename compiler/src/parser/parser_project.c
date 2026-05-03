@@ -852,6 +852,8 @@ JZASTNode *jz_parse_file(const char *filename,
     p.tokens = stream->tokens;
     p.count = stream->count;
     p.pos = 0;
+    p.expr_depth = 0;
+    p.stmt_depth = 0;
     p.diagnostics = diagnostics;
 
     JZLocation root_loc = { filename, 1, 1 };

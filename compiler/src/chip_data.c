@@ -256,6 +256,33 @@ int jz_json_skip(const jsmntok_t *toks, int count, int index)
     return next;
 }
 
+static int jz_json_check_nesting_limit(const jsmntok_t *toks,
+                                       int count,
+                                       unsigned max_depth)
+{
+    unsigned depth = 0;
+    int end_stack[JZ_MAX_CHIP_JSON_NESTING_DEPTH];
+
+    if (!toks || count <= 0) return 0;
+    if (max_depth == 0 || max_depth > JZ_MAX_CHIP_JSON_NESTING_DEPTH) {
+        max_depth = JZ_MAX_CHIP_JSON_NESTING_DEPTH;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        while (depth > 0 && toks[i].start >= end_stack[depth - 1]) {
+            --depth;
+        }
+        if (toks[i].type == JSMN_OBJECT || toks[i].type == JSMN_ARRAY) {
+            if (depth >= max_depth) {
+                return -1;
+            }
+            end_stack[depth++] = toks[i].end;
+        }
+    }
+
+    return 0;
+}
+
 const char *jz_chip_mem_type_name(JZChipMemType type)
 {
     switch (type) {
@@ -2119,8 +2146,15 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
     char *path = jz_build_chip_json_path(project_filename, chip_id);
     char *path_lower = NULL;
     char *json = NULL;
+    size_t json_size = 0;
     if (path) {
-        json = jz_read_entire_file(path, NULL);
+        if (jz_get_file_size(path, &json_size) == 0 &&
+            json_size > JZ_MAX_LOCAL_CHIP_JSON_BYTES) {
+            jz_chip_set_error("CHIP_JSON_TOO_LARGE: local chip JSON '%s' is %zu byte(s), exceeding the safety limit of %u byte(s)",
+                              path, json_size, (unsigned)JZ_MAX_LOCAL_CHIP_JSON_BYTES);
+        } else {
+            json = jz_read_entire_file_limit(path, JZ_MAX_LOCAL_CHIP_JSON_BYTES, &json_size);
+        }
     }
     if (!json && path == NULL) {
         jz_chip_set_error("local chip JSON path for '%s' could not be resolved safely", chip_id);
@@ -2130,7 +2164,13 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
         if (lower) {
             path_lower = jz_build_chip_json_path(project_filename, lower);
             if (path_lower) {
-                json = jz_read_entire_file(path_lower, NULL);
+                if (jz_get_file_size(path_lower, &json_size) == 0 &&
+                    json_size > JZ_MAX_LOCAL_CHIP_JSON_BYTES) {
+                    jz_chip_set_error("CHIP_JSON_TOO_LARGE: local chip JSON '%s' is %zu byte(s), exceeding the safety limit of %u byte(s)",
+                                      path_lower, json_size, (unsigned)JZ_MAX_LOCAL_CHIP_JSON_BYTES);
+                } else {
+                    json = jz_read_entire_file_limit(path_lower, JZ_MAX_LOCAL_CHIP_JSON_BYTES, &json_size);
+                }
             }
             if (!json && !path_lower) {
                 jz_chip_set_error("local chip JSON path for '%s' could not be resolved safely", chip_id);
@@ -2169,6 +2209,13 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
         jz_chip_data_free(out);
         return JZ_CHIP_LOAD_JSON_ERROR;
     }
+    if ((size_t)tok_count > JZ_MAX_LOCAL_CHIP_JSON_TOKENS) {
+        jz_chip_set_error("CHIP_JSON_TOKEN_LIMIT_EXCEEDED: chip JSON token count %d exceeds the safety limit of %u token(s)",
+                          tok_count, (unsigned)JZ_MAX_LOCAL_CHIP_JSON_TOKENS);
+        free(json);
+        jz_chip_data_free(out);
+        return JZ_CHIP_LOAD_JSON_ERROR;
+    }
 
     jsmntok_t *toks = (jsmntok_t *)calloc((size_t)tok_count, sizeof(jsmntok_t));
     if (!toks) {
@@ -2180,6 +2227,14 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
     jsmn_init(&parser);
     tok_count = jsmn_parse(&parser, json_source, strlen(json_source), toks, (unsigned int)tok_count);
     if (tok_count <= 0) {
+        free(toks);
+        free(json);
+        jz_chip_data_free(out);
+        return JZ_CHIP_LOAD_JSON_ERROR;
+    }
+    if (jz_json_check_nesting_limit(toks, tok_count, JZ_MAX_CHIP_JSON_NESTING_DEPTH) != 0) {
+        jz_chip_set_error("CHIP_JSON_NESTING_LIMIT_EXCEEDED: chip JSON nesting exceeds the safety limit of %u level(s)",
+                          (unsigned)JZ_MAX_CHIP_JSON_NESTING_DEPTH);
         free(toks);
         free(json);
         jz_chip_data_free(out);

@@ -27,6 +27,23 @@
  */
 static const JZBuffer *g_tristate_project_symbols = NULL;
 static const JZModuleScope *g_tristate_parent_scope = NULL;
+static unsigned g_tristate_depth = 0;
+
+static int tristate_enter_depth(void)
+{
+    if (g_tristate_depth >= JZ_MAX_TRISTATE_DEPTH) {
+        return 0;
+    }
+    ++g_tristate_depth;
+    return 1;
+}
+
+static void tristate_leave_depth(void)
+{
+    if (g_tristate_depth > 0) {
+        --g_tristate_depth;
+    }
+}
 
 void jz_tristate_set_project_symbols(const JZBuffer *project_symbols)
 {
@@ -133,7 +150,18 @@ static int tristate_lhs_matches_port(const JZASTNode *lhs,
     return 0;
 }
 
+static int tristate_expr_is_all_z_literal_impl(const JZASTNode *expr);
+
 static int tristate_expr_is_all_z_literal(const JZASTNode *expr)
+{
+    if (!expr) return 0;
+    if (!tristate_enter_depth()) return 0;
+    int rc = tristate_expr_is_all_z_literal_impl(expr);
+    tristate_leave_depth();
+    return rc;
+}
+
+static int tristate_expr_is_all_z_literal_impl(const JZASTNode *expr)
 {
     if (!expr) return 0;
 
@@ -170,7 +198,18 @@ static int tristate_expr_is_all_z_literal(const JZASTNode *expr)
     return 0;
 }
 
+static int tristate_expr_contains_z_anywhere_impl(const JZASTNode *expr);
+
 static int tristate_expr_contains_z_anywhere(const JZASTNode *expr)
+{
+    if (!expr) return 0;
+    if (!tristate_enter_depth()) return 1;
+    int rc = tristate_expr_contains_z_anywhere_impl(expr);
+    tristate_leave_depth();
+    return rc;
+}
+
+static int tristate_expr_contains_z_anywhere_impl(const JZASTNode *expr)
 {
     if (!expr) return 0;
 
@@ -197,8 +236,21 @@ static int tristate_expr_contains_z_anywhere(const JZASTNode *expr)
     return 0;
 }
 
+static int tristate_port_can_drive_z_in_ast_impl(const JZASTNode *node, const char *name,
+                                                 const char *bus_field);
+
 static int tristate_port_can_drive_z_in_ast(const JZASTNode *node, const char *name,
                                             const char *bus_field)
+{
+    if (!node || !name) return 0;
+    if (!tristate_enter_depth()) return 1;
+    int rc = tristate_port_can_drive_z_in_ast_impl(node, name, bus_field);
+    tristate_leave_depth();
+    return rc;
+}
+
+static int tristate_port_can_drive_z_in_ast_impl(const JZASTNode *node, const char *name,
+                                                 const char *bus_field)
 {
     if (!node || !name) return 0;
 
@@ -229,8 +281,21 @@ static int tristate_port_can_drive_z_in_ast(const JZASTNode *node, const char *n
     return 0;
 }
 
+static int tristate_port_can_drive_non_z_in_ast_impl(const JZASTNode *node, const char *name,
+                                                     const char *bus_field);
+
 static int tristate_port_can_drive_non_z_in_ast(const JZASTNode *node, const char *name,
                                                 const char *bus_field)
+{
+    if (!node || !name) return 0;
+    if (!tristate_enter_depth()) return 1;
+    int rc = tristate_port_can_drive_non_z_in_ast_impl(node, name, bus_field);
+    tristate_leave_depth();
+    return rc;
+}
+
+static int tristate_port_can_drive_non_z_in_ast_impl(const JZASTNode *node, const char *name,
+                                                     const char *bus_field)
 {
     if (!node || !name) return 0;
 
@@ -409,10 +474,26 @@ static size_t tristate_format_condition(const JZASTNode *expr, char *buf, size_t
     return 0;
 }
 
+static void tristate_collect_compare_terms_impl(const JZASTNode *cond,
+                                                JZCompareTerm *terms,
+                                                size_t *n_terms,
+                                                size_t max_terms);
+
 static void tristate_collect_compare_terms(const JZASTNode *cond,
                                            JZCompareTerm *terms,
                                            size_t *n_terms,
                                            size_t max_terms)
+{
+    if (!cond || !terms || !n_terms || *n_terms >= max_terms) return;
+    if (!tristate_enter_depth()) return;
+    tristate_collect_compare_terms_impl(cond, terms, n_terms, max_terms);
+    tristate_leave_depth();
+}
+
+static void tristate_collect_compare_terms_impl(const JZASTNode *cond,
+                                                JZCompareTerm *terms,
+                                                size_t *n_terms,
+                                                size_t max_terms)
 {
     if (!cond || !terms || !n_terms || *n_terms >= max_terms) return;
 
@@ -460,8 +541,18 @@ static void tristate_collect_compare_terms(const JZASTNode *cond,
 }
 
 /* Forward declaration. */
+static int tristate_extract_guard_from_cond_impl(const JZASTNode *cond,
+                                                 JZTristateGuardInfo *out);
+
 static int tristate_extract_guard_from_cond(const JZASTNode *cond,
-                                            JZTristateGuardInfo *out);
+                                            JZTristateGuardInfo *out)
+{
+    if (!cond || !out) return 0;
+    if (!tristate_enter_depth()) return 0;
+    int rc = tristate_extract_guard_from_cond_impl(cond, out);
+    tristate_leave_depth();
+    return rc;
+}
 
 /* -------------------------------------------------------------------------
  *  IF/ELIF guard extraction
@@ -473,11 +564,24 @@ typedef struct {
     int              neg;
 } JZGuardTerm;
 
+static int tristate_find_if_guards_recurse_impl(const JZASTNode *node,
+                                                const JZASTNode *target,
+                                                JZGuardTerm *terms,
+                                                size_t *n_terms,
+                                                size_t max_terms);
+
 static int tristate_find_if_guards_recurse(const JZASTNode *node,
-                                            const JZASTNode *target,
-                                            JZGuardTerm *terms,
-                                            size_t *n_terms,
-                                            size_t max_terms);
+                                           const JZASTNode *target,
+                                           JZGuardTerm *terms,
+                                           size_t *n_terms,
+                                           size_t max_terms)
+{
+    if (!node || !target) return 0;
+    if (!tristate_enter_depth()) return 0;
+    int rc = tristate_find_if_guards_recurse_impl(node, target, terms, n_terms, max_terms);
+    tristate_leave_depth();
+    return rc;
+}
 
 static int tristate_scan_children(JZASTNode **children,
                                    size_t count,
@@ -539,11 +643,11 @@ static int tristate_scan_children(JZASTNode **children,
     return 0;
 }
 
-static int tristate_find_if_guards_recurse(const JZASTNode *node,
-                                            const JZASTNode *target,
-                                            JZGuardTerm *terms,
-                                            size_t *n_terms,
-                                            size_t max_terms)
+static int tristate_find_if_guards_recurse_impl(const JZASTNode *node,
+                                                const JZASTNode *target,
+                                                JZGuardTerm *terms,
+                                                size_t *n_terms,
+                                                size_t max_terms)
 {
     if (!node || !target) return 0;
 
@@ -653,8 +757,8 @@ static int tristate_extract_if_guard(const JZASTNode *module_root,
     return 3;
 }
 
-static int tristate_extract_guard_from_cond(const JZASTNode *cond,
-                                            JZTristateGuardInfo *out)
+static int tristate_extract_guard_from_cond_impl(const JZASTNode *cond,
+                                                 JZTristateGuardInfo *out)
 {
     if (!cond || !out) return 0;
     out->input_name = NULL;
@@ -746,10 +850,27 @@ static int tristate_extract_guard_from_cond(const JZASTNode *cond,
     return 0;
 }
 
+static int tristate_find_port_guard_in_ast_impl(const JZASTNode *node,
+                                                const char *port_name,
+                                                const char *bus_field,
+                                                JZTristateGuardInfo *out);
+
 static int tristate_find_port_guard_in_ast(const JZASTNode *node,
                                            const char *port_name,
                                            const char *bus_field,
                                            JZTristateGuardInfo *out)
+{
+    if (!node || !port_name || !out) return 0;
+    if (!tristate_enter_depth()) return 0;
+    int rc = tristate_find_port_guard_in_ast_impl(node, port_name, bus_field, out);
+    tristate_leave_depth();
+    return rc;
+}
+
+static int tristate_find_port_guard_in_ast_impl(const JZASTNode *node,
+                                                const char *port_name,
+                                                const char *bus_field,
+                                                JZTristateGuardInfo *out)
 {
     if (!node || !port_name || !out) return 0;
 
@@ -918,10 +1039,27 @@ typedef struct {
 
 #define JZ_MAX_ALIASES 32
 
+static size_t tristate_collect_bus_aliases_impl(const JZASTNode *node,
+                                                const char *port_name,
+                                                JZAliasEntry *aliases,
+                                                size_t max_aliases);
+
 static size_t tristate_collect_bus_aliases(const JZASTNode *node,
                                            const char *port_name,
                                            JZAliasEntry *aliases,
                                            size_t max_aliases)
+{
+    if (!node || !port_name || !aliases) return 0;
+    if (!tristate_enter_depth()) return 0;
+    size_t rc = tristate_collect_bus_aliases_impl(node, port_name, aliases, max_aliases);
+    tristate_leave_depth();
+    return rc;
+}
+
+static size_t tristate_collect_bus_aliases_impl(const JZASTNode *node,
+                                                const char *port_name,
+                                                JZAliasEntry *aliases,
+                                                size_t max_aliases)
 {
     size_t count = 0;
     if (!node || !port_name || !aliases) return 0;
@@ -1209,10 +1347,27 @@ static int tristate_literal_is_nonzero(const char *lit)
  * Returns: 1 = definitely produces only z (caller should return 0 for
  *              can_produce_non_z), 0 = cannot prove.
  */
+static int tristate_instance_ternary_forces_z_impl(const JZASTNode *node,
+                                                   const char *port_name,
+                                                   const char *bus_field,
+                                                   const JZASTNode *inst_node);
+
 static int tristate_instance_ternary_forces_z(const JZASTNode *node,
-                                               const char *port_name,
-                                               const char *bus_field,
-                                               const JZASTNode *inst_node)
+                                              const char *port_name,
+                                              const char *bus_field,
+                                              const JZASTNode *inst_node)
+{
+    if (!node || !port_name) return 0;
+    if (!tristate_enter_depth()) return 0;
+    int rc = tristate_instance_ternary_forces_z_impl(node, port_name, bus_field, inst_node);
+    tristate_leave_depth();
+    return rc;
+}
+
+static int tristate_instance_ternary_forces_z_impl(const JZASTNode *node,
+                                                   const char *port_name,
+                                                   const char *bus_field,
+                                                   const JZASTNode *inst_node)
 {
     if (!node || !port_name) return 0;
 
@@ -1359,9 +1514,24 @@ static int tristate_instance_can_produce_non_z(const JZASTNode *inst_node,
     return tristate_port_can_drive_non_z_in_ast(child_scope->node, child_port_name, bus_field);
 }
 
+static const JZASTNode *tristate_find_port_driver_stmt_impl(const JZASTNode *node,
+                                                            const char *port_name,
+                                                            const char *bus_field);
+
 static const JZASTNode *tristate_find_port_driver_stmt(const JZASTNode *node,
-                                                        const char *port_name,
-                                                        const char *bus_field)
+                                                       const char *port_name,
+                                                       const char *bus_field)
+{
+    if (!node || !port_name) return NULL;
+    if (!tristate_enter_depth()) return NULL;
+    const JZASTNode *rc = tristate_find_port_driver_stmt_impl(node, port_name, bus_field);
+    tristate_leave_depth();
+    return rc;
+}
+
+static const JZASTNode *tristate_find_port_driver_stmt_impl(const JZASTNode *node,
+                                                            const char *port_name,
+                                                            const char *bus_field)
 {
     if (!node || !port_name) return NULL;
 
@@ -1519,6 +1689,7 @@ void jz_tristate_analyze_net(JZTristateNetInfo *info,
                              const JZBuffer *module_scopes)
 {
     if (!info || !net) return;
+    g_tristate_depth = 0;
     memset(info, 0, sizeof(*info));
     info->name = net_name;
 

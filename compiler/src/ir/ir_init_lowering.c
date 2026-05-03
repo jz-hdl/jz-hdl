@@ -84,6 +84,30 @@ static void report_file_error(JZDiagnosticList *diagnostics,
     report_init_lowering_error(diagnostics, msg);
 }
 
+static int check_mem_init_file_size(const char *file_path,
+                                    size_t max_bytes,
+                                    JZDiagnosticList *diagnostics,
+                                    size_t *out_size)
+{
+    size_t file_size = 0;
+
+    if (!file_path) return -1;
+    if (jz_get_file_size(file_path, &file_size) != 0) {
+        report_file_error(diagnostics, file_path,
+                          "failed to stat memory initialization file");
+        return -1;
+    }
+    if (file_size > max_bytes) {
+        report_file_error(diagnostics, file_path,
+                          "memory initialization file exceeds the compiler safety file-size limit");
+        return -1;
+    }
+    if (out_size) {
+        *out_size = file_size;
+    }
+    return 0;
+}
+
 static void set_blob_bit(uint8_t *blob_bytes,
                          int bytes_per_word,
                          int word_width,
@@ -610,7 +634,13 @@ static int lower_text_mem_init(const char *file_path,
                                JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
+    char *contents = NULL;
+
+    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+                                 diagnostics, &file_size) != 0) {
+        return -1;
+    }
+    contents = jz_read_entire_file_limit(file_path, JZ_MAX_MEM_INIT_FILE_BYTES, &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -689,17 +719,27 @@ static int lower_binary_mem_init(const char *file_path,
                                  JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
-    if (!contents) {
-        report_file_error(diagnostics, file_path,
-                          "failed to read memory initialization file");
+    size_t max_bytes = capacity_bytes;
+    char *contents = NULL;
+
+    if (max_bytes > JZ_MAX_MEM_INIT_FILE_BYTES) {
+        max_bytes = JZ_MAX_MEM_INIT_FILE_BYTES;
+    }
+    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+                                 diagnostics, &file_size) != 0) {
         return -1;
     }
 
     if (file_size > capacity_bytes) {
         report_file_error(diagnostics, file_path,
                           "memory initialization file exceeds declared memory size");
-        free(contents);
+        return -1;
+    }
+
+    contents = jz_read_entire_file_limit(file_path, max_bytes, &file_size);
+    if (!contents) {
+        report_file_error(diagnostics, file_path,
+                          "failed to read memory initialization file");
         return -1;
     }
 
@@ -716,7 +756,7 @@ static int lower_coe_mem_init(const char *file_path,
                               JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
+    char *contents = NULL;
     const char *radix_start;
     const char *radix_end;
     const char *vec_start;
@@ -724,6 +764,11 @@ static int lower_coe_mem_init(const char *file_path,
     MemInitRadix radix;
     int addr = 0;
 
+    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+                                 diagnostics, &file_size) != 0) {
+        return -1;
+    }
+    contents = jz_read_entire_file_limit(file_path, JZ_MAX_MEM_INIT_FILE_BYTES, &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -794,7 +839,7 @@ static int lower_mif_mem_init(const char *file_path,
                               JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
+    char *contents = NULL;
     char *stripped = NULL;
     const char *depth_start;
     const char *depth_end;
@@ -812,6 +857,16 @@ static int lower_mif_mem_init(const char *file_path,
     MemInitRadix addr_radix = MEM_RADIX_NONE;
     MemInitRadix data_radix = MEM_RADIX_NONE;
 
+    if ((unsigned)depth > JZ_MAX_MEM_INIT_MIF_DEPTH) {
+        report_file_error(diagnostics, file_path,
+                          "declared MIF depth exceeds the compiler safety limit");
+        return -1;
+    }
+    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+                                 diagnostics, &file_size) != 0) {
+        return -1;
+    }
+    contents = jz_read_entire_file_limit(file_path, JZ_MAX_MEM_INIT_FILE_BYTES, &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -833,6 +888,12 @@ static int lower_mif_mem_init(const char *file_path,
         free(stripped);
         report_file_error(diagnostics, file_path,
                           "missing or invalid DEPTH in MIF file");
+        return -1;
+    }
+    if (mif_depth > (unsigned long long)JZ_MAX_MEM_INIT_MIF_DEPTH) {
+        free(stripped);
+        report_file_error(diagnostics, file_path,
+                          "MIF DEPTH exceeds the compiler safety limit");
         return -1;
     }
 

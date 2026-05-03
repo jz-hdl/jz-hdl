@@ -45,6 +45,8 @@ typedef struct Parser {
     const JZToken    *tokens;            /**< Token array produced by the lexer */
     size_t            count;             /**< Total number of tokens */
     size_t            pos;               /**< Current parsing position */
+    unsigned          expr_depth;        /**< Current recursive expression depth */
+    unsigned          stmt_depth;        /**< Current recursive statement depth */
     JZDiagnosticList *diagnostics;       /**< Diagnostic sink for rule-based errors */
 } Parser;
 

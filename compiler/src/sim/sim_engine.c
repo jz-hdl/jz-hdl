@@ -30,6 +30,7 @@
 #include <math.h>
 
 #include "../sem/driver_internal.h"
+#include "util.h"
 
 /* ---- Forward declarations ---- */
 
@@ -492,14 +493,18 @@ static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
 
 /* Record a failure message */
 static void record_failure(SimTestState *ts, const char *msg) {
+    char *dup = NULL;
+
     if (ts->num_failure_msgs >= ts->cap_failure_msgs) {
         int new_cap = ts->cap_failure_msgs < 8 ? 8 : ts->cap_failure_msgs * 2;
-        char **new_buf = realloc(ts->failure_msgs, (size_t)new_cap * sizeof(char *));
+        char **new_buf = (char **)realloc(ts->failure_msgs, (size_t)new_cap * sizeof(char *));
         if (!new_buf) return;
         ts->failure_msgs = new_buf;
         ts->cap_failure_msgs = new_cap;
     }
-    ts->failure_msgs[ts->num_failure_msgs++] = strdup(msg);
+    dup = jz_strdup(msg);
+    if (!dup) return;
+    ts->failure_msgs[ts->num_failure_msgs++] = dup;
 }
 
 /* ---- @print / @print_if execution ---- */
@@ -801,9 +806,9 @@ fail:
 
 /* ---- Build port bindings from @new ---- */
 
-static void build_port_bindings(SimTestState *ts,
-                                const JZASTNode *instance_node,
-                                const IR_Module *dut_module) {
+static int build_port_bindings(SimTestState *ts,
+                               const JZASTNode *instance_node,
+                               const IR_Module *dut_module) {
     /* First pass: count how many bindings we'll need (BUS expands to many) */
     int n = 0;
     for (size_t i = 0; i < instance_node->child_count; i++) {
@@ -825,7 +830,12 @@ static void build_port_bindings(SimTestState *ts,
         }
     }
 
-    ts->bindings = calloc((size_t)(n > 0 ? n : 1), sizeof(SimPortBinding));
+    ts->bindings = (SimPortBinding *)calloc((size_t)(n > 0 ? n : 1), sizeof(SimPortBinding));
+    if (!ts->bindings) {
+        fprintf(stderr, "error: failed to allocate simulator port bindings\n");
+        ts->num_bindings = 0;
+        return -1;
+    }
     ts->num_bindings = 0;
 
     for (size_t i = 0; i < instance_node->child_count; i++) {
@@ -885,6 +895,8 @@ static void build_port_bindings(SimTestState *ts,
         ts->bindings[ts->num_bindings].tb_wire_index = wi;
         ts->num_bindings++;
     }
+
+    return 0;
 }
 
 /* ---- Input / output propagation ---- */
@@ -1395,7 +1407,13 @@ static int sim_run_test(const JZASTNode *root,
     }
 
     /* Build port bindings */
-    build_port_bindings(&ts, instance_node, dut_module);
+    if (build_port_bindings(&ts, instance_node, dut_module) != 0) {
+        sim_ctx_destroy(ts.dut);
+        for (int fi = 0; fi < ts.num_tb_wires; fi++)
+            if (ts.tb_wires[fi].owns_name) free((char *)ts.tb_wires[fi].name);
+        free(ts.tb_wires);
+        return 1;
+    }
 
     /* Initial propagation */
     sim_full_settle(&ts);
@@ -1890,7 +1908,9 @@ static int sim_run_simulation(const JZASTNode *root,
     }
 
     /* Build port bindings */
-    build_port_bindings(&ts, instance_node, dut_module);
+    if (build_port_bindings(&ts, instance_node, dut_module) != 0) {
+        goto cleanup_dut;
+    }
 
     /* Collect simulation clocks */
     SimClock sim_clocks[64];
@@ -2046,12 +2066,22 @@ static int sim_run_simulation(const JZASTNode *root,
     }
 
     /* Register testbench wires in waveform writer */
-    int *wave_ids = calloc((size_t)ts.num_tb_wires, sizeof(int));
+    int *wave_ids = (int *)calloc((size_t)(ts.num_tb_wires > 0 ? ts.num_tb_wires : 1),
+                                  sizeof(int));
+    if (!wave_ids) {
+        fprintf(stderr, "error: failed to allocate waveform signal IDs\n");
+        goto cleanup_wave;
+    }
     for (int i = 0; i < ts.num_tb_wires; i++) {
         const char *scope = ts.tb_wires[i].is_clock ? "clocks" : "wires";
         const char *type = ts.tb_wires[i].is_clock ? "clock" : "wire";
         wave_ids[i] = sim_wave_add_signal(wave, scope, ts.tb_wires[i].name,
                                            ts.tb_wires[i].width, type);
+        if (wave_ids[i] < 0) {
+            fprintf(stderr, "error: failed to register waveform signal '%s'\n",
+                    ts.tb_wires[i].name ? ts.tb_wires[i].name : "?");
+            goto cleanup_wave_ids;
+        }
     }
 
     /* Collect and register TAP signals in VCD */
@@ -2071,7 +2101,11 @@ static int sim_run_simulation(const JZASTNode *root,
         }
 
         if (tap_count > 0) {
-            sim_taps = calloc((size_t)tap_count, sizeof(SimTap));
+            sim_taps = (SimTap *)calloc((size_t)tap_count, sizeof(SimTap));
+            if (!sim_taps) {
+                fprintf(stderr, "error: failed to allocate waveform TAP table\n");
+                goto cleanup_wave_ids;
+            }
             for (size_t i = 0; i < sim_node->child_count; i++) {
                 const JZASTNode *child = sim_node->children[i];
                 if (!child || child->type != JZ_AST_SIM_TAP_BLOCK) continue;
@@ -2088,7 +2122,11 @@ static int sim_run_simulation(const JZASTNode *root,
 
                     const char *sig_name = last_dot + 1;
                     size_t scope_len = (size_t)(last_dot - path);
-                    char *scope = malloc(scope_len + 1);
+                    char *scope = (char *)malloc(scope_len + 1);
+                    if (!scope) {
+                        fprintf(stderr, "error: failed to allocate waveform TAP scope\n");
+                        goto cleanup_wave_taps;
+                    }
                     memcpy(scope, path, scope_len);
                     scope[scope_len] = '\0';
 
@@ -2109,6 +2147,12 @@ static int sim_run_simulation(const JZASTNode *root,
                         sim_taps[num_sim_taps].signal_id = found_id;
                         sim_taps[num_sim_taps].wave_id =
                             sim_wave_add_signal(wave, scope, sig_name, found_width, "tap");
+                        if (sim_taps[num_sim_taps].wave_id < 0) {
+                            free(scope);
+                            fprintf(stderr, "error: failed to register waveform TAP '%s'\n",
+                                    path);
+                            goto cleanup_wave_taps;
+                        }
                         num_sim_taps++;
                     } else if (verbose) {
                         fprintf(stderr, "warning: TAP signal '%s' not found in DUT\n",
@@ -2615,10 +2659,23 @@ static int sim_run_simulation(const JZASTNode *root,
                 const JZASTNode *mc = child->children[mi];
                 if (!mc) continue;
                 if (num_monitors >= cap_monitors) {
+                    const JZASTNode **new_nodes = NULL;
+                    size_t new_bytes = 0;
+
                     cap_monitors = cap_monitors ? cap_monitors * 2 : 8;
-                    monitor_nodes = (const JZASTNode **)realloc(
-                        (void *)monitor_nodes,
-                        cap_monitors * sizeof(const JZASTNode *));
+                    if (cap_monitors <= num_monitors ||
+                        jz_size_mul_checked((size_t)cap_monitors,
+                                            sizeof(const JZASTNode *),
+                                            &new_bytes) != 0) {
+                        fprintf(stderr, "error: monitor directive count exceeds supported size\n");
+                        goto cleanup_monitors;
+                    }
+                    new_nodes = (const JZASTNode **)realloc((void *)monitor_nodes, new_bytes);
+                    if (!new_nodes) {
+                        fprintf(stderr, "error: failed to grow monitor directive table\n");
+                        goto cleanup_monitors;
+                    }
+                    monitor_nodes = new_nodes;
                 }
                 monitor_nodes[num_monitors++] = mc;
             }
@@ -2648,6 +2705,19 @@ static int sim_run_simulation(const JZASTNode *root,
     free(wave_ids);
     free(sim_taps);
     free((void *)monitor_nodes);
+    sim_wave_close(wave);
+    goto cleanup_dut;
+
+cleanup_monitors:
+    free((void *)monitor_nodes);
+
+cleanup_wave_taps:
+    free(sim_taps);
+
+cleanup_wave_ids:
+    free(wave_ids);
+
+cleanup_wave:
     sim_wave_close(wave);
 
 cleanup_dut:

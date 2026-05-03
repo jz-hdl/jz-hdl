@@ -15,6 +15,7 @@
 #include "ir_builder.h"
 #include "diagnostic.h"
 #include "rules.h"
+#include "../../include/util.h"
 
 /* -----------------------------------------------------------------------
  * Guard stack: tracks known-nonzero signal IDs from enclosing IF branches.
@@ -31,6 +32,37 @@ typedef struct {
     GuardEntry entries[MAX_GUARD_DEPTH];
     int        count;
 } GuardStack;
+
+static unsigned s_div_guard_depth = 0;
+static int s_div_guard_depth_reported = 0;
+
+static void report_div_guard_depth(JZDiagnosticList *diagnostics,
+                                   const IR_Design *design,
+                                   const IR_Module *mod,
+                                   int source_line)
+{
+    if (!diagnostics || s_div_guard_depth_reported) return;
+    s_div_guard_depth_reported = 1;
+
+    const char *filename = "";
+    if (design && mod &&
+        mod->source_file_id >= 0 &&
+        mod->source_file_id < design->num_source_files) {
+        filename = design->source_files[mod->source_file_id].path;
+    }
+
+    JZLocation loc = { filename, source_line, 0 };
+    const JZRuleInfo *rule = jz_rule_lookup("IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED");
+    JZSeverity sev = JZ_SEVERITY_ERROR;
+    if (rule && rule->mode == JZ_RULE_MODE_WRN) {
+        sev = JZ_SEVERITY_WARNING;
+    }
+    jz_diagnostic_report(diagnostics,
+                         loc,
+                         sev,
+                         "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED",
+                         "IR division-guard analysis exceeds the compiler safety limit");
+}
 
 static void guard_push(GuardStack *gs, int signal_id, bool is_nonzero)
 {
@@ -303,11 +335,33 @@ static void report_unguarded_div(JZDiagnosticList *diagnostics,
  * Expression walker: find DIV/MOD and check divisor.
  * ----------------------------------------------------------------------- */
 
+static void check_expr_for_div_impl(const IR_Expr *expr,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    const GuardStack *guards,
+                                    JZDiagnosticList *diagnostics);
+
 static void check_expr_for_div(const IR_Expr *expr,
                                const IR_Design *design,
                                const IR_Module *mod,
                                const GuardStack *guards,
                                JZDiagnosticList *diagnostics)
+{
+    if (!expr) return;
+    if (s_div_guard_depth >= JZ_MAX_IR_STMT_DEPTH) {
+        report_div_guard_depth(diagnostics, design, mod, expr->source_line);
+        return;
+    }
+    ++s_div_guard_depth;
+    check_expr_for_div_impl(expr, design, mod, guards, diagnostics);
+    --s_div_guard_depth;
+}
+
+static void check_expr_for_div_impl(const IR_Expr *expr,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    const GuardStack *guards,
+                                    JZDiagnosticList *diagnostics)
 {
     if (!expr) return;
 
@@ -452,11 +506,33 @@ static void check_stmts_for_div(const IR_Stmt *stmts, int count,
     }
 }
 
+static void check_stmt_for_div_impl(const IR_Stmt *stmt,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    GuardStack *guards,
+                                    JZDiagnosticList *diagnostics);
+
 static void check_stmt_for_div(const IR_Stmt *stmt,
                                const IR_Design *design,
                                const IR_Module *mod,
                                GuardStack *guards,
                                JZDiagnosticList *diagnostics)
+{
+    if (!stmt) return;
+    if (s_div_guard_depth >= JZ_MAX_IR_STMT_DEPTH) {
+        report_div_guard_depth(diagnostics, design, mod, stmt->source_line);
+        return;
+    }
+    ++s_div_guard_depth;
+    check_stmt_for_div_impl(stmt, design, mod, guards, diagnostics);
+    --s_div_guard_depth;
+}
+
+static void check_stmt_for_div_impl(const IR_Stmt *stmt,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    GuardStack *guards,
+                                    JZDiagnosticList *diagnostics)
 {
     if (!stmt) return;
 
@@ -544,6 +620,8 @@ int jz_ir_div_guard_check(IR_Design *design, JZDiagnosticList *diagnostics)
     if (!design || !diagnostics) return 0;
 
     for (int m = 0; m < design->num_modules; m++) {
+        s_div_guard_depth = 0;
+        s_div_guard_depth_reported = 0;
         IR_Module *mod = &design->modules[m];
         if (mod->eliminated) continue;
 

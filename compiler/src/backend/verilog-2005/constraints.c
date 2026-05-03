@@ -10,6 +10,7 @@
 #include "verilog_internal.h"
 #include "ir.h"
 #include "chip_data.h"
+#include "util.h"
 
 /* -------------------------------------------------------------------------
  * Xilinx IOSTANDARD name mapping
@@ -63,15 +64,7 @@ int open_backend_output(const char *target,
         return 0;
     }
 
-    int n = snprintf(tmp_path, tmp_path_size, "%s.tmp", target);
-    if (n <= 0 || (size_t)n >= tmp_path_size) {
-        backend_io_error(diagnostics, input_filename,
-                         "failed to construct temporary constraint output filename");
-        return -1;
-    }
-
-    *out = fopen(tmp_path, "w");
-    if (!*out) {
+    if (jz_open_exclusive_temp_output(target, out, tmp_path, tmp_path_size) != 0) {
         backend_io_error(diagnostics, input_filename,
                          "failed to open temporary constraint output file for writing");
         return -1;
@@ -95,23 +88,9 @@ int close_backend_output(FILE *out,
         return -1;
     }
 
-    if (fflush(out) != 0 || ferror(out)) {
-        fclose(out);
-        (void)remove(tmp_path);
+    if (jz_commit_exclusive_temp_output(out, tmp_path, final_path) != 0) {
         backend_io_error(diagnostics, input_filename,
-                         "failed to write complete constraint output");
-        return -1;
-    }
-    if (fclose(out) != 0) {
-        (void)remove(tmp_path);
-        backend_io_error(diagnostics, input_filename,
-                         "failed to close constraint output stream");
-        return -1;
-    }
-    if (rename(tmp_path, final_path) != 0) {
-        (void)remove(tmp_path);
-        backend_io_error(diagnostics, input_filename,
-                         "failed to move temporary constraint file into place");
+                         "failed to finalize constraint output");
         return -1;
     }
     return 0;

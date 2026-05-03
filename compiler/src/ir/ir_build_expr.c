@@ -14,6 +14,29 @@
 
 #include "ir_internal.h"
 #include "../sem/driver_internal.h"
+#include "../../include/diagnostic.h"
+#include "../../include/rules.h"
+#include "../../include/util.h"
+
+static unsigned s_ir_expr_depth = 0;
+static int s_ir_expr_depth_reported = 0;
+
+static void ir_report_expr_depth_limit(JZDiagnosticList *diagnostics, JZLocation loc)
+{
+    if (!diagnostics || s_ir_expr_depth_reported) return;
+    s_ir_expr_depth_reported = 1;
+
+    const JZRuleInfo *rule = jz_rule_lookup("IR_EXPR_DEPTH_LIMIT_EXCEEDED");
+    JZSeverity sev = JZ_SEVERITY_ERROR;
+    if (rule && rule->mode == JZ_RULE_MODE_WRN) {
+        sev = JZ_SEVERITY_WARNING;
+    }
+    jz_diagnostic_report(diagnostics,
+                         loc,
+                         sev,
+                         "IR_EXPR_DEPTH_LIMIT_EXCEEDED",
+                         "IR expression lowering exceeds the compiler safety limit");
+}
 
 static int ir_eval_lit_call_in_project(const char *expr,
                                        const JZBuffer *project_symbols,
@@ -289,7 +312,20 @@ static int ir_map_unary_kind(const char *kind, IR_ExprKind *out)
  * @param buf  Output buffer.
  * @return 0 on success, non-zero on failure.
  */
+static int ir_expr_to_const_expr_string_rec_impl(const JZASTNode *expr, JZBuffer *buf);
+
 static int ir_expr_to_const_expr_string_rec(const JZASTNode *expr, JZBuffer *buf)
+{
+    if (s_ir_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+        return -1;
+    }
+    ++s_ir_expr_depth;
+    int rc = ir_expr_to_const_expr_string_rec_impl(expr, buf);
+    --s_ir_expr_depth;
+    return rc;
+}
+
+static int ir_expr_to_const_expr_string_rec_impl(const JZASTNode *expr, JZBuffer *buf)
 {
     if (!expr || !buf) return -1;
 
@@ -359,10 +395,29 @@ static int ir_expr_to_const_expr_string_rec(const JZASTNode *expr, JZBuffer *buf
     }
 }
 
+static int ir_lit_expr_to_const_string_rec_impl(const JZASTNode *expr,
+                                                const JZModuleScope *mod_scope,
+                                                const JZBuffer *project_symbols,
+                                                JZBuffer *buf);
+
 static int ir_lit_expr_to_const_string_rec(const JZASTNode *expr,
                                            const JZModuleScope *mod_scope,
                                            const JZBuffer *project_symbols,
                                            JZBuffer *buf)
+{
+    if (s_ir_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+        return -1;
+    }
+    ++s_ir_expr_depth;
+    int rc = ir_lit_expr_to_const_string_rec_impl(expr, mod_scope, project_symbols, buf);
+    --s_ir_expr_depth;
+    return rc;
+}
+
+static int ir_lit_expr_to_const_string_rec_impl(const JZASTNode *expr,
+                                                const JZModuleScope *mod_scope,
+                                                const JZBuffer *project_symbols,
+                                                JZBuffer *buf)
 {
     if (!expr || !buf) return -1;
 
@@ -680,13 +735,48 @@ static const IR_BusSignalMapping *ir_find_signal_mapping(const IR_BusSignalMappi
  * @param diagnostics     Diagnostic sink.
  * @return Pointer to IR_Expr, or NULL if lowering fails.
  */
+static IR_Expr *ir_build_expr_impl(JZArena *arena,
+                                   JZASTNode *expr,
+                                   const JZModuleScope *mod_scope,
+                                   const JZBuffer *project_symbols,
+                                   const IR_BusSignalMapping *bus_map,
+                                   int bus_map_count,
+                                   JZDiagnosticList *diagnostics);
+
 IR_Expr *ir_build_expr(JZArena *arena,
-                              JZASTNode *expr,
-                              const JZModuleScope *mod_scope,
-                              const JZBuffer *project_symbols,
-                              const IR_BusSignalMapping *bus_map,
-                              int bus_map_count,
-                              JZDiagnosticList *diagnostics)
+                       JZASTNode *expr,
+                       const JZModuleScope *mod_scope,
+                       const JZBuffer *project_symbols,
+                       const IR_BusSignalMapping *bus_map,
+                       int bus_map_count,
+                       JZDiagnosticList *diagnostics)
+{
+    if (s_ir_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+        if (expr) {
+            ir_report_expr_depth_limit(diagnostics, expr->loc);
+        }
+        return NULL;
+    }
+
+    ++s_ir_expr_depth;
+    IR_Expr *ir = ir_build_expr_impl(arena,
+                                     expr,
+                                     mod_scope,
+                                     project_symbols,
+                                     bus_map,
+                                     bus_map_count,
+                                     diagnostics);
+    --s_ir_expr_depth;
+    return ir;
+}
+
+static IR_Expr *ir_build_expr_impl(JZArena *arena,
+                                   JZASTNode *expr,
+                                   const JZModuleScope *mod_scope,
+                                   const JZBuffer *project_symbols,
+                                   const IR_BusSignalMapping *bus_map,
+                                   int bus_map_count,
+                                   JZDiagnosticList *diagnostics)
 {
     if (!arena || !expr || !mod_scope) return NULL;
 

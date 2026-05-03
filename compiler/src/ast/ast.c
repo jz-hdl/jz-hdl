@@ -91,10 +91,14 @@ int jz_ast_add_child(JZASTNode *parent, JZASTNode *child) {
     return 0;
 }
 
-void jz_ast_free(JZASTNode *node) {
+static void jz_ast_free_recursive(JZASTNode *node, unsigned depth)
+{
     if (!node) return;
+    if (depth >= JZ_MAX_AST_DEPTH) {
+        return;
+    }
     for (size_t i = 0; i < node->child_count; ++i) {
-        jz_ast_free(node->children[i]);
+        jz_ast_free_recursive(node->children[i], depth + 1);
     }
     free(node->children);
     free(node->name);
@@ -102,4 +106,8 @@ void jz_ast_free(JZASTNode *node) {
     free(node->text);
     free(node->width);
     free(node);
+}
+
+void jz_ast_free(JZASTNode *node) {
+    jz_ast_free_recursive(node, 0);
 }

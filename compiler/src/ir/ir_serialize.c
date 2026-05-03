@@ -5,6 +5,10 @@
 
 #include "../../include/ir_serialize.h"
 #include "../../include/diagnostic.h"
+#include "../../include/util.h"
+
+static unsigned s_ir_json_expr_depth = 0;
+static unsigned s_ir_json_stmt_depth = 0;
 
 /* Simple JSON string escaper for names and paths. */
 static void json_write_string(FILE *out, const char *s)
@@ -138,7 +142,20 @@ static const char *ir_expr_kind_string(IR_ExprKind kind)
     }
 }
 
+static void json_write_expr_impl(FILE *out, const IR_Expr *expr);
+
 static void json_write_expr(FILE *out, const IR_Expr *expr)
+{
+    if (s_ir_json_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+        fputs("{ \"kind\": \"expr_depth_limit\" }", out);
+        return;
+    }
+    ++s_ir_json_expr_depth;
+    json_write_expr_impl(out, expr);
+    --s_ir_json_expr_depth;
+}
+
+static void json_write_expr_impl(FILE *out, const IR_Expr *expr)
 {
     if (!expr) {
         fputs("null", out);
@@ -274,7 +291,20 @@ static void json_write_expr(FILE *out, const IR_Expr *expr)
     fputs(" }", out);
 }
 
+static void json_write_stmt_impl(FILE *out, const IR_Stmt *stmt);
+
 static void json_write_stmt(FILE *out, const IR_Stmt *stmt)
+{
+    if (s_ir_json_stmt_depth >= JZ_MAX_IR_STMT_DEPTH) {
+        fputs("{ \"kind\": \"stmt_depth_limit\" }", out);
+        return;
+    }
+    ++s_ir_json_stmt_depth;
+    json_write_stmt_impl(out, stmt);
+    --s_ir_json_stmt_depth;
+}
+
+static void json_write_stmt_impl(FILE *out, const IR_Stmt *stmt)
 {
     if (!stmt) {
         fputs("null", out);

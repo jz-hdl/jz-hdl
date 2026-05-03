@@ -13,6 +13,7 @@
 #include "rtlil_internal.h"
 #include "version.h"
 #include "ir.h"
+#include "util.h"
 
 /* Reuse alias context from Verilog backend. */
 #include "backend/verilog-2005/verilog_internal.h"
@@ -144,15 +145,7 @@ int jz_emit_rtlil(const IR_Design *design,
         out = stdout;
         close_out = 0;
     } else {
-        int n = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", target);
-        if (n <= 0 || (size_t)n >= sizeof(tmp_path)) {
-            rtlil_backend_io_error(diagnostics, input_filename,
-                                   "failed to construct temporary RTLIL output filename");
-            return -1;
-        }
-
-        out = fopen(tmp_path, "w");
-        if (!out) {
+        if (jz_open_exclusive_temp_output(target, &out, tmp_path, sizeof(tmp_path)) != 0) {
             rtlil_backend_io_error(diagnostics, input_filename,
                                    "failed to open temporary RTLIL output file for writing");
             return -1;
@@ -189,30 +182,11 @@ int jz_emit_rtlil(const IR_Design *design,
     }
 
     if (close_out) {
-        if (fflush(out) != 0 || ferror(out)) {
-            fclose(out);
-            if (tmp_path[0] != '\0') {
-                (void)remove(tmp_path);
-            }
+        if (tmp_path[0] != '\0' &&
+            jz_commit_exclusive_temp_output(out, tmp_path, target) != 0) {
             rtlil_backend_io_error(diagnostics, input_filename,
-                                   "failed to write complete RTLIL output");
+                                   "failed to finalize RTLIL output");
             return -1;
-        }
-        if (fclose(out) != 0) {
-            if (tmp_path[0] != '\0') {
-                (void)remove(tmp_path);
-            }
-            rtlil_backend_io_error(diagnostics, input_filename,
-                                   "failed to close RTLIL output stream");
-            return -1;
-        }
-        if (tmp_path[0] != '\0') {
-            if (rename(tmp_path, target) != 0) {
-                (void)remove(tmp_path);
-                rtlil_backend_io_error(diagnostics, input_filename,
-                                       "failed to move temporary RTLIL file into place");
-                return -1;
-            }
         }
     }
 

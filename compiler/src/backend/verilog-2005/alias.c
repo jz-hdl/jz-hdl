@@ -558,21 +558,42 @@ static int             s_cov_len = 0;
 
 static SignalCoverage *find_or_create_coverage(int signal_id, int width)
 {
+    SignalCoverage *c = NULL;
+
     for (int i = 0; i < s_cov_len; ++i) {
         if (s_cov[i].signal_id == signal_id) {
             return &s_cov[i];
         }
     }
     if (s_cov_len >= s_cov_cap) {
-        s_cov_cap = s_cov_cap ? s_cov_cap * 2 : 16;
-        s_cov = realloc(s_cov, (size_t)s_cov_cap * sizeof(*s_cov));
+        int new_cap = s_cov_cap ? s_cov_cap * 2 : 16;
+        SignalCoverage *new_cov = NULL;
+
+        if (new_cap <= s_cov_cap) {
+            return NULL;
+        }
+        new_cov = (SignalCoverage *)realloc(s_cov, (size_t)new_cap * sizeof(*s_cov));
+        if (!new_cov) {
+            return NULL;
+        }
+        s_cov = new_cov;
+        s_cov_cap = new_cap;
     }
-    SignalCoverage *c = &s_cov[s_cov_len++];
+
+    if (width <= 0) {
+        return NULL;
+    }
+
+    c = &s_cov[s_cov_len];
     c->signal_id = signal_id;
     c->width = width;
     c->has_full_alias = false;
     c->has_any_sliced_alias = false;
-    c->driven = calloc((size_t)width, 1);
+    c->driven = (char *)calloc((size_t)width, 1);
+    if (!c->driven) {
+        return NULL;
+    }
+    s_cov_len++;
     return c;
 }
 
@@ -593,6 +614,7 @@ static void collect_alias_coverage_from_stmt(const IR_Module *mod,
         if (sig->can_be_z) break;
 
         SignalCoverage *c = find_or_create_coverage(sig->id, sig->width);
+        if (!c) break;
         if (a->is_sliced) {
             c->has_any_sliced_alias = true;
             int lo = a->lhs_lsb;

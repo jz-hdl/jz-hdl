@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "sem.h"
+#include "util.h"
 
 /* Simple recursive-descent expression parser for integer constant expressions.
  * Grammar (roughly, with standard precedence):
@@ -223,6 +224,7 @@ typedef struct Parser {
     Token cur;
     const JZConstEvalOptions *opts;
     int   error;
+    unsigned expr_depth;
 } Parser;
 
 static void parser_init(Parser *p, const char *src, const JZConstEvalOptions *opts)
@@ -231,6 +233,7 @@ static void parser_init(Parser *p, const char *src, const JZConstEvalOptions *op
     p->cur = lex_one(&p->lx);
     p->opts = opts;
     p->error = 0;
+    p->expr_depth = 0;
 }
 
 static void parser_diag(Parser *p, const char *msg)
@@ -268,6 +271,23 @@ static void advance(Parser *p)
 
 static long long parse_expr(Parser *p);
 static long long parse_shift(Parser *p);
+
+static int parser_enter_expr_depth(Parser *p)
+{
+    if (p->expr_depth >= JZ_MAX_CONST_EVAL_DEPTH) {
+        parser_diag(p, "constant expression nesting exceeds the compiler safety limit");
+        return -1;
+    }
+    p->expr_depth++;
+    return 0;
+}
+
+static void parser_leave_expr_depth(Parser *p)
+{
+    if (p->expr_depth > 0) {
+        p->expr_depth--;
+    }
+}
 
 static long long parse_primary(Parser *p)
 {
@@ -331,11 +351,16 @@ static long long parse_unary(Parser *p)
 
     if (p->cur.kind == TK_PLUS) {
         advance(p);
-        return parse_unary(p);
+        if (parser_enter_expr_depth(p) != 0) return 0;
+        long long v = parse_unary(p);
+        parser_leave_expr_depth(p);
+        return v;
     }
     if (p->cur.kind == TK_MINUS) {
         advance(p);
+        if (parser_enter_expr_depth(p) != 0) return 0;
         long long v = parse_unary(p);
+        parser_leave_expr_depth(p);
         return -v;
     }
     return parse_primary(p);
@@ -477,7 +502,11 @@ static long long parse_logical_or(Parser *p)
 
 static long long parse_expr(Parser *p)
 {
-    return parse_logical_or(p);
+    long long value = 0;
+    if (parser_enter_expr_depth(p) != 0) return 0;
+    value = parse_logical_or(p);
+    parser_leave_expr_depth(p);
+    return value;
 }
 
 int jz_const_eval_expr(const char *expr,
@@ -543,6 +572,7 @@ typedef struct EnvParser {
     EvalEnv *env;
     size_t  current_index;
     int     error;
+    unsigned expr_depth;
 } EnvParser;
 
 static void env_parser_diag(EnvParser *p, const char *msg)
@@ -567,6 +597,7 @@ static void env_parser_init(EnvParser *p, const char *src,
     p->env = env;
     p->current_index = index;
     p->error = 0;
+    p->expr_depth = 0;
 }
 
 static void env_advance(EnvParser *p)
@@ -579,6 +610,23 @@ static void env_advance(EnvParser *p)
 static int eval_one(EvalEnv *env, size_t index);
 static long long env_parse_expr(EnvParser *p);
 static long long env_parse_shift(EnvParser *p);
+
+static int env_parser_enter_expr_depth(EnvParser *p)
+{
+    if (p->expr_depth >= JZ_MAX_CONST_EVAL_DEPTH) {
+        env_parser_diag(p, "constant expression nesting exceeds the compiler safety limit");
+        return -1;
+    }
+    p->expr_depth++;
+    return 0;
+}
+
+static void env_parser_leave_expr_depth(EnvParser *p)
+{
+    if (p->expr_depth > 0) {
+        p->expr_depth--;
+    }
+}
 
 static long long env_parse_primary(EnvParser *p)
 {
@@ -659,11 +707,16 @@ static long long env_parse_unary(EnvParser *p)
     if (p->error) return 0;
     if (p->cur.kind == TK_PLUS) {
         env_advance(p);
-        return env_parse_unary(p);
+        if (env_parser_enter_expr_depth(p) != 0) return 0;
+        long long v = env_parse_unary(p);
+        env_parser_leave_expr_depth(p);
+        return v;
     }
     if (p->cur.kind == TK_MINUS) {
         env_advance(p);
+        if (env_parser_enter_expr_depth(p) != 0) return 0;
         long long v = env_parse_unary(p);
+        env_parser_leave_expr_depth(p);
         return -v;
     }
     return env_parse_primary(p);
@@ -805,7 +858,11 @@ static long long env_parse_logical_or(EnvParser *p)
 
 static long long env_parse_expr(EnvParser *p)
 {
-    return env_parse_logical_or(p);
+    long long value = 0;
+    if (env_parser_enter_expr_depth(p) != 0) return 0;
+    value = env_parse_logical_or(p);
+    env_parser_leave_expr_depth(p);
+    return value;
 }
 
 static int eval_one(EvalEnv *env, size_t index)

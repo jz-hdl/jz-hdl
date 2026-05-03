@@ -379,7 +379,19 @@ int import_modules_from_path(const Parser *parent,
     if (remember_imported_resolved_path(full_path) != 0) goto cleanup;
     full_path = NULL;
 
-    source = jz_read_entire_file(g_imported_resolved_paths[g_imported_resolved_paths_len - 1], &size);
+    if (jz_get_file_size(g_imported_resolved_paths[g_imported_resolved_paths_len - 1], &size) == 0 &&
+        size > JZ_MAX_SOURCE_FILE_BYTES) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "imported source file exceeds the compiler safety limit of %u byte(s)",
+                 (unsigned)JZ_MAX_SOURCE_FILE_BYTES);
+        report_import_limit(parent, import_token, "SOURCE_FILE_TOO_LARGE", msg, rel_path);
+        goto cleanup;
+    }
+
+    source = jz_read_entire_file_limit(g_imported_resolved_paths[g_imported_resolved_paths_len - 1],
+                                       JZ_MAX_SOURCE_FILE_BYTES,
+                                       &size);
     if (!source) {
         fprintf(stderr, "%s:1:1: import error: failed to read imported file '%s'\n",
                 g_imported_resolved_paths[g_imported_resolved_paths_len - 1], rel_path);
@@ -426,6 +438,8 @@ int import_modules_from_path(const Parser *parent,
     ip.tokens = tokens.tokens;
     ip.count = tokens.count;
     ip.pos = 0;
+    ip.expr_depth = 0;
+    ip.stmt_depth = 0;
     ip.diagnostics = parent->diagnostics;
 
     int saw_project = 0;

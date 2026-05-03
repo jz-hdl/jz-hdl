@@ -61,6 +61,7 @@ typedef struct FSTBuffer {
     uint8_t *data;
     size_t   len;
     size_t   cap;
+    int      failed;
 } FSTBuffer;
 
 struct FSTWriter {
@@ -105,27 +106,48 @@ static void buf_init(FSTBuffer *b)
     b->data = NULL;
     b->len = 0;
     b->cap = 0;
+    b->failed = 0;
 }
 
-static void buf_ensure(FSTBuffer *b, size_t extra)
+static int buf_ensure(FSTBuffer *b, size_t extra)
 {
-    size_t needed = b->len + extra;
-    if (needed <= b->cap) return;
-    size_t newcap = b->cap ? b->cap * 2 : 4096;
-    while (newcap < needed) newcap *= 2;
-    b->data = (uint8_t *)realloc(b->data, newcap);
+    size_t needed = 0;
+    size_t newcap = 0;
+    uint8_t *new_data = NULL;
+
+    if (!b || b->failed) return -1;
+    if (jz_size_add_checked(b->len, extra, &needed) != 0) {
+        b->failed = 1;
+        return -1;
+    }
+    if (needed <= b->cap) return 0;
+    newcap = b->cap ? b->cap * 2 : 4096;
+    while (newcap < needed) {
+        if (newcap > SIZE_MAX / 2) {
+            b->failed = 1;
+            return -1;
+        }
+        newcap *= 2;
+    }
+    new_data = (uint8_t *)realloc(b->data, newcap);
+    if (!new_data) {
+        b->failed = 1;
+        return -1;
+    }
+    b->data = new_data;
     b->cap = newcap;
+    return 0;
 }
 
 static void buf_u8(FSTBuffer *b, uint8_t v)
 {
-    buf_ensure(b, 1);
+    if (buf_ensure(b, 1) != 0) return;
     b->data[b->len++] = v;
 }
 
 static void buf_bytes(FSTBuffer *b, const void *data, size_t len)
 {
-    buf_ensure(b, len);
+    if (buf_ensure(b, len) != 0) return;
     memcpy(b->data + b->len, data, len);
     b->len += len;
 }
@@ -143,6 +165,7 @@ static void buf_free(FSTBuffer *b)
     b->data = NULL;
     b->len = 0;
     b->cap = 0;
+    b->failed = 0;
 }
 
 static int fst_update_tracked_allocation(FSTWriter *w, size_t *tracked_bytes, size_t new_bytes)
@@ -492,24 +515,52 @@ int fst_add_signal(FSTWriter *w, const char *scope, const char *name, int width)
     if (!w || w->defs_ended || w->num_signals >= FST_MAX_SIGNALS) return -1;
 
     const char *s = scope ? scope : "top";
+    char *new_scope_name = NULL;
+    char *sig_scope = NULL;
+    char *sig_name = NULL;
 
     /* Open/switch scope if needed */
     if (!w->current_scope || strcmp(w->current_scope, s) != 0) {
         if (w->current_scope) {
             hier_close_scope(w);
             free(w->current_scope);
+            w->current_scope = NULL;
         }
-        w->current_scope = strdup(s);
+        new_scope_name = jz_strdup(s);
+        if (!new_scope_name) {
+            return -1;
+        }
+        w->current_scope = new_scope_name;
         hier_open_scope(w, s);
+        if (w->hier.failed) {
+            free(w->current_scope);
+            w->current_scope = NULL;
+            return -1;
+        }
     }
 
     int idx = w->num_signals;
     FSTSignal *sig = &w->signals[idx];
-    sig->scope = strdup(s);
-    sig->name = strdup(name);
+    sig_scope = jz_strdup(s);
+    sig_name = jz_strdup(name);
+    if (!sig_scope || !sig_name) {
+        free(sig_scope);
+        free(sig_name);
+        return -1;
+    }
+    sig->scope = sig_scope;
+    sig->name = sig_name;
     sig->width = width;
 
     hier_add_var(w, name, width);
+    if (w->hier.failed) {
+        free(sig->scope);
+        free(sig->name);
+        sig->scope = NULL;
+        sig->name = NULL;
+        sig->width = 0;
+        return -1;
+    }
 
     w->num_signals++;
     return idx;
@@ -710,8 +761,15 @@ static void write_vcdata_block(FSTWriter *w)
     fputc('!', w->fp); /* uncompressed */
 
     /* ---- Build per-signal VC data ---- */
-    FSTBuffer *sig_vc = (FSTBuffer *)calloc((size_t)maxhandle, sizeof(FSTBuffer));
-    uint32_t *prev_tidx = (uint32_t *)calloc((size_t)maxhandle, sizeof(uint32_t));
+    FSTBuffer *sig_vc = (FSTBuffer *)calloc((size_t)(maxhandle > 0 ? maxhandle : 1),
+                                            sizeof(FSTBuffer));
+    uint32_t *prev_tidx = (uint32_t *)calloc((size_t)(maxhandle > 0 ? maxhandle : 1),
+                                             sizeof(uint32_t));
+    if (!sig_vc || !prev_tidx) {
+        free(sig_vc);
+        free(prev_tidx);
+        return;
+    }
     for (int s = 0; s < maxhandle; s++)
         buf_init(&sig_vc[s]);
 
@@ -759,7 +817,15 @@ static void write_vcdata_block(FSTWriter *w)
      * chain_table offsets are from vc_start (the packtype byte position).
      * Offset 1 = first byte after packtype.
      */
-    uint32_t *offsets = (uint32_t *)calloc((size_t)maxhandle, sizeof(uint32_t));
+    uint32_t *offsets = (uint32_t *)calloc((size_t)(maxhandle > 0 ? maxhandle : 1),
+                                           sizeof(uint32_t));
+    if (!offsets) {
+        for (int s = 0; s < maxhandle; s++)
+            buf_free(&sig_vc[s]);
+        free(sig_vc);
+        free(prev_tidx);
+        return;
+    }
     uint32_t cumulative = 1; /* offset 1 = first byte after packtype */
     uint64_t total_vc_mem = 0;
     for (int s = 0; s < maxhandle; s++) {
@@ -796,6 +862,16 @@ static void write_vcdata_block(FSTWriter *w)
             }
         }
 
+        if (chain.failed) {
+            buf_free(&chain);
+            for (int sig = 0; sig < maxhandle; sig++)
+                buf_free(&sig_vc[sig]);
+            free(sig_vc);
+            free(offsets);
+            free(prev_tidx);
+            return;
+        }
+
         /* Write chain table raw (not compressed) */
         fwrite(chain.data, 1, chain.len, w->fp);
         write_u64(w->fp, (uint64_t)chain.len);
@@ -815,6 +891,16 @@ static void write_vcdata_block(FSTWriter *w)
 
         size_t bound = zlib_store_bound(tb.len);
         uint8_t *compressed = (uint8_t *)malloc(bound);
+        if (tb.failed || !compressed) {
+            free(compressed);
+            buf_free(&tb);
+            for (int sig = 0; sig < maxhandle; sig++)
+                buf_free(&sig_vc[sig]);
+            free(sig_vc);
+            free(offsets);
+            free(prev_tidx);
+            return;
+        }
         size_t tsec_clen = zlib_store(compressed, tb.data, tb.len);
 
         fwrite(compressed, 1, tsec_clen, w->fp);
@@ -860,6 +946,11 @@ static void write_geom_block(FSTWriter *w)
 
     size_t bound = zlib_store_bound(geom.len);
     uint8_t *compressed = (uint8_t *)malloc(bound);
+    if (geom.failed || !compressed) {
+        free(compressed);
+        buf_free(&geom);
+        return;
+    }
     size_t clen = zlib_store(compressed, geom.data, geom.len);
 
     /* total = 1(type) + 8(seclen) + 8(uncomp) + 8(count) + clen */
@@ -884,6 +975,10 @@ static void write_hier_block(FSTWriter *w)
 {
     size_t bound = gzip_store_bound(w->hier.len);
     uint8_t *compressed = (uint8_t *)malloc(bound);
+    if (w->hier.failed || !compressed) {
+        free(compressed);
+        return;
+    }
     size_t clen = gzip_store(compressed, w->hier.data, w->hier.len);
 
     /* total = 1(type) + 8(seclen) + 8(uncomp) + clen */

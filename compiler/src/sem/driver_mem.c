@@ -285,20 +285,8 @@ static int sem_mem_extract_assignment(const char *text,
 
 static char *sem_mem_read_entire_fp(FILE *fp, size_t *size_out)
 {
-    long sz;
-    char *buf;
-    size_t nread;
     if (!fp) return NULL;
-    if (fseek(fp, 0, SEEK_END) != 0) return NULL;
-    sz = ftell(fp);
-    if (sz < 0) return NULL;
-    if (fseek(fp, 0, SEEK_SET) != 0) return NULL;
-    buf = (char *)malloc((size_t)sz + 1);
-    if (!buf) return NULL;
-    nread = fread(buf, 1, (size_t)sz, fp);
-    buf[nread] = '\0';
-    if (size_out) *size_out = nread;
-    return buf;
+    return jz_read_entire_fp_limit(fp, JZ_MAX_MEM_INIT_FILE_BYTES, size_out);
 }
 
 static char *sem_mem_strip_mif_comments(const char *contents, size_t size)
@@ -598,6 +586,7 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
     unsigned long long assigned_words = 0ull;
     int overflow = 0;
 
+    if (depth > JZ_MAX_MEM_INIT_MIF_DEPTH) return -1;
     if (!contents) return -1;
     stripped = sem_mem_strip_mif_comments(contents, size);
     free(contents);
@@ -808,11 +797,25 @@ static void sem_check_mem_file_init(JZASTNode *mem,
                                         init_expr->loc,
                                         diagnostics);
     char fullpath[512];
+    size_t file_size = 0;
     if (validated) {
         snprintf(fullpath, sizeof(fullpath), "%s", validated);
         free(validated);
     } else {
         /* Path validation failed; diagnostic already emitted. */
+        return;
+    }
+
+    if (jz_get_file_size(fullpath, &file_size) == 0 &&
+        file_size > JZ_MAX_MEM_INIT_FILE_BYTES) {
+        char msg[640];
+        snprintf(msg, sizeof(msg),
+                 "MEM init file '%s' is %zu byte(s), exceeding the compiler safety limit of %u byte(s)",
+                 fullpath, file_size, (unsigned)JZ_MAX_MEM_INIT_FILE_BYTES);
+        sem_report_rule(diagnostics,
+                        init_expr->loc,
+                        "MEM_INIT_FILE_HARD_LIMIT_EXCEEDED",
+                        msg);
         return;
     }
 
@@ -838,6 +841,20 @@ static void sem_check_mem_file_init(JZASTNode *mem,
 
     const char *ext = sem_mem_get_file_ext(init_expr->text);
     unsigned long long file_bits = 0ull;
+
+    if (ext && sem_mem_ext_equals(ext, "mif") &&
+        depth > JZ_MAX_MEM_INIT_MIF_DEPTH) {
+        char msg[640];
+        fclose(fp);
+        snprintf(msg, sizeof(msg),
+                 "MEM declared depth %u exceeds the compiler MIF safety limit of %u words",
+                 depth, (unsigned)JZ_MAX_MEM_INIT_MIF_DEPTH);
+        sem_report_rule(diagnostics,
+                        init_expr->loc,
+                        "MEM_INIT_MIF_DEPTH_LIMIT_EXCEEDED",
+                        msg);
+        return;
+    }
 
     /* MEM_INIT_FILE_CONTAINS_X: scan text-format files for x/z values. */
     if (ext && (sem_mem_ext_equals(ext, "hex") ||

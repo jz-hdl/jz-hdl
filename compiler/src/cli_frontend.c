@@ -30,7 +30,18 @@ int jz_cli_run_frontend(JZCompiler *compiler,
 
     t0 = clock();
     size_t size = 0;
-    char *source = jz_read_entire_file(filename, &size);
+    char *source = NULL;
+    if (jz_get_file_size(filename, &size) == 0 && size > JZ_MAX_SOURCE_FILE_BYTES) {
+        JZLocation loc = { filename, 1, 1 };
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "source file is %zu byte(s), exceeding the compiler safety limit of %u byte(s)",
+                 size, (unsigned)JZ_MAX_SOURCE_FILE_BYTES);
+        jz_diagnostic_report(&compiler->diagnostics, loc, JZ_SEVERITY_ERROR,
+                             "SOURCE_FILE_TOO_LARGE", msg);
+        return 1;
+    }
+    source = jz_read_entire_file_limit(filename, JZ_MAX_SOURCE_FILE_BYTES, &size);
     if (!source) {
         JZLocation loc = { filename, 1, 1 };
         jz_diagnostic_report(&compiler->diagnostics, loc, JZ_SEVERITY_ERROR,

@@ -3,6 +3,12 @@
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
+#include <errno.h>
+
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #include "../include/util.h"
 
@@ -44,42 +50,80 @@ char *jz_strdup(const char *s) {
     return copy;
 }
 
-char *jz_read_entire_file(const char *filename, size_t *out_size) {
-    FILE *f = fopen(filename, "rb");
-    if (!f) return NULL;
+int jz_get_fp_size(FILE *fp, size_t *out_size)
+{
+    long cur = 0;
+    long end = 0;
 
-    if (fseek(f, 0, SEEK_END) != 0) {
-        fclose(f);
-        return NULL;
+    if (!fp || !out_size) return -1;
+    if ((cur = ftell(fp)) < 0) return -1;
+    if (fseek(fp, 0, SEEK_END) != 0) return -1;
+    end = ftell(fp);
+    if (end < 0) {
+        (void)fseek(fp, cur, SEEK_SET);
+        return -1;
     }
-    long len = ftell(f);
-    if (len < 0) {
-        fclose(f);
-        return NULL;
-    }
-    rewind(f);
+    if (fseek(fp, cur, SEEK_SET) != 0) return -1;
+    *out_size = (size_t)end;
+    return 0;
+}
 
-    size_t alloc_size = 0;
-    if (jz_size_add_checked((size_t)len, 1, &alloc_size) != 0) {
-        fclose(f);
-        return NULL;
-    }
+int jz_get_file_size(const char *filename, size_t *out_size)
+{
+    FILE *f = NULL;
+    int rc = -1;
 
-    char *buf = (char *)malloc(alloc_size);
-    if (!buf) {
-        fclose(f);
-        return NULL;
-    }
-
-    size_t read = fread(buf, 1, (size_t)len, f);
+    if (!filename || !out_size) return -1;
+    f = fopen(filename, "rb");
+    if (!f) return -1;
+    rc = jz_get_fp_size(f, out_size);
     fclose(f);
-    if (read != (size_t)len) {
+    return rc;
+}
+
+char *jz_read_entire_fp_limit(FILE *fp, size_t max_size, size_t *out_size)
+{
+    size_t len = 0;
+    size_t alloc_size = 0;
+    char *buf = NULL;
+    size_t read = 0;
+
+    if (!fp) return NULL;
+    if (jz_get_fp_size(fp, &len) != 0) return NULL;
+    if (len > max_size) return NULL;
+    if (fseek(fp, 0, SEEK_SET) != 0) return NULL;
+    if (jz_size_add_checked(len, 1, &alloc_size) != 0) return NULL;
+
+    buf = (char *)malloc(alloc_size);
+    if (!buf) return NULL;
+
+    read = fread(buf, 1, len, fp);
+    if (read != len) {
         free(buf);
         return NULL;
     }
 
     buf[len] = '\0';
-    if (out_size) *out_size = (size_t)len;
+    if (out_size) *out_size = len;
+    return buf;
+}
+
+char *jz_read_entire_file_limit(const char *filename, size_t max_size, size_t *out_size)
+{
+    FILE *f = fopen(filename, "rb");
+    char *buf = NULL;
+    if (!f) return NULL;
+    buf = jz_read_entire_fp_limit(f, max_size, out_size);
+    fclose(f);
+    return buf;
+}
+
+char *jz_read_entire_file(const char *filename, size_t *out_size) {
+    FILE *f = fopen(filename, "rb");
+    char *buf = NULL;
+    if (!f) return NULL;
+    buf = jz_read_entire_fp_limit(f, SIZE_MAX - 1u, out_size);
+    fclose(f);
     return buf;
 }
 
@@ -122,3 +166,179 @@ void jz_buf_free(JZBuffer *buf)
     buf->len = 0;
     buf->cap = 0;
 }
+
+#ifndef _WIN32
+static int jz_open_exclusive_fd(const char *path)
+{
+    int flags = O_CREAT | O_EXCL | O_WRONLY;
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+#ifdef O_NOFOLLOW
+    flags |= O_NOFOLLOW;
+#endif
+    return open(path, flags, 0600);
+}
+
+static int jz_build_temp_path(const char *target,
+                              unsigned attempt,
+                              char *tmp_path,
+                              size_t tmp_path_size)
+{
+    const char *slash = NULL;
+    const char *base = NULL;
+    int pid = (int)getpid();
+    int n = 0;
+
+    if (!target || !tmp_path || tmp_path_size == 0) return -1;
+    slash = strrchr(target, '/');
+    base = slash ? slash + 1 : target;
+
+    if (slash) {
+        size_t dir_len = (size_t)(slash - target);
+        n = snprintf(tmp_path, tmp_path_size,
+                     "%.*s/.%s.tmp.%d.%u",
+                     (int)dir_len, target, base, pid, attempt);
+    } else {
+        n = snprintf(tmp_path, tmp_path_size,
+                     ".%s.tmp.%d.%u",
+                     base, pid, attempt);
+    }
+    if (n <= 0 || (size_t)n >= tmp_path_size) return -1;
+    return 0;
+}
+
+int jz_open_exclusive_temp_output(const char *target,
+                                  FILE **out,
+                                  char *tmp_path,
+                                  size_t tmp_path_size)
+{
+    unsigned attempt = 0;
+
+    if (!target || !out || !tmp_path || tmp_path_size == 0) return -1;
+    *out = NULL;
+    tmp_path[0] = '\0';
+
+    for (attempt = 0; attempt < 256u; ++attempt) {
+        int fd = -1;
+        if (jz_build_temp_path(target, attempt, tmp_path, tmp_path_size) != 0) {
+            return -1;
+        }
+        fd = jz_open_exclusive_fd(tmp_path);
+        if (fd < 0) {
+            if (errno == EEXIST) continue;
+            tmp_path[0] = '\0';
+            return -1;
+        }
+        *out = fdopen(fd, "w");
+        if (!*out) {
+            close(fd);
+            (void)unlink(tmp_path);
+            tmp_path[0] = '\0';
+            return -1;
+        }
+        return 0;
+    }
+
+    tmp_path[0] = '\0';
+    return -1;
+}
+
+int jz_commit_exclusive_temp_output(FILE *out,
+                                    const char *tmp_path,
+                                    const char *final_path)
+{
+    if (!out || !tmp_path || !final_path || final_path[0] == '\0') return -1;
+    if (fflush(out) != 0 || ferror(out)) {
+        fclose(out);
+        (void)unlink(tmp_path);
+        return -1;
+    }
+    if (fclose(out) != 0) {
+        (void)unlink(tmp_path);
+        return -1;
+    }
+    if (rename(tmp_path, final_path) != 0) {
+        (void)unlink(tmp_path);
+        return -1;
+    }
+    return 0;
+}
+
+int jz_open_unique_sidecar_output(const char *prefix,
+                                  const char *suffix,
+                                  FILE **out,
+                                  char *path_buf,
+                                  size_t path_buf_size)
+{
+    unsigned attempt = 0;
+    int pid = (int)getpid();
+
+    if (!prefix || !suffix || !out || !path_buf || path_buf_size == 0) return -1;
+    *out = NULL;
+    path_buf[0] = '\0';
+
+    for (attempt = 0; attempt < 256u; ++attempt) {
+        int fd = -1;
+        int n = snprintf(path_buf, path_buf_size, "%s.%d.%u%s",
+                         prefix, pid, attempt, suffix);
+        if (n <= 0 || (size_t)n >= path_buf_size) {
+            path_buf[0] = '\0';
+            return -1;
+        }
+        fd = jz_open_exclusive_fd(path_buf);
+        if (fd < 0) {
+            if (errno == EEXIST) continue;
+            path_buf[0] = '\0';
+            return -1;
+        }
+        *out = fdopen(fd, "w");
+        if (!*out) {
+            close(fd);
+            (void)unlink(path_buf);
+            path_buf[0] = '\0';
+            return -1;
+        }
+        return 0;
+    }
+
+    path_buf[0] = '\0';
+    return -1;
+}
+#else
+int jz_open_exclusive_temp_output(const char *target,
+                                  FILE **out,
+                                  char *tmp_path,
+                                  size_t tmp_path_size)
+{
+    (void)target;
+    (void)out;
+    (void)tmp_path;
+    (void)tmp_path_size;
+    return -1;
+}
+
+int jz_commit_exclusive_temp_output(FILE *out,
+                                    const char *tmp_path,
+                                    const char *final_path)
+{
+    (void)out;
+    (void)tmp_path;
+    (void)final_path;
+    return -1;
+}
+
+int jz_open_unique_sidecar_output(const char *prefix,
+                                  const char *suffix,
+                                  FILE **out,
+                                  char *path_buf,
+                                  size_t path_buf_size)
+{
+    (void)prefix;
+    (void)suffix;
+    (void)out;
+    (void)path_buf;
+    (void)path_buf_size;
+    return -1;
+}
+#endif
