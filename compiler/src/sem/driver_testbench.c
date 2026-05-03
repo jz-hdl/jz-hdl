@@ -12,6 +12,7 @@
 
 #include "../../include/ast.h"
 #include "../../include/diagnostic.h"
+#include "../../include/sem.h"
 #include "../../include/rules.h"
 #include "driver_internal.h"
 
@@ -67,6 +68,520 @@ static int tb_has_clock_decl(const JZASTNode *tb, const char *name)
 static int tb_has_wire_decl(const JZASTNode *tb, const char *name)
 {
     return tb_has_decl(tb, JZ_AST_TB_WIRE_BLOCK, JZ_AST_TB_WIRE_DECL, name);
+}
+
+static const JZASTNode *tb_find_decl_node(const JZASTNode *tb,
+                                          JZASTNodeType block_type,
+                                          JZASTNodeType decl_type,
+                                          const char *name)
+{
+    if (!tb || !name) return NULL;
+
+    for (size_t i = 0; i < tb->child_count; ++i) {
+        const JZASTNode *block = tb->children[i];
+        if (!block || block->type != block_type) continue;
+
+        for (size_t j = 0; j < block->child_count; ++j) {
+            const JZASTNode *decl = block->children[j];
+            if (!decl || decl->type != decl_type || !decl->name) continue;
+            if (strcmp(decl->name, name) == 0) {
+                return decl;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static const JZASTNode *tb_find_wire_decl_node(const JZASTNode *tb, const char *name)
+{
+    return tb_find_decl_node(tb, JZ_AST_TB_WIRE_BLOCK, JZ_AST_TB_WIRE_DECL, name);
+}
+
+static const JZASTNode *tb_find_module_node(const JZASTNode *root, const char *name)
+{
+    if (!root || !name) return NULL;
+
+    for (size_t i = 0; i < root->child_count; ++i) {
+        const JZASTNode *child = root->children[i];
+        if (!child || !child->name) continue;
+        if (child->type != JZ_AST_MODULE && child->type != JZ_AST_BLACKBOX) continue;
+        if (strcmp(child->name, name) == 0) {
+            return child;
+        }
+    }
+
+    return NULL;
+}
+
+static void tb_collect_feature_decl_symbols(const JZASTNode *node,
+                                            JZModuleScope *scope,
+                                            JZASTNodeType decl_type,
+                                            JZSymbolKind kind,
+                                            JZDiagnosticList *diagnostics)
+{
+    if (!node || !scope) return;
+
+    if (node->type == decl_type && node->name) {
+        (void)module_scope_add_symbol(scope, kind, node->name, (JZASTNode *)node, diagnostics);
+        return;
+    }
+
+    if (node->type != JZ_AST_FEATURE_GUARD) return;
+
+    for (size_t i = 0; i < node->child_count; ++i) {
+        tb_collect_feature_decl_symbols(node->children[i], scope, decl_type, kind, diagnostics);
+    }
+}
+
+static int tb_build_module_scope(const JZASTNode *module,
+                                 JZModuleScope *scope,
+                                 JZDiagnosticList *diagnostics)
+{
+    if (!module || !scope) return 0;
+
+    memset(scope, 0, sizeof(*scope));
+    scope->name = module->name;
+    scope->node = (JZASTNode *)module;
+
+    for (size_t i = 0; i < module->child_count; ++i) {
+        const JZASTNode *child = module->children[i];
+        if (!child) continue;
+
+        switch (child->type) {
+        case JZ_AST_CONST_BLOCK:
+            for (size_t j = 0; j < child->child_count; ++j) {
+                tb_collect_feature_decl_symbols(child->children[j], scope,
+                                                JZ_AST_CONST_DECL, JZ_SYM_CONST,
+                                                diagnostics);
+            }
+            break;
+        case JZ_AST_PORT_BLOCK:
+            for (size_t j = 0; j < child->child_count; ++j) {
+                tb_collect_feature_decl_symbols(child->children[j], scope,
+                                                JZ_AST_PORT_DECL, JZ_SYM_PORT,
+                                                diagnostics);
+            }
+            break;
+        case JZ_AST_WIRE_BLOCK:
+            for (size_t j = 0; j < child->child_count; ++j) {
+                tb_collect_feature_decl_symbols(child->children[j], scope,
+                                                JZ_AST_WIRE_DECL, JZ_SYM_WIRE,
+                                                diagnostics);
+            }
+            break;
+        case JZ_AST_REGISTER_BLOCK:
+            for (size_t j = 0; j < child->child_count; ++j) {
+                tb_collect_feature_decl_symbols(child->children[j], scope,
+                                                JZ_AST_REGISTER_DECL, JZ_SYM_REGISTER,
+                                                diagnostics);
+            }
+            break;
+        case JZ_AST_LATCH_BLOCK:
+            for (size_t j = 0; j < child->child_count; ++j) {
+                tb_collect_feature_decl_symbols(child->children[j], scope,
+                                                JZ_AST_LATCH_DECL, JZ_SYM_LATCH,
+                                                diagnostics);
+            }
+            break;
+        case JZ_AST_MODULE_INSTANCE:
+            if (child->name) {
+                (void)module_scope_add_symbol(scope, JZ_SYM_INSTANCE,
+                                              child->name, (JZASTNode *)child,
+                                              diagnostics);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    return 1;
+}
+
+static void tb_free_module_scope(JZModuleScope *scope)
+{
+    if (!scope) return;
+    jz_buf_free(&scope->symbols);
+    jz_buf_free(&scope->bus_signal_decls);
+}
+
+static int tb_eval_decl_width(const JZASTNode *decl,
+                              const JZModuleScope *scope,
+                              const JZBuffer *project_symbols,
+                              unsigned *out_width)
+{
+    if (!decl || !decl->width || !out_width) return 0;
+
+    if (eval_simple_positive_decl_int(decl->width, out_width) == 1) {
+        return 1;
+    }
+
+    if (scope && sem_eval_width_expr_at_loc(decl->width,
+                                            scope,
+                                            project_symbols,
+                                            out_width,
+                                            decl->loc) == 0) {
+        return 1;
+    }
+
+    if (!scope) {
+        long long width_value = 0;
+        if (sem_eval_const_expr_in_project(decl->width, project_symbols, &width_value) == 0 &&
+            width_value > 0) {
+            *out_width = (unsigned)width_value;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int tb_resolve_module_path_width(const JZASTNode *root,
+                                        const JZASTNode *module,
+                                        const char *path,
+                                        const JZBuffer *project_symbols,
+                                        unsigned *out_width)
+{
+    if (!root || !module || !path || !*path || !out_width) return 0;
+
+    JZModuleScope scope;
+    const JZSymbol *sym = NULL;
+    int ok = 0;
+    const char *dot = strchr(path, '.');
+
+    if (!tb_build_module_scope(module, &scope, NULL)) {
+        return 0;
+    }
+
+    if (!dot) {
+        sym = module_scope_lookup_kind(&scope, path, JZ_SYM_PORT);
+        if (!sym) sym = module_scope_lookup_kind(&scope, path, JZ_SYM_WIRE);
+        if (!sym) sym = module_scope_lookup_kind(&scope, path, JZ_SYM_REGISTER);
+        if (!sym) sym = module_scope_lookup_kind(&scope, path, JZ_SYM_LATCH);
+        if (sym && sym->node) {
+            ok = tb_eval_decl_width(sym->node, &scope, project_symbols, out_width);
+        }
+        tb_free_module_scope(&scope);
+        return ok;
+    }
+
+    {
+        char inst_name[256];
+        size_t inst_len = (size_t)(dot - path);
+        if (inst_len == 0 || inst_len >= sizeof(inst_name)) {
+            tb_free_module_scope(&scope);
+            return 0;
+        }
+
+        memcpy(inst_name, path, inst_len);
+        inst_name[inst_len] = '\0';
+
+        sym = module_scope_lookup_kind(&scope, inst_name, JZ_SYM_INSTANCE);
+        if (!sym || !sym->node || !sym->node->text) {
+            tb_free_module_scope(&scope);
+            return 0;
+        }
+
+        {
+            const JZASTNode *child_module = tb_find_module_node(root, sym->node->text);
+            tb_free_module_scope(&scope);
+            return tb_resolve_module_path_width(root,
+                                                child_module,
+                                                dot + 1,
+                                                project_symbols,
+                                                out_width);
+        }
+    }
+}
+
+static const JZASTNode *tb_find_test_instance(const JZASTNode *test, const char *name)
+{
+    if (!test || !name) return NULL;
+
+    for (size_t i = 0; i < test->child_count; ++i) {
+        const JZASTNode *child = test->children[i];
+        if (!child || child->type != JZ_AST_MODULE_INSTANCE || !child->name) continue;
+        if (strcmp(child->name, name) == 0) {
+            return child;
+        }
+    }
+
+    return NULL;
+}
+
+static int tb_resolve_signal_width(const JZASTNode *root,
+                                   const JZASTNode *tb,
+                                   const JZASTNode *test,
+                                   const char *name,
+                                   const JZBuffer *project_symbols,
+                                   unsigned *out_width)
+{
+    if (!tb || !name || !out_width) return 0;
+
+    if (!strchr(name, '.')) {
+        const JZASTNode *wire_decl = tb_find_wire_decl_node(tb, name);
+        if (wire_decl) {
+            return tb_eval_decl_width(wire_decl, NULL, project_symbols, out_width);
+        }
+
+        if (tb_has_clock_decl(tb, name)) {
+            *out_width = 1;
+            return 1;
+        }
+        return 0;
+    }
+
+    if (!root || !test) return 0;
+
+    {
+        const char *dot = strchr(name, '.');
+        char inst_name[256];
+        size_t inst_len = (size_t)(dot - name);
+        const JZASTNode *inst;
+        const JZASTNode *module;
+
+        if (inst_len == 0 || inst_len >= sizeof(inst_name)) return 0;
+        memcpy(inst_name, name, inst_len);
+        inst_name[inst_len] = '\0';
+
+        inst = tb_find_test_instance(test, inst_name);
+        if (!inst || !inst->text) return 0;
+
+        module = tb_find_module_node(root, inst->text);
+        return tb_resolve_module_path_width(root, module, dot + 1, project_symbols, out_width);
+    }
+}
+
+static int tb_literal_width(const JZASTNode *node,
+                            const JZBuffer *project_symbols,
+                            unsigned *out_width)
+{
+    JZBitvecType ty;
+
+    if (!node || node->type != JZ_AST_EXPR_LITERAL || !out_width) return 0;
+
+    infer_literal_type((JZASTNode *)node, NULL, &ty);
+    if (ty.width > 0) {
+        *out_width = ty.width;
+        return 1;
+    }
+
+    if (node->text) {
+        const char *tick = strchr(node->text, '\'');
+        if (tick && tick != node->text) {
+            size_t prefix_len = (size_t)(tick - node->text);
+            char width_expr[128];
+            long long width_value = 0;
+
+            if (prefix_len >= sizeof(width_expr)) return 0;
+            memcpy(width_expr, node->text, prefix_len);
+            width_expr[prefix_len] = '\0';
+
+            if (sem_eval_const_expr_in_project(width_expr, project_symbols, &width_value) == 0 &&
+                width_value > 0) {
+                *out_width = (unsigned)width_value;
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int tb_map_unary_op(const char *op, JZUnaryOp *out)
+{
+    if (!op || !out) return 0;
+
+    if (strcmp(op, "POS") == 0) {
+        *out = JZ_UNARY_PLUS;
+        return 1;
+    }
+    if (strcmp(op, "NEG") == 0) {
+        *out = JZ_UNARY_MINUS;
+        return 1;
+    }
+    if (strcmp(op, "BIT_NOT") == 0) {
+        *out = JZ_UNARY_BIT_NOT;
+        return 1;
+    }
+    if (strcmp(op, "LOG_NOT") == 0) {
+        *out = JZ_UNARY_LOGICAL_NOT;
+        return 1;
+    }
+
+    return 0;
+}
+
+static int tb_map_binary_op(const char *op, JZBinaryOp *out)
+{
+    if (!op || !out) return 0;
+
+    if (strcmp(op, "ADD") == 0)      *out = JZ_BIN_ADD;
+    else if (strcmp(op, "SUB") == 0) *out = JZ_BIN_SUB;
+    else if (strcmp(op, "MUL") == 0) *out = JZ_BIN_MUL;
+    else if (strcmp(op, "DIV") == 0) *out = JZ_BIN_DIV;
+    else if (strcmp(op, "MOD") == 0) *out = JZ_BIN_MOD;
+    else if (strcmp(op, "BIT_AND") == 0) *out = JZ_BIN_BIT_AND;
+    else if (strcmp(op, "BIT_OR") == 0)  *out = JZ_BIN_BIT_OR;
+    else if (strcmp(op, "BIT_XOR") == 0) *out = JZ_BIN_BIT_XOR;
+    else if (strcmp(op, "LOG_AND") == 0) *out = JZ_BIN_LOG_AND;
+    else if (strcmp(op, "LOG_OR") == 0)  *out = JZ_BIN_LOG_OR;
+    else if (strcmp(op, "EQ") == 0)      *out = JZ_BIN_EQ;
+    else if (strcmp(op, "NEQ") == 0)     *out = JZ_BIN_NE;
+    else if (strcmp(op, "LT") == 0)      *out = JZ_BIN_LT;
+    else if (strcmp(op, "LE") == 0)      *out = JZ_BIN_LE;
+    else if (strcmp(op, "GT") == 0)      *out = JZ_BIN_GT;
+    else if (strcmp(op, "GE") == 0)      *out = JZ_BIN_GE;
+    else if (strcmp(op, "SHL") == 0)     *out = JZ_BIN_SHL;
+    else if (strcmp(op, "SHR") == 0)     *out = JZ_BIN_SHR;
+    else if (strcmp(op, "ASHR") == 0)    *out = JZ_BIN_ASHR;
+    else return 0;
+
+    return 1;
+}
+
+static int tb_infer_expr_type(const JZASTNode *root,
+                              const JZASTNode *tb,
+                              const JZASTNode *test,
+                              const JZASTNode *expr,
+                              const JZBuffer *project_symbols,
+                              JZBitvecType *out)
+{
+    if (!expr || !out) return 0;
+    memset(out, 0, sizeof(*out));
+
+    switch (expr->type) {
+    case JZ_AST_EXPR_LITERAL: {
+        unsigned width = 0;
+        if (!tb_literal_width(expr, project_symbols, &width) || width == 0) {
+            return 0;
+        }
+        jz_type_scalar(width, 0, out);
+        return 1;
+    }
+
+    case JZ_AST_EXPR_IDENTIFIER:
+    case JZ_AST_EXPR_QUALIFIED_IDENTIFIER: {
+        unsigned width = 0;
+        if (!expr->name ||
+            !tb_resolve_signal_width(root, tb, test, expr->name, project_symbols, &width)) {
+            return 0;
+        }
+        jz_type_scalar(width, 0, out);
+        return 1;
+    }
+
+    case JZ_AST_EXPR_UNARY: {
+        JZBitvecType operand;
+        JZUnaryOp op;
+        if (expr->child_count < 1 ||
+            !tb_infer_expr_type(root, tb, test, expr->children[0], project_symbols, &operand) ||
+            !tb_map_unary_op(expr->block_kind, &op) ||
+            jz_type_unary(op, &operand, out) != 0) {
+            return 0;
+        }
+        return 1;
+    }
+
+    case JZ_AST_EXPR_BINARY: {
+        JZBitvecType lhs;
+        JZBitvecType rhs;
+        JZBinaryOp op;
+        if (expr->child_count < 2 ||
+            !tb_infer_expr_type(root, tb, test, expr->children[0], project_symbols, &lhs) ||
+            !tb_infer_expr_type(root, tb, test, expr->children[1], project_symbols, &rhs) ||
+            !tb_map_binary_op(expr->block_kind, &op) ||
+            jz_type_binary(op, &lhs, &rhs, out) != 0) {
+            return 0;
+        }
+        return 1;
+    }
+
+    case JZ_AST_EXPR_TERNARY: {
+        JZBitvecType cond;
+        JZBitvecType on_true;
+        JZBitvecType on_false;
+        if (expr->child_count < 3 ||
+            !tb_infer_expr_type(root, tb, test, expr->children[0], project_symbols, &cond) ||
+            !tb_infer_expr_type(root, tb, test, expr->children[1], project_symbols, &on_true) ||
+            !tb_infer_expr_type(root, tb, test, expr->children[2], project_symbols, &on_false) ||
+            jz_type_ternary(&cond, &on_true, &on_false, out) != 0) {
+            return 0;
+        }
+        return 1;
+    }
+
+    case JZ_AST_EXPR_CONCAT: {
+        JZBitvecType elems[64];
+        size_t count = expr->child_count;
+        if (count == 0 || count > sizeof(elems) / sizeof(elems[0])) return 0;
+
+        for (size_t i = 0; i < count; ++i) {
+            if (!tb_infer_expr_type(root, tb, test, expr->children[i], project_symbols, &elems[i])) {
+                return 0;
+            }
+        }
+
+        return jz_type_concat(elems, count, out) == 0;
+    }
+
+    case JZ_AST_EXPR_SLICE: {
+        JZBitvecType base;
+        long msb = 0;
+        long lsb = 0;
+        if (expr->child_count < 3 ||
+            !tb_infer_expr_type(root, tb, test, expr->children[0], project_symbols, &base) ||
+            !sem_try_const_eval_ast_expr(expr->children[1], &msb) ||
+            !sem_try_const_eval_ast_expr(expr->children[2], &lsb) ||
+            msb < 0 || lsb < 0) {
+            return 0;
+        }
+        return jz_type_slice(&base, (unsigned)msb, (unsigned)lsb, out) == 0;
+    }
+
+    default:
+        return 0;
+    }
+}
+
+static void check_expect_widths(const JZASTNode *root,
+                                const JZASTNode *tb,
+                                const JZASTNode *test,
+                                const JZASTNode *expect_node,
+                                const JZBuffer *project_symbols,
+                                JZDiagnosticList *diagnostics)
+{
+    JZBitvecType signal_ty;
+    JZBitvecType value_ty;
+    const JZASTNode *signal_node;
+    const JZASTNode *value_node;
+    const char *directive_name;
+    char msg[512];
+
+    if (!root || !tb || !test || !expect_node || expect_node->child_count < 2) return;
+
+    signal_node = expect_node->children[0];
+    value_node = expect_node->children[1];
+    directive_name = expect_node->type == JZ_AST_TB_EXPECT_EQ
+        ? "@expect_equal"
+        : "@expect_not_equal";
+
+    if (!tb_infer_expr_type(root, tb, test, signal_node, project_symbols, &signal_ty) ||
+        !tb_infer_expr_type(root, tb, test, value_node, project_symbols, &value_ty)) {
+        return;
+    }
+
+    if (signal_ty.width == 0 || value_ty.width == 0 || signal_ty.width == value_ty.width) {
+        return;
+    }
+
+    snprintf(msg, sizeof(msg),
+             "%s value width %u does not match signal width %u",
+             directive_name,
+             value_ty.width,
+             signal_ty.width);
+    tb_report_rule(diagnostics, value_node->loc, "TB_EXPECT_WIDTH_MISMATCH", msg);
 }
 
 static void check_clock_directive(const JZASTNode *tb,
@@ -328,11 +843,12 @@ static void check_test_block(JZASTNode *test, JZDiagnosticList *diagnostics)
  * @brief Validate a @testbench block.
  */
 static void check_test_block_semantics(const JZASTNode *tb,
+                                       const JZASTNode *root,
                                        const JZASTNode *test,
                                        const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics)
 {
-    if (!tb || !test) return;
+    if (!tb || !root || !test) return;
 
     for (size_t i = 0; i < test->child_count; ++i) {
         const JZASTNode *child = test->children[i];
@@ -342,6 +858,9 @@ static void check_test_block_semantics(const JZASTNode *tb,
             check_stimulus_clock_assignments(tb, child, diagnostics);
         } else if (child->type == JZ_AST_TB_CLOCK_ADV) {
             check_clock_directive(tb, child, project_symbols, diagnostics);
+        } else if (child->type == JZ_AST_TB_EXPECT_EQ ||
+                   child->type == JZ_AST_TB_EXPECT_NEQ) {
+            check_expect_widths(root, tb, test, child, project_symbols, diagnostics);
         }
     }
 }
@@ -365,7 +884,7 @@ static void validate_testbench(JZASTNode *tb, JZASTNode *root,
         if (child->type == JZ_AST_TB_TEST) {
             test_count++;
             check_test_block(child, diagnostics);
-            check_test_block_semantics(tb, child, project_symbols, diagnostics);
+            check_test_block_semantics(tb, root, child, project_symbols, diagnostics);
         }
     }
 

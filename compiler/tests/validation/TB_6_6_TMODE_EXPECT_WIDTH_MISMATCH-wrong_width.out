@@ -1,0 +1,2 @@
+File: TB_6_6_TMODE_EXPECT_WIDTH_MISMATCH-wrong_width.jz
+      51:33   error TB_EXPECT_WIDTH_MISMATCH TB-011 @expect value width must match signal width
