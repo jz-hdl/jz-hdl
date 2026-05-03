@@ -32,10 +32,16 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #ifndef _WIN32
+#include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
+#endif
+
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0
 #endif
 
 #define RC_FILENAME ".jzhdl-lsp.rc"
@@ -294,18 +300,78 @@ static void write_rc_file(const char *dir, const LspProjectList *projects)
     char rc_path[2048];
     snprintf(rc_path, sizeof(rc_path), "%s/%s", dir, RC_FILENAME);
 
+#ifndef _WIN32
+    char tmp_path[2048];
+    FILE *f = NULL;
+    int fd = -1;
+    static unsigned long temp_counter = 0;
+
+    for (unsigned attempt = 0; attempt < 128; ++attempt) {
+        snprintf(tmp_path, sizeof(tmp_path), "%s/%s.tmp.%ld.%lu",
+                 dir, RC_FILENAME, (long)getpid(), temp_counter++);
+        fd = open(tmp_path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+        if (fd >= 0) {
+            break;
+        }
+        if (errno != EEXIST) {
+            lsp_log("failed to create temporary rc file %s", tmp_path);
+            return;
+        }
+    }
+    if (fd < 0) {
+        lsp_log("failed to create temporary rc file in %s", dir);
+        return;
+    }
+
+    f = fdopen(fd, "w");
+    if (!f) {
+        close(fd);
+        unlink(tmp_path);
+        lsp_log("failed to open temporary rc file stream %s", tmp_path);
+        return;
+    }
+#else
     FILE *f = fopen(rc_path, "w");
     if (!f) {
         lsp_log("failed to write %s", rc_path);
         return;
     }
+#endif
 
     for (size_t i = 0; i < projects->count; i++) {
         const LspProjectEntry *e = &projects->entries[i];
         fprintf(f, "%s %s %s\n", e->file, e->chip, e->name);
     }
 
-    fclose(f);
+    if (fflush(f) != 0 || ferror(f)) {
+#ifndef _WIN32
+        fclose(f);
+        unlink(tmp_path);
+        lsp_log("failed to flush %s", tmp_path);
+#else
+        fclose(f);
+        lsp_log("failed to flush %s", rc_path);
+#endif
+        return;
+    }
+
+    if (fclose(f) != 0) {
+#ifndef _WIN32
+        unlink(tmp_path);
+        lsp_log("failed to close %s", tmp_path);
+#else
+        lsp_log("failed to close %s", rc_path);
+#endif
+        return;
+    }
+
+#ifndef _WIN32
+    if (rename(tmp_path, rc_path) != 0) {
+        unlink(tmp_path);
+        lsp_log("failed to replace %s", rc_path);
+        return;
+    }
+#endif
     lsp_log("wrote %s with %zu project(s)", rc_path, projects->count);
 }
 

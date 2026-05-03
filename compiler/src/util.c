@@ -6,11 +6,30 @@
 
 #include "../include/util.h"
 
-static int jz_size_add_checked(size_t a, size_t b, size_t *out)
+int jz_size_add_checked(size_t a, size_t b, size_t *out)
 {
     if (!out) return -1;
     if (a > SIZE_MAX - b) return -1;
     *out = a + b;
+    return 0;
+}
+
+int jz_size_mul_checked(size_t a, size_t b, size_t *out)
+{
+    if (!out) return -1;
+    if (a != 0 && b > SIZE_MAX / a) return -1;
+    *out = a * b;
+    return 0;
+}
+
+int jz_size_align_up_checked(size_t size, size_t alignment, size_t *out)
+{
+    size_t rounded = 0;
+
+    if (!out || alignment == 0) return -1;
+    if ((alignment & (alignment - 1u)) != 0u) return -1;
+    if (jz_size_add_checked(size, alignment - 1u, &rounded) != 0) return -1;
+    *out = rounded & ~(alignment - 1u);
     return 0;
 }
 

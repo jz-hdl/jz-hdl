@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "lexer.h"
 #include "util.h"
@@ -23,8 +24,15 @@ typedef struct LexerState {
 
 static int lexer_ensure_capacity(JZTokenStream *s) {
     if (s->count == s->capacity) {
-        size_t new_cap = s->capacity ? s->capacity * 2 : 128;
-        JZToken *new_tokens = (JZToken *)realloc(s->tokens, new_cap * sizeof(JZToken));
+        size_t new_cap = s->capacity ? s->capacity : 128;
+        size_t new_bytes = 0;
+        if (s->capacity != 0) {
+            if (new_cap > SIZE_MAX / 2) return -1;
+            new_cap *= 2;
+        }
+        if (new_cap <= s->count) return -1;
+        if (jz_size_mul_checked(new_cap, sizeof(JZToken), &new_bytes) != 0) return -1;
+        JZToken *new_tokens = (JZToken *)realloc(s->tokens, new_bytes);
         if (!new_tokens) return -1;
         s->tokens = new_tokens;
         s->capacity = new_cap;
@@ -48,7 +56,14 @@ static void lexer_report_parse_error(LexerState *st,
 }
 
 static void emit_token(LexerState *st, JZTokenType type, const char *start, size_t length, JZLocation loc) {
-    if (lexer_ensure_capacity(st->out) != 0) return;
+    if (lexer_ensure_capacity(st->out) != 0) {
+        st->had_error = 1;
+        return;
+    }
+    if (st->out->count >= st->out->capacity) {
+        st->had_error = 1;
+        return;
+    }
     JZToken *t = &st->out->tokens[st->out->count++];
     memset(t, 0, sizeof(*t));
     t->type = type;

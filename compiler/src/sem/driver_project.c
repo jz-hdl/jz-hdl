@@ -1341,8 +1341,13 @@ void sem_check_project_config(JZASTNode *project,
         return;
     }
 
-    unsigned char *edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
-    unsigned char *bare_edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
+    size_t edge_count = 0;
+    if (jz_size_mul_checked(count, count, &edge_count) != 0) {
+        return;
+    }
+
+    unsigned char *edges = (unsigned char *)calloc(edge_count, sizeof(unsigned char));
+    unsigned char *bare_edges = (unsigned char *)calloc(edge_count, sizeof(unsigned char));
     if (!edges || !bare_edges) {
         free(edges);
         free(bare_edges);
@@ -1473,8 +1478,12 @@ void sem_check_project_config(JZASTNode *project,
         for (size_t i = 0; i < count; ++i) {
             if (visit[i] != 0) continue;
 
-            size_t *stack = (size_t *)malloc(count * sizeof(size_t));
-            size_t *iter  = (size_t *)malloc(count * sizeof(size_t));
+            size_t frame_bytes = 0;
+            if (jz_size_mul_checked(count, sizeof(size_t), &frame_bytes) != 0) {
+                break;
+            }
+            size_t *stack = (size_t *)malloc(frame_bytes);
+            size_t *iter  = (size_t *)malloc(frame_bytes);
             if (!stack || !iter) {
                 free(stack);
                 free(iter);

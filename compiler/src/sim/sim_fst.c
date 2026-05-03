@@ -17,9 +17,11 @@
 #include <string.h>
 #include <time.h>
 
+#include "util.h"
 #include "sim_fst.h"
 
 #define FST_MAX_SIGNALS 4096
+#define FST_MAX_RETAINED_TRACE_BYTES (64u * 1024u * 1024u)
 
 /* ---- FST block types ---- */
 #define FST_BL_HDR               0
@@ -49,7 +51,7 @@ typedef struct FSTSignal {
 
 /* ---- Value change record ---- */
 typedef struct FSTChange {
-    uint64_t time;
+    uint32_t time_index;
     int      sig_id;
     uint64_t value;
 } FSTChange;
@@ -79,6 +81,16 @@ struct FSTWriter {
     FSTChange  *changes;
     size_t      num_changes;
     size_t      changes_cap;
+    size_t      changes_alloc_bytes;
+
+    uint64_t   *time_table;
+    size_t      time_count;
+    size_t      time_cap;
+    size_t      time_table_alloc_bytes;
+    uint32_t    current_time_index;
+
+    size_t      retained_trace_bytes;
+    int         trace_limit_hit;
 
     uint64_t    current_time;
     uint64_t    start_time;
@@ -131,6 +143,103 @@ static void buf_free(FSTBuffer *b)
     b->data = NULL;
     b->len = 0;
     b->cap = 0;
+}
+
+static int fst_update_tracked_allocation(FSTWriter *w, size_t *tracked_bytes, size_t new_bytes)
+{
+    size_t retained_without = 0;
+    size_t new_total = 0;
+
+    if (!w || !tracked_bytes) {
+        return -1;
+    }
+    if (w->retained_trace_bytes < *tracked_bytes) {
+        return -1;
+    }
+    retained_without = w->retained_trace_bytes - *tracked_bytes;
+    if (jz_size_add_checked(retained_without, new_bytes, &new_total) != 0 ||
+        new_total > FST_MAX_RETAINED_TRACE_BYTES) {
+        return -1;
+    }
+    w->retained_trace_bytes = new_total;
+    *tracked_bytes = new_bytes;
+    return 0;
+}
+
+static int fst_grow_changes(FSTWriter *w, size_t min_count)
+{
+    size_t new_cap = 0;
+    size_t new_bytes = 0;
+    FSTChange *new_changes = NULL;
+
+    if (!w) {
+        return -1;
+    }
+    if (min_count <= w->changes_cap) {
+        return 0;
+    }
+
+    new_cap = w->changes_cap ? w->changes_cap : 8192;
+    while (new_cap < min_count) {
+        if (new_cap > SIZE_MAX / 2) {
+            return -1;
+        }
+        new_cap *= 2;
+    }
+    if (jz_size_mul_checked(new_cap, sizeof(FSTChange), &new_bytes) != 0) {
+        return -1;
+    }
+    if (fst_update_tracked_allocation(w, &w->changes_alloc_bytes, new_bytes) != 0) {
+        return -1;
+    }
+
+    new_changes = (FSTChange *)realloc(w->changes, new_bytes);
+    if (!new_changes) {
+        fst_update_tracked_allocation(w, &w->changes_alloc_bytes,
+                                      w->changes_cap * sizeof(FSTChange));
+        return -1;
+    }
+    w->changes = new_changes;
+    w->changes_cap = new_cap;
+    return 0;
+}
+
+static int fst_grow_time_table(FSTWriter *w, size_t min_count)
+{
+    size_t new_cap = 0;
+    size_t new_bytes = 0;
+    uint64_t *new_times = NULL;
+
+    if (!w) {
+        return -1;
+    }
+    if (min_count <= w->time_cap) {
+        return 0;
+    }
+
+    new_cap = w->time_cap ? w->time_cap : 1024;
+    while (new_cap < min_count) {
+        if (new_cap > SIZE_MAX / 2) {
+            return -1;
+        }
+        new_cap *= 2;
+    }
+    if (jz_size_mul_checked(new_cap, sizeof(uint64_t), &new_bytes) != 0) {
+        return -1;
+    }
+    if (fst_update_tracked_allocation(w, &w->time_table_alloc_bytes, new_bytes) != 0) {
+        return -1;
+    }
+
+    new_times = (uint64_t *)realloc(w->time_table, new_bytes);
+    if (!new_times) {
+        fst_update_tracked_allocation(w, &w->time_table_alloc_bytes,
+                                      w->time_cap * sizeof(uint64_t));
+        return -1;
+    }
+    w->time_table = new_times;
+    w->time_cap = new_cap;
+    return 0;
 }
 
 /* ---- Varint encoding (unsigned LEB128) ---- */
@@ -434,78 +543,51 @@ void fst_set_time(FSTWriter *w, uint64_t time_ps)
     if (time_units > w->end_time) {
         w->end_time = time_units;
     }
+
+    if (w->trace_limit_hit) {
+        return;
+    }
+    if (w->time_count > 0 && w->time_table[w->time_count - 1] == time_units) {
+        w->current_time_index = (uint32_t)(w->time_count - 1);
+        return;
+    }
+    if (fst_grow_time_table(w, w->time_count + 1) != 0) {
+        w->trace_limit_hit = 1;
+        return;
+    }
+    w->time_table[w->time_count] = time_units;
+    w->current_time_index = (uint32_t)w->time_count;
+    w->time_count++;
 }
 
 void fst_dump_value(FSTWriter *w, int sig_id, uint64_t value, int width)
 {
     if (!w || !w->defs_ended || sig_id < 0 || sig_id >= w->num_signals) return;
     (void)width;
+    if (w->trace_limit_hit) return;
 
-    if (w->num_changes >= w->changes_cap) {
-        size_t newcap = w->changes_cap ? w->changes_cap * 2 : 8192;
-        w->changes = (FSTChange *)realloc(w->changes, newcap * sizeof(FSTChange));
-        w->changes_cap = newcap;
+    if (w->time_count == 0) {
+        if (fst_grow_time_table(w, 1) != 0) {
+            w->trace_limit_hit = 1;
+            return;
+        }
+        w->time_table[0] = w->current_time;
+        w->time_count = 1;
+        w->current_time_index = 0;
+    }
+
+    if (fst_grow_changes(w, w->num_changes + 1) != 0) {
+        w->trace_limit_hit = 1;
+        return;
     }
 
     FSTChange *vc = &w->changes[w->num_changes++];
-    vc->time = w->current_time;
+    vc->time_index = w->current_time_index;
     vc->sig_id = sig_id;
     vc->value = value;
 }
 
 /* ---- FST file writing (called from fst_close) ---- */
-
-/**
- * @brief Build the unique sorted time table from all value changes.
- */
-static uint64_t *build_time_table(FSTWriter *w, size_t *out_count)
-{
-    if (w->num_changes == 0) {
-        *out_count = 0;
-        return NULL;
-    }
-
-    size_t cap = 1024;
-    uint64_t *times = (uint64_t *)malloc(cap * sizeof(uint64_t));
-    size_t count = 0;
-
-    for (size_t i = 0; i < w->num_changes; i++) {
-        uint64_t t = w->changes[i].time;
-        int found = 0;
-        for (size_t j = 0; j < count; j++) {
-            if (times[j] == t) { found = 1; break; }
-        }
-        if (!found) {
-            if (count >= cap) {
-                cap *= 2;
-                times = (uint64_t *)realloc(times, cap * sizeof(uint64_t));
-            }
-            times[count++] = t;
-        }
-    }
-
-    /* Sort */
-    for (size_t i = 0; i < count - 1; i++) {
-        for (size_t j = i + 1; j < count; j++) {
-            if (times[j] < times[i]) {
-                uint64_t tmp = times[i];
-                times[i] = times[j];
-                times[j] = tmp;
-            }
-        }
-    }
-
-    *out_count = count;
-    return times;
-}
-
-static size_t time_to_index(const uint64_t *times, size_t count, uint64_t t)
-{
-    for (size_t i = 0; i < count; i++) {
-        if (times[i] == t) return i;
-    }
-    return 0;
-}
 
 /* ---- HDR block ----
  *
@@ -595,8 +677,8 @@ static void write_hdr_block(FSTWriter *w)
  */
 static void write_vcdata_block(FSTWriter *w)
 {
-    size_t time_count = 0;
-    uint64_t *times = build_time_table(w, &time_count);
+    size_t time_count = w->time_count;
+    const uint64_t *times = w->time_table;
     int maxhandle = w->num_signals;
 
     long block_start = ftell(w->fp);
@@ -629,7 +711,7 @@ static void write_vcdata_block(FSTWriter *w)
 
     /* ---- Build per-signal VC data ---- */
     FSTBuffer *sig_vc = (FSTBuffer *)calloc((size_t)maxhandle, sizeof(FSTBuffer));
-    int *prev_tidx = (int *)calloc((size_t)maxhandle, sizeof(int));
+    uint32_t *prev_tidx = (uint32_t *)calloc((size_t)maxhandle, sizeof(uint32_t));
     for (int s = 0; s < maxhandle; s++)
         buf_init(&sig_vc[s]);
 
@@ -639,9 +721,9 @@ static void write_vcdata_block(FSTWriter *w)
         if (s < 0 || s >= maxhandle) continue;
 
         int width = w->signals[s].width;
-        size_t tidx = time_to_index(times, time_count, vc->time);
-        int delta = (int)tidx - prev_tidx[s];
-        prev_tidx[s] = (int)tidx;
+        uint32_t tidx = vc->time_index;
+        uint32_t delta = tidx - prev_tidx[s];
+        prev_tidx[s] = tidx;
 
         if (width == 1) {
             /* 1-bit 2-state: (delta << 2) | enc; enc: 0→'0', 2→'1' */
@@ -759,7 +841,6 @@ static void write_vcdata_block(FSTWriter *w)
     free(sig_vc);
     free(offsets);
     free(prev_tidx);
-    free(times);
 }
 
 /* ---- GEOM block ----
@@ -846,6 +927,7 @@ void fst_close(FSTWriter *w)
 
     buf_free(&w->hier);
     free(w->changes);
+    free(w->time_table);
     free(w->current_scope);
 
     free(w);

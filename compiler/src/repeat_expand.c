@@ -19,6 +19,7 @@
 
 #include "../include/repeat_expand.h"
 #include "../include/diagnostic.h"
+#include "../include/util.h"
 
 /* ── Dynamic string buffer ──────────────────────────────────────── */
 
@@ -34,6 +35,24 @@ typedef struct {
     JZDiagnosticList  *diagnostics;
     JZExpansionLimits  limits;
 } RepeatExpandContext;
+
+typedef struct {
+    const char *region_end;
+    const char *p;
+    StrBuf      nested_out;
+    StrBuf     *out;
+    int         owns_out;
+    int         pending_repeat;
+    size_t      pending_count;
+    const char *pending_repeat_at;
+    const char *pending_end_at;
+} RepeatFrame;
+
+typedef struct {
+    RepeatFrame *data;
+    size_t       len;
+    size_t       cap;
+} RepeatFrameStack;
 
 static int count_line(const char *src, const char *pos);
 
@@ -97,7 +116,12 @@ static int sb_append_limited(StrBuf *sb,
         return 1;
     }
 
-    needed = sb->len + n + 1;
+    if (jz_size_add_checked(sb->len, n, &needed) != 0 ||
+        jz_size_add_checked(needed, 1, &needed) != 0) {
+        report_repeat_internal_failure(ctx, limit_at,
+                                       "internal error: @repeat expansion size overflow");
+        return 1;
+    }
     while (needed > sb->cap) {
         size_t new_cap = sb->cap ? sb->cap : 4096;
         char *new_data = NULL;
@@ -135,6 +159,28 @@ static int is_word_char(char c)
     return isalnum((unsigned char)c) || c == '_';
 }
 
+static int has_remaining(const char *p, const char *end, size_t need)
+{
+    return p && end && p <= end && (size_t)(end - p) >= need;
+}
+
+static int matches_directive(const char *p, const char *end,
+                             const char *directive, size_t directive_len)
+{
+    if (!has_remaining(p, end, directive_len)) {
+        return 0;
+    }
+    return strncmp(p, directive, directive_len) == 0;
+}
+
+static int directive_boundary_ok(const char *p, const char *end, size_t directive_len)
+{
+    if (!has_remaining(p, end, directive_len + 1)) {
+        return 1;
+    }
+    return !is_word_char(p[directive_len]);
+}
+
 /* Count the line number at position `pos` within `src`. */
 static int count_line(const char *src, const char *pos)
 {
@@ -146,9 +192,9 @@ static int count_line(const char *src, const char *pos)
 }
 
 /* Skip whitespace (spaces and tabs only, not newlines). */
-static const char *skip_hspace(const char *p)
+static const char *skip_hspace(const char *p, const char *end)
 {
-    while (*p == ' ' || *p == '\t') p++;
+    while (p < end && (*p == ' ' || *p == '\t')) p++;
     return p;
 }
 
@@ -179,13 +225,15 @@ static const char *find_matching_end(const char *body_start, const char *src_end
         }
         if (*p == '@') {
             /* Check for @repeat (nested) */
-            if (strncmp(p, "@repeat", 7) == 0 && !is_word_char(p[7])) {
+            if (matches_directive(p, src_end, "@repeat", 7) &&
+                directive_boundary_ok(p, src_end, 7)) {
                 depth++;
                 p += 7;
                 continue;
             }
             /* Check for @end — but NOT @endmod, @endtb, @endsim, etc. */
-            if (strncmp(p, "@end", 4) == 0 && !is_word_char(p[4])) {
+            if (matches_directive(p, src_end, "@end", 4) &&
+                directive_boundary_ok(p, src_end, 4)) {
                 depth--;
                 if (depth == 0) {
                     return p;
@@ -254,7 +302,64 @@ static int substitute_idx(StrBuf *sb,
     return 0;
 }
 
-/* ── Recursive expansion ────────────────────────────────────────── */
+static void repeat_frame_release(RepeatFrame *frame)
+{
+    if (!frame) {
+        return;
+    }
+    if (frame->owns_out) {
+        free(frame->nested_out.data);
+        frame->nested_out.data = NULL;
+        frame->nested_out.len = 0;
+        frame->nested_out.cap = 0;
+    }
+}
+
+static void repeat_frame_stack_free(RepeatFrameStack *stack)
+{
+    if (!stack) {
+        return;
+    }
+    for (size_t i = 0; i < stack->len; ++i) {
+        repeat_frame_release(&stack->data[i]);
+    }
+    free(stack->data);
+    stack->data = NULL;
+    stack->len = 0;
+    stack->cap = 0;
+}
+
+static int repeat_frame_stack_push(RepeatFrameStack *stack, const RepeatFrame *frame)
+{
+    if (!stack || !frame) {
+        return -1;
+    }
+    if (stack->len == stack->cap) {
+        size_t new_cap = stack->cap ? stack->cap : 8;
+        size_t new_bytes = 0;
+        if (stack->cap != 0) {
+            if (new_cap > SIZE_MAX / 2) {
+                return -1;
+            }
+            new_cap *= 2;
+        }
+        if (jz_size_mul_checked(new_cap, sizeof(RepeatFrame), &new_bytes) != 0) {
+            return -1;
+        }
+        RepeatFrame *new_data = (RepeatFrame *)realloc(stack->data, new_bytes);
+        if (!new_data) {
+            return -1;
+        }
+        stack->data = new_data;
+        stack->cap = new_cap;
+    }
+    stack->data[stack->len] = *frame;
+    if (stack->data[stack->len].owns_out) {
+        stack->data[stack->len].out = &stack->data[stack->len].nested_out;
+    }
+    stack->len++;
+    return 0;
+}
 
 /**
  * Expand @repeat blocks in [start, src_end).
@@ -266,57 +371,125 @@ static int expand_region(const char *start,
                          RepeatExpandContext *ctx,
                          StrBuf *out)
 {
-    const char *p = start;
+    RepeatFrameStack stack = {0};
+    RepeatFrame root;
 
-    while (p < src_end) {
-        /* Skip single-line comments */
-        if (*p == '/' && p + 1 < src_end && p[1] == '/') {
-            const char *eol = p;
-            while (eol < src_end && *eol != '\n') eol++;
-            if (sb_append_limited(out, p, (size_t)(eol - p), ctx, p) != 0) {
+    memset(&root, 0, sizeof(root));
+    root.region_end = src_end;
+    root.p = start;
+    root.out = out;
+
+    if (repeat_frame_stack_push(&stack, &root) != 0) {
+        report_repeat_internal_failure(ctx, start,
+                                       "out of memory during @repeat expansion");
+        return 1;
+    }
+
+    while (stack.len > 0) {
+        RepeatFrame *frame = &stack.data[stack.len - 1];
+        const char *p = frame->p;
+
+        if (p >= frame->region_end) {
+            if (stack.len == 1) {
+                stack.len = 0;
+                break;
+            }
+
+            RepeatFrame child = stack.data[stack.len - 1];
+            RepeatFrame *parent = &stack.data[stack.len - 2];
+            stack.len--;
+
+            if (!parent->pending_repeat) {
+                repeat_frame_stack_free(&stack);
+                report_repeat_internal_failure(ctx, parent->p,
+                                               "internal error: missing pending @repeat state");
+                repeat_frame_release(&child);
                 return 1;
             }
-            p = eol;
+
+            for (size_t i = 0; i < parent->pending_count; ++i) {
+                if (substitute_idx(parent->out,
+                                   child.out->data,
+                                   child.out->len,
+                                   i,
+                                   ctx,
+                                   parent->pending_repeat_at) != 0) {
+                    repeat_frame_release(&child);
+                    repeat_frame_stack_free(&stack);
+                    return 1;
+                }
+            }
+            repeat_frame_release(&child);
+
+            parent->p = parent->pending_end_at + 4;
+            parent->p = skip_hspace(parent->p, parent->region_end);
+            if (parent->p < parent->region_end && *parent->p == '\n') {
+                parent->p++;
+            }
+            parent->pending_repeat = 0;
+            parent->pending_count = 0;
+            parent->pending_repeat_at = NULL;
+            parent->pending_end_at = NULL;
+            continue;
+        }
+
+        /* Skip single-line comments */
+        if (*p == '/' && has_remaining(p, frame->region_end, 2) && p[1] == '/') {
+            const char *eol = p;
+            while (eol < frame->region_end && *eol != '\n') eol++;
+            if (sb_append_limited(frame->out, p, (size_t)(eol - p), ctx, p) != 0) {
+                repeat_frame_stack_free(&stack);
+                return 1;
+            }
+            frame->p = eol;
             continue;
         }
 
         /* Skip string literals */
         if (*p == '"') {
             const char *q = p + 1;
-            while (q < src_end && *q != '"' && *q != '\n') {
-                if (*q == '\\' && q + 1 < src_end) q++;
+            while (q < frame->region_end && *q != '"' && *q != '\n') {
+                if (*q == '\\' && has_remaining(q, frame->region_end, 2)) q++;
                 q++;
             }
-            if (q < src_end && *q == '"') q++;
-            if (sb_append_limited(out, p, (size_t)(q - p), ctx, p) != 0) {
+            if (q < frame->region_end && *q == '"') q++;
+            if (sb_append_limited(frame->out, p, (size_t)(q - p), ctx, p) != 0) {
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
-            p = q;
+            frame->p = q;
             continue;
         }
 
         /* Scan for @repeat */
-        if (*p == '@' && strncmp(p, "@repeat", 7) == 0 && !is_word_char(p[7])) {
+        if (*p == '@' &&
+            matches_directive(p, frame->region_end, "@repeat", 7) &&
+            directive_boundary_ok(p, frame->region_end, 7)) {
             const char *repeat_at = p;
+            const char *body_start = NULL;
+            const char *end_at = NULL;
+            RepeatFrame child;
+            memset(&child, 0, sizeof(child));
             p += 7;
 
             /* Skip whitespace after @repeat */
-            p = skip_hspace(p);
+            p = skip_hspace(p, frame->region_end);
 
             /* Parse the count */
-            if (!isdigit((unsigned char)*p)) {
+            if (p >= frame->region_end || !isdigit((unsigned char)*p)) {
                 report_repeat_rule(ctx, repeat_at,
                                    "RPT_COUNT_INVALID",
                                    "RPT-001 @repeat requires a positive integer count");
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
 
             size_t count = 0;
             int overflow = 0;
-            while (isdigit((unsigned char)*p)) {
+            while (p < frame->region_end && isdigit((unsigned char)*p)) {
                 unsigned digit = (unsigned)(*p - '0');
                 if (!overflow) {
-            if (count > (SIZE_MAX - digit) / 10) {
+                    if (count > (SIZE_MAX - digit) / 10) {
                         overflow = 1;
                     } else {
                         count = count * 10 + digit;
@@ -329,6 +502,7 @@ static int expand_region(const char *start,
                 report_repeat_rule(ctx, repeat_at,
                                    "RPT_COUNT_INVALID",
                                    "RPT-001 @repeat count must be a positive integer");
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
 
@@ -340,61 +514,61 @@ static int expand_region(const char *start,
                 report_repeat_rule(ctx, repeat_at,
                                    "RPT_COUNT_LIMIT_EXCEEDED",
                                    msg);
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
 
             /* Skip to end of line (the body starts on the next line or after whitespace) */
-            while (*p == ' ' || *p == '\t') p++;
-            if (*p == '\n') p++;
+            p = skip_hspace(p, frame->region_end);
+            if (p < frame->region_end && *p == '\n') p++;
 
             /* Find matching @end */
-            const char *end_at = find_matching_end(p, src_end);
+            end_at = find_matching_end(p, frame->region_end);
             if (!end_at) {
                 report_repeat_rule(ctx, repeat_at,
                                    "RPT_NO_MATCHING_END",
                                    "RPT-002 @repeat without matching @end");
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
 
-            const char *body_start = p;
-            StrBuf nested;
-
-            sb_init(&nested);
-            if (!nested.data) {
+            body_start = p;
+            sb_init(&child.nested_out);
+            if (!child.nested_out.data) {
                 report_repeat_internal_failure(ctx, repeat_at,
                                                "out of memory during @repeat expansion");
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
-            if (expand_region(body_start, end_at, ctx, &nested) != 0) {
-                free(nested.data);
+            child.region_end = end_at;
+            child.p = body_start;
+            child.out = &child.nested_out;
+            child.owns_out = 1;
+
+            frame->pending_repeat = 1;
+            frame->pending_count = count;
+            frame->pending_repeat_at = repeat_at;
+            frame->pending_end_at = end_at;
+
+            if (repeat_frame_stack_push(&stack, &child) != 0) {
+                repeat_frame_release(&child);
+                report_repeat_internal_failure(ctx, repeat_at,
+                                               "out of memory during @repeat expansion");
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
-
-            /* For each iteration, recursively expand nested @repeats,
-             * then substitute IDX. */
-            for (size_t i = 0; i < count; i++) {
-                if (substitute_idx(out, nested.data, nested.len, i, ctx, repeat_at) != 0) {
-                    free(nested.data);
-                    return 1;
-                }
-            }
-            free(nested.data);
-
-            /* Skip past @end */
-            p = end_at + 4; /* skip "@end" */
-            /* Skip trailing whitespace and newline */
-            while (*p == ' ' || *p == '\t') p++;
-            if (*p == '\n') p++;
 
         } else {
             /* Regular character — just copy */
-            if (sb_append_limited(out, p, 1, ctx, p) != 0) {
+            if (sb_append_limited(frame->out, p, 1, ctx, p) != 0) {
+                repeat_frame_stack_free(&stack);
                 return 1;
             }
-            p++;
+            frame->p = p + 1;
         }
     }
 
+    repeat_frame_stack_free(&stack);
     return 0;
 }
 

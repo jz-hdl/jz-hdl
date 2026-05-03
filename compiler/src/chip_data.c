@@ -618,12 +618,21 @@ static void jz_chip_parse_clock_gen_map_into(const char *json,
         for (int i = 0; i < val->size && arr_idx < count; ++i) {
             const jsmntok_t *elem = &toks[arr_idx];
             if (elem->type == JSMN_STRING) {
-                total_len += (size_t)(elem->end - elem->start);
+                size_t elem_len = (size_t)(elem->end - elem->start);
+                if (jz_size_add_checked(total_len, elem_len, &total_len) != 0) {
+                    free(backend);
+                    return;
+                }
             }
             arr_idx = jz_json_skip(toks, count, arr_idx);
         }
 
-        char *template_text = (char *)malloc(total_len + 1);
+        size_t alloc_len = 0;
+        if (jz_size_add_checked(total_len, 1, &alloc_len) != 0) {
+            free(backend);
+            return;
+        }
+        char *template_text = (char *)malloc(alloc_len);
         if (template_text) {
             size_t offset = 0;
             arr_idx = cur + 1;
@@ -1766,12 +1775,21 @@ static void jz_chip_parse_diff_map_into(const char *json,
         for (int i = 0; i < val->size && arr_idx < count; ++i) {
             const jsmntok_t *elem = &toks[arr_idx];
             if (elem->type == JSMN_STRING) {
-                total_len += (size_t)(elem->end - elem->start);
+                size_t elem_len = (size_t)(elem->end - elem->start);
+                if (jz_size_add_checked(total_len, elem_len, &total_len) != 0) {
+                    free(backend);
+                    return;
+                }
             }
             arr_idx = jz_json_skip(toks, count, arr_idx);
         }
 
-        char *template_text = (char *)malloc(total_len + 1);
+        size_t alloc_len = 0;
+        if (jz_size_add_checked(total_len, 1, &alloc_len) != 0) {
+            free(backend);
+            return;
+        }
+        char *template_text = (char *)malloc(alloc_len);
         if (template_text) {
             size_t offset = 0;
             arr_idx = cur + 1;

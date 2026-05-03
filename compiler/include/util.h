@@ -29,6 +29,24 @@ char *jz_strdup(const char *s);
 char *jz_read_entire_file(const char *filename, size_t *out_size);
 
 /**
+ * @brief Add two size_t values with overflow checking.
+ * @return 0 on success, -1 on overflow or invalid output pointer.
+ */
+int jz_size_add_checked(size_t a, size_t b, size_t *out);
+
+/**
+ * @brief Multiply two size_t values with overflow checking.
+ * @return 0 on success, -1 on overflow or invalid output pointer.
+ */
+int jz_size_mul_checked(size_t a, size_t b, size_t *out);
+
+/**
+ * @brief Round a size up to the next multiple of alignment.
+ * @return 0 on success, -1 on overflow, invalid output pointer, or zero/non-power-of-two alignment.
+ */
+int jz_size_align_up_checked(size_t size, size_t alignment, size_t *out);
+
+/**
  * @struct JZBuffer
  * @brief A growable dynamic byte buffer.
  */

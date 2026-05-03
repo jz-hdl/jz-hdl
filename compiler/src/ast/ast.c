@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #include "../../include/ast.h"
 #include "../../include/util.h"
@@ -72,12 +73,20 @@ void jz_ast_set_width(JZASTNode *node, const char *width) {
 int jz_ast_add_child(JZASTNode *parent, JZASTNode *child) {
     if (!parent || !child) return -1;
     if (parent->child_count == parent->child_capacity) {
-        size_t new_cap = parent->child_capacity ? parent->child_capacity * 2 : INITIAL_CHILD_CAPACITY;
-        JZASTNode **new_children = (JZASTNode **)realloc(parent->children, new_cap * sizeof(JZASTNode *));
+        size_t new_cap = parent->child_capacity ? parent->child_capacity : INITIAL_CHILD_CAPACITY;
+        size_t new_bytes = 0;
+        if (parent->child_capacity != 0) {
+            if (new_cap > SIZE_MAX / 2) return -1;
+            new_cap *= 2;
+        }
+        if (new_cap <= parent->child_count) return -1;
+        if (jz_size_mul_checked(new_cap, sizeof(JZASTNode *), &new_bytes) != 0) return -1;
+        JZASTNode **new_children = (JZASTNode **)realloc(parent->children, new_bytes);
         if (!new_children) return -1;
         parent->children = new_children;
         parent->child_capacity = new_cap;
     }
+    if (parent->child_count >= parent->child_capacity) return -1;
     parent->children[parent->child_count++] = child;
     return 0;
 }

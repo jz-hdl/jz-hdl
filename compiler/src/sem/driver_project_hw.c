@@ -2880,8 +2880,12 @@ void sem_check_globals(JZASTNode *project,
         }
 
         /* Dependency graph for forward-ref and cycle detection. */
-        unsigned char *edges = (unsigned char *)calloc(decl_count * decl_count,
-                                                       sizeof(unsigned char));
+        size_t edge_count = 0;
+        if (jz_size_mul_checked(decl_count, decl_count, &edge_count) != 0) {
+            free(decls);
+            return;
+        }
+        unsigned char *edges = (unsigned char *)calloc(edge_count, sizeof(unsigned char));
         int *has_forward_ref = (int *)calloc(decl_count, sizeof(int));
         int *has_cycle = (int *)calloc(decl_count, sizeof(int));
         int any_static_error = 0;
@@ -2923,8 +2927,12 @@ void sem_check_globals(JZASTNode *project,
             for (size_t i = 0; i < decl_count; ++i) {
                 if (visit[i] != 0) continue;
 
-                size_t *stack = (size_t *)malloc(decl_count * sizeof(size_t));
-                size_t *iter  = (size_t *)malloc(decl_count * sizeof(size_t));
+                size_t frame_bytes = 0;
+                if (jz_size_mul_checked(decl_count, sizeof(size_t), &frame_bytes) != 0) {
+                    break;
+                }
+                size_t *stack = (size_t *)malloc(frame_bytes);
+                size_t *iter  = (size_t *)malloc(frame_bytes);
                 if (!stack || !iter) {
                     free(stack);
                     free(iter);

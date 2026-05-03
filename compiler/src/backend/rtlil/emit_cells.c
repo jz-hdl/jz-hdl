@@ -1106,13 +1106,25 @@ int rtlil_emit_expr(FILE *out, const IR_Module *mod, const IR_Expr *expr,
         rtlil_emit_expr(out, mod, src, src_ss, sizeof(src_ss));
         int w = src->width;
         /* Build reversed concat: { src[0] src[1] ... src[N-1] } */
-        int pos = 0;
-        pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos, "{ ");
+        size_t pos = 0;
+        int overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, "{ ");
         for (int i = 0; i < w; i++) {
-            if (i > 0) pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos, " ");
-            pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos, "%s [%d]", src_ss, i);
+            char bit_ss[RTLIL_SIGSPEC_MAX];
+            if (i > 0 && overflow == 0) {
+                overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, " ");
+            }
+            if (overflow == 0) {
+                snprintf(bit_ss, sizeof(bit_ss), "%s [%d]", src_ss, i);
+                overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, bit_ss);
+            }
         }
-        pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos, " }");
+        if (overflow == 0) {
+            overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, " }");
+        }
+        if (overflow != 0) {
+            snprintf(out_sigspec, sigspec_size, "1'0");
+            return -1;
+        }
         return 0;
     }
 
@@ -1127,16 +1139,27 @@ int rtlil_emit_expr(FILE *out, const IR_Module *mod, const IR_Expr *expr,
         int w = src->width;
         int num_bytes = w / 8;
         /* Build swapped concat: { src[7:0] src[15:8] ... src[N-1:N-8] } */
-        int pos = 0;
-        pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos, "{ ");
+        size_t pos = 0;
+        int overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, "{ ");
         for (int i = 0; i < num_bytes; i++) {
-            if (i > 0) pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos, " ");
+            char byte_ss[RTLIL_SIGSPEC_MAX];
+            if (i > 0 && overflow == 0) {
+                overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, " ");
+            }
             int lo = i * 8;
             int hi = lo + 7;
-            pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos,
-                            "%s [%d:%d]", src_ss, hi, lo);
+            if (overflow == 0) {
+                snprintf(byte_ss, sizeof(byte_ss), "%s [%d:%d]", src_ss, hi, lo);
+                overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, byte_ss);
+            }
         }
-        pos += snprintf(out_sigspec + pos, sigspec_size - (size_t)pos, " }");
+        if (overflow == 0) {
+            overflow = append_sigspec_text(out_sigspec, sigspec_size, &pos, " }");
+        }
+        if (overflow != 0) {
+            snprintf(out_sigspec, sigspec_size, "1'0");
+            return -1;
+        }
         return 0;
     }
 

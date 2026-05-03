@@ -266,6 +266,8 @@ const JZRuleInfo jz_rule_table[] = {
     { "PROJECT_AND_IMPORTS", "IMPORT_FILE_HAS_PROJECT",             0, JZ_RULE_MODE_ERR, "S6.2.1 Imported file contains its own @project/@endproj (forbidden)" },
     { "PROJECT_AND_IMPORTS", "IMPORT_DUP_MODULE_OR_BLACKBOX",       0, JZ_RULE_MODE_ERR, "S6.2.1/S6.10 Imported module/blackbox name duplicates existing project name" },
     { "PROJECT_AND_IMPORTS", "IMPORT_FILE_MULTIPLE_TIMES",          0, JZ_RULE_MODE_ERR, "S6.2.1 Same source file imported more than once into a single project (duplicate @import or nested re-import)" },
+    { "PROJECT_AND_IMPORTS", "IMPORT_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "S6.2.1 Nested @import depth exceeds the compiler safety limit" },
+    { "PROJECT_AND_IMPORTS", "IMPORT_MEMORY_LIMIT_EXCEEDED",        0, JZ_RULE_MODE_ERR, "S6.2.1 Nested @import retained source/token memory exceeds the compiler safety limit" },
     { "PROJECT_AND_IMPORTS", "PROJECT_MISSING_ENDPROJ",           0, JZ_RULE_MODE_ERR, "S6.2 @project block missing @endproj terminator" },
 
     /* [CONFIG_BLOCK] */
