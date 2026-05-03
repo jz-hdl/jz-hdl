@@ -23,10 +23,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
 #include <math.h>
+
+#include "../sem/driver_internal.h"
 
 /* ---- Forward declarations ---- */
 
@@ -48,6 +51,11 @@ static void sim_fire_domains_for_clock(SimTestState *ts, int clock_port_id,
                                         int apply_nba_per_domain);
 static void sim_clock_advance(SimTestState *ts, const char *clock_name, int num_cycles);
 static void record_failure(SimTestState *ts, const char *msg);
+
+/* Expression evaluation is shared by @testbench and @simulation execution.
+ * Rebuild project symbols once per run so GLOBAL.CONST can resolve here too.
+ */
+static const JZBuffer *g_tb_expr_project_symbols = NULL;
 
 /* ---- Helpers ---- */
 
@@ -234,6 +242,155 @@ static SimValue parse_literal_to_simval(const char *text) {
     return sim_val_from_words(words, SIM_VAL_WORDS, width);
 }
 
+static int eval_lit_call_to_simval(const char *expr,
+                                   const JZBuffer *project_symbols,
+                                   SimValue *out)
+{
+    const char *p;
+    int depth = 0;
+    const char *arg_start;
+    const char *comma = NULL;
+    const char *end = NULL;
+    const char *w_start;
+    const char *w_end;
+    const char *v_start;
+    const char *v_end;
+    size_t w_len;
+    size_t v_len;
+    char *w_expr;
+    char *v_expr;
+    long long width_value = 0;
+    long long literal_value = 0;
+
+    if (!expr || !project_symbols || !out) return 0;
+
+    p = expr;
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (strncmp(p, "lit", 3) != 0) return 0;
+    p += 3;
+
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (*p != '(') return 0;
+    ++p;
+
+    arg_start = p;
+    for (; *p; ++p) {
+        if (*p == '(') {
+            depth++;
+        } else if (*p == ')') {
+            if (depth == 0) {
+                end = p;
+                break;
+            }
+            depth--;
+        } else if (*p == ',' && depth == 0 && !comma) {
+            comma = p;
+        }
+    }
+
+    if (!comma || !end) return 0;
+
+    w_start = arg_start;
+    w_end = comma;
+    v_start = comma + 1;
+    v_end = end;
+
+    while (w_start < w_end && isspace((unsigned char)*w_start)) ++w_start;
+    while (w_end > w_start && isspace((unsigned char)w_end[-1])) --w_end;
+    while (v_start < v_end && isspace((unsigned char)*v_start)) ++v_start;
+    while (v_end > v_start && isspace((unsigned char)v_end[-1])) --v_end;
+    if (w_start >= w_end || v_start >= v_end) return 0;
+
+    w_len = (size_t)(w_end - w_start);
+    v_len = (size_t)(v_end - v_start);
+    w_expr = (char *)malloc(w_len + 1);
+    v_expr = (char *)malloc(v_len + 1);
+    if (!w_expr || !v_expr) {
+        free(w_expr);
+        free(v_expr);
+        return 0;
+    }
+
+    memcpy(w_expr, w_start, w_len);
+    w_expr[w_len] = '\0';
+    memcpy(v_expr, v_start, v_len);
+    v_expr[v_len] = '\0';
+
+    if (sem_eval_const_expr_in_project(w_expr, project_symbols, &width_value) != 0 ||
+        sem_eval_const_expr_in_project(v_expr, project_symbols, &literal_value) != 0 ||
+        width_value <= 0 || literal_value < 0 || width_value > SIM_VAL_WORDS * 64) {
+        free(w_expr);
+        free(v_expr);
+        return 0;
+    }
+
+    free(w_expr);
+    free(v_expr);
+    *out = sim_val_from_uint((uint64_t)literal_value, (int)width_value);
+    return 1;
+}
+
+static int resolve_global_const_simval(const char *qname, SimValue *out)
+{
+    const char *dot;
+    char namespace_name[256];
+    size_t ns_len;
+    const JZSymbol *glob_sym;
+
+    if (!qname || !out || !g_tb_expr_project_symbols) return 0;
+
+    dot = strchr(qname, '.');
+    if (!dot || dot == qname || dot[1] == '\0') return 0;
+
+    ns_len = (size_t)(dot - qname);
+    if (ns_len >= sizeof(namespace_name)) return 0;
+    memcpy(namespace_name, qname, ns_len);
+    namespace_name[ns_len] = '\0';
+
+    glob_sym = project_lookup(g_tb_expr_project_symbols, namespace_name, JZ_SYM_GLOBAL);
+    if (!glob_sym || !glob_sym->node) return 0;
+
+    for (size_t i = 0; i < glob_sym->node->child_count; ++i) {
+        const JZASTNode *decl = glob_sym->node->children[i];
+        if (!decl || decl->type != JZ_AST_CONST_DECL || !decl->name || !decl->text) continue;
+        if (strcmp(decl->name, dot + 1) != 0) continue;
+
+        if (strchr(decl->text, '\'')) {
+            *out = parse_literal_to_simval(decl->text);
+            return 1;
+        }
+
+        return eval_lit_call_to_simval(decl->text, g_tb_expr_project_symbols, out);
+    }
+
+    return 0;
+}
+
+static void free_built_symbol_tables(JZBuffer *module_scopes, JZBuffer *project_symbols)
+{
+    size_t scope_count;
+    JZModuleScope *scopes;
+
+    if (!module_scopes || !project_symbols) return;
+
+    scope_count = module_scopes->len / sizeof(JZModuleScope);
+    scopes = (JZModuleScope *)module_scopes->data;
+    for (size_t i = 0; i < scope_count; ++i) {
+        jz_buf_free(&scopes[i].symbols);
+        if (scopes[i].bus_signal_decls.len > 0) {
+            size_t bcount = scopes[i].bus_signal_decls.len / sizeof(JZASTNode *);
+            JZASTNode **barr = (JZASTNode **)scopes[i].bus_signal_decls.data;
+            for (size_t bi = 0; bi < bcount; ++bi) {
+                jz_ast_free(barr[bi]);
+            }
+            jz_buf_free(&scopes[i].bus_signal_decls);
+        }
+    }
+
+    jz_buf_free(module_scopes);
+    jz_buf_free(project_symbols);
+}
+
 /* Evaluate an AST expression node from testbench context into a SimValue.
  * For @expect_equal, the arguments are AST nodes — identifiers or literals. */
 static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
@@ -247,6 +404,12 @@ static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
         node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
         int idx = find_tb_wire(ts, node->name);
         if (idx >= 0) return ts->tb_wires[idx].value;
+        if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+            SimValue global_value;
+            if (resolve_global_const_simval(node->name, &global_value)) {
+                return global_value;
+            }
+        }
         return sim_val_all_x(1);
     }
 
@@ -1344,9 +1507,16 @@ int jz_sim_run_testbenches(const JZASTNode *root,
                            int verbose,
                            JZDiagnosticList *diagnostics,
                            const char *filename) {
-    (void)diagnostics; /* unused for now */
+    JZBuffer module_scopes = (JZBuffer){0};
+    JZBuffer project_symbols = (JZBuffer){0};
 
     if (!root || !design) return 1;
+
+    if (build_symbol_tables((JZASTNode *)root, &module_scopes, &project_symbols, diagnostics) != 0) {
+        free_built_symbol_tables(&module_scopes, &project_symbols);
+        return 1;
+    }
+    g_tb_expr_project_symbols = &project_symbols;
 
     perf_reset();
 
@@ -1393,6 +1563,8 @@ int jz_sim_run_testbenches(const JZASTNode *root,
 
     if (!any_tb_found) {
         fprintf(stdout, "\nNo testbenches found.\n");
+        g_tb_expr_project_symbols = NULL;
+        free_built_symbol_tables(&module_scopes, &project_symbols);
         return 0;
     }
 
@@ -1403,6 +1575,8 @@ int jz_sim_run_testbenches(const JZASTNode *root,
 
     perf_print_summary();
 
+    g_tb_expr_project_symbols = NULL;
+    free_built_symbol_tables(&module_scopes, &project_symbols);
     return total_failed > 0 ? 1 : 0;
 }
 
@@ -2507,9 +2681,16 @@ int jz_sim_run_simulations(const JZASTNode *root,
                             int num_jitter,
                             const SimDriftConfig *drift_configs,
                             int num_drift) {
-    (void)diagnostics;
+    JZBuffer module_scopes = (JZBuffer){0};
+    JZBuffer project_symbols = (JZBuffer){0};
 
     if (!root || !design) return 1;
+
+    if (build_symbol_tables((JZASTNode *)root, &module_scopes, &project_symbols, diagnostics) != 0) {
+        free_built_symbol_tables(&module_scopes, &project_symbols);
+        return 1;
+    }
+    g_tb_expr_project_symbols = &project_symbols;
 
     perf_reset();
 
@@ -2547,5 +2728,7 @@ int jz_sim_run_simulations(const JZASTNode *root,
 
     perf_print_summary();
 
+    g_tb_expr_project_symbols = NULL;
+    free_built_symbol_tables(&module_scopes, &project_symbols);
     return rc;
 }

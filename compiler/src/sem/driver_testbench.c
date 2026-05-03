@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "../../include/ast.h"
 #include "../../include/diagnostic.h"
@@ -232,6 +233,126 @@ static int tb_eval_decl_width(const JZASTNode *decl,
             *out_width = (unsigned)width_value;
             return 1;
         }
+    }
+
+    return 0;
+}
+
+static int tb_eval_lit_call_width(const char *expr,
+                                  const JZBuffer *project_symbols,
+                                  unsigned *out_width)
+{
+    if (!expr || !project_symbols || !out_width) return 0;
+
+    const char *p = expr;
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (strncmp(p, "lit", 3) != 0) return 0;
+    p += 3;
+
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (*p != '(') return 0;
+    ++p;
+
+    {
+        int depth = 0;
+        const char *arg_start = p;
+        const char *comma = NULL;
+        const char *end = NULL;
+        const char *w_start;
+        const char *w_end;
+        size_t w_len;
+        char *w_expr;
+        long long width_value = 0;
+
+        for (; *p; ++p) {
+            if (*p == '(') {
+                depth++;
+            } else if (*p == ')') {
+                if (depth == 0) {
+                    end = p;
+                    break;
+                }
+                depth--;
+            } else if (*p == ',' && depth == 0 && !comma) {
+                comma = p;
+            }
+        }
+
+        if (!comma || !end) return 0;
+
+        w_start = arg_start;
+        w_end = comma;
+        while (w_start < w_end && isspace((unsigned char)*w_start)) ++w_start;
+        while (w_end > w_start && isspace((unsigned char)w_end[-1])) --w_end;
+        if (w_start >= w_end) return 0;
+
+        w_len = (size_t)(w_end - w_start);
+        w_expr = (char *)malloc(w_len + 1);
+        if (!w_expr) return 0;
+        memcpy(w_expr, w_start, w_len);
+        w_expr[w_len] = '\0';
+
+        if (sem_eval_const_expr_in_project(w_expr, project_symbols, &width_value) != 0 ||
+            width_value <= 0) {
+            free(w_expr);
+            return 0;
+        }
+
+        free(w_expr);
+        *out_width = (unsigned)width_value;
+        return 1;
+    }
+}
+
+static int tb_resolve_global_const_width(const char *name,
+                                         const JZBuffer *project_symbols,
+                                         unsigned *out_width)
+{
+    const char *dot;
+    char namespace_name[256];
+    size_t ns_len;
+    const JZSymbol *glob_sym;
+
+    if (!name || !project_symbols || !out_width) return 0;
+
+    dot = strchr(name, '.');
+    if (!dot || dot == name || dot[1] == '\0') return 0;
+
+    ns_len = (size_t)(dot - name);
+    if (ns_len >= sizeof(namespace_name)) return 0;
+    memcpy(namespace_name, name, ns_len);
+    namespace_name[ns_len] = '\0';
+
+    glob_sym = project_lookup(project_symbols, namespace_name, JZ_SYM_GLOBAL);
+    if (!glob_sym || !glob_sym->node) return 0;
+
+    for (size_t i = 0; i < glob_sym->node->child_count; ++i) {
+        const JZASTNode *decl = glob_sym->node->children[i];
+        const char *tick;
+        size_t prefix_len;
+        char width_expr[128];
+        long long width_value = 0;
+
+        if (!decl || decl->type != JZ_AST_CONST_DECL || !decl->name || !decl->text) continue;
+        if (strcmp(decl->name, dot + 1) != 0) continue;
+
+        tick = strchr(decl->text, '\'');
+        if (!tick) {
+            return tb_eval_lit_call_width(decl->text, project_symbols, out_width);
+        }
+
+        prefix_len = (size_t)(tick - decl->text);
+        if (prefix_len == 0 || prefix_len >= sizeof(width_expr)) return 0;
+        memcpy(width_expr, decl->text, prefix_len);
+        width_expr[prefix_len] = '\0';
+
+        if (sem_eval_const_expr_in_project(width_expr, project_symbols, &width_value) != 0 ||
+            width_value <= 0) {
+            return 0;
+        }
+
+        *out_width = (unsigned)width_value;
+        return 1;
     }
 
     return 0;
@@ -464,8 +585,15 @@ static int tb_infer_expr_type(const JZASTNode *root,
     case JZ_AST_EXPR_IDENTIFIER:
     case JZ_AST_EXPR_QUALIFIED_IDENTIFIER: {
         unsigned width = 0;
-        if (!expr->name ||
-            !tb_resolve_signal_width(root, tb, test, expr->name, project_symbols, &width)) {
+        if (!expr->name) {
+            return 0;
+        }
+        if (expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER &&
+            tb_resolve_global_const_width(expr->name, project_symbols, &width)) {
+            jz_type_scalar(width, 0, out);
+            return 1;
+        }
+        if (!tb_resolve_signal_width(root, tb, test, expr->name, project_symbols, &width)) {
             return 0;
         }
         jz_type_scalar(width, 0, out);
