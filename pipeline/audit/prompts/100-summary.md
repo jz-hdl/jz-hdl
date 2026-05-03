@@ -29,6 +29,7 @@ Create or overwrite `audit/todo.md` with:
 Compute the summary directly from `audit/runner.log`:
 
 - Count total entries
+- Count `[DONE]` entries
 - Count `TEST-ISSUE`, `COMPILER-BUG`, and `SPECIFICATION-BUG` entries
 - Identify the dominant audit-noise patterns from the log text
 - Identify the highest-volume files by number of log entries
