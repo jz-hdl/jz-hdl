@@ -1,0 +1,67 @@
+// MULTIPLE_CLOCK_DIRECTIVES_ALLOWED: Sequential @clock directives are valid.
+// Exercises back-to-back @clock directives for different declared clocks.
+
+@module MultiClockDirectiveDut
+    PORT {
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        IN  [1] in_a;
+        IN  [1] in_b;
+        OUT [1] out_a;
+        OUT [1] out_b;
+    }
+
+    REGISTER {
+        state_a [1] = 1'b0;
+        state_b [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        out_a = state_a;
+        out_b = state_b;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        state_a <= in_a;
+    }
+
+    SYNCHRONOUS(CLK=clk_b) {
+        state_b <= in_b;
+    }
+@endmod
+
+@testbench MultiClockDirectiveDut
+    CLOCK {
+        clk_a;
+        clk_b;
+    }
+
+    WIRE {
+        in_a [1];
+        in_b [1];
+        out_a [1];
+        out_b [1];
+    }
+
+    TEST "multiple @clock directives in sequence" {
+        @new dut MultiClockDirectiveDut {
+            clk_a [1] = clk_a;
+            clk_b [1] = clk_b;
+            in_a [1] = in_a;
+            in_b [1] = in_b;
+            out_a [1] = out_a;
+            out_b [1] = out_b;
+        }
+
+        @setup {
+            in_a <= 1'b1;
+            in_b <= 1'b1;
+        }
+
+        @clock(clk_a, cycle=1)
+        @clock(clk_b, cycle=1)
+
+        @expect_equal(out_a, 1'b1)
+        @expect_equal(out_b, 1'b1)
+    }
+@endtb

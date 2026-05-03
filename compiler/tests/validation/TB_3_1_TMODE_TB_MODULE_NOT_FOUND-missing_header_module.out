@@ -1,0 +1,2 @@
+File: TB_3_1_TMODE_TB_MODULE_NOT_FOUND-missing_header_module.jz
+       4:1    error TB_MODULE_NOT_FOUND TB-001 @testbench module name must refer to a module in scope

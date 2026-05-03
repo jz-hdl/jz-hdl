@@ -1,0 +1,7 @@
+
+=== @testbench PrintDirectiveFormDut ===
+data=3c value=60 bits=00111100
+  PASS  "valid @print call form" (1/1 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

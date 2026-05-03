@@ -1,0 +1,51 @@
+// FORMAT_STRING_LITERAL_REQUIRED: @print format string must be a string literal.
+// Trigger 1: non-string first argument in @print emits the targeted parse error.
+
+@module PrintFormatLiteralDut
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data_out = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= data_in;
+    }
+@endmod
+
+@testbench PrintFormatLiteralDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [8];
+        data_out [8];
+    }
+
+    TEST "format string must be literal" {
+        @new dut PrintFormatLiteralDut {
+            clk [1] = clk;
+            data_in [8] = data_in;
+            data_out [8] = data_out;
+        }
+
+        @setup {
+            data_in <= 8'h12;
+        }
+
+        @clock(clk, cycle=1)
+
+        // Trigger 1: identifier used where a string literal is required.
+        @print(data_out, data_out)
+        @expect_equal(data_out, 8'h12)
+    }
+@endtb
