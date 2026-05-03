@@ -63,6 +63,71 @@ static int tb_has_clock_decl(const JZASTNode *tb, const char *name)
     return tb_has_decl(tb, JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL, name);
 }
 
+static const JZASTNode *tb_find_bus_def(const JZASTNode *root, const char *bus_name)
+{
+    if (!root || !bus_name) return NULL;
+
+    for (size_t i = 0; i < root->child_count; ++i) {
+        const JZASTNode *child = root->children[i];
+        if (child && child->type == JZ_AST_BUS_BLOCK && child->name &&
+            strcmp(child->name, bus_name) == 0) {
+            return child;
+        }
+    }
+
+    for (size_t i = 0; i < root->child_count; ++i) {
+        const JZASTNode *child = root->children[i];
+        if (!child ||
+            (child->type != JZ_AST_TESTBENCH && child->type != JZ_AST_SIMULATION)) {
+            continue;
+        }
+
+        for (size_t j = 0; j < child->child_count; ++j) {
+            const JZASTNode *grandchild = child->children[j];
+            if (grandchild && grandchild->type == JZ_AST_BUS_BLOCK &&
+                grandchild->name && strcmp(grandchild->name, bus_name) == 0) {
+                return grandchild;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static void check_tb_bus_wire_declarations(const JZASTNode *tb,
+                                           const JZASTNode *root,
+                                           JZDiagnosticList *diagnostics)
+{
+    if (!tb || !root) return;
+
+    for (size_t i = 0; i < tb->child_count; ++i) {
+        const JZASTNode *block = tb->children[i];
+        if (!block || block->type != JZ_AST_TB_WIRE_BLOCK) continue;
+
+        for (size_t j = 0; j < block->child_count; ++j) {
+            const JZASTNode *decl = block->children[j];
+            char msg[512];
+
+            if (!decl || decl->type != JZ_AST_TB_WIRE_DECL ||
+                !decl->block_kind || strcmp(decl->block_kind, "BUS") != 0) {
+                continue;
+            }
+
+            if (tb_find_bus_def(root, decl->text)) {
+                continue;
+            }
+
+            snprintf(msg, sizeof(msg),
+                     "testbench BUS wire `%s` references unknown BUS definition `%s`;\n"
+                     "declare BUS `%s` at file scope or inside a @testbench before the WIRE block",
+                     decl->name ? decl->name : "?",
+                     decl->text ? decl->text : "?",
+                     decl->text ? decl->text : "?");
+            tb_report_rule(diagnostics, decl->loc, "TB_BUS_NOT_FOUND", msg);
+        }
+    }
+}
+
 static void check_stimulus_clock_assignments(const JZASTNode *tb,
                                              const JZASTNode *block,
                                              JZDiagnosticList *diagnostics)
@@ -233,6 +298,7 @@ static void validate_testbench(JZASTNode *tb, JZASTNode *root,
 
     /* TB-001: module must exist */
     check_tb_module_exists(tb, root, diagnostics);
+    check_tb_bus_wire_declarations(tb, root, diagnostics);
 
     /* TB-012: must contain at least one TEST */
     int test_count = 0;

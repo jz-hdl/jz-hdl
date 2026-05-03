@@ -1182,6 +1182,10 @@ The sections below list all diagnostic rules organized by category. Each entry s
 - Severity: ERROR
 - Fix: @setup must appear exactly once per TEST, after @new, before other directives.
 
+### TESTBENCH.TB_BUS_NOT_FOUND — BUS definition not found
+- Severity: ERROR
+- Fix: A testbench `WIRE` block `BUS <bus_id> ...;` declaration must reference a `BUS` definition in scope.
+
 ### TESTBENCH.TB_SETUP_CLOCK_ASSIGN — @setup assigns clock
 - Severity: ERROR
 - Fix: @setup may not assign clock signals.
