@@ -1,0 +1,2 @@
+File: TB_6_4_TMODE_TB_CLOCK_NOT_DECLARED-undeclared_clock.jz
+      47:9    error TB_CLOCK_NOT_DECLARED TB-007 @clock clock identifier must refer to a declared CLOCK

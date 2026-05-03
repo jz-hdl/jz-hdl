@@ -1,0 +1,52 @@
+// TB_CLOCK_CYCLE_NOT_POSITIVE: @clock cycle count must be positive.
+// Target diagnostic: TB_CLOCK_CYCLE_NOT_POSITIVE.
+// Non-target diagnostics: none; the clock identifier and testbench structure are valid.
+
+@module ClockCycleValidationDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] in_data;
+        OUT [1] out_data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        out_data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= in_data;
+    }
+@endmod
+
+@testbench ClockCycleValidationDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        in_data [1];
+        out_data [1];
+    }
+
+    TEST "nonpositive @clock cycle count" {
+        @new dut ClockCycleValidationDut {
+            clk [1] = clk;
+            in_data [1] = in_data;
+            out_data [1] = out_data;
+        }
+
+        @setup {
+            in_data <= 1'b1;
+        }
+
+        // Trigger 1: zero is not a positive cycle count.
+        @clock(clk, cycle=0)
+
+        // Trigger 2: a negative constant expression is also invalid.
+        @clock(clk, cycle=-1)
+    }
+@endtb

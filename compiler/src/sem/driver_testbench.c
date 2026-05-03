@@ -13,6 +13,7 @@
 #include "../../include/ast.h"
 #include "../../include/diagnostic.h"
 #include "../../include/rules.h"
+#include "driver_internal.h"
 
 static void tb_report_rule(JZDiagnosticList *diagnostics,
                            JZLocation loc,
@@ -61,6 +62,35 @@ static int tb_has_decl(const JZASTNode *tb,
 static int tb_has_clock_decl(const JZASTNode *tb, const char *name)
 {
     return tb_has_decl(tb, JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL, name);
+}
+
+static void check_clock_directive(const JZASTNode *tb,
+                                  const JZASTNode *clock_adv,
+                                  const JZBuffer *project_symbols,
+                                  JZDiagnosticList *diagnostics)
+{
+    if (!tb || !clock_adv) return;
+
+    if (clock_adv->name && !tb_has_clock_decl(tb, clock_adv->name)) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "@clock references `%s`, but that identifier is not declared in the testbench\n"
+                 "CLOCK block",
+                 clock_adv->name);
+        tb_report_rule(diagnostics, clock_adv->loc, "TB_CLOCK_NOT_DECLARED", msg);
+    }
+
+    if (clock_adv->text) {
+        long long cycles = 0;
+        int rc = sem_eval_const_expr_in_project(clock_adv->text, project_symbols, &cycles);
+        if (rc != 0 || cycles <= 0) {
+            char msg[512];
+            snprintf(msg, sizeof(msg),
+                     "@clock cycle count `%s` must evaluate to a positive integer",
+                     clock_adv->text);
+            tb_report_rule(diagnostics, clock_adv->loc, "TB_CLOCK_CYCLE_NOT_POSITIVE", msg);
+        }
+    }
 }
 
 static const JZASTNode *tb_find_bus_def(const JZASTNode *root, const char *bus_name)
@@ -277,6 +307,7 @@ static void check_test_block(JZASTNode *test, JZDiagnosticList *diagnostics)
  */
 static void check_test_block_semantics(const JZASTNode *tb,
                                        const JZASTNode *test,
+                                       const JZBuffer *project_symbols,
                                        JZDiagnosticList *diagnostics)
 {
     if (!tb || !test) return;
@@ -287,11 +318,14 @@ static void check_test_block_semantics(const JZASTNode *tb,
 
         if (child->type == JZ_AST_TB_SETUP || child->type == JZ_AST_TB_UPDATE) {
             check_stimulus_clock_assignments(tb, child, diagnostics);
+        } else if (child->type == JZ_AST_TB_CLOCK_ADV) {
+            check_clock_directive(tb, child, project_symbols, diagnostics);
         }
     }
 }
 
 static void validate_testbench(JZASTNode *tb, JZASTNode *root,
+                               const JZBuffer *project_symbols,
                                JZDiagnosticList *diagnostics)
 {
     if (!tb) return;
@@ -309,7 +343,7 @@ static void validate_testbench(JZASTNode *tb, JZASTNode *root,
         if (child->type == JZ_AST_TB_TEST) {
             test_count++;
             check_test_block(child, diagnostics);
-            check_test_block_semantics(tb, child, diagnostics);
+            check_test_block_semantics(tb, child, project_symbols, diagnostics);
         }
     }
 
@@ -320,7 +354,9 @@ static void validate_testbench(JZASTNode *tb, JZASTNode *root,
     }
 }
 
-int jz_sem_run_testbench(JZASTNode *root, JZDiagnosticList *diagnostics)
+int jz_sem_run_testbench(JZASTNode *root,
+                         const JZBuffer *project_symbols,
+                         JZDiagnosticList *diagnostics)
 {
     if (!root) return 0;
 
@@ -329,7 +365,7 @@ int jz_sem_run_testbench(JZASTNode *root, JZDiagnosticList *diagnostics)
         if (!child) continue;
 
         if (child->type == JZ_AST_TESTBENCH) {
-            validate_testbench(child, root, diagnostics);
+            validate_testbench(child, root, project_symbols, diagnostics);
         }
     }
 

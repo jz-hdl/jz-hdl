@@ -2956,7 +2956,9 @@ void sem_check_mux_selectors_recursive(JZASTNode *node,
  * same register more than once.
  */
 /* Forward declaration for testbench semantic validation. */
-extern int jz_sem_run_testbench(JZASTNode *root, JZDiagnosticList *diagnostics);
+extern int jz_sem_run_testbench(JZASTNode *root,
+                                const JZBuffer *project_symbols,
+                                JZDiagnosticList *diagnostics);
 
 /**
  * @brief Check if the root AST contains testbench nodes.
@@ -2981,11 +2983,6 @@ int jz_sem_run(JZASTNode *root,
 {
     if (!root) {
         return 0;
-    }
-
-    /* Testbench/simulation files get their own validation path. */
-    if (is_testbench_file(root)) {
-        return jz_sem_run_testbench(root, diagnostics);
     }
 
     clock_t st0;
@@ -3022,6 +3019,27 @@ int jz_sem_run(JZASTNode *root,
     }
     if (verbose) fprintf(stderr, "[verbose]   sem: build_symbol_tables: %.1f ms\n",
                          (double)(clock() - st0) / CLOCKS_PER_SEC * 1000.0);
+
+    /* Testbench/simulation files get their own validation path. */
+    if (is_testbench_file(root)) {
+        int rc = jz_sem_run_testbench(root, &project_symbols, diagnostics);
+        size_t scope_count = module_scopes.len / sizeof(JZModuleScope);
+        JZModuleScope *scopes = (JZModuleScope *)module_scopes.data;
+        for (size_t i = 0; i < scope_count; ++i) {
+            jz_buf_free(&scopes[i].symbols);
+            if (scopes[i].bus_signal_decls.len > 0) {
+                size_t bcount = scopes[i].bus_signal_decls.len / sizeof(JZASTNode *);
+                JZASTNode **barr = (JZASTNode **)scopes[i].bus_signal_decls.data;
+                for (size_t bi = 0; bi < bcount; ++bi) {
+                    jz_ast_free(barr[bi]);
+                }
+                jz_buf_free(&scopes[i].bus_signal_decls);
+            }
+        }
+        jz_buf_free(&module_scopes);
+        jz_buf_free(&project_symbols);
+        return rc;
+    }
 
     JZChipData chip = (JZChipData){0};
     const JZChipData *chip_ptr = NULL;
