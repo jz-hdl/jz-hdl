@@ -1084,9 +1084,8 @@ Seed: 0xDEADBEEF
 ### 12.1 Testbench Execution
 
 ```text
-jz-hdl --test <file.jz>                     # Run all testbenches in file
-jz-hdl --test <file.jz> --seed=<hex>        # Fixed random seed for reproducibility
-jz-hdl --test <file.jz> --filter="<pattern>" # Run only tests matching pattern
+jz-hdl --test <file.jz>                      # Run all testbenches in file
+jz-hdl --test <file.jz> --seed=<hex>         # Fixed random seed for reproducibility
 jz-hdl --test <file.jz> --verbose            # Print all assertion results (pass and fail)
 ```
 
