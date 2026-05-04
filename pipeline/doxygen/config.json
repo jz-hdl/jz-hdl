@@ -1,0 +1,78 @@
+{
+  "name": "doxygen",
+  "description": "Source-corpus API documentation review and normalization pipeline",
+  "default_cli": "codex",
+  "output_dir": "doxygen-audit",
+  "placeholders": {
+    "target": "<DOXYGEN_REVIEW_TARGET>",
+    "files": "<DOXYGEN_FILE_LIST>",
+    "output_file": "<OUTPUT_FILE>"
+  },
+  "options": [
+    "filter",
+    "start",
+    "start_at",
+    "dry_run",
+    "list",
+    "roots",
+    "shard_size",
+    "include_third_party"
+  ],
+  "targeting": {
+    "discover": {
+      "type": "source_files",
+      "default_roots": [
+        "compiler/include",
+        "compiler/src",
+        "viewer/src"
+      ],
+      "source_extensions": [
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".h",
+        ".hh",
+        ".hpp",
+        ".hxx"
+      ],
+      "excluded_dir_names": [
+        "build",
+        "dist",
+        "out",
+        "target",
+        "node_modules",
+        ".git"
+      ],
+      "exclude_dir_names_always": [
+        "old"
+      ]
+    },
+    "group": {
+      "type": "fixed_size_shards"
+    },
+    "output_filename": {
+      "type": "source_shard",
+      "template": "{index:03d}_{safe_first_basename}.md"
+    },
+    "unit_name": "shard",
+    "summary_label": "source shard(s) to document",
+    "full_run_default_options": [
+      "filter",
+      "start",
+      "end",
+      "start_at",
+      "roots",
+      "shard_size",
+      "include_third_party"
+    ],
+    "no_match_message": "No source shards matched."
+  },
+  "steps": [
+    {
+      "path": "pipeline/doxygen/prompts/1-review-and-fix.md",
+      "effort": "high",
+      "kind": "target_prompt"
+    }
+  ]
+}

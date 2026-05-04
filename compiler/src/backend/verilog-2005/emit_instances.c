@@ -1,7 +1,6 @@
-/*
- * emit_instances.c - Module instance emission for the Verilog-2005 backend.
- *
- * This file handles emitting structural module instantiations.
+/**
+ * @file emit_instances.c
+ * @brief Module instance emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,14 +10,13 @@
 #include "verilog_internal.h"
 #include "ir.h"
 
-/* -------------------------------------------------------------------------
- * Helper: canonicalize signal names inside a const_expr string through the
- * alias union-find. Signal names that are aliased (e.g., sel_a → en) get
- * replaced by their canonical representative so that eliminated wires are
- * never referenced.
- *
- * The buffer is written into `buf` (size `buf_size`). Returns buf.
- * -------------------------------------------------------------------------
+/**
+ * @brief Canonicalize signal names embedded in a constant-expression string.
+ * @param mod Module that owns the referenced signals.
+ * @param expr Source constant-expression text.
+ * @param buf Destination buffer for rewritten text.
+ * @param buf_size Size of `buf` in bytes.
+ * @return `buf` when rewritten, or `expr` when no rewrite was possible.
  */
 static const char *canonicalize_const_expr(const IR_Module *mod,
                                            const char *expr,

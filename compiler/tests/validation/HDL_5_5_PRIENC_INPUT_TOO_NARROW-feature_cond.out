@@ -1,0 +1,2 @@
+File: HDL_5_5_PRIENC_INPUT_TOO_NARROW-feature_cond.jz
+      24:14   error PRIENC_INPUT_TOO_NARROW S5.5.14 prienc() source must be at least 2 bits wide

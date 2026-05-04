@@ -1,0 +1,81 @@
+// TEST_BLOCK_DECLARATION: Valid TEST block declaration with required body parts.
+// Exercises one @new instantiation, one @setup block, and a valid post-setup
+// directive sequence containing @clock, @update, @expect_equal,
+// @expect_not_equal, and @expect_tristate.
+
+@module TestSequenceDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [1] din;
+        IN  [1] drive_z;
+        OUT [1] q;
+        INOUT [1] tri_bus;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        q = state;
+
+        IF (drive_z) {
+            tri_bus <= 1'bz;
+        } ELSE {
+            tri_bus <= state;
+        }
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (en) {
+            state <= din;
+        } ELSE {
+            state <= state;
+        }
+    }
+@endmod
+
+@testbench TestSequenceDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        en [1];
+        din [1];
+        drive_z [1];
+        q [1];
+        tri_bus [1];
+    }
+
+    TEST "valid declaration and directive sequence" {
+        @new dut TestSequenceDut {
+            clk [1] = clk;
+            en [1] = en;
+            din [1] = din;
+            drive_z [1] = drive_z;
+            q [1] = q;
+            tri_bus [1] = tri_bus;
+        }
+
+        @setup {
+            en <= 1'b1;
+            din <= 1'b1;
+            drive_z <= 1'b0;
+            tri_bus <= 1'bz;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(q, 1'b1)
+        @expect_not_equal(q, 1'b0)
+
+        @update {
+            drive_z <= 1'b1;
+            din <= 1'b0;
+            tri_bus <= 1'bz;
+        }
+
+        @expect_tristate(tri_bus)
+    }
+@endtb

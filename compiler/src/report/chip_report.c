@@ -1,3 +1,8 @@
+/**
+ * @file chip_report.c
+ * @brief Human-readable chip capability reporting from chip JSON data.
+ */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,16 +12,24 @@
 #include "../chip_data_internal.h"
 #include "util.h"
 
+/**
+ * @struct JZChipDim
+ * @brief One width/depth operating point for a chip mode.
+ */
 typedef struct JZChipDim {
-    unsigned width;
-    unsigned depth;
+    unsigned width; /**< Supported data width in bits. */
+    unsigned depth; /**< Supported element count or storage depth. */
 } JZChipDim;
 
+/**
+ * @struct JZChipModeInfo
+ * @brief One named operating mode collected from chip JSON data.
+ */
 typedef struct JZChipModeInfo {
-    char    *name;
-    unsigned r_ports;
-    unsigned w_ports;
-    JZBuffer configs; /* JZChipDim[] */
+    char    *name;    /**< Heap-allocated mode name. */
+    unsigned r_ports; /**< Number of readable ports in this mode. */
+    unsigned w_ports; /**< Number of writable ports in this mode. */
+    JZBuffer configs; /**< Array of `JZChipDim` entries for this mode. */
 } JZChipModeInfo;
 
 static int jz_strcasecmp(const char *a, const char *b)

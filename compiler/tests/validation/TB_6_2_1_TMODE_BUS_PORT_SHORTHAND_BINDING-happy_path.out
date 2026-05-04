@@ -1,0 +1,6 @@
+
+=== @testbench TbBusPortShorthandBindingDut ===
+  PASS  "BUS shorthand binds all expanded BUS port signals" (3/3 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

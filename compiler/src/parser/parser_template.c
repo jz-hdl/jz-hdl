@@ -16,10 +16,29 @@
 /**
  * @brief Parse a @scratch declaration inside a template body.
  *
- * Syntax: @scratch <id> [<width_expr>];
+ * @param p Active parser positioned after the consumed @scratch token.
+ * @return SCRATCH_DECL AST node, or NULL on error.
+ */
+JZASTNode *parse_scratch_decl(Parser *p);
+
+/**
+ * @brief Parse a @template definition.
  *
- * @param p Active parser (positioned after @scratch token was consumed)
- * @return SCRATCH_DECL AST node, or NULL on error
+ * @param p Active parser positioned after the consumed @template token.
+ * @return TEMPLATE_DEF AST node, or NULL on error.
+ */
+JZASTNode *parse_template_def(Parser *p);
+
+/**
+ * @brief Parse an @apply statement inside a statement list.
+ *
+ * @param p Active parser positioned after the consumed @apply token.
+ * @return TEMPLATE_APPLY AST node, or NULL on error.
+ */
+JZASTNode *parse_apply_stmt(Parser *p);
+
+/**
+ * Parse a @scratch declaration inside a template body.
  */
 JZASTNode *parse_scratch_decl(Parser *p) {
     const JZToken *scratch_tok = &p->tokens[p->pos - 1]; /* already consumed @scratch */
@@ -57,7 +76,13 @@ JZASTNode *parse_scratch_decl(Parser *p) {
         const JZToken *wt = &p->tokens[i];
         if (wt->lexeme) {
             size_t tl = strlen(wt->lexeme);
-            char *nw = (char *)realloc(width_str, width_len + tl + 1);
+            size_t new_size = 0;
+            char *nw = NULL;
+            if (jz_size_mul_add_checked(1, width_len, tl + 1, &new_size) != 0) {
+                free(width_str);
+                return NULL;
+            }
+            nw = (char *)realloc(width_str, new_size);
             if (!nw) { free(width_str); return NULL; }
             width_str = nw;
             memcpy(width_str + width_len, wt->lexeme, tl);
@@ -89,18 +114,6 @@ JZASTNode *parse_scratch_decl(Parser *p) {
     return node;
 }
 
-/**
- * @brief Parse a @template definition.
- *
- * Syntax: @template <id> (<param0>, <param1>, ...) <body> @endtemplate
- *
- * The body may contain @scratch declarations, assignment statements,
- * IF/ELIF/ELSE chains, and SELECT/CASE statements. Declaration blocks,
- * alias assignments, and structural directives are diagnosed as errors.
- *
- * @param p Active parser (positioned after @template token was consumed)
- * @return TEMPLATE_DEF AST node, or NULL on error
- */
 JZASTNode *parse_template_def(Parser *p) {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* already consumed @template */
 
@@ -317,16 +330,6 @@ JZASTNode *parse_template_def(Parser *p) {
     return tmpl;
 }
 
-/**
- * @brief Parse an @apply statement.
- *
- * Syntax:
- *   @apply <template_id> (<arg0>, <arg1>, ...);
- *   @apply [count_expr] <template_id> (<arg0>, <arg1>, ...);
- *
- * @param p Active parser (positioned after @apply token was consumed)
- * @return TEMPLATE_APPLY AST node, or NULL on error
- */
 JZASTNode *parse_apply_stmt(Parser *p) {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* already consumed @apply */
 
@@ -354,7 +357,14 @@ JZASTNode *parse_apply_stmt(Parser *p) {
             const JZToken *ct = &p->tokens[i];
             if (ct->lexeme) {
                 size_t tl = strlen(ct->lexeme);
-                char *nc = (char *)realloc(count_str, count_len + tl + 1);
+                size_t new_size = 0;
+                char *nc = NULL;
+                if (jz_size_mul_add_checked(1, count_len, tl + 1, &new_size) != 0) {
+                    free(count_str);
+                    jz_ast_free(apply);
+                    return NULL;
+                }
+                nc = (char *)realloc(count_str, new_size);
                 if (!nc) { free(count_str); jz_ast_free(apply); return NULL; }
                 count_str = nc;
                 memcpy(count_str + count_len, ct->lexeme, tl);

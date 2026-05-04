@@ -13,17 +13,86 @@
 
 #include "parser_internal.h"
 
-/* ---------- forward declarations ---------- */
-static JZASTNode *parse_tb_instantiation(Parser *p);
-
-/* ---------- helpers ---------- */
-
 /**
  * @brief Parse a testbench CLOCK block body.
  *
- * CLOCK { <id>; ... }
+ * @param p Active parser positioned after the opening brace.
+ * @param parent TESTBENCH clock block node that receives clock declarations.
+ * @return 0 on success, -1 on parse or allocation failure.
+ */
+static int parse_tb_clock_block_body(Parser *p, JZASTNode *parent);
+
+/**
+ * @brief Parse a testbench WIRE block body.
  *
- * Each child is a TB_CLOCK_DECL node with the clock name.
+ * @param p Active parser positioned after the opening brace.
+ * @param parent TESTBENCH wire block node that receives wire declarations.
+ * @return 0 on success, -1 on parse or allocation failure.
+ */
+static int parse_tb_wire_block_body(Parser *p, JZASTNode *parent);
+
+/**
+ * @brief Parse a @setup or @update body.
+ *
+ * @param p Active parser positioned after the opening brace.
+ * @param parent TESTBENCH stimulus block node that receives assignment children.
+ * @return 0 on success, -1 on parse or allocation failure.
+ */
+static int parse_tb_stimulus_body(Parser *p, JZASTNode *parent);
+
+/**
+ * @brief Parse a testbench clock-advance directive.
+ *
+ * @param p Active parser positioned after the consumed @clock token.
+ * @return TB_CLOCK_ADV node, or NULL on error.
+ */
+static JZASTNode *parse_tb_clock_adv(Parser *p);
+
+/**
+ * @brief Parse a testbench equality or inequality expectation.
+ *
+ * @param p Active parser positioned after the expectation keyword.
+ * @param node_type Expectation node kind to create.
+ * @return Expectation node, or NULL on error.
+ */
+static JZASTNode *parse_tb_expect(Parser *p, JZASTNodeType node_type);
+
+/**
+ * @brief Parse a testbench tri-state expectation.
+ *
+ * @param p Active parser positioned after the consumed @expect_tristate token.
+ * @return TB_EXPECT_TRISTATE node, or NULL on error.
+ */
+static JZASTNode *parse_tb_expect_tristate(Parser *p);
+
+/**
+ * @brief Parse a testbench instance binding list.
+ *
+ * @param p Active parser positioned after the opening brace for bindings.
+ * @param inst TESTBENCH instance node that receives binding children.
+ * @return 0 on success, -1 on parse or allocation failure.
+ */
+static int parse_tb_binding_list(Parser *p, JZASTNode *inst);
+
+/**
+ * @brief Parse a @new instantiation inside a testbench.
+ *
+ * @param p Active parser positioned after the consumed @new token.
+ * @return TB_INSTANCE node, or NULL on error.
+ */
+static JZASTNode *parse_tb_instantiation(Parser *p);
+
+/**
+ * @brief Parse the body of one TEST block.
+ *
+ * @param p Active parser positioned after the opening brace.
+ * @param test_node TEST block node that receives child statements.
+ * @return 0 on success, -1 on parse or allocation failure.
+ */
+static int parse_test_body(Parser *p, JZASTNode *test_node);
+
+/**
+ * Parse a testbench CLOCK block body.
  */
 static int parse_tb_clock_block_body(Parser *p, JZASTNode *parent)
 {
@@ -61,11 +130,6 @@ static int parse_tb_clock_block_body(Parser *p, JZASTNode *parent)
     }
 }
 
-/**
- * @brief Parse a testbench WIRE block body.
- *
- * WIRE { <id> [<width>]; ... }
- */
 static int parse_tb_wire_block_body(Parser *p, JZASTNode *parent)
 {
     for (;;) {
@@ -219,14 +283,6 @@ static int parse_tb_wire_block_body(Parser *p, JZASTNode *parent)
     }
 }
 
-/**
- * @brief Parse a @setup or @update block body.
- *
- * @setup { <wire> <= <expr>; ... }
- * @update { <wire> <= <expr>; ... }
- *
- * Assignments are stored as STMT_ASSIGN children.
- */
 static int parse_tb_stimulus_body(Parser *p, JZASTNode *parent)
 {
     for (;;) {

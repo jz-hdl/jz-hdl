@@ -1,0 +1,71 @@
+// TAP_BLOCK_FORM: valid simulation TAP block syntax accepts hierarchical
+// internal signal monitoring paths.
+
+@module TapBlockFormDutChild
+    PORT {
+        IN  [1] clk;
+        OUT [1] child_out;
+    }
+
+    REGISTER {
+        child_state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        child_out = child_state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        child_state <= ~child_state;
+    }
+@endmod
+
+@module TapBlockFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    WIRE {
+        child_data [1];
+    }
+
+    @new child TapBlockFormDutChild {
+        IN  [1] clk = clk;
+        OUT [1] child_out = child_data;
+    };
+
+    ASYNCHRONOUS {
+        data = child_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation TapBlockFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut TapBlockFormDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    TAP {
+        dut.state;
+        dut.child.child_state;
+    }
+
+    @run(ns=20)
+@endsim

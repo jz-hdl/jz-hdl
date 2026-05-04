@@ -1,3 +1,8 @@
+/**
+ * @file rules.c
+ * @brief Static validation rule table and formatted rule listing helpers.
+ */
+
 #include <string.h>
 
 #include "rules.h"
@@ -26,6 +31,9 @@ const JZRuleInfo jz_rule_table[] = {
     /* [PARSE] (done) */
     { "PARSE", "COMMENT_IN_TOKEN",                                  0, JZ_RULE_MODE_ERR, "S1.4 Comment appears inside a token (identifier/number/operator/literal)" },
     { "PARSE", "COMMENT_NESTED_BLOCK",                              0, JZ_RULE_MODE_ERR, "S1.4 Nested block comment `/* ... /* ... */ ... */` detected" },
+    { "PARSE", "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S3.2 Expression nesting exceeds the compiler safety limit" },
+    { "PARSE", "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 Statement nesting exceeds the compiler safety limit" },
+    { "PARSE", "AST_DEPTH_LIMIT_EXCEEDED",                          0, JZ_RULE_MODE_ERR, "AST traversal exceeds the compiler safety limit" },
     { "PARSE", "DIRECTIVE_INVALID_CONTEXT",                         0, JZ_RULE_MODE_ERR, "S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location" },
     { "PARSE", "KEYWORD_AS_IDENTIFIER",                             2, JZ_RULE_MODE_ERR, "S1.1 Reserved keyword used as identifier" },
     { "PARSE", "IF_COND_MISSING_PARENS",                            0, JZ_RULE_MODE_ERR, "S5.3 IF/ELIF condition missing required parentheses" },
@@ -61,6 +69,9 @@ const JZRuleInfo jz_rule_table[] = {
     { "OPERATORS_AND_EXPRESSIONS", "CONCAT_EMPTY",                  0, JZ_RULE_MODE_ERR, "S3.2/S8.1 Empty concatenation `{}` is not allowed" },
     { "OPERATORS_AND_EXPRESSIONS", "DIV_CONST_ZERO",                0, JZ_RULE_MODE_ERR, "S3.2 Division/modulus by compile-time constant zero divisor" },
     { "OPERATORS_AND_EXPRESSIONS", "DIV_UNGUARDED_RUNTIME_ZERO",    0, JZ_RULE_MODE_WRN, "S3.2 Divisor may be zero at runtime; guard with IF (divisor != 0) or use a compile-time constant" },
+    { "OPERATORS_AND_EXPRESSIONS", "IR_EXPR_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S3.2 IR expression lowering exceeds the compiler safety limit" },
+    { "OPERATORS_AND_EXPRESSIONS", "IR_STMT_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 IR statement traversal exceeds the compiler safety limit" },
+    { "OPERATORS_AND_EXPRESSIONS", "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S3.2 IR division-guard analysis exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_EXPRESSION", 0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in arithmetic/logical expressions" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_CONCAT",     0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in concatenations" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_SLICED",        0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not be sliced or indexed" },
@@ -92,6 +103,9 @@ const JZRuleInfo jz_rule_table[] = {
     { "CONST_RULES", "CONST_NEGATIVE_OR_NONINT",                    0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST initialized with negative or non-integer value where nonnegative integer required" },
     { "CONST_RULES", "CONST_UNDEFINED_IN_WIDTH_OR_SLICE",           0, JZ_RULE_MODE_ERR, "S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly" },
     { "CONST_RULES", "CONST_CIRCULAR_DEP",                         1, JZ_RULE_MODE_ERR, "S4.3/S7.10 Circular dependency in CONST/CONFIG definitions" },
+    { "CONST_RULES", "CONST_CYCLE_ANALYSIS_OVERFLOW",              0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST cycle analysis exceeds safe adjacency-matrix size limits" },
+    { "CONST_RULES", "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "S4.3/S7.10 Constant-expression nesting exceeds the compiler safety limit" },
+    { "CONST_RULES", "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "Semantic traversal exceeds the compiler safety limit" },
 
     /* [PORT_WIRE_REGISTER_DECLS] */
     { "PORT_WIRE_REGISTER_DECLS", "PORT_MISSING_WIDTH",             0, JZ_RULE_MODE_ERR, "S4.4/S8.1 Port declaration without mandatory `[N]` width" },
@@ -260,11 +274,18 @@ const JZRuleInfo jz_rule_table[] = {
     { "PROJECT_AND_IMPORTS", "PROJECT_CHIP_DATA_NOT_FOUND",         0, JZ_RULE_MODE_ERR, "S6.1 Chip data not found for CHIP id (no local JSON and no built-in data)" },
     { "PROJECT_AND_IMPORTS", "PROJECT_CHIP_DATA_INVALID",           0, JZ_RULE_MODE_ERR, "S6.1 Chip JSON data could not be parsed" },
     { "PROJECT_AND_IMPORTS", "PROJECT_CHIP_DATA_VARIANT_INVALID",   0, JZ_RULE_MODE_ERR, "S9.3 Chip JSON clock_gen variants are invalid (parse error, not exhaustive, or not disjoint)" },
+    { "PROJECT_AND_IMPORTS", "SOURCE_FILE_TOO_LARGE",               0, JZ_RULE_MODE_ERR, "S6.2 Source file exceeds the compiler safety file-size limit" },
+    { "PROJECT_AND_IMPORTS", "SOURCE_TOKEN_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "S6.2 Source file token count exceeds the compiler safety limit" },
     { "PROJECT_AND_IMPORTS", "IMPORT_OUTSIDE_PROJECT",              0, JZ_RULE_MODE_ERR, "S6.2.1 @import used outside @project block" },
     { "PROJECT_AND_IMPORTS", "IMPORT_NOT_AT_PROJECT_TOP",           0, JZ_RULE_MODE_ERR, "S6.2.1 @import appears after CONFIG/CLOCKS/PIN/blackbox/top-level new blocks" },
     { "PROJECT_AND_IMPORTS", "IMPORT_FILE_HAS_PROJECT",             0, JZ_RULE_MODE_ERR, "S6.2.1 Imported file contains its own @project/@endproj (forbidden)" },
     { "PROJECT_AND_IMPORTS", "IMPORT_DUP_MODULE_OR_BLACKBOX",       0, JZ_RULE_MODE_ERR, "S6.2.1/S6.10 Imported module/blackbox name duplicates existing project name" },
     { "PROJECT_AND_IMPORTS", "IMPORT_FILE_MULTIPLE_TIMES",          0, JZ_RULE_MODE_ERR, "S6.2.1 Same source file imported more than once into a single project (duplicate @import or nested re-import)" },
+    { "PROJECT_AND_IMPORTS", "IMPORT_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "S6.2.1 Nested @import depth exceeds the compiler safety limit" },
+    { "PROJECT_AND_IMPORTS", "IMPORT_MEMORY_LIMIT_EXCEEDED",        0, JZ_RULE_MODE_ERR, "S6.2.1 Nested @import retained source/token memory exceeds the compiler safety limit" },
+    { "PROJECT_AND_IMPORTS", "CHIP_JSON_TOO_LARGE",                 0, JZ_RULE_MODE_ERR, "S6.1 Local chip JSON exceeds the compiler safety file-size limit" },
+    { "PROJECT_AND_IMPORTS", "CHIP_JSON_TOKEN_LIMIT_EXCEEDED",      0, JZ_RULE_MODE_ERR, "S6.1 Local chip JSON token count exceeds the compiler safety limit" },
+    { "PROJECT_AND_IMPORTS", "CHIP_JSON_NESTING_LIMIT_EXCEEDED",    0, JZ_RULE_MODE_ERR, "S6.1/S9.3 Chip JSON nesting exceeds the compiler safety limit" },
     { "PROJECT_AND_IMPORTS", "PROJECT_MISSING_ENDPROJ",           0, JZ_RULE_MODE_ERR, "S6.2 @project block missing @endproj terminator" },
 
     /* [CONFIG_BLOCK] */
@@ -304,9 +325,11 @@ const JZRuleInfo jz_rule_table[] = {
     { "CLOCKS_PINS_MAP", "PIN_INVALID_STANDARD",                    0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Invalid electrical standard in PIN declaration" },
     { "CLOCKS_PINS_MAP", "PIN_DRIVE_MISSING_OR_INVALID",            0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Missing or nonpositive drive value for OUT_PINS/INOUT_PINS" },
     { "CLOCKS_PINS_MAP", "PIN_BUS_WIDTH_INVALID",                   0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Bus pin width non-integer or <= 0" },
+    { "CLOCKS_PINS_MAP", "PIN_WIDTH_LIMIT_EXCEEDED",                0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Pin width exceeds the compiler safety limit" },
     { "CLOCKS_PINS_MAP", "PIN_DUP_NAME_WITHIN_BLOCK",               0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Duplicate pin names within same PIN block" },
     { "CLOCKS_PINS_MAP", "MAP_PIN_DECLARED_NOT_MAPPED",             0, JZ_RULE_MODE_ERR, "S6.6/S6.10/S6.9 Pin declared in PIN blocks but not mapped in MAP" },
     { "CLOCKS_PINS_MAP", "MAP_PIN_MAPPED_NOT_DECLARED",             0, JZ_RULE_MODE_ERR, "S6.6/S6.9 MAP entry references undeclared pin" },
+    { "CLOCKS_PINS_MAP", "MAP_BITMAP_FOOTPRINT_LIMIT_EXCEEDED",     0, JZ_RULE_MODE_ERR, "S6.5/S6.6 Pin coverage bitmap exceeds the compiler safety limit" },
     { "CLOCKS_PINS_MAP", "MAP_DUP_PHYSICAL_LOCATION",               0, JZ_RULE_MODE_WRN, "S6.6/S6.9 Two logical pins mapped to same physical board pin (warning or error; treated as warning)" },
     { "CLOCKS_PINS_MAP", "MAP_INVALID_BOARD_PIN_ID",                0, JZ_RULE_MODE_ERR, "S6.6/S6.9 Board pin ID format invalid for target device" },
     { "CLOCKS_PINS_MAP", "PIN_MODE_INVALID",                       0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Invalid pin mode value (must be SINGLE or DIFFERENTIAL)" },
@@ -391,6 +414,8 @@ const JZRuleInfo jz_rule_table[] = {
     { "MEM_DECLARATION", "MEM_INIT_CONTAINS_Z",                      0, JZ_RULE_MODE_ERR, "S1.6.7/S7.5.1 Memory initialization literal must not contain `z` bits" },
     { "MEM_DECLARATION", "MEM_INIT_FILE_CONTAINS_X",               0, JZ_RULE_MODE_ERR, "S7.5.2 Memory initialization file contains x or z values" },
     { "MEM_DECLARATION", "MEM_INIT_FILE_TOO_LARGE",                 0, JZ_RULE_MODE_ERR, "S7.5.2/S7.7.1 Initialization file larger than depth*word_width" },
+    { "MEM_DECLARATION", "MEM_INIT_FILE_HARD_LIMIT_EXCEEDED",       0, JZ_RULE_MODE_ERR, "S7.5.2/S7.7.1 Initialization file exceeds the compiler safety file-size limit" },
+    { "MEM_DECLARATION", "MEM_INIT_MIF_DEPTH_LIMIT_EXCEEDED",       0, JZ_RULE_MODE_ERR, "S7.5.2/S7.7.1 MIF DEPTH exceeds the compiler safety limit" },
     { "MEM_DECLARATION", "MEM_TYPE_INVALID",                        0, JZ_RULE_MODE_ERR, "S7.1 MEM TYPE value is not recognized; expected BLOCK or DISTRIBUTED" },
     { "MEM_DECLARATION", "MEM_TYPE_BLOCK_WITH_ASYNC_OUT",           1, JZ_RULE_MODE_ERR, "S7.1 Strict mode: MEM(TYPE=BLOCK) has IN port declared ASYNC" },
     { "MEM_DECLARATION", "MEM_CHIP_CONFIG_UNSUPPORTED",             0, JZ_RULE_MODE_ERR, "S7.1/S6.1 MEM configuration not supported by selected chip" },
@@ -462,6 +487,10 @@ const JZRuleInfo jz_rule_table[] = {
     { "TEMPLATE", "TEMPLATE_SCRATCH_WIDTH_INVALID",  0, JZ_RULE_MODE_ERR, "S10.3 @scratch width must be a positive integer constant expression" },
     { "TEMPLATE", "TEMPLATE_EXTERNAL_REF",           0, JZ_RULE_MODE_ERR, "S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments" },
     { "TEMPLATE", "TEMPLATE_RESET_LOGIC_FORBIDDEN",  0, JZ_RULE_MODE_ERR, "S10.4 Reset-style conditional logic is not allowed inside templates; keep reset handling at the callsite or enclosing SYNCHRONOUS block" },
+    { "TEMPLATE", "TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 @apply count exceeds the configured hard limit" },
+    { "TEMPLATE", "TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 Template expansion exceeds the configured total growth limit" },
+    { "TEMPLATE", "TEMPLATE_EXPANSION_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 Template expansion nesting exceeds the compiler safety limit" },
+    { "REPORTS", "REPORT_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "Report traversal exceeds the compiler safety limit" },
 
     /* [TESTBENCH] */
     { "TESTBENCH", "TB_WRONG_TOOL",               0, JZ_RULE_MODE_ERR, "File contains @testbench blocks; use --test to run testbenches" },
@@ -471,6 +500,8 @@ const JZRuleInfo jz_rule_table[] = {
     { "TESTBENCH", "TB_PORT_WIDTH_MISMATCH",       0, JZ_RULE_MODE_ERR, "TB-003 Port width must match module declared width" },
     { "TESTBENCH", "TB_NEW_RHS_INVALID",           0, JZ_RULE_MODE_ERR, "TB-004 @new RHS must be a testbench CLOCK or WIRE" },
     { "TESTBENCH", "TB_SETUP_POSITION",            0, JZ_RULE_MODE_ERR, "TB-005 @setup must appear exactly once per TEST, after @new, before other directives" },
+    { "TESTBENCH", "TB_BUS_NOT_FOUND",             0, JZ_RULE_MODE_ERR, "TB-006 Testbench BUS wire declaration must refer to a BUS definition in scope" },
+    { "TESTBENCH", "TB_SETUP_CLOCK_ASSIGN",        0, JZ_RULE_MODE_ERR, "S4.2/S6.3 @setup may not assign clock signals" },
     { "TESTBENCH", "TB_CLOCK_NOT_DECLARED",        0, JZ_RULE_MODE_ERR, "TB-007 @clock clock identifier must refer to a declared CLOCK" },
     { "TESTBENCH", "TB_CLOCK_CYCLE_NOT_POSITIVE",  0, JZ_RULE_MODE_ERR, "TB-008 @clock cycle count must be a positive integer" },
     { "TESTBENCH", "TB_UPDATE_NOT_WIRE",           0, JZ_RULE_MODE_ERR, "TB-009 @update may only assign testbench WIRE identifiers" },
@@ -485,10 +516,17 @@ const JZRuleInfo jz_rule_table[] = {
 
     /* [SIMULATION_RUNTIME] */
     { "SIMULATION", "SIM_RUN_COND_TIMEOUT",         0, JZ_RULE_MODE_ERR, "SIM-030 @run_until/@run_while condition not met within timeout" },
+    { "SIMULATION", "SIM_MEMORY_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-031 Declared simulation memory depth exceeds the simulator safety limit" },
+
+    /* [PRINT_DIRECTIVES] */
+    { "PRINT_DIRECTIVES", "PRT_ARG_COUNT_MISMATCH", 0, JZ_RULE_MODE_ERR, "PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments" },
 
     /* [REPEAT] */
     { "REPEAT", "RPT_COUNT_INVALID",              0, JZ_RULE_MODE_ERR, "RPT-001 @repeat requires a positive integer count" },
     { "REPEAT", "RPT_NO_MATCHING_END",            0, JZ_RULE_MODE_ERR, "RPT-002 @repeat without matching @end" },
+    { "REPEAT", "RPT_COUNT_LIMIT_EXCEEDED",       0, JZ_RULE_MODE_ERR, "RPT-003 @repeat count exceeds the configured hard limit" },
+    { "REPEAT", "RPT_EXPANDED_SIZE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "RPT-004 @repeat expansion exceeds the configured expanded-size limit" },
+    { "REPEAT", "RPT_INTERNAL",                   0, JZ_RULE_MODE_ERR, "RPT-005 Internal failure during @repeat expansion" },
 
     /* [GENERAL_WARNINGS] */
     { "GENERAL_WARNINGS", "WARN_UNUSED_REGISTER",                   0, JZ_RULE_MODE_WRN, "S8.3 Register is never read or written; remove it if unused" },

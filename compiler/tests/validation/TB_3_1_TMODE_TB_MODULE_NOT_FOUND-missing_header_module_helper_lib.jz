@@ -1,0 +1,11 @@
+@module ImportedDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] rst_n;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = rst_n;
+    }
+@endmod

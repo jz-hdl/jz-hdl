@@ -1,0 +1,2 @@
+File: HDL_8_1_GLOBAL_ASSIGN_FORBIDDEN-assign_in_template.jz
+      24:5    error GLOBAL_ASSIGN_FORBIDDEN S8.5 Assignment to GLOBAL constant is forbidden; globals are read-only

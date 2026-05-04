@@ -1,9 +1,6 @@
-/*
- * verilog_internal.h - Internal declarations for the Verilog-2005 backend.
- *
- * This header is shared among the split backend source files. It declares
- * static-linkage functions exposed across compilation units within the backend
- * as well as shared state and utility functions.
+/**
+ * @file verilog_internal.h
+ * @brief Internal declarations shared by the Verilog-2005 backend sources.
  */
 #ifndef JZ_HDL_VERILOG_INTERNAL_H
 #define JZ_HDL_VERILOG_INTERNAL_H

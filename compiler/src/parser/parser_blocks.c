@@ -24,6 +24,39 @@
 #include "parser_internal.h"
 
 /**
+ * @brief Parse the parameter list attached to a `SYNCHRONOUS(...)` block header.
+ * @param p Active parser.
+ * @param block Block node that receives parsed sync-parameter children.
+ * @return 0 on success or -1 on parse failure.
+ */
+static int parse_synchronous_header(Parser *p, JZASTNode *block);
+
+/**
+ * @brief Parse a braced block into raw-text child items.
+ * @param p Active parser.
+ * @param parent Parent AST node that receives the raw-text items.
+ * @param unterminated_msg Error text to use when the closing brace is missing.
+ * @return 0 on success or -1 on parse failure.
+ */
+static int parse_braced_raw_items(Parser *p, JZASTNode *parent, const char *unterminated_msg);
+
+/**
+ * @brief Parse the body of an `ASYNCHRONOUS` block.
+ * @param p Active parser.
+ * @param parent Block node that receives parsed statements.
+ * @return 0 on success or -1 on parse failure.
+ */
+static int parse_asynchronous_block_body(Parser *p, JZASTNode *parent);
+
+/**
+ * @brief Parse the body of a `SYNCHRONOUS` block.
+ * @param p Active parser.
+ * @param parent Block node that receives parsed statements.
+ * @return 0 on success or -1 on parse failure.
+ */
+static int parse_synchronous_block_body(Parser *p, JZASTNode *parent);
+
+/**
  * @brief Parse the parameter header of a SYNCHRONOUS block.
  *
  * The SYNCHRONOUS header has the form:

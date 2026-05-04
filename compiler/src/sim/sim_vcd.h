@@ -1,6 +1,6 @@
 /**
  * @file sim_vcd.h
- * @brief VCD (Value Change Dump) waveform writer for simulation.
+ * @brief VCD waveform writer API for simulator traces.
  */
 
 #ifndef JZ_SIM_VCD_H
@@ -10,6 +10,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/**
+ * @struct VCDWriter
+ * @brief Opaque writer for Value Change Dump output.
+ */
 typedef struct VCDWriter VCDWriter;
 
 /**
@@ -22,7 +26,7 @@ typedef struct VCDWriter VCDWriter;
 VCDWriter *vcd_open(const char *filename, uint64_t timescale_ps);
 
 /**
- * @brief Add a signal to be tracked in the VCD.
+ * @brief Register a signal that should appear in the VCD output.
  *
  * Must be called before vcd_end_definitions().
  *
@@ -44,7 +48,7 @@ int vcd_add_signal(VCDWriter *w, const char *scope, const char *name, int width)
 void vcd_end_definitions(VCDWriter *w);
 
 /**
- * @brief Set the current simulation time.
+ * @brief Advance the current timestamp used for subsequent dumps.
  *
  * Only emits a time marker if the time has changed since the last call.
  *
@@ -54,17 +58,17 @@ void vcd_end_definitions(VCDWriter *w);
 void vcd_set_time(VCDWriter *w, uint64_t time_ps);
 
 /**
- * @brief Dump a signal value change.
+ * @brief Emit a value change record for one signal.
  *
  * @param w      VCD writer.
  * @param sig_id Signal ID returned by vcd_add_signal().
  * @param value  Signal value (up to 64 bits).
- * @param width  Signal width.
+ * @param width Declared signal width in bits. This backend uses the width already registered for the signal.
  */
 void vcd_dump_value(VCDWriter *w, int sig_id, uint64_t value, int width);
 
 /**
- * @brief Close the VCD file and free resources.
+ * @brief Close the VCD file and free all writer resources.
  *
  * @param w VCD writer.
  */

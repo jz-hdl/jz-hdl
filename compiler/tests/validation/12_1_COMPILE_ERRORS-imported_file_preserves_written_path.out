@@ -1,2 +1,0 @@
-File: ./12_1_COMPILE_ERRORS-imported_file_preserves_written_path_lib.jz
-      11:17   error REG_INIT_WIDTH_MISMATCH S4.7 Register initialization literal width does not match declared register width

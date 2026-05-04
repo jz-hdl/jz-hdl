@@ -1,0 +1,50 @@
+// PRINT_DIRECTIVE_FORM: Valid @print directive syntax in a TEST sequence.
+// Exercises @print("<format_string>", <arg1>, <arg2>, ...) with a literal
+// format string and positional signal arguments.
+
+@module PrintDirectiveFormDut
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data_out = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= data_in;
+    }
+@endmod
+
+@testbench PrintDirectiveFormDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [8];
+        data_out [8];
+    }
+
+    TEST "valid @print call form" {
+        @new dut PrintDirectiveFormDut {
+            clk [1] = clk;
+            data_in [8] = data_in;
+            data_out [8] = data_out;
+        }
+
+        @setup {
+            data_in <= 8'h3C;
+        }
+
+        @clock(clk, cycle=1)
+        @print("data=%h value=%d bits=%b", data_out, data_out, data_out)
+        @expect_equal(data_out, 8'h3C)
+    }
+@endtb

@@ -1,0 +1,31 @@
+// TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED: total template clone/scratch growth
+// exceeds the configured hard limit.
+// Trigger: @apply[1024] of a 5-statement template grows by 5120 nodes, above
+// the default apply-growth limit of 4096.
+
+@project TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED_growth_limit
+    @top TopMod {
+        IN  [1] din = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@template grow(a, b, c, d, e, src)
+    a <= src;
+    b <= src;
+    c <= src;
+    d <= src;
+    e <= src;
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [1] din;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        @apply[1024] grow(data, data, data, data, data, din);
+        data = din;
+    }
+@endmod

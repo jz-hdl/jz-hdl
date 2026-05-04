@@ -1,3 +1,8 @@
+/**
+ * @file literal.c
+ * @brief Literal width and extension analysis helpers.
+ */
+
 #include <ctype.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -5,6 +10,11 @@
 
 #include "sem.h"
 
+/**
+ * @brief Count digits in a literal value while ignoring underscores.
+ * @param s Literal digit string.
+ * @return Number of non-underscore characters in @p s.
+ */
 static unsigned count_digits_no_underscore(const char *s)
 {
     unsigned n = 0;
@@ -15,6 +25,11 @@ static unsigned count_digits_no_underscore(const char *s)
     return n;
 }
 
+/**
+ * @brief Compute the intrinsic width of an unsigned decimal literal.
+ * @param value Decimal digit string without a base prefix.
+ * @return Minimum bit width needed to represent the literal, or `0` on invalid input.
+ */
 static unsigned intrinsic_width_for_decimal(const char *value)
 {
     if (!value || !*value) return 0;
@@ -40,7 +55,11 @@ static unsigned intrinsic_width_for_decimal(const char *value)
     return bits ? bits : 1;
 }
 
-/* Compute intrinsic bit-width for a pure-hex (0–9, A–F only) value string. */
+/**
+ * @brief Compute the intrinsic width of a hexadecimal magnitude string.
+ * @param value Hex digit string containing only magnitude digits and underscores.
+ * @return Minimum bit width needed to represent the literal, or `0` on invalid input.
+ */
 static unsigned intrinsic_width_for_hex_magnitude(const char *value)
 {
     if (!value || !*value) return 0;

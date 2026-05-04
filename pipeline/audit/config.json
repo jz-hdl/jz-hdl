@@ -34,7 +34,6 @@
     "unit_name": "section",
     "summary_label": "spec section(s) to audit",
     "full_run_default_options": [
-      "spec",
       "filter",
       "start",
       "end",

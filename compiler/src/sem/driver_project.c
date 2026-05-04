@@ -1,3 +1,8 @@
+/**
+ * @file driver_project.c
+ * @brief Project-level symbol collection and semantic checks.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -9,6 +14,7 @@
 #include "rules.h"
 #include "driver_internal.h"
 #include "path_security.h"
+#include "../parser/parser_internal.h"
 
 /* -------------------------------------------------------------------------
  *  Module scopes and project-level symbol tables
@@ -30,6 +36,17 @@ JZModuleScope *find_module_scope_for_node(JZBuffer *scopes,
 }
 
 /**
+ * @brief Collect declarations from a feature guard into the module scope.
+ * @param guard Feature guard node to walk.
+ * @param scope Module scope to populate.
+ * @param diagnostics Diagnostic sink for duplicate or invalid declarations.
+ * @return `0` on success, or `-1` on failure.
+ */
+static int collect_decls_from_feature(JZASTNode *guard,
+                                      JZModuleScope *scope,
+                                      JZDiagnosticList *diagnostics);
+
+/**
  * @brief Collect declarations from inside a FEATURE_GUARD AST node into the
  *        module symbol table. Both THEN and ELSE branches are walked so that
  *        both paths are validated (per spec).
@@ -41,8 +58,8 @@ static int collect_decls_from_feature_block(JZASTNode *block,
                                              JZDiagnosticList *diagnostics);
 
 static int collect_decls_from_feature(JZASTNode *guard,
-                                       JZModuleScope *scope,
-                                       JZDiagnosticList *diagnostics)
+                                      JZModuleScope *scope,
+                                      JZDiagnosticList *diagnostics)
 {
     if (!guard || guard->type != JZ_AST_FEATURE_GUARD) return 0;
     /* children[0] = condition, children[1] = THEN block, children[2] = ELSE block (optional) */
@@ -684,11 +701,27 @@ static void sem_base_dir_from_loc(const JZLocation *loc, char *buf, size_t bufsz
 {
     buf[0] = '\0';
     if (!loc || !loc->filename) return;
-    const char *slash = strrchr(loc->filename, '/');
+    const char *path = loc->filename;
+    if (!strchr(path, '/')) {
+        size_t count = g_imported_filenames_len;
+        if (g_imported_resolved_paths_len < count) {
+            count = g_imported_resolved_paths_len;
+        }
+        for (size_t i = 0; i < count; ++i) {
+            if (g_imported_filenames[i] &&
+                strcmp(g_imported_filenames[i], path) == 0 &&
+                g_imported_resolved_paths[i] &&
+                *g_imported_resolved_paths[i]) {
+                path = g_imported_resolved_paths[i];
+                break;
+            }
+        }
+    }
+    const char *slash = strrchr(path, '/');
     if (slash) {
-        size_t dlen = (size_t)(slash - loc->filename);
+        size_t dlen = (size_t)(slash - path);
         if (dlen >= bufsz) dlen = bufsz - 1;
-        memcpy(buf, loc->filename, dlen);
+        memcpy(buf, path, dlen);
         buf[dlen] = '\0';
     }
 }
@@ -1324,8 +1357,13 @@ void sem_check_project_config(JZASTNode *project,
         return;
     }
 
-    unsigned char *edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
-    unsigned char *bare_edges = (unsigned char *)calloc(count * count, sizeof(unsigned char));
+    size_t edge_count = 0;
+    if (jz_size_mul_checked(count, count, &edge_count) != 0) {
+        return;
+    }
+
+    unsigned char *edges = (unsigned char *)calloc(edge_count, sizeof(unsigned char));
+    unsigned char *bare_edges = (unsigned char *)calloc(edge_count, sizeof(unsigned char));
     if (!edges || !bare_edges) {
         free(edges);
         free(bare_edges);
@@ -1456,8 +1494,12 @@ void sem_check_project_config(JZASTNode *project,
         for (size_t i = 0; i < count; ++i) {
             if (visit[i] != 0) continue;
 
-            size_t *stack = (size_t *)malloc(count * sizeof(size_t));
-            size_t *iter  = (size_t *)malloc(count * sizeof(size_t));
+            size_t frame_bytes = 0;
+            if (jz_size_mul_checked(count, sizeof(size_t), &frame_bytes) != 0) {
+                break;
+            }
+            size_t *stack = (size_t *)malloc(frame_bytes);
+            size_t *iter  = (size_t *)malloc(frame_bytes);
             if (!stack || !iter) {
                 free(stack);
                 free(iter);

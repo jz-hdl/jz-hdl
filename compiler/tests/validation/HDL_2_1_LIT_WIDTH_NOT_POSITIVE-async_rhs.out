@@ -1,0 +1,2 @@
+File: HDL_2_1_LIT_WIDTH_NOT_POSITIVE-async_rhs.jz
+      19:23   error LIT_WIDTH_NOT_POSITIVE S2.1 Literal width is non-positive or non-integer

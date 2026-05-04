@@ -1,0 +1,2 @@
+File: HDL_6_9_TOP_PORT_SIGNAL_WIDTH_MISMATCH-inout_signal_width.jz
+      26:19   error TOP_PORT_SIGNAL_WIDTH_MISMATCH S6.9/S6.10 Binding width does not match connected pin/signal width

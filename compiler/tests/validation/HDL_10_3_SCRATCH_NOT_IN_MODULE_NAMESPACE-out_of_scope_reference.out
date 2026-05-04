@@ -1,0 +1,2 @@
+File: HDL_10_3_SCRATCH_NOT_IN_MODULE_NAMESPACE-out_of_scope_reference.jz
+      35:17   error UNDECLARED_IDENTIFIER S4.2/S8.1 Use of undeclared identifier in expression or statement

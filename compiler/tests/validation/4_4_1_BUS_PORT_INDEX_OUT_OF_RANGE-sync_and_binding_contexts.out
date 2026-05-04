@@ -1,4 +1,0 @@
-File: 4_4_1_BUS_PORT_INDEX_OUT_OF_RANGE-sync_and_binding_contexts.jz
-      40:14   error BUS_PORT_INDEX_OUT_OF_RANGE S4.4.1 BUS port index is outside the declared range
-      65:14   error BUS_PORT_INDEX_OUT_OF_RANGE S4.4.1 BUS port index is outside the declared range
-     109:23   error BUS_PORT_INDEX_OUT_OF_RANGE S4.4.1 BUS port index is outside the declared range

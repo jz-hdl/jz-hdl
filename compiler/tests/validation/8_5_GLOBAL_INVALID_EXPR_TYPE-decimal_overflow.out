@@ -1,2 +1,0 @@
-File: 8_5_GLOBAL_INVALID_EXPR_TYPE-decimal_overflow.jz
-      10:5    error GLOBAL_INVALID_EXPR_TYPE S8.4 Global value must be a sized literal <width>'<base><value>

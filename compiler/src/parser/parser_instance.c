@@ -17,6 +17,51 @@
 
 #include "parser_internal.h"
 
+/**
+ * @brief Map an instance binding operator token to its stored binding kind.
+ *
+ * @param type Token type to map
+ * @return Binding kind string, or NULL if the token is not a supported operator
+ */
+static const char *instance_binding_op_kind_from_token_type(JZTokenType type);
+
+/**
+ * @brief Parse the operator used in a module instance binding.
+ *
+ * @param p           Active parser
+ * @param context     Error message used when the operator is missing or invalid
+ * @param out_op_kind Optional output for the parsed binding kind string
+ * @return 0 on success, -1 on parse error
+ */
+static int parse_instance_binding_operator(Parser *p,
+                                           const char *context,
+                                           const char **out_op_kind);
+
+/**
+ * @brief Deep-copy an expression subtree for reused slice endpoints.
+ *
+ * @param src Expression subtree to clone
+ * @return Newly allocated clone, or NULL on allocation failure
+ */
+static JZASTNode *clone_expr_tree(const JZASTNode *src);
+
+/**
+ * @brief Parse the restricted RHS expression grammar used by @new bindings.
+ *
+ * @param p Active parser
+ * @return Expression AST node, or NULL on error
+ */
+static JZASTNode *parse_instance_parent_signal_expr(Parser *p);
+
+/**
+ * @brief Parse the binding list inside a module instance body.
+ *
+ * @param p    Active parser
+ * @param inst Module instance AST node receiving parsed bindings
+ * @return 0 on success, -1 on error
+ */
+static int parse_instance_binding_list(Parser *p, JZASTNode *inst);
+
 static const char *instance_binding_op_kind_from_token_type(JZTokenType type) {
     switch (type) {
     case JZ_TOK_OP_ASSIGN:
@@ -79,21 +124,6 @@ static JZASTNode *clone_expr_tree(const JZASTNode *src) {
     return copy;
 }
 
-/**
- * @brief Parse a restricted parent signal expression for @new bindings.
- *
- * This helper parses the right-hand side of a module instance port binding.
- * Only signal-like expressions are permitted:
- * - A simple identifier
- * - A qualified identifier using '.'
- * - An optional single slice [msb:lsb] or index [idx]
- *
- * CONFIG-qualified identifiers and arbitrary expressions are deliberately
- * disallowed so that illegal connections are caught during parsing.
- *
- * @param p Active parser
- * @return Expression AST node, or NULL on error
- */
 static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
 {
     /* Parse a restricted expression used on the RHS of @new bindings:
@@ -155,7 +185,14 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
         const JZToken *id = peek(p);
         if (id->type != JZ_TOK_IDENTIFIER || !id->lexeme) break;
         size_t len = strlen(id->lexeme);
-        char *new_buf = (char *)realloc(buf, buf_sz + len + 2);
+        size_t new_size = 0;
+        char *new_buf = NULL;
+        if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+            jz_size_add_checked(new_size, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
         if (!new_buf) {
             free(buf);
             return NULL;
@@ -168,7 +205,11 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
         if (!match(p, JZ_TOK_DOT)) {
             break;
         }
-        new_buf = (char *)realloc(buf, buf_sz + 2);
+        if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
         if (!new_buf) {
             free(buf);
             return NULL;
@@ -362,22 +403,6 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
     return slice;
 }
 
-/**
- * @brief Parse the body of a module instance (@new) declaration.
- *
- * The instance body consists of structured port-binding declarations:
- *
- * @code
- * IN    [width] port = parent_signal;
- * OUT   [width] port = parent_signal;
- * INOUT [width] port = parent_signal;
- * BUS <bus_id> <ROLE> [N] port = parent_signal;
- * @endcode
- *
- * @param p    Active parser
- * @param inst Module instance AST node
- * @return 0 on success, -1 on error
- */
 static int parse_instance_binding_list(Parser *p, JZASTNode *inst) {
     for (;;) {
         const JZToken *t = peek(p);
@@ -650,21 +675,6 @@ static int parse_instance_binding_list(Parser *p, JZASTNode *inst) {
     }
 }
 
-/**
- * @brief Parse a module instantiation (@new) statement.
- *
- * Supported forms:
- * @code
- * @new inst module { ... }
- * @new inst[count] module { ... }
- * @endcode
- *
- * An optional OVERRIDE block may appear at the start of the instance body
- * to supply per-instance constant overrides.
- *
- * @param p Active parser
- * @return Module instance AST node, or NULL on error
- */
 JZASTNode *parse_module_instantiation(Parser *p) {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* @new already consumed */
 

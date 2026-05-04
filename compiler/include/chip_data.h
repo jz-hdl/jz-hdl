@@ -67,7 +67,7 @@ typedef enum JZChipVariantFactKind {
  * @brief A single fact/value pair from a variant's `when` clause.
  */
 typedef struct JZChipClockGenVariantFact {
-    JZChipVariantFactKind kind;
+    JZChipVariantFactKind kind; /**< Fact selector key. */
     char *input_name;   /**< Input name for INPUT_SOURCE (NULL for OUTPUT_COUNT). */
     char *source_value; /**< "pad"|"fabric"|"" for INPUT_SOURCE (NULL for OUTPUT_COUNT). */
     int   int_value;    /**< Integer value for OUTPUT_COUNT. */

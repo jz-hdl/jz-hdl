@@ -1,0 +1,59 @@
+// IDX_WORD_BOUNDARY_SUBSTITUTION: standalone IDX is substituted on word
+// boundaries only inside @repeat bodies.
+
+@module RepeatIdxBoundaryDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] q;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        q = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= din;
+    }
+@endmod
+
+@testbench RepeatIdxBoundaryDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        din        [1];
+        q          [1];
+        INDEX      [1];
+        MY_IDX_VAR [1];
+    }
+
+    TEST "IDX substitution respects word boundaries" {
+        @new dut RepeatIdxBoundaryDut {
+            clk [1] = clk;
+            din [1] = din;
+            q   [1] = q;
+        }
+
+        @setup {
+            din <= 1'b1;
+            INDEX <= 1'b1;
+            MY_IDX_VAR <= 1'b0;
+        }
+
+        // Trigger 1: standalone IDX in the cycle expression is substituted,
+        // while
+        // INDEX and MY_IDX_VAR remain unchanged identifiers.
+        @repeat 2
+            @clock(clk, cycle=IDX + 1)
+            @expect_equal(q, 1'b1)
+            @expect_equal(INDEX, 1'b1)
+            @expect_equal(MY_IDX_VAR, 1'b0)
+        @end
+    }
+@endtb

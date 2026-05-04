@@ -1,2 +1,0 @@
-File: 12_4_PATH_SYMLINK_ESCAPE-symlink_escape.jz
-       7:5    error PATH_SYMLINK_ESCAPE S12.2 Symbolic link resolves to target outside sandbox root

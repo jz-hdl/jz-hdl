@@ -1,3 +1,8 @@
+/**
+ * @file driver_assign.c
+ * @brief Semantic checks for assignment statements and alias operators.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -9,8 +14,97 @@
 #include "rules.h"
 #include "driver_internal.h"
 
-/* Forward declaration for internal use. */
-/* sem_expr_contains_x_literal_anywhere: declared in driver_internal.h */
+/**
+ * @brief Check whether an expression is a simple all-`z` literal form.
+ * @param expr Expression subtree to inspect.
+ * @return Non-zero when the expression is composed entirely of `z` literals.
+ */
+static int sem_expr_is_all_z_literal_simple(const JZASTNode *expr);
+/**
+ * @brief Check whether an expression subtree contains a value literal.
+ * @param expr Expression subtree to inspect.
+ * @return Non-zero when a value literal is present, or zero otherwise.
+ */
+static int sem_expr_contains_literal_anywhere(const JZASTNode *expr);
+/**
+ * @brief Check async alias statements for literal right-hand-side usage.
+ * @param node Statement subtree to inspect.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_async_alias_literal_rhs_recursive(JZASTNode *node,
+                                                        JZDiagnosticList *diagnostics);
+/**
+ * @brief Check whether an expression is a special driver form.
+ * @param expr Expression subtree to inspect.
+ * @return Non-zero when the expression is a special driver form.
+ */
+static int sem_expr_is_special_driver(const JZASTNode *expr);
+/**
+ * @brief Validate special-driver usage within an expression subtree.
+ * @param expr Expression subtree to inspect.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_special_driver_usage(const JZASTNode *expr,
+                                           JZDiagnosticList *diagnostics);
+/**
+ * @brief Validate assignment targets reachable in a subtree.
+ * @param node Statement or expression subtree to inspect.
+ * @param mod_scope Module scope containing the subtree.
+ * @param project_symbols Project-level symbols used for access resolution.
+ * @param diagnostics Diagnostic sink for reported issues.
+ * @param is_sync Non-zero when the surrounding block is synchronous.
+ * @param is_alias Non-zero when validating an alias-style assignment.
+ */
+static void sem_check_lvalue_targets_recursive(JZASTNode *node,
+                                               const JZModuleScope *mod_scope,
+                                               const JZBuffer *project_symbols,
+                                               JZDiagnosticList *diagnostics,
+                                               int is_sync,
+                                               int is_alias);
+/**
+ * @brief Check synchronous concat assignments for duplicate register targets.
+ * @param lhs Assignment left-hand side to inspect.
+ * @param mod_scope Module scope containing the assignment.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_sync_concat_dup_reg(JZASTNode *lhs,
+                                          const JZModuleScope *mod_scope,
+                                          JZDiagnosticList *diagnostics);
+/**
+ * @brief Handle BUS bulk-assignment validation for a statement when applicable.
+ * @param stmt Assignment statement to inspect.
+ * @param mod_scope Module scope containing the statement.
+ * @param project_symbols Project-level symbols used for BUS resolution.
+ * @param diagnostics Diagnostic sink for reported issues.
+ * @param is_sync Non-zero when the surrounding block is synchronous.
+ * @return Non-zero when the statement was handled as a BUS bulk assignment.
+ */
+static int sem_try_handle_bus_bulk_assignment(JZASTNode *stmt,
+                                              const JZModuleScope *mod_scope,
+                                              const JZBuffer *project_symbols,
+                                              JZDiagnosticList *diagnostics,
+                                              int is_sync);
+/**
+ * @brief Validate one assignment statement against semantic assignment rules.
+ * @param stmt Assignment statement to validate.
+ * @param mod_scope Module scope containing the statement.
+ * @param project_symbols Project-level symbols used for access resolution.
+ * @param diagnostics Diagnostic sink for reported issues.
+ * @param is_sync Non-zero when the surrounding block is synchronous.
+ * @param mem_out_writes Accumulates writes through MEM OUT ports.
+ * @param mem_sync_reads Accumulates synchronous MEM read assignments.
+ * @param mem_inout_addrs Accumulates MEM INOUT address assignments.
+ * @param mem_inout_wdatas Accumulates MEM INOUT write-data assignments.
+ */
+static void sem_check_assignment_stmt(JZASTNode *stmt,
+                                      const JZModuleScope *mod_scope,
+                                      const JZBuffer *project_symbols,
+                                      JZDiagnosticList *diagnostics,
+                                      int is_sync,
+                                      JZBuffer *mem_out_writes,
+                                      JZBuffer *mem_sync_reads,
+                                      JZBuffer *mem_inout_addrs,
+                                      JZBuffer *mem_inout_wdatas);
 
 void sem_lhs_observable_classify(JZASTNode *lhs,
                                         const JZModuleScope *mod_scope,

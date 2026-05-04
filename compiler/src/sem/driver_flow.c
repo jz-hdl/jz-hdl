@@ -1,3 +1,8 @@
+/**
+ * @file driver_flow.c
+ * @brief Exclusive-assignment and dead-code flow analysis helpers.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -60,35 +65,50 @@ int sem_try_const_eval_ast_expr(const JZASTNode *expr, long *out)
  */
 
 /* JZAssignRange is defined in driver_internal.h */
+/** @brief Key for grouping assignments to the same declaration kind. */
 typedef struct JZAssignKey {
-    JZASTNode *decl;
-    int        is_register;
+    JZASTNode *decl;      /**< Target declaration node. */
+    int        is_register;/**< Non-zero when the target is a register. */
 } JZAssignKey;
 
+/** @brief One assignment record tracked on a control-flow path. */
 typedef struct JZAssignRecord {
-    JZAssignKey   key;
-    JZAssignRange range;
-    int           is_nested;
-    int           partial;    /* 1 if only assigned in SOME branches (not all paths) */
-    int           can_drive_z;
-    JZASTNode    *stmt;
+    JZAssignKey   key;        /**< Target identity for the assignment. */
+    JZAssignRange range;      /**< Bit-range covered by the assignment. */
+    int           is_nested;  /**< Non-zero when found in nested control flow. */
+    int           partial;    /**< Non-zero when assigned on only some paths. */
+    int           can_drive_z;/**< Non-zero when the assignment may drive `z`. */
+    JZASTNode    *stmt;       /**< Originating assignment statement. */
 } JZAssignRecord;
 
+/** @brief Assignment-state snapshot for one control-flow path. */
 typedef struct JZPathState {
-    JZBuffer assigns;
+    JZBuffer assigns; /**< Array of `JZAssignRecord` entries. */
     /* Number of records in `assigns` that were inherited when this path was
      * cloned for branch analysis. Records at index >= branch_base were added
      * by statements in the current branch body; records below it came from
      * outer scope (root-level or prior merged IF/SELECT chains). Used to
      * distinguish "same-branch double-assign" from "independent chain
      * conflict" when an overlap is detected. Zero on the root path. */
-    size_t   branch_base;
+    size_t   branch_base; /**< Index where branch-local records begin. */
 } JZPathState;
 
+/**
+ * @brief Check whether a SELECT statement covers all selector values.
+ * @param select_stmt SELECT statement to inspect.
+ * @param scope Module scope containing the statement.
+ * @param project_symbols Project-level symbols used for evaluation.
+ * @return Non-zero when the CASE set is exhaustive, or zero otherwise.
+ */
 static int sem_dead_select_cases_exhaustive(JZASTNode *select_stmt,
                                             const JZModuleScope *scope,
                                             const JZBuffer *project_symbols);
 
+/**
+ * @brief Check whether an expression subtree contains a `z` literal.
+ * @param expr Expression subtree to inspect.
+ * @return Non-zero when a `z` literal is present, or zero otherwise.
+ */
 static int sem_flow_expr_contains_z_literal(const JZASTNode *expr)
 {
     if (!expr) return 0;

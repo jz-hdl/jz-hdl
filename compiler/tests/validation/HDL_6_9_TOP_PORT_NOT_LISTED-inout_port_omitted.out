@@ -1,0 +1,2 @@
+File: HDL_6_9_TOP_PORT_NOT_LISTED-inout_port_omitted.jz
+      33:19   error TOP_PORT_NOT_LISTED S6.9/S6.10 Top module port omitted from project-level @top block

@@ -1,0 +1,14 @@
+// TB_NO_TEST_BLOCKS: @testbench must contain at least one TEST block.
+// Trigger 1: The @testbench declares shared testbench state but omits every TEST block.
+
+@testbench ImportedDut
+    @import "TB_3_1_TMODE_TB_NO_TEST_BLOCKS-no_test_blocks_helper_lib.jz";
+
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data [1];
+    }
+@endtb

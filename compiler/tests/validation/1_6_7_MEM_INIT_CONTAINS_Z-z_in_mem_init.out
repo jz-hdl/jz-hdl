@@ -1,2 +1,0 @@
-File: 1_6_7_MEM_INIT_CONTAINS_Z-z_in_mem_init.jz
-      27:26   error MEM_INIT_CONTAINS_Z S1.6.7/S7.5.1 Memory initialization literal must not contain `z` bits

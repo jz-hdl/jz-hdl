@@ -1,3 +1,8 @@
+/**
+ * @file driver_width.c
+ * @brief Width-expression validation and evaluation helpers.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -10,7 +15,16 @@
 #include "rules.h"
 #include "driver_internal.h"
 
-/* Forward declaration for internal recursive helper. */
+/**
+ * @brief Recursively evaluate a width expression.
+ * @param expr Width expression text.
+ * @param scope Module scope used to resolve constants.
+ * @param project_symbols Project symbols used to resolve `CONFIG` references.
+ * @param out_width Output location for the resolved width.
+ * @param depth Current recursion depth.
+ * @param loc Source location used for diagnostics.
+ * @return `0` on success, or non-zero on failure.
+ */
 static int sem_eval_width_expr_internal(const char *expr,
                                         const JZModuleScope *scope,
                                         const JZBuffer *project_symbols,
@@ -18,6 +32,12 @@ static int sem_eval_width_expr_internal(const char *expr,
                                         int depth,
                                         JZLocation loc);
 
+/**
+ * @brief Look up a project symbol by name without filtering on symbol kind.
+ * @param symbols Project symbol buffer.
+ * @param name Symbol name to look up.
+ * @return Matching symbol, or `NULL` when none exists.
+ */
 static const JZSymbol *project_lookup_any(const JZBuffer *symbols,
                                           const char *name)
 {
@@ -32,6 +52,11 @@ static const JZSymbol *project_lookup_any(const JZBuffer *symbols,
     return NULL;
 }
 
+/**
+ * @brief Check whether a register initializer literal overflows its declared width.
+ * @param lit Sized literal text.
+ * @return Non-zero when the literal overflows.
+ */
 static int sem_register_init_literal_overflows(const char *lit)
 {
     if (!lit) return 0;
@@ -632,9 +657,23 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                 char num[32];
                 snprintf(num, sizeof(num), "%u", target_width);
                 size_t num_len = strlen(num);
-                if (out_len + num_len + 1 >= cap) {
-                    size_t new_cap = cap * 2u + num_len + 32u;
-                    char *new_buf = (char *)realloc(buf, new_cap);
+                size_t needed = 0;
+                if (jz_size_add_checked(out_len, num_len, &needed) != 0 ||
+                    jz_size_add_checked(needed, 1, &needed) != 0) {
+                    free(buf);
+                    return -1;
+                }
+                if (needed >= cap) {
+                    size_t doubled = 0;
+                    size_t new_cap = 0;
+                    char *new_buf = NULL;
+                    if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                        jz_size_add_checked(doubled, num_len, &new_cap) != 0 ||
+                        jz_size_add_checked(new_cap, 32u, &new_cap) != 0) {
+                        free(buf);
+                        return -1;
+                    }
+                    new_buf = (char *)realloc(buf, new_cap);
                     if (!new_buf) {
                         free(buf);
                         return -1;
@@ -649,9 +688,21 @@ int sem_expand_widthof_in_width_expr(const char *expr,
         }
 
         /* Default: copy one character. */
-        if (out_len + 2 >= cap) {
-            size_t new_cap = cap * 2u + 32u;
-            char *new_buf = (char *)realloc(buf, new_cap);
+        size_t needed = 0;
+        if (jz_size_add_checked(out_len, 2, &needed) != 0) {
+            free(buf);
+            return -1;
+        }
+        if (needed >= cap) {
+            size_t doubled = 0;
+            size_t new_cap = 0;
+            char *new_buf = NULL;
+            if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                jz_size_add_checked(doubled, 32u, &new_cap) != 0) {
+                free(buf);
+                return -1;
+            }
+            new_buf = (char *)realloc(buf, new_cap);
             if (!new_buf) {
                 free(buf);
                 return -1;
@@ -881,9 +932,23 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
                 char num[32];
                 snprintf(num, sizeof(num), "%u", target_width);
                 size_t num_len = strlen(num);
-                if (out_len + num_len + 1 >= cap) {
-                    size_t new_cap = cap * 2u + num_len + 32u;
-                    char *new_buf = (char *)realloc(buf, new_cap);
+                size_t needed = 0;
+                if (jz_size_add_checked(out_len, num_len, &needed) != 0 ||
+                    jz_size_add_checked(needed, 1, &needed) != 0) {
+                    free(buf);
+                    return -1;
+                }
+                if (needed >= cap) {
+                    size_t doubled = 0;
+                    size_t new_cap = 0;
+                    char *new_buf = NULL;
+                    if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                        jz_size_add_checked(doubled, num_len, &new_cap) != 0 ||
+                        jz_size_add_checked(new_cap, 32u, &new_cap) != 0) {
+                        free(buf);
+                        return -1;
+                    }
+                    new_buf = (char *)realloc(buf, new_cap);
                     if (!new_buf) {
                         free(buf);
                         return -1;
@@ -897,9 +962,21 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
             }
         }
 
-        if (out_len + 2 >= cap) {
-            size_t new_cap = cap * 2u + 32u;
-            char *new_buf = (char *)realloc(buf, new_cap);
+        size_t needed = 0;
+        if (jz_size_add_checked(out_len, 2, &needed) != 0) {
+            free(buf);
+            return -1;
+        }
+        if (needed >= cap) {
+            size_t doubled = 0;
+            size_t new_cap = 0;
+            char *new_buf = NULL;
+            if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                jz_size_add_checked(doubled, 32u, &new_cap) != 0) {
+                free(buf);
+                return -1;
+            }
+            new_buf = (char *)realloc(buf, new_cap);
             if (!new_buf) {
                 free(buf);
                 return -1;

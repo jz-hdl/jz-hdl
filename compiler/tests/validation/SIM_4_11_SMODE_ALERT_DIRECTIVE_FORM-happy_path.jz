@@ -1,0 +1,38 @@
+// ALERT_DIRECTIVE_FORM: valid @alert(<color>) syntax in @simulation.
+
+@module AlertDirectiveFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation AlertDirectiveFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut AlertDirectiveFormDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @alert(RED)
+    @run(ns=10)
+@endsim

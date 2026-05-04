@@ -1,3 +1,0 @@
-File: 1_5_ASSIGN_INDEPENDENT_IF_SELECT-sync_register.jz
-      46:13   error SYNC_MULTI_ASSIGN_SAME_REG_BITS S5.2/S8.1 Same register bits assigned more than once along any execution path in SYNCHRONOUS block
-      48:13   error SYNC_MULTI_ASSIGN_SAME_REG_BITS S5.2/S8.1 Same register bits assigned more than once along any execution path in SYNCHRONOUS block

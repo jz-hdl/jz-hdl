@@ -1,0 +1,2 @@
+File: TB_3_1_TMODE_TB_NO_TEST_BLOCKS-no_test_blocks.jz
+       4:1    error TB_NO_TEST_BLOCKS TB-012 @testbench must contain at least one TEST block

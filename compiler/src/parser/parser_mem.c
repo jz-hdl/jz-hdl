@@ -13,16 +13,6 @@
 
 #include "parser_internal.h"
 
-/**
- * @brief Parse the body of a MEM block.
- *
- * MEM blocks define memories with word width, depth, optional initialization,
- * and one or more IN/OUT ports with optional attributes.
- *
- * @param p      Active parser
- * @param parent MEM block AST node
- * @return 0 on success, -1 on error
- */
 int parse_mem_block_body(Parser *p, JZASTNode *parent) {
     /* MEM { name [word_width] [depth] = init { IN ...; OUT ...; ... }; ... } */
     for (;;) {

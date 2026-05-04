@@ -1,0 +1,19 @@
+@module TbBusWireWidthPreservationDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] keep;
+        OUT [1] q;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        q = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= keep;
+    }
+@endmod

@@ -1,7 +1,22 @@
+/**
+ * @file literal_test.c
+ * @brief Unit tests for literal semantic analysis helpers.
+ */
+
 #include <stdio.h>
 
 #include "sem.h"
 
+/**
+ * @brief Check one literal analysis case.
+ * @param base Numeric base passed to `jz_literal_analyze`.
+ * @param value Literal value text without width or base prefix.
+ * @param declared_width Declared destination width to analyze against.
+ * @param expected_intrinsic Expected intrinsic width when the call succeeds.
+ * @param expected_ext Expected extension kind when the call succeeds.
+ * @param should_fail Non-zero when the analysis is expected to fail.
+ * @return `0` on success, or `1` when the observed result differs from the expectation.
+ */
 static int expect_literal(JZNumericBase base,
                           const char *value,
                           unsigned declared_width,
@@ -38,6 +53,10 @@ static int expect_literal(JZNumericBase base,
     return 0;
 }
 
+/**
+ * @brief Run the literal analysis unit tests.
+ * @return Exit status for the test executable.
+ */
 int main(void)
 {
     int failures = 0;

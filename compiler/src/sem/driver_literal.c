@@ -1,3 +1,8 @@
+/**
+ * @file driver_literal.c
+ * @brief Literal typing and literal-width semantic checks.
+ */
+
 #include <string.h>
 #include <ctype.h>
 #include <limits.h>
@@ -5,10 +10,35 @@
 #include "sem.h"
 #include "driver_internal.h"
 
-/* -------------------------------------------------------------------------
- *  Literal typing and simple literal helpers
- * -------------------------------------------------------------------------
+/**
+ * @brief Parse a simple signed decimal integer.
+ * @param s Input text to parse.
+ * @param out Receives the parsed value on success.
+ * @return Non-zero on success, or zero when parsing fails.
  */
+static int sem_parse_simple_signed(const char *s, long long *out);
+/**
+ * @brief Validate the explicit width prefix of a literal node.
+ * @param lit Literal AST node to inspect.
+ * @param mod_scope Module scope that owns the literal.
+ * @param project_symbols Project-level symbols used for CONFIG lookup.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_literal_width(JZASTNode *lit,
+                                    const JZModuleScope *mod_scope,
+                                    const JZBuffer *project_symbols,
+                                    JZDiagnosticList *diagnostics);
+/**
+ * @brief Walk a subtree and validate every literal width it contains.
+ * @param node AST node to walk.
+ * @param mod_scope Module scope that owns the subtree.
+ * @param project_symbols Project-level symbols used for CONFIG lookup.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_literal_widths_recursive(JZASTNode *node,
+                                               const JZModuleScope *mod_scope,
+                                               const JZBuffer *project_symbols,
+                                               JZDiagnosticList *diagnostics);
 
 void infer_literal_type(JZASTNode *node,
                         JZDiagnosticList *diagnostics,
@@ -141,10 +171,6 @@ int sem_literal_is_const_zero(const char *lex, int *out_known)
  * -------------------------------------------------------------------------
  */
 
-/* Parse a very simple signed decimal integer (including zero) from a string
- * that may contain whitespace and an optional leading '+' or '-'. Returns 1 on
- * success, 0 on failure.
- */
 static int sem_parse_simple_signed(const char *s, long long *out)
 {
     if (!s || !out) return 0;
@@ -186,9 +212,6 @@ static int sem_parse_simple_signed(const char *s, long long *out)
     return 1;
 }
 
-/* Check the <width> prefix of a sized literal lexeme and emit LIT_* width
- * diagnostics when we can safely reason about it.
- */
 static void sem_check_literal_width(JZASTNode *lit,
                                     const JZModuleScope *mod_scope,
                                     const JZBuffer *project_symbols,

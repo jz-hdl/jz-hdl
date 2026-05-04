@@ -1,7 +1,49 @@
+/**
+ * @file ast_json.c
+ * @brief Emits the AST as a JSON document.
+ */
+
 #include <stdio.h>
 #include <string.h>
 
 #include "../../include/ast.h"
+#include "../../include/diagnostic.h"
+#include "../../include/util.h"
+
+static int s_ast_json_depth_reported = 0;
+static int s_ast_json_depth_failed = 0;
+static JZDiagnosticList *s_ast_json_diagnostics = NULL;
+
+/**
+ * @brief Write a JSON string literal with escaping.
+ * @param out Destination stream.
+ * @param s Null-terminated string to encode. A null pointer emits `""`.
+ */
+static void print_escaped_string(FILE *out, const char *s);
+
+/**
+ * @brief Map an AST node kind to its JSON type name.
+ * @param t AST node kind to describe.
+ * @return Stable node type string used in JSON output.
+ */
+static const char *node_type_name(JZASTNodeType t);
+
+/**
+ * @brief Emit indentation for one JSON nesting level.
+ * @param out Destination stream.
+ * @param level Indentation depth in two-space units.
+ */
+static void indent(FILE *out, int level);
+
+/**
+ * @brief Emit one AST node and its descendants as JSON.
+ * @param out Destination stream.
+ * @param node AST node to serialize.
+ * @param level Current indentation depth.
+ * @param depth Current recursion depth used for safety-limit checking.
+ */
+static void print_node(FILE *out, const JZASTNode *node, int level,
+                       unsigned depth);
 
 static void print_escaped_string(FILE *out, const char *s) {
     fputc('"', out);
@@ -149,7 +191,7 @@ static void indent(FILE *out, int level) {
     for (int i = 0; i < level; ++i) fputs("  ", out);
 }
 
-static void print_node(FILE *out, const JZASTNode *node, int level) {
+static void print_node(FILE *out, const JZASTNode *node, int level, unsigned depth) {
     indent(out, level);
     fputc('{', out);
 
@@ -197,11 +239,25 @@ static void print_node(FILE *out, const JZASTNode *node, int level) {
     }
     fputc('}', out);
 
+    if ((size_t)depth >= jz_input_limit_value(JZ_LIMIT_AST_DEPTH)) {
+        s_ast_json_depth_failed = 1;
+        if (node) {
+            (void)jz_diagnostic_report_rule_once(&s_ast_json_depth_reported,
+                                                 s_ast_json_diagnostics,
+                                                 node->loc,
+                                                 "AST_DEPTH_LIMIT_EXCEEDED",
+                                                 "AST traversal exceeds the compiler safety limit");
+        }
+        fputs(", \"truncated\": true", out);
+        fputc('}', out);
+        return;
+    }
+
     /* children */
     if (node->child_count > 0) {
         fputs(", \"children\": [\n", out);
         for (size_t i = 0; i < node->child_count; ++i) {
-            print_node(out, node->children[i], level + 1);
+            print_node(out, node->children[i], level + 1, depth + 1);
             if (i + 1 < node->child_count) fputc(',', out);
             fputc('\n', out);
         }
@@ -212,11 +268,17 @@ static void print_node(FILE *out, const JZASTNode *node, int level) {
     fputc('}', out);
 }
 
-void jz_ast_print_json(FILE *out, const JZASTNode *root) {
+int jz_ast_print_json(FILE *out, const JZASTNode *root, JZDiagnosticList *diagnostics) {
+    s_ast_json_depth_reported = 0;
+    s_ast_json_depth_failed = 0;
+    s_ast_json_diagnostics = diagnostics;
     if (!root) {
         fputs("null\n", out);
-        return;
+        s_ast_json_diagnostics = NULL;
+        return 0;
     }
-    print_node(out, root, 0);
+    print_node(out, root, 0, 0);
     fputc('\n', out);
+    s_ast_json_diagnostics = NULL;
+    return s_ast_json_depth_failed ? -1 : 0;
 }

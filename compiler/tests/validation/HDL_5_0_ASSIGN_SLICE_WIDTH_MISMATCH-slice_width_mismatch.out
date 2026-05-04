@@ -1,0 +1,4 @@
+File: HDL_5_0_ASSIGN_SLICE_WIDTH_MISMATCH-slice_width_mismatch.jz
+      27:9    error ASSIGN_SLICE_WIDTH_MISMATCH S4.10/S5.1/S5.2 Slice assignment where source and destination slice widths differ
+      29:9    error ASSIGN_SLICE_WIDTH_MISMATCH S4.10/S5.1/S5.2 Slice assignment where source and destination slice widths differ
+      47:9    error ASSIGN_SLICE_WIDTH_MISMATCH S4.10/S5.1/S5.2 Slice assignment where source and destination slice widths differ

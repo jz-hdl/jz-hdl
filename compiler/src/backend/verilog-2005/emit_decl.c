@@ -1,15 +1,84 @@
-/*
- * emit_decl.c - Declaration emission for the Verilog-2005 backend.
- *
- * This file handles emitting module headers, port declarations, signal
- * declarations, and memory declarations.
+/**
+ * @file emit_decl.c
+ * @brief Module declaration emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
 #include "verilog_internal.h"
 #include "ir.h"
+#include "util.h"
+
+/**
+ * @brief Check whether a statement subtree writes a specific signal.
+ * @param stmt Statement subtree to inspect.
+ * @param signal_id Signal identifier to search for.
+ * @return Non-zero when the subtree assigns to `signal_id`.
+ */
+static int stmt_assigns_to_signal(const IR_Stmt *stmt, int signal_id);
+
+/**
+ * @brief Count statement nodes that may be traversed during stack allocation.
+ * @param stmt Statement subtree to measure.
+ * @return Node count, or `SIZE_MAX` if the count overflows.
+ */
+static size_t stmt_traversal_node_count(const IR_Stmt *stmt);
+
+/**
+ * @brief Collect selector-signal references used by nested select statements.
+ * @param stmt Statement subtree to inspect.
+ * @param ids Destination array for signal identifiers.
+ * @param count In-out count of collected identifiers.
+ * @param cap Maximum number of identifiers that fit in `ids`.
+ */
+static void collect_select_signals_from_stmt(const IR_Stmt *stmt, int *ids, int *count, int cap);
+
+/**
+ * @brief Return whether a signal is used as a select-selector expression.
+ * @param mod Module that owns the statements.
+ * @param signal_id Signal identifier to test.
+ * @return `true` when the signal drives any select selector.
+ */
+static bool signal_is_select_selector(const IR_Module *mod, int signal_id);
+
+/**
+ * @brief Sanitize a memory-init fragment for hex sidecar output.
+ * @param src Source text fragment.
+ * @param dst Destination buffer.
+ * @param dst_size Size of `dst` in bytes.
+ */
+static void mem_init_sanitize_fragment(const char *src,
+                                       char *dst,
+                                       size_t dst_size);
+
+/**
+ * @brief Read one bit from a packed memory-init word buffer.
+ * @param word_bytes Byte array for the packed word.
+ * @param bytes_per_word Number of bytes in each stored word.
+ * @param word_width Logical width of the stored word in bits.
+ * @param bit_from_msb Bit index counted from the most-significant bit.
+ * @return Bit value at the requested position.
+ */
+static unsigned mem_init_word_bit(const uint8_t *word_bytes,
+                                  int bytes_per_word,
+                                  int word_width,
+                                  int bit_from_msb);
+
+/**
+ * @brief Write a memory-init blob to a sidecar hex file.
+ * @param mod Module that owns the memory.
+ * @param mem Memory description being emitted.
+ * @param path_buf In-out buffer that receives the generated sidecar path.
+ * @param path_buf_size Size of `path_buf` in bytes.
+ * @return `0` on success, `-1` on failure.
+ */
+static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
+                                           const IR_Memory *mem,
+                                           char *path_buf,
+                                           size_t path_buf_size);
 
 /* -------------------------------------------------------------------------
  * Helper: determine if a statement assigns to a given signal
@@ -59,6 +128,54 @@ static int stmt_assigns_to_signal(const IR_Stmt *stmt, int signal_id)
     }
 }
 
+static size_t stmt_traversal_node_count(const IR_Stmt *stmt)
+{
+    size_t count = 0;
+    size_t added = 0;
+
+    if (!stmt) {
+        return 0;
+    }
+
+    count = 1;
+    switch (stmt->kind) {
+    case STMT_IF: {
+        const IR_IfStmt *ifs = &stmt->u.if_stmt;
+        added = stmt_traversal_node_count(ifs->then_block);
+        if (jz_size_add_checked(count, added, &count) != 0) return SIZE_MAX;
+        added = stmt_traversal_node_count(ifs->else_block);
+        if (jz_size_add_checked(count, added, &count) != 0) return SIZE_MAX;
+        for (const IR_Stmt *elif = ifs->elif_chain;
+             elif && elif->kind == STMT_IF;
+             elif = elif->u.if_stmt.elif_chain) {
+            added = stmt_traversal_node_count(elif->u.if_stmt.then_block);
+            if (jz_size_add_checked(count, added, &count) != 0) return SIZE_MAX;
+        }
+        break;
+    }
+    case STMT_SELECT: {
+        const IR_SelectStmt *sel = &stmt->u.select_stmt;
+        for (int i = 0; i < sel->num_cases; ++i) {
+            added = stmt_traversal_node_count(sel->cases[i].body);
+            if (jz_size_add_checked(count, added, &count) != 0) return SIZE_MAX;
+        }
+        break;
+    }
+    case STMT_BLOCK: {
+        const IR_BlockStmt *blk = &stmt->u.block;
+        for (int i = 0; i < blk->count; ++i) {
+            added = stmt_traversal_node_count(&blk->stmts[i]);
+            if (jz_size_add_checked(count, added, &count) != 0) return SIZE_MAX;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    return count;
+}
+
 /* -------------------------------------------------------------------------
  * Helper: determine if a port needs to be declared as reg
  * -------------------------------------------------------------------------
@@ -66,11 +183,31 @@ static int stmt_assigns_to_signal(const IR_Stmt *stmt, int signal_id)
 
 int module_port_needs_reg(const IR_Module *mod, int signal_id)
 {
+    size_t stack_cap = 0;
+    size_t stack_bytes = 0;
+    IR_Stmt **stack = NULL;
+    size_t top = 0;
+
     if (!mod) return 0;
 
-    IR_Stmt *stack[512];
-    int      top = 0;
-    const int stack_cap = (int)(sizeof(stack) / sizeof(stack[0]));
+    stack_cap = mod->async_block ? stmt_traversal_node_count(mod->async_block) : 0u;
+    for (int i = 0; i < mod->num_clock_domains; ++i) {
+        const IR_ClockDomain *cd = &mod->clock_domains[i];
+        size_t added = stmt_traversal_node_count(cd->statements);
+        if (jz_size_add_checked(stack_cap, added, &stack_cap) != 0) {
+            return 0;
+        }
+    }
+    if (stack_cap == 0) {
+        return 0;
+    }
+    if (jz_size_mul_checked(stack_cap, sizeof(IR_Stmt *), &stack_bytes) != 0) {
+        return 0;
+    }
+    stack = (IR_Stmt **)malloc(stack_bytes);
+    if (!stack) {
+        return 0;
+    }
 
     if (mod->async_block) {
         stack[top++] = mod->async_block;
@@ -110,19 +247,19 @@ int module_port_needs_reg(const IR_Module *mod, int signal_id)
         }
         case STMT_IF: {
             const IR_IfStmt *ifs = &stmt->u.if_stmt;
-            if (ifs->then_block && top < stack_cap) stack[top++] = ifs->then_block;
+            if (ifs->then_block) stack[top++] = ifs->then_block;
             IR_Stmt *elif = ifs->elif_chain;
-            while (elif && elif->kind == STMT_IF && top < stack_cap) {
+            while (elif && elif->kind == STMT_IF) {
                 const IR_IfStmt *eifs = &elif->u.if_stmt;
-                if (eifs->then_block && top < stack_cap) stack[top++] = eifs->then_block;
+                if (eifs->then_block) stack[top++] = eifs->then_block;
                 elif = eifs->elif_chain;
             }
-            if (ifs->else_block && top < stack_cap) stack[top++] = ifs->else_block;
+            if (ifs->else_block) stack[top++] = ifs->else_block;
             break;
         }
         case STMT_SELECT: {
             const IR_SelectStmt *sel = &stmt->u.select_stmt;
-            for (int i = 0; i < sel->num_cases && top < stack_cap; ++i) {
+            for (int i = 0; i < sel->num_cases; ++i) {
                 if (sel->cases[i].body) {
                     stack[top++] = sel->cases[i].body;
                 }
@@ -131,7 +268,7 @@ int module_port_needs_reg(const IR_Module *mod, int signal_id)
         }
         case STMT_BLOCK: {
             const IR_BlockStmt *blk = &stmt->u.block;
-            for (int i = 0; i < blk->count && top < stack_cap; ++i) {
+            for (int i = 0; i < blk->count; ++i) {
                 stack[top++] = &blk->stmts[i];
             }
             break;
@@ -139,12 +276,9 @@ int module_port_needs_reg(const IR_Module *mod, int signal_id)
         default:
             break;
         }
-
-        if (top >= stack_cap) {
-            break;
-        }
     }
 
+    free(stack);
     return 0;
 }
 
@@ -501,6 +635,9 @@ static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
                                            char *path_buf,
                                            size_t path_buf_size)
 {
+    FILE *fout = NULL;
+    char tmp_path[1024];
+
     if (!mod || !mem || !mem->init.blob || !path_buf || path_buf_size == 0) {
         return -1;
     }
@@ -519,8 +656,7 @@ static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
         return -1;
     }
 
-    FILE *fout = fopen(path_buf, "w");
-    if (!fout) {
+    if (jz_open_exclusive_temp_output(path_buf, &fout, tmp_path, sizeof(tmp_path)) != 0) {
         return -1;
     }
 
@@ -545,11 +681,10 @@ static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
         fputc('\n', fout);
     }
 
-    if (fflush(fout) != 0 || ferror(fout)) {
-        fclose(fout);
+    if (jz_commit_exclusive_temp_output(fout, tmp_path, path_buf) != 0) {
         return -1;
     }
-    return fclose(fout) == 0 ? 0 : -1;
+    return 0;
 }
 
 int emit_memory_initialization(FILE *out, const IR_Module *mod)

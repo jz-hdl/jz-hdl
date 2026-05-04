@@ -1,0 +1,6 @@
+
+=== @testbench RepeatIdxBoundaryDut ===
+  PASS  "IDX substitution respects word boundaries" (6/6 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

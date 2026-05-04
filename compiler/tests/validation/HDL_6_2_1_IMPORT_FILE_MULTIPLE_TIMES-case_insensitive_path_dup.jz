@@ -1,0 +1,41 @@
+// IMPORT_FILE_MULTIPLE_TIMES: Same file imported twice via distinct filesystem aliases.
+// Uses a symlink alias so canonical-path duplicate detection is portable across
+// case-sensitive and case-insensitive filesystems.
+
+@project IMPORT_FILE_MULTIPLE_TIMES_case_insensitive_path_dup
+
+    // Valid: first import of the library file using its declared casing.
+    @import "HDL_6_2_1_IMPORT_FILE_MULTIPLE_TIMES-happy_path_case_insensitive_path_dup_lib.jz";
+
+    // Trigger 1: same file imported again through a symlink alias.
+    @import "HDL_6_2_1_IMPORT_FILE_MULTIPLE_TIMES-happy_path_case_insensitive_path_dup_lib_alias.jz";
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_a ImportedMod {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

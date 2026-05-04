@@ -1,13 +1,10 @@
 /**
- * @file ir_mem_bind.c
- * @brief Memory port binding pass for IR construction.
+ * @file ir_build_memory.c
+ * @brief Memory construction and memory-port binding helpers for IR building.
  *
- * This file implements a post-IR-build binding pass that infers concrete
- * signal connections for IR_MemoryPort entries by walking the AST while
- * semantic context (JZModuleScope, JZMemPortRef) is still available.
- *
- * The pass runs after jz_ir_build_design() has constructed IR_Module and
- * IR_Memory objects, but before semantic scopes are discarded.
+ * This file builds IR memory objects from AST MEM declarations and also
+ * performs the follow-on binding pass that resolves concrete signals for
+ * IR_MemoryPort entries while semantic scope data is still available.
  */
 
 #include <string.h>
@@ -16,15 +13,16 @@
 
 #include "../../include/ast.h"
 #include "../../include/ir_mem_bind.h"
+#include "../parser/parser_internal.h"
 #include "../sem/driver_internal.h"
 #include "ir_internal.h"
 
 /**
- * @brief Find an IR_Memory by name within a module.
+ * @brief Find a memory object by name within a module.
  *
- * @param mod  IR module.
+ * @param mod  IR module to search.
  * @param name Memory name.
- * @return Pointer to IR_Memory, or NULL if not found.
+ * @return Matching memory object, or NULL if not found.
  */
 static IR_Memory *ir_find_memory_by_name(IR_Module *mod, const char *name)
 {
@@ -41,11 +39,11 @@ static IR_Memory *ir_find_memory_by_name(IR_Module *mod, const char *name)
 }
 
 /**
- * @brief Find an IR_MemoryPort by name on a given memory.
+ * @brief Find a named memory port on a memory object.
  *
- * @param mem       IR memory.
+ * @param mem       Memory object to search.
  * @param port_name Port name.
- * @return Pointer to IR_MemoryPort, or NULL if not found.
+ * @return Matching memory port, or NULL if not found.
  */
 static IR_MemoryPort *ir_find_memory_port_by_name(IR_Memory *mem, const char *port_name)
 {
@@ -59,6 +57,33 @@ static IR_MemoryPort *ir_find_memory_port_by_name(IR_Memory *mem, const char *po
         }
     }
     return NULL;
+}
+
+/**
+ * @brief Resolve an imported source filename to its canonical path when available.
+ *
+ * @param filename Source filename recorded on an AST node.
+ * @return Resolved path when the import table provides one, otherwise the original filename.
+ */
+static const char *ir_resolve_imported_filename(const char *filename)
+{
+    if (!filename || !*filename) return filename;
+    if (strchr(filename, '/')) return filename;
+
+    size_t count = g_imported_filenames_len;
+    if (g_imported_resolved_paths_len < count) {
+        count = g_imported_resolved_paths_len;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (g_imported_filenames[i] &&
+            strcmp(g_imported_filenames[i], filename) == 0 &&
+            g_imported_resolved_paths[i] &&
+            *g_imported_resolved_paths[i]) {
+            return g_imported_resolved_paths[i];
+        }
+    }
+
+    return filename;
 }
 
 /**
@@ -1003,12 +1028,14 @@ int ir_build_memories_for_module(const JZModuleScope *scope,
                     /* Resolve relative path against the source file's
                      * directory so the backend can open it from any CWD. */
                     if (raw_file_path[0] != '/' && mem_decl->loc.filename) {
-                        const char *slash = strrchr(mem_decl->loc.filename, '/');
+                        const char *resolved_filename =
+                            ir_resolve_imported_filename(mem_decl->loc.filename);
+                        const char *slash = strrchr(resolved_filename, '/');
                         if (slash) {
-                            size_t dir_len = (size_t)(slash - mem_decl->loc.filename);
+                            size_t dir_len = (size_t)(slash - resolved_filename);
                             char rel_buf[1024];
                             snprintf(rel_buf, sizeof(rel_buf), "%.*s/%s",
-                                     (int)dir_len, mem_decl->loc.filename, raw_file_path);
+                                     (int)dir_len, resolved_filename, raw_file_path);
                             char *abs = realpath(rel_buf, NULL);
                             if (abs) {
                                 ir_mem->init.file_path = ir_strdup_arena(arena, abs);

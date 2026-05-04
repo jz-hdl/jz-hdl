@@ -149,8 +149,15 @@ Every signal in the simulation hierarchy has a **stable, deterministic hierarchi
 ```
 <instance_name>.<signal_name>
 <instance_name>.<sub_instance>.<signal_name>
-<instance_name>.<mem_name>.<port_name>
+<instance_name>.<mem_name>.<port_name>.addr
+<instance_name>.<mem_name>.<port_name>.data
+<instance_name>.<mem_name>.<port_name>.wdata
 ```
+
+For memory observability, the stable hierarchical name applies only to concrete pseudo-fields. Bare
+`<instance_name>.<mem_name>.<port_name>` is a memory port handle, not an observable signal. Indexed
+asynchronous reads such as `<instance_name>.<mem_name>.<port_name>[<address>]` are access expressions,
+not stable hierarchical names.
 
 The elaboration process must produce identical hierarchical paths across compilations given the same source. This is critical for:
 - Waveform dumps (VCD/FST)
@@ -1077,9 +1084,8 @@ Seed: 0xDEADBEEF
 ### 12.1 Testbench Execution
 
 ```text
-jz-hdl --test <file.jz>                     # Run all testbenches in file
-jz-hdl --test <file.jz> --seed=<hex>        # Fixed random seed for reproducibility
-jz-hdl --test <file.jz> --filter="<pattern>" # Run only tests matching pattern
+jz-hdl --test <file.jz>                      # Run all testbenches in file
+jz-hdl --test <file.jz> --seed=<hex>         # Fixed random seed for reproducibility
 jz-hdl --test <file.jz> --verbose            # Print all assertion results (pass and fail)
 ```
 

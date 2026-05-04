@@ -1,3 +1,0 @@
-File: 5_4_SELECT_DEFAULT_RECOMMENDED_ASYNC-complete_coverage_no_default.jz
-      19:9    warn  SELECT_DEFAULT_RECOMMENDED_ASYNC S5.4/S8.3 ASYNCHRONOUS SELECT without DEFAULT (may cause floating nets)
-      43:9    warn  SELECT_DEFAULT_RECOMMENDED_ASYNC S5.4/S8.3 ASYNCHRONOUS SELECT without DEFAULT (may cause floating nets)

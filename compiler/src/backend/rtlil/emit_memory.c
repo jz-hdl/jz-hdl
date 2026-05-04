@@ -1,12 +1,6 @@
-/*
- * emit_memory.c - Memory cell emission for the RTLIL backend.
- *
- * Memory accesses in RTLIL are represented by $memrd_v2 and $memwr_v2
- * cells. These cells reference a named memory declared in the module.
- *
- * Note: Memory reads that appear inline in expressions are handled by
- * emit_cells.c (EXPR_MEM_READ). This file handles the standalone
- * memory write cells that correspond to STMT_MEM_WRITE in the IR.
+/**
+ * @file emit_memory.c
+ * @brief Emits RTLIL memory initialization and write-port support cells.
  */
 #include <stdio.h>
 #include <string.h>
@@ -17,9 +11,104 @@
 /* Reuse alias helpers from Verilog backend. */
 #include "backend/verilog-2005/verilog_internal.h"
 
-/* Forward declaration. */
+/**
+ * @brief Build an all-zero constant sigspec string.
+ * @param buf Destination buffer.
+ * @param buf_size Size of `buf` in bytes.
+ * @param width Bit width to emit.
+ */
 static void const_val_sigspec_zero(char *buf, int buf_size, int width);
 static int s_mem_emit_errors = 0;
+
+/**
+ * @brief Append text to a sigspec buffer.
+ * @param buf Destination buffer.
+ * @param buf_size Size of `buf` in bytes.
+ * @param pos In-out write position within `buf`.
+ * @param text Text to append.
+ * @return `0` on success, or `-1` if the append would overflow.
+ */
+static int append_sigspec_text(char *buf, size_t buf_size, size_t *pos,
+                               const char *text);
+
+/**
+ * @brief Check whether a memory-init blob matches the declared memory size.
+ * @param mem Memory declaration to validate.
+ * @return Nonzero when the blob size matches the declared depth and width.
+ */
+static int mem_init_blob_has_expected_size(const IR_Memory *mem);
+
+/**
+ * @brief Read one bit from a packed memory-init word.
+ * @param word_bytes Packed bytes for a single memory word.
+ * @param bytes_per_word Size of `word_bytes` in bytes.
+ * @param word_width Declared word width in bits.
+ * @param bit_from_msb Zero-based bit index counted from the most-significant
+ * output bit.
+ * @return Selected bit value as `0` or `1`.
+ */
+static unsigned mem_init_word_bit(const uint8_t *word_bytes,
+                                  int bytes_per_word, int word_width,
+                                  int bit_from_msb);
+
+/**
+ * @brief Emit one initialized memory word as an RTLIL constant.
+ * @param out Destination RTLIL stream.
+ * @param word_bytes Packed bytes for a single memory word.
+ * @param bytes_per_word Size of `word_bytes` in bytes.
+ * @param word_width Declared word width in bits.
+ */
+static void rtlil_emit_blob_word_const(FILE *out, const uint8_t *word_bytes,
+                                       int bytes_per_word, int word_width);
+
+/**
+ * @brief Emit one `$meminit_v2` cell for a memory address.
+ * @param out Destination RTLIL stream.
+ * @param mem Memory being initialized.
+ * @param addr Address index to initialize.
+ */
+static void emit_meminit_cell(FILE *out, const IR_Memory *mem, int addr);
+
+static int append_sigspec_text(char *buf,
+                               size_t buf_size,
+                               size_t *pos,
+                               const char *text)
+{
+    if (!buf || buf_size == 0 || !pos || !text) {
+        return -1;
+    }
+    if (*pos >= buf_size) {
+        buf[buf_size - 1] = '\0';
+        return -1;
+    }
+
+    int written = snprintf(buf + *pos, buf_size - *pos, "%s", text);
+    if (written < 0) {
+        buf[*pos] = '\0';
+        return -1;
+    }
+    if ((size_t)written >= buf_size - *pos) {
+        *pos = buf_size - 1;
+        buf[*pos] = '\0';
+        return -1;
+    }
+
+    *pos += (size_t)written;
+    return 0;
+}
+
+static int mem_init_blob_has_expected_size(const IR_Memory *mem)
+{
+    if (!mem || !mem->init.blob) return 0;
+
+    int width = mem->word_width > 0 ? mem->word_width : 1;
+    size_t bytes_per_word = (size_t)((width + 7) / 8);
+    size_t depth = mem->depth > 0 ? (size_t)mem->depth : 0u;
+    size_t expected_num_bytes = depth * bytes_per_word;
+
+    return mem->init.blob->num_bytes >= 0 &&
+           (size_t)mem->init.blob->num_bytes == expected_num_bytes;
+}
 
 static unsigned mem_init_word_bit(const uint8_t *word_bytes,
                                   int bytes_per_word,
@@ -88,15 +177,14 @@ static void emit_meminit_cell(FILE *out,
     fprintf(out, "end\n");
 }
 
-/* -------------------------------------------------------------------------
- * Collect memory write statements from the statement tree
- * -------------------------------------------------------------------------
+/**
+ * @struct MemWriteInfo
+ * @brief Captures one memory write discovered in a statement tree.
  */
-
 typedef struct {
-    const IR_MemWriteStmt *write;
-    const IR_Expr *guard_condition;  /* NULL if unconditional. */
-    int clock_domain_id;
+    const IR_MemWriteStmt *write;     /**< Memory write statement to emit. */
+    const IR_Expr *guard_condition;   /**< Guard condition, or `NULL` if unconditional. */
+    int clock_domain_id;              /**< Source clock-domain ID, or `-1` for async logic. */
 } MemWriteInfo;
 
 #define MAX_MEM_WRITES 64
@@ -104,6 +192,13 @@ typedef struct {
 static int s_mem_writes_count = 0;
 static MemWriteInfo s_mem_writes[MAX_MEM_WRITES];
 
+/**
+ * @brief Collect memory writes reachable from a statement subtree.
+ * @param stmt Statement subtree to walk.
+ * @param guard Guard condition inherited from enclosing control flow.
+ * @param cd_id Clock-domain identifier for the enclosing process, or `-1` for
+ * async logic.
+ */
 static void collect_mem_writes_from_stmt(const IR_Stmt *stmt,
                                           const IR_Expr *guard,
                                           int cd_id)
@@ -153,11 +248,12 @@ static void collect_mem_writes_from_stmt(const IR_Stmt *stmt,
     }
 }
 
-/* -------------------------------------------------------------------------
- * Emit $memwr_v2 cells for collected writes
- * -------------------------------------------------------------------------
+/**
+ * @brief Emit one `$memwr_v2` cell for a collected memory write.
+ * @param out Destination RTLIL stream.
+ * @param mod Module that owns the target memory.
+ * @param info Collected write information to emit.
  */
-
 static void emit_memwr_cell(FILE *out, const IR_Module *mod,
                               const MemWriteInfo *info)
 {
@@ -203,17 +299,28 @@ static void emit_memwr_cell(FILE *out, const IR_Module *mod,
 
         /* Replicate the 1-bit enable to match the data width.
          * Build a concat: { guard guard ... guard } */
-        int pos = snprintf(en_ss, sizeof(en_ss), "{ ");
-        for (int b = 0; b < width && pos < (int)sizeof(en_ss) - 4; ++b) {
+        size_t pos = 0;
+        int overflow = append_sigspec_text(en_ss, sizeof(en_ss), &pos, "{ ");
+        for (int b = 0; b < width && overflow == 0; ++b) {
             if (b > 0) {
-                en_ss[pos++] = ' ';
+                overflow = append_sigspec_text(en_ss, sizeof(en_ss), &pos, " ");
             }
-            int n = snprintf(en_ss + pos, sizeof(en_ss) - (size_t)pos,
-                             "%s", guard_ss);
-            pos += n;
+            if (overflow == 0) {
+                overflow = append_sigspec_text(en_ss, sizeof(en_ss), &pos,
+                                               guard_ss);
+            }
         }
-        pos += snprintf(en_ss + pos, sizeof(en_ss) - (size_t)pos, " }");
-        en_ss[pos] = '\0';
+        if (overflow == 0) {
+            overflow = append_sigspec_text(en_ss, sizeof(en_ss), &pos, " }");
+        }
+        if (overflow != 0) {
+            fprintf(stderr,
+                    "error: memory write enable for memory %s in module %s exceeds RTLIL sigspec buffer\n",
+                    mw->memory_name,
+                    mod->name ? mod->name : "?");
+            s_mem_emit_errors++;
+            const_val_sigspec_zero(en_ss, sizeof(en_ss), width);
+        }
     } else {
         /* Unconditional write: all bits enabled. */
         int pos = snprintf(en_ss, sizeof(en_ss), "%d'", width);
@@ -315,6 +422,21 @@ void rtlil_emit_memory_cells(FILE *out, const IR_Module *mod)
             continue;
         }
         if (mem->init_kind != MEM_INIT_BLOB || !mem->init.blob) {
+            continue;
+        }
+        if (!mem_init_blob_has_expected_size(mem)) {
+            int width = mem->word_width > 0 ? mem->word_width : 1;
+            int bytes_per_word = (width + 7) / 8;
+            size_t expected_num_bytes =
+                (size_t)(mem->depth > 0 ? mem->depth : 0) *
+                (size_t)bytes_per_word;
+            fprintf(stderr,
+                    "error: memory init blob size mismatch for memory %s in module %s (expected %zu bytes, got %d)\n",
+                    mem->name ? mem->name : "jz_mem",
+                    mod->name ? mod->name : "?",
+                    expected_num_bytes,
+                    mem->init.blob->num_bytes);
+            s_mem_emit_errors++;
             continue;
         }
         for (int addr = 0; addr < mem->depth; ++addr) {

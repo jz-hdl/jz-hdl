@@ -1,12 +1,15 @@
 /**
  * @file sim_state.c
- * @brief Simulation state creation, initialization, lookup, and NBA apply.
+ * @brief Builds and manages simulator state for module instances.
  */
 
 #include "sim_state.h"
 #include "sim_perf.h"
+#include "util.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 /* ---- PRNG ---- */
 
@@ -28,12 +31,56 @@ typedef struct {
     int  cap;
 } SigIdSet;
 
+/**
+ * @brief Append a signal ID to a set when it is not already present.
+ * @param s Mutable set being extended.
+ * @param id Signal ID to add.
+ */
+static void sigset_add(SigIdSet *s, int id);
+/**
+ * @brief Collect all signal reads reachable from an expression tree.
+ * @param expr Expression to scan.
+ * @param reads Set that receives referenced signal IDs.
+ */
+static void collect_expr_reads(const IR_Expr *expr, SigIdSet *reads);
+/**
+ * @brief Collect read and write signal dependencies for a statement tree.
+ * @param stmt Statement to scan.
+ * @param reads Set that receives read signal IDs.
+ * @param writes Set that receives written signal IDs.
+ */
+static void collect_stmt_deps(const IR_Stmt *stmt, SigIdSet *reads, SigIdSet *writes);
+/**
+ * @brief Convert a set of signal IDs into deduplicated signal-table indices.
+ * @param ctx Simulation context that owns the signal table.
+ * @param ids Signal ID set to resolve.
+ * @param out_count Receives the number of returned indices.
+ * @return Newly allocated index array, or `NULL` when the set resolves to no indices or allocation fails.
+ */
+static int *sigids_to_indices(SimContext *ctx, const SigIdSet *ids, int *out_count);
+/**
+ * @brief Split the async block into dependency-tracked execution chunks.
+ * @param ctx Simulation context whose module async block is analyzed.
+ */
+static void build_async_chunks(SimContext *ctx);
+
 static void sigset_add(SigIdSet *s, int id) {
     for (int i = 0; i < s->count; i++)
         if (s->ids[i] == id) return;
     if (s->count >= s->cap) {
-        s->cap = s->cap ? s->cap * 2 : 8;
-        s->ids = realloc(s->ids, (size_t)s->cap * sizeof(int));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        int *new_ids = NULL;
+        if (jz_size_grow_doubling_checked((size_t)s->cap,
+                                          (size_t)s->count + 1,
+                                          8,
+                                          &new_cap) != 0 ||
+            new_cap > (size_t)INT_MAX ||
+            jz_size_mul_checked(new_cap, sizeof(int), &new_bytes) != 0) return;
+        new_ids = realloc(s->ids, new_bytes);
+        if (!new_ids) return;
+        s->ids = new_ids;
+        s->cap = (int)new_cap;
     }
     s->ids[s->count++] = id;
 }
@@ -137,13 +184,13 @@ static void collect_stmt_deps(const IR_Stmt *stmt, SigIdSet *reads, SigIdSet *wr
     }
 }
 
-/**
- * Convert signal IDs to ctx->signals[] indices, deduplicating.
- * Returns allocated array and sets *out_count. Caller frees.
- */
 static int *sigids_to_indices(SimContext *ctx, const SigIdSet *ids, int *out_count) {
     if (ids->count == 0) { *out_count = 0; return NULL; }
     int *indices = malloc((size_t)ids->count * sizeof(int));
+    if (!indices) {
+        *out_count = 0;
+        return NULL;
+    }
     int n = 0;
     for (int i = 0; i < ids->count; i++) {
         int sig_id = ids->ids[i];
@@ -164,10 +211,6 @@ static int *sigids_to_indices(SimContext *ctx, const SigIdSet *ids, int *out_cou
     return indices;
 }
 
-/**
- * Build async chunks from the module's async_block.
- * Splits top-level STMT_BLOCK into individual chunks with dependency sets.
- */
 static void build_async_chunks(SimContext *ctx) {
     const IR_Stmt *async = ctx->module->async_block;
     if (!async) {
@@ -188,6 +231,10 @@ static void build_async_chunks(SimContext *ctx) {
     }
 
     ctx->async_chunks = calloc((size_t)n, sizeof(SimAsyncChunk));
+    if (!ctx->async_chunks) {
+        ctx->num_async_chunks = 0;
+        return;
+    }
     ctx->num_async_chunks = n;
 
     for (int i = 0; i < n; i++) {
@@ -211,14 +258,66 @@ static void build_async_chunks(SimContext *ctx) {
 
 SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
                            uint32_t rng_seed) {
+    const int max_sim_width = SIM_VAL_WORDS * 64;
+    if (!module) return NULL;
     SimContext *ctx = calloc(1, sizeof(SimContext));
     if (!ctx) return NULL;
 
     ctx->module = module;
     ctx->design = design;
     ctx->rng_state = rng_seed;
+
+    for (int i = 0; i < module->num_signals; i++) {
+        const IR_Signal *sig = &module->signals[i];
+        if (sig->width > max_sim_width) {
+            fprintf(stderr,
+                    "error: signal '%s' width %d exceeds simulator capacity (%d bits)\n",
+                    sig->name ? sig->name : "?",
+                    sig->width,
+                    max_sim_width);
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+    }
+
+    for (int i = 0; i < module->num_memories; i++) {
+        const IR_Memory *mem = &module->memories[i];
+        size_t mem_bytes = 0;
+        if (mem->word_width > max_sim_width) {
+            fprintf(stderr,
+                    "error: memory '%s' word width %d exceeds simulator capacity (%d bits)\n",
+                    mem->name ? mem->name : "?",
+                    mem->word_width,
+                    max_sim_width);
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+        if ((unsigned)mem->depth > jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_DEPTH)) {
+            fprintf(stderr,
+                    "error: memory '%s' depth %d exceeds simulator safety limit (%u words)\n",
+                    mem->name ? mem->name : "?",
+                    mem->depth,
+                    (unsigned)jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_DEPTH));
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+        if (jz_size_mul_checked((size_t)mem->depth, sizeof(SimValue), &mem_bytes) != 0 ||
+            mem_bytes > jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES)) {
+            fprintf(stderr,
+                    "error: memory '%s' allocation exceeds simulator safety limit (%u byte(s))\n",
+                    mem->name ? mem->name : "?",
+                    (unsigned)jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES));
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+    }
+
     ctx->num_signals = module->num_signals;
     ctx->signals = calloc((size_t)module->num_signals, sizeof(SimSignalEntry));
+    if (module->num_signals > 0 && !ctx->signals) {
+        sim_ctx_destroy(ctx);
+        return NULL;
+    }
 
     /* Find max signal ID to size the lookup map */
     int max_id = -1;
@@ -229,7 +328,16 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
     ctx->max_sig_id = max_id;
     ctx->sig_id_map = NULL;
     if (max_id >= 0) {
-        ctx->sig_id_map = malloc((size_t)(max_id + 1) * sizeof(int));
+        size_t sig_id_map_bytes = 0;
+        if (jz_size_mul_checked((size_t)(max_id + 1), sizeof(int), &sig_id_map_bytes) != 0) {
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+        ctx->sig_id_map = malloc(sig_id_map_bytes);
+        if (!ctx->sig_id_map) {
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
         for (int i = 0; i <= max_id; i++)
             ctx->sig_id_map[i] = -1;
     }
@@ -266,6 +374,10 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
 
     /* Allocate per-signal dirty flags (all dirty initially for first settle) */
     ctx->sig_dirty = calloc((size_t)module->num_signals, sizeof(uint8_t));
+    if (module->num_signals > 0 && !ctx->sig_dirty) {
+        sim_ctx_destroy(ctx);
+        return NULL;
+    }
     for (int i = 0; i < module->num_signals; i++)
         ctx->sig_dirty[i] = 1;
 
@@ -273,6 +385,10 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
     ctx->num_memories = module->num_memories;
     if (module->num_memories > 0) {
         ctx->memories = calloc((size_t)module->num_memories, sizeof(SimMemEntry));
+        if (!ctx->memories) {
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
         for (int i = 0; i < module->num_memories; i++) {
             const IR_Memory *mem = &module->memories[i];
             SimMemEntry *me = &ctx->memories[i];
@@ -280,6 +396,10 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
             me->word_width = mem->word_width;
             me->depth = mem->depth;
             me->cells = calloc((size_t)mem->depth, sizeof(SimValue));
+            if (mem->depth > 0 && !me->cells) {
+                sim_ctx_destroy(ctx);
+                return NULL;
+            }
             for (int j = 0; j < mem->depth; j++) {
                 if (mem->init_kind == MEM_INIT_FILE ||
                     mem->init_kind == MEM_INIT_BLOB) {
@@ -305,6 +425,10 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
     if (module->num_instances > 0 && design) {
         ctx->children = calloc((size_t)module->num_instances,
                                sizeof(SimChildInstance));
+        if (!ctx->children) {
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
         for (int i = 0; i < module->num_instances; i++) {
             const IR_Instance *inst = &module->instances[i];
             SimChildInstance *ci = &ctx->children[i];
@@ -363,6 +487,10 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
             ci->num_input_maps = 0;
             ci->output_maps = n_out > 0 ? malloc((size_t)n_out * sizeof(SimPortMapping)) : NULL;
             ci->num_output_maps = 0;
+            if ((n_in > 0 && !ci->input_maps) || (n_out > 0 && !ci->output_maps)) {
+                sim_ctx_destroy(ctx);
+                return NULL;
+            }
 
             for (int p = 0; p < num_conn; p++) {
                 const IR_InstanceConnection *conn = &inst->connections[p];

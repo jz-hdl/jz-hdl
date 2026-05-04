@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified config-driven pipeline runner for audit and security pipelines."""
+"""Unified config-driven pipeline runner for named repo workflows."""
 
 from __future__ import annotations
 
@@ -54,9 +54,9 @@ OPTION_FLAG_NAMES = {
 OPTION_PIPELINE_NAMES = {
     "spec": "audit",
     "include_parents": "audit",
-    "roots": "security",
-    "shard_size": "security",
-    "include_third_party": "security",
+    "roots": "security or doxygen",
+    "shard_size": "security or doxygen",
+    "include_third_party": "security or doxygen",
 }
 
 
@@ -506,7 +506,7 @@ def discover_source_files(
     return sorted(set(files))
 
 
-def resolve_security_targets(
+def resolve_source_shard_targets(
     config: PipelineConfig, args: argparse.Namespace
 ) -> tuple[list[ResolvedTarget], int, int]:
     discover = config.targeting["discover"]
@@ -589,7 +589,7 @@ def resolve_targets(
     if discover_type == "markdown_headings" and group_type == "leaf_sections":
         return resolve_spec_targets(config, args)
     if discover_type == "source_files" and group_type == "fixed_size_shards":
-        return resolve_security_targets(config, args)
+        return resolve_source_shard_targets(config, args)
     raise ValueError(
         f"unsupported targeting resolver: {discover_type} + {group_type}"
     )
@@ -818,7 +818,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Run a named pipeline with the shared pipeline runner. "
-            "Pass the pipeline name last: audit or security."
+            "Pass the pipeline name last: audit, security, doxygen, or project_ready."
         ),
     )
     parser.add_argument(
@@ -882,7 +882,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         default=12,
         metavar="N",
-        help="Number of source files per shard for the security pipeline.",
+        help="Number of source files per shard for source-sharded pipelines.",
     )
     parser.add_argument(
         "--include-third-party",
@@ -910,7 +910,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     parser.add_argument(
         "pipeline_name",
-        choices=("audit", "security", "project_ready"),
+        choices=("audit", "security", "doxygen", "project_ready"),
         help="Pipeline to run.",
     )
 

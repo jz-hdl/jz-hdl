@@ -1,8 +1,6 @@
-/*
- * common.c - Shared utilities for the RTLIL backend.
- *
- * This file contains helper functions, auto-ID counter, and signal lookup
- * functions used across the RTLIL backend.
+/**
+ * @file common.c
+ * @brief Implements shared utilities for the RTLIL backend.
  */
 #include <stdio.h>
 #include <string.h>

@@ -14,6 +14,15 @@
 /* Global perf context */
 PerfContext g_perf;
 
+/* ---- Private declarations ---- */
+
+/**
+ * @brief Print a nanosecond duration using human-friendly units.
+ *
+ * @param ns Duration in nanoseconds.
+ */
+static void print_time(uint64_t ns);
+
 static const char *timer_names[PERF__COUNT] = {
     [PERF_PROPAGATE_INPUTS]     = "propagate_inputs",
     [PERF_PROPAGATE_OUTPUTS]    = "propagate_outputs",

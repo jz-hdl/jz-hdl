@@ -1,3 +1,8 @@
+/**
+ * @file driver_expr.c
+ * @brief Expression-level semantic checks for observability and read rules.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -9,6 +14,12 @@
 #include "rules.h"
 #include "driver_internal.h"
 
+/**
+ * @brief Resolve a qualified GLOBAL constant declaration for observability checks.
+ * @param qname Qualified name in `global.const` form.
+ * @param project_symbols Project-level symbols used for lookup.
+ * @return Matching CONST declaration, or `NULL` when none exists.
+ */
 static const JZASTNode *sem_find_global_const_decl_for_observability(
     const char *qname,
     const JZBuffer *project_symbols)
@@ -51,6 +62,14 @@ static const JZASTNode *sem_find_global_const_decl_for_observability(
     return NULL;
 }
 
+/**
+ * @brief Evaluate an expression as an unsigned integer for observability checks.
+ * @param expr Expression node to evaluate.
+ * @param mod_scope Module scope used for local CONST lookup.
+ * @param project_symbols Project-level symbols used for GLOBAL and CONFIG lookup.
+ * @param out Receives the evaluated value on success.
+ * @return Non-zero on success, or zero when the expression is not statically known.
+ */
 static int sem_eval_const_expr_u64_for_observability(
     const JZASTNode *expr,
     const JZModuleScope *mod_scope,

@@ -1,0 +1,6 @@
+
+=== @testbench ImportedTbDirectiveDut ===
+  PASS  "imported module is in scope" (1/1 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

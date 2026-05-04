@@ -1,0 +1,56 @@
+// TB_BUS_WIRE_EXPANSION_NAMING: scalar and arrayed BUS wire declarations
+// expand to the documented testbench wire names from §5.2.
+
+@testbench TbBusWireExpansionNamingDut
+    @import "TB_5_2_TMODE_TB_BUS_WIRE_EXPANSION_NAMING-happy_path_helper_lib.jz";
+
+    BUS CTRL_BUS {
+        OUT [16] ADDR;
+        OUT [1]  CMD;
+        IN  [1]  VALID;
+    }
+
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        keep [1];
+        q [1];
+        BUS CTRL_BUS scalar;
+        BUS CTRL_BUS [2] lanes;
+    }
+
+    TEST "bus wire names expand for scalar and array declarations" {
+        @new dut TbBusWireExpansionNamingDut {
+            clk [1] = clk;
+            keep [1] = keep;
+            q [1] = q;
+        }
+
+        @setup {
+            keep <= 1'b1;
+            scalar_ADDR <= 16'h1234;
+            scalar_CMD <= 1'b1;
+            scalar_VALID <= 1'b0;
+            lanes0_ADDR <= 16'h00AA;
+            lanes0_CMD <= 1'b0;
+            lanes0_VALID <= 1'b1;
+            lanes1_ADDR <= 16'h00BB;
+            lanes1_CMD <= 1'b1;
+            lanes1_VALID <= 1'b0;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(q, 1'b1)
+        @expect_equal(scalar_ADDR, 16'h1234)
+        @expect_equal(scalar_CMD, 1'b1)
+        @expect_equal(scalar_VALID, 1'b0)
+        @expect_equal(lanes0_ADDR, 16'h00AA)
+        @expect_equal(lanes0_CMD, 1'b0)
+        @expect_equal(lanes0_VALID, 1'b1)
+        @expect_equal(lanes1_ADDR, 16'h00BB)
+        @expect_equal(lanes1_CMD, 1'b1)
+        @expect_equal(lanes1_VALID, 1'b0)
+    }
+@endtb

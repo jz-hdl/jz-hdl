@@ -11,6 +11,9 @@
 
 #include <stdint.h>
 
+/**
+ * @brief Opaque writer for JZW waveform output.
+ */
 typedef struct JZWWriter JZWWriter;
 
 /**
@@ -26,11 +29,25 @@ JZWWriter *jzw_open(const char *filename, uint64_t timescale_ps);
  * @brief Set simulation metadata.
  *
  * Must be called before jzw_end_definitions().
+ *
+ * @param w JZW writer.
+ * @param key Metadata key to upsert in the `meta` table.
+ * @param value Metadata value to store for `key`.
  */
 void jzw_set_meta(JZWWriter *w, const char *key, const char *value);
 
 /**
  * @brief Add a clock definition to the clocks table.
+ *
+ * @param w JZW writer.
+ * @param name Clock name.
+ * @param period_ps Nominal full clock period in picoseconds.
+ * @param phase_ps Clock phase offset in picoseconds.
+ * @param jitter_pp_ps Configured peak-to-peak jitter in picoseconds.
+ * @param jitter_sigma_ps Gaussian jitter sigma in picoseconds.
+ * @param drift_max_ppm Configured maximum drift in parts per million.
+ * @param drift_actual_ppm Selected drift value for this run in parts per million.
+ * @param drifted_period_ps Full clock period after applying drift.
  */
 void jzw_add_clock(JZWWriter *w, const char *name, uint64_t period_ps,
                    uint64_t phase_ps, uint64_t jitter_pp_ps,
@@ -54,6 +71,8 @@ int jzw_add_signal(JZWWriter *w, const char *scope, const char *name,
 
 /**
  * @brief Finalize definitions and begin accepting value changes.
+ *
+ * @param w JZW writer.
  */
 void jzw_end_definitions(JZWWriter *w);
 
@@ -73,7 +92,7 @@ void jzw_set_time(JZWWriter *w, uint64_t time_ps);
  * @param w      JZW writer.
  * @param sig_id Signal ID returned by jzw_add_signal().
  * @param value  Signal value (up to 64 bits).
- * @param width  Signal width.
+ * @param width  Signal width in bits for binary string formatting.
  */
 void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width);
 
@@ -86,11 +105,11 @@ void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width);
  * @param signal_id Signal ID, or -1 for global annotations.
  * @param message   Optional message text (may be NULL).
  * @param color     Optional color name (may be NULL).
- * @param end_time  Optional end time for range annotations, or 0 for point.
+ * @param end_time  Optional end time for range annotations, or `0` for a point annotation.
  */
 void jzw_add_annotation(JZWWriter *w, uint64_t time_ps, const char *type,
-                         int signal_id, const char *message,
-                         const char *color, uint64_t end_time);
+                        int signal_id, const char *message,
+                        const char *color, uint64_t end_time);
 
 /**
  * @brief Set the simulation end time and close the database.

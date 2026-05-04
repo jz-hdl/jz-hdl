@@ -1,2 +1,0 @@
-File: 10_4_TEMPLATE_RESET_LOGIC_FORBIDDEN-reset_style_if.jz
-      13:5    error TEMPLATE_RESET_LOGIC_FORBIDDEN S10.4 Reset-style conditional logic is not allowed inside templates; keep reset handling at the callsite or enclosing SYNCHRONOUS block

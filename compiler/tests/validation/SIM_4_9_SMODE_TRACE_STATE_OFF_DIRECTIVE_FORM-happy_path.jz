@@ -1,0 +1,38 @@
+// TRACE_STATE_OFF_DIRECTIVE_FORM: valid @trace(state=off) syntax in @simulation.
+
+@module TraceStateOffDirectiveFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation TraceStateOffDirectiveFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut TraceStateOffDirectiveFormDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @trace(state=off)
+    @run(ns=10)
+@endsim

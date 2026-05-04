@@ -1,0 +1,2 @@
+File: SIM_4_11_SMODE_ALERT_MESSAGE_STRING_LITERAL-non_string_message.jz
+      38:17   error PARSE000 parse error near token 'label': expected string literal for @alert message (orig: PARSE000)

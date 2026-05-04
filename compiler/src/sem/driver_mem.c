@@ -1,6 +1,13 @@
+/**
+ * @file driver_mem.c
+ * @brief Semantic checks for MEM declarations, initializers, and access rules.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 
 #include "sem_driver.h"
@@ -8,6 +15,7 @@
 #include "driver_internal.h"
 #include "chip_data.h"
 #include "path_security.h"
+#include "../parser/parser_internal.h"
 
 /* Provided by driver.c; used here to enforce x-free MEM initialization
  * literals consistent with the Observability Rule and literal semantics.
@@ -17,26 +25,31 @@ int sem_literal_has_z_bits(const char *lex);
 #include "rules.h"
 #include "driver_internal.h"
 
-/* -------------------------------------------------------------------------
- *  MEM helpers (declaration/introspection) used by MEM_* rules
- * -------------------------------------------------------------------------
+/**
+ * @brief Validate an aggregate-style MUX declaration.
+ * @param mux_decl MUX declaration to validate.
+ * @param scope Module scope containing the declaration.
+ * @param diagnostics Diagnostic sink for reported issues.
  */
-
-/* Forward declarations for local MUX helper functions defined later. */
 static void sem_check_mux_aggregate_decl(JZASTNode *mux_decl,
                                          const JZModuleScope *scope,
                                          JZDiagnosticList *diagnostics);
+/**
+ * @brief Validate a slice-style MUX declaration.
+ * @param mux_decl MUX declaration to validate.
+ * @param scope Module scope containing the declaration.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
 static void sem_check_mux_slice_decl(JZASTNode *mux_decl,
                                      const JZModuleScope *scope,
                                      JZDiagnosticList *diagnostics);
 
 /* sem_extract_identifier_like: now shared from driver.c via driver_internal.h */
 
-/* Heuristic to decide whether a MEM initializer literal node is actually
- * the payload of an @file("...") initializer. The parser represents
- * @file paths as Literal nodes whose text is the decoded string contents,
- * while numeric literals contain only digits/underscores and optional
- * sized-literal syntax.
+/**
+ * @brief Heuristically distinguish MEM file-path initializers from numeric literals.
+ * @param s Literal text to inspect.
+ * @return Non-zero when the text looks like a file path, or zero otherwise.
  */
 static int sem_mem_init_looks_like_file_path(const char *s)
 {
@@ -92,6 +105,39 @@ static int sem_mem_ext_equals(const char *ext, const char *want)
     return *ext == '\0' && *want == '\0';
 }
 
+static void sem_base_dir_from_filename_resolved(const char *filename,
+                                                char *buf,
+                                                size_t bufsz)
+{
+    const char *path = filename;
+    buf[0] = '\0';
+    if (!path || !*path || bufsz == 0) return;
+
+    if (!strchr(path, '/')) {
+        size_t count = g_imported_filenames_len;
+        if (g_imported_resolved_paths_len < count) {
+            count = g_imported_resolved_paths_len;
+        }
+        for (size_t i = 0; i < count; ++i) {
+            if (g_imported_filenames[i] &&
+                strcmp(g_imported_filenames[i], path) == 0 &&
+                g_imported_resolved_paths[i] &&
+                *g_imported_resolved_paths[i]) {
+                path = g_imported_resolved_paths[i];
+                break;
+            }
+        }
+    }
+
+    const char *slash = strrchr(path, '/');
+    if (!slash) return;
+
+    size_t dir_len = (size_t)(slash - path);
+    if (dir_len >= bufsz) dir_len = bufsz - 1;
+    memcpy(buf, path, dir_len);
+    buf[dir_len] = '\0';
+}
+
 /* Count logical bits in a hex text file: 0-9, A-F, a-f are treated as
  * hexadecimal digits contributing 4 bits each. Underscores and whitespace
  * (including newlines) are ignored; any other characters are skipped.
@@ -132,13 +178,14 @@ static unsigned long long sem_mem_count_bits_mem_file(FILE *fp)
     return bits;
 }
 
+/** @brief Radix modes recognized while parsing MEM initialization files. */
 typedef enum {
-    SEM_MEM_RADIX_NONE = 0,
-    SEM_MEM_RADIX_BIN = 2,
-    SEM_MEM_RADIX_OCT = 8,
-    SEM_MEM_RADIX_DEC = 10,
-    SEM_MEM_RADIX_HEX = 16,
-    SEM_MEM_RADIX_UNS = 100
+    SEM_MEM_RADIX_NONE = 0, /**< No radix specified. */
+    SEM_MEM_RADIX_BIN = 2,  /**< Binary radix. */
+    SEM_MEM_RADIX_OCT = 8,  /**< Octal radix. */
+    SEM_MEM_RADIX_DEC = 10, /**< Decimal radix. */
+    SEM_MEM_RADIX_HEX = 16, /**< Hexadecimal radix. */
+    SEM_MEM_RADIX_UNS = 100 /**< Unspecified radix marker. */
 } SemMemRadix;
 
 static int sem_mem_ci_char_eq(char a, char b)
@@ -249,20 +296,10 @@ static int sem_mem_extract_assignment(const char *text,
 
 static char *sem_mem_read_entire_fp(FILE *fp, size_t *size_out)
 {
-    long sz;
-    char *buf;
-    size_t nread;
     if (!fp) return NULL;
-    if (fseek(fp, 0, SEEK_END) != 0) return NULL;
-    sz = ftell(fp);
-    if (sz < 0) return NULL;
-    if (fseek(fp, 0, SEEK_SET) != 0) return NULL;
-    buf = (char *)malloc((size_t)sz + 1);
-    if (!buf) return NULL;
-    nread = fread(buf, 1, (size_t)sz, fp);
-    buf[nread] = '\0';
-    if (size_out) *size_out = nread;
-    return buf;
+    return jz_read_entire_fp_limit(fp,
+                                   jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                   size_out);
 }
 
 static char *sem_mem_strip_mif_comments(const char *contents, size_t size)
@@ -401,8 +438,9 @@ static int sem_mem_parse_unsigned_value(const char *start,
         return -1;
     }
 
+    errno = 0;
     value = strtoull(clean, &endptr, base);
-    if (!endptr || *endptr != '\0') {
+    if (errno == ERANGE || !endptr || *endptr != '\0') {
         free(clean);
         return -1;
     }
@@ -424,6 +462,65 @@ static void sem_mem_mark_addr(unsigned char *assigned,
     if (!assigned[addr]) {
         assigned[addr] = 1;
         (*count)++;
+    }
+}
+
+static int sem_mem_is_saturated_mif_addr(unsigned long long addr)
+{
+    return addr == ULLONG_MAX;
+}
+
+static void sem_mem_mark_addr_range(unsigned char *assigned,
+                                    unsigned depth,
+                                    unsigned long long start_addr,
+                                    unsigned long long end_addr,
+                                    unsigned long long *count,
+                                    int *overflow)
+{
+    unsigned long long capped_end;
+
+    if (start_addr >= (unsigned long long)depth) {
+        *overflow = 1;
+        return;
+    }
+
+    capped_end = end_addr;
+    if (capped_end >= (unsigned long long)depth) {
+        capped_end = (unsigned long long)depth - 1ull;
+        *overflow = 1;
+    }
+
+    for (unsigned long long addr = start_addr; addr <= capped_end; ++addr) {
+        sem_mem_mark_addr(assigned, depth, addr, count, overflow);
+    }
+}
+
+static void sem_mem_mark_addr_sequence(unsigned char *assigned,
+                                       unsigned depth,
+                                       unsigned long long start_addr,
+                                       int token_count,
+                                       unsigned long long *count,
+                                       int *overflow)
+{
+    unsigned long long available;
+    int mark_count;
+
+    if (token_count <= 0) return;
+    if (start_addr >= (unsigned long long)depth) {
+        *overflow = 1;
+        return;
+    }
+
+    available = (unsigned long long)depth - start_addr;
+    mark_count = token_count;
+    if ((unsigned long long)mark_count > available) {
+        mark_count = (int)available;
+        *overflow = 1;
+    }
+
+    for (int idx = 0; idx < mark_count; ++idx) {
+        sem_mem_mark_addr(assigned, depth, start_addr + (unsigned long long)idx,
+                          count, overflow);
     }
 }
 
@@ -502,6 +599,7 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
     unsigned long long assigned_words = 0ull;
     int overflow = 0;
 
+    if (depth > JZ_MAX_MEM_INIT_MIF_DEPTH) return -1;
     if (!contents) return -1;
     stripped = sem_mem_strip_mif_comments(contents, size);
     free(contents);
@@ -598,6 +696,8 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
                     sem_mem_trim_span(&rhs_start, &rhs_end);
                     if (sem_mem_parse_unsigned_value(lhs_start, lhs_end, addr_radix, &start_addr) != 0 ||
                         sem_mem_parse_unsigned_value(rhs_start, rhs_end, addr_radix, &end_addr) != 0 ||
+                        sem_mem_is_saturated_mif_addr(start_addr) ||
+                        sem_mem_is_saturated_mif_addr(end_addr) ||
                         end_addr < start_addr) {
                         free(assigned);
                         free(stripped);
@@ -608,6 +708,11 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
             } else {
                 if (sem_mem_parse_unsigned_value(addr_spec_start, addr_spec_end,
                                                  addr_radix, &start_addr) != 0) {
+                    free(assigned);
+                    free(stripped);
+                    return -1;
+                }
+                if (sem_mem_is_saturated_mif_addr(start_addr)) {
                     free(assigned);
                     free(stripped);
                     return -1;
@@ -649,16 +754,12 @@ static int sem_mem_count_bits_mif_file(FILE *fp,
             }
 
             if (is_range) {
-                unsigned long long span = end_addr - start_addr + 1ull;
-                for (unsigned long long off = 0; off < span; ++off) {
-                    sem_mem_mark_addr(assigned, depth, start_addr + off,
-                                      &assigned_words, &overflow);
-                }
+                sem_mem_mark_addr_range(assigned, depth, start_addr, end_addr,
+                                        &assigned_words, &overflow);
             } else {
-                for (int idx = 0; idx < token_count; ++idx) {
-                    sem_mem_mark_addr(assigned, depth, start_addr + (unsigned long long)idx,
-                                      &assigned_words, &overflow);
-                }
+                sem_mem_mark_addr_sequence(assigned, depth, start_addr,
+                                           token_count, &assigned_words,
+                                           &overflow);
             }
         }
     }
@@ -700,27 +801,36 @@ static void sem_check_mem_file_init(JZASTNode *mem,
 
     /* Validate the @file() path against security policy. */
     char base_dir[512];
-    base_dir[0] = '\0';
-    if (mem->loc.filename) {
-        const char *slash = strrchr(mem->loc.filename, '/');
-        if (slash) {
-            size_t dir_len = (size_t)(slash - mem->loc.filename);
-            if (dir_len >= sizeof(base_dir)) dir_len = sizeof(base_dir) - 1;
-            memcpy(base_dir, mem->loc.filename, dir_len);
-            base_dir[dir_len] = '\0';
-        }
-    }
+    sem_base_dir_from_filename_resolved(mem->loc.filename,
+                                        base_dir,
+                                        sizeof(base_dir));
 
     char *validated = jz_path_validate(init_expr->text,
                                         base_dir[0] ? base_dir : NULL,
                                         init_expr->loc,
                                         diagnostics);
     char fullpath[512];
+    size_t file_size = 0;
     if (validated) {
         snprintf(fullpath, sizeof(fullpath), "%s", validated);
         free(validated);
     } else {
         /* Path validation failed; diagnostic already emitted. */
+        return;
+    }
+
+    if (jz_get_file_size(fullpath, &file_size) == 0 &&
+        file_size > jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES)) {
+        char msg[640];
+        snprintf(msg, sizeof(msg),
+                 "MEM init file '%s' is %zu byte(s), exceeding the compiler safety limit of %u byte(s)",
+                 fullpath,
+                 file_size,
+                 (unsigned)jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES));
+        sem_report_rule(diagnostics,
+                        init_expr->loc,
+                        "MEM_INIT_FILE_HARD_LIMIT_EXCEEDED",
+                        msg);
         return;
     }
 
@@ -746,6 +856,20 @@ static void sem_check_mem_file_init(JZASTNode *mem,
 
     const char *ext = sem_mem_get_file_ext(init_expr->text);
     unsigned long long file_bits = 0ull;
+
+    if (ext && sem_mem_ext_equals(ext, "mif") &&
+        depth > jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH)) {
+        char msg[640];
+        fclose(fp);
+        snprintf(msg, sizeof(msg),
+                 "MEM declared depth %u exceeds the compiler MIF safety limit of %u words",
+                 depth, (unsigned)jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH));
+        sem_report_rule(diagnostics,
+                        init_expr->loc,
+                        "MEM_INIT_MIF_DEPTH_LIMIT_EXCEEDED",
+                        msg);
+        return;
+    }
 
     /* MEM_INIT_FILE_CONTAINS_X: scan text-format files for x/z values. */
     if (ext && (sem_mem_ext_equals(ext, "hex") ||
@@ -2321,9 +2445,10 @@ void sem_check_module_mem_port_usage(const JZModuleScope *scope,
  * -------------------------------------------------------------------------
  */
 
+/** @brief Accumulates the number of times each module is instantiated. */
 typedef struct JZModuleInstanceCount {
-    const char *module_name;
-    unsigned    count;
+    const char *module_name; /**< Module identifier text. */
+    unsigned    count;       /**< Total number of instances in the project graph. */
 } JZModuleInstanceCount;
 
 /* Recursively accumulate instance counts starting from a given module.

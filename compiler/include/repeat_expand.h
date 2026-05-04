@@ -11,6 +11,7 @@
 #define JZ_HDL_REPEAT_EXPAND_H
 
 #include "diagnostic.h"
+#include "expansion_limits.h"
 
 /**
  * @brief Expand all @repeat blocks in source text.
@@ -22,11 +23,13 @@
  * @param source   The raw source text (null-terminated).
  * @param filename Source filename for diagnostics.
  * @param diagnostics Diagnostic list for error reporting.
+ * @param limits Expansion hard limits. If NULL, built-in defaults are used.
  * @return Newly allocated expanded source (caller must free),
  *         or NULL on error.
  */
 char *jz_repeat_expand(const char *source,
                        const char *filename,
-                       JZDiagnosticList *diagnostics);
+                       JZDiagnosticList *diagnostics,
+                       const JZExpansionLimits *limits);
 
 #endif /* JZ_HDL_REPEAT_EXPAND_H */

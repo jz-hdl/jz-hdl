@@ -1,3 +1,0 @@
-File: 5_5_CLOG2_INVALID_CONTEXT-feature_cond.jz
-      30:14   error CLOG2_INVALID_CONTEXT S5.5.5 clog2() used outside compile-time constant integer expression context
-      63:14   error CLOG2_INVALID_CONTEXT S5.5.5 clog2() used outside compile-time constant integer expression context

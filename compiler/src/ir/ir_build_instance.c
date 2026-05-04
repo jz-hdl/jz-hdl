@@ -12,6 +12,7 @@
 #include <limits.h>
 
 #include "ir_internal.h"
+#include "../../include/util.h"
 
 /**
  * @brief Look up a BUS definition in the project symbol table.
@@ -40,14 +41,11 @@ static const JZSymbol *ir_lookup_bus_def(const JZBuffer *project_symbols,
 }
 
 /**
- * @brief qsort comparator for module-spec override entries.
- *
- * Sorts IR_ModuleSpecOverride entries lexicographically by CONST name in
- * order to canonicalize OVERRIDE sets.
+ * @brief Compare two module-specialization overrides by name for sorting.
  *
  * @param a First override.
  * @param b Second override.
- * @return Negative, zero, or positive as per strcmp semantics.
+ * @return Negative, zero, or positive according to `strcmp` ordering.
  */
 static int ir_override_name_cmp(const void *a, const void *b)
 {
@@ -364,8 +362,25 @@ int ir_collect_module_specializations(const JZModuleScope *scopes,
 
             /* New specialization: grow specs array if needed. */
             if (spec_count >= spec_cap) {
-                int new_cap = (spec_cap == 0) ? 4 : spec_cap * 2;
-                IR_ModuleSpec *new_specs = (IR_ModuleSpec *)realloc(specs, sizeof(IR_ModuleSpec) * (size_t)new_cap);
+                int new_cap = 0;
+                size_t new_bytes = 0;
+                IR_ModuleSpec *new_specs = NULL;
+                if (spec_cap == 0) {
+                    new_cap = 4;
+                } else if (spec_cap > INT_MAX / 2) {
+                    free(ov);
+                    free(specs);
+                    return -1;
+                } else {
+                    new_cap = spec_cap * 2;
+                }
+                if (new_cap <= spec_cap ||
+                    jz_size_mul_checked((size_t)new_cap, sizeof(IR_ModuleSpec), &new_bytes) != 0) {
+                    free(ov);
+                    free(specs);
+                    return -1;
+                }
+                new_specs = (IR_ModuleSpec *)realloc(specs, new_bytes);
                 if (!new_specs) {
                     free(ov);
                     free(specs);
@@ -656,9 +671,25 @@ int ir_collect_module_specializations(const JZModuleScope *scopes,
 
             /* Register new sub-specialization. */
             if (spec_count >= spec_cap) {
-                int new_cap = (spec_cap == 0) ? 4 : spec_cap * 2;
-                IR_ModuleSpec *new_specs = (IR_ModuleSpec *)realloc(
-                    specs, sizeof(IR_ModuleSpec) * (size_t)new_cap);
+                int new_cap = 0;
+                size_t new_bytes = 0;
+                IR_ModuleSpec *new_specs = NULL;
+                if (spec_cap == 0) {
+                    new_cap = 4;
+                } else if (spec_cap > INT_MAX / 2) {
+                    free(sub_ov);
+                    free(specs);
+                    return -1;
+                } else {
+                    new_cap = spec_cap * 2;
+                }
+                if (new_cap <= spec_cap ||
+                    jz_size_mul_checked((size_t)new_cap, sizeof(IR_ModuleSpec), &new_bytes) != 0) {
+                    free(sub_ov);
+                    free(specs);
+                    return -1;
+                }
+                new_specs = (IR_ModuleSpec *)realloc(specs, new_bytes);
                 if (!new_specs) {
                     free(sub_ov);
                     free(specs);

@@ -1,0 +1,38 @@
+// MARK_COLOR_MESSAGE_FORM: valid @mark(<color>, "<message>") syntax in @simulation.
+
+@module MarkColorMessageFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation MarkColorMessageFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut MarkColorMessageFormDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @mark(BLUE, "capture point")
+    @run(ns=10)
+@endsim

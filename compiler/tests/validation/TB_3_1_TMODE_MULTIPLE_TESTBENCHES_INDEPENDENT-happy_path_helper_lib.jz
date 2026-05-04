@@ -1,0 +1,24 @@
+@module MultipleIndependentTestbenchesDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [1] din;
+        OUT [1] q;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        q = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (en) {
+            state <= din;
+        } ELSE {
+            state <= state;
+        }
+    }
+@endmod

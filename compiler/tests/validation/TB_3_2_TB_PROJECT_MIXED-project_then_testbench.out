@@ -1,0 +1,2 @@
+File: TB_3_2_TB_PROJECT_MIXED-project_then_testbench.jz
+      16:1    error TB_PROJECT_MIXED TB-020 A file may not contain both @project and @testbench

@@ -1,14 +1,92 @@
+/**
+ * @file chip_data.c
+ * @brief Chip-data loading, parsing, and query helpers.
+ */
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include "chip_data.h"
+#include "path_security.h"
 #include "util.h"
 
 #define JSMN_IMPLEMENTATION
 #include "third_party/jsmn.h"
+
+/**
+ * @brief Clear the last chip-data error string.
+ */
+static void jz_chip_clear_error(void);
+
+/**
+ * @brief Format the last chip-data error string.
+ * @param fmt `printf`-style format string.
+ * @param ... Format arguments written into the static error buffer.
+ */
+static void jz_chip_set_error(const char *fmt, ...);
+
+/**
+ * @brief Compare two strings case-insensitively.
+ * @param a Left string.
+ * @param b Right string.
+ * @return Negative, zero, or positive comparison result.
+ */
+static int jz_strcasecmp(const char *a, const char *b);
+
+/**
+ * @brief Duplicate a string while converting it to lowercase.
+ * @param s Source string to duplicate.
+ * @return Newly allocated lowercase copy, or `NULL` on failure.
+ */
+static char *jz_strdup_lower(const char *s);
+
+/**
+ * @brief Duplicate a string while converting it to uppercase.
+ * @param s Source string to duplicate.
+ * @return Newly allocated uppercase copy, or `NULL` on failure.
+ */
+static char *jz_strdup_upper(const char *s);
+
+/**
+ * @brief Build a validated path to an external chip-data JSON file.
+ * @param project_filename Project file path used as the resolution base.
+ * @param chip_id Chip identifier whose JSON file should be located.
+ * @return Newly allocated validated path, or `NULL` on failure.
+ */
+static char *jz_build_chip_json_path(const char *project_filename,
+                                     const char *chip_id);
+
+/**
+ * @brief Return whether one chip identifier is a case-insensitive prefix of another.
+ * @param chip_id Prefix candidate.
+ * @param target Full chip identifier to test.
+ * @return Non-zero when `chip_id` matches a full prefix boundary in `target`.
+ */
+static int jz_chip_id_is_prefix(const char *chip_id, const char *target);
+
+/**
+ * @brief Enforce the maximum supported JSON nesting depth.
+ * @param toks Parsed JSMN token array.
+ * @param count Number of tokens in `toks`.
+ * @param max_depth Maximum allowed nesting depth.
+ * @return `0` when the nesting depth is acceptable, `-1` otherwise.
+ */
+static int jz_json_check_nesting_limit(const jsmntok_t *toks,
+                                       int count,
+                                       unsigned max_depth);
+
+/**
+ * @brief Convert a JSON token to a chip-memory type.
+ * @param json Backing JSON text.
+ * @param tok Token that names a memory type.
+ * @return Parsed memory type, or `JZ_CHIP_MEM_UNKNOWN` when unsupported.
+ */
+static JZChipMemType jz_chip_mem_type_from_token(const char *json,
+                                                 const jsmntok_t *tok);
 
 /* Last chip-data load error, for detailed diagnostics via
  * jz_chip_data_last_error(). Reset at the start of each load attempt. */
@@ -32,10 +110,15 @@ static void jz_chip_set_error(const char *fmt, ...)
     va_end(ap);
 }
 
+/**
+ * @struct JZChipBuiltin
+ * @brief One built-in chip-data payload compiled into the binary.
+ */
 typedef struct JZChipBuiltin {
-    const char *chip_id;
-    const char *json;
+    const char *chip_id; /**< Canonical chip identifier. */
+    const char *json;    /**< Embedded JSON payload for the chip. */
 } JZChipBuiltin;
+
 
 /* Built-in chip data generated at build time. */
 #include "data/gw1nr-9-qn88-c6-i5.h"
@@ -101,6 +184,7 @@ static char *jz_build_chip_json_path(const char *project_filename,
                                      const char *chip_id)
 {
     if (!chip_id || !chip_id[0]) return NULL;
+    char *base_dir = NULL;
     const char *slash = NULL;
     if (project_filename) {
         slash = strrchr(project_filename, '/');
@@ -111,23 +195,37 @@ static char *jz_build_chip_json_path(const char *project_filename,
     }
 
     const char *dir = ".";
-    size_t dir_len = 1;
     if (slash) {
-        dir = project_filename;
-        dir_len = (size_t)(slash - project_filename);
+        size_t dir_len = (size_t)(slash - project_filename);
+        if (dir_len == 0) {
+            dir = "/";
+        } else {
+            base_dir = (char *)malloc(dir_len + 1);
+            if (!base_dir) return NULL;
+            memcpy(base_dir, project_filename, dir_len);
+            base_dir[dir_len] = '\0';
+            dir = base_dir;
+        }
     }
 
     size_t chip_len = strlen(chip_id);
-    size_t total = dir_len + 1 + chip_len + 5 + 1;
-    char *out = (char *)malloc(total);
-    if (!out) return NULL;
+    if (chip_len > SIZE_MAX - 6) return NULL;
 
-    memcpy(out, dir, dir_len);
-    out[dir_len] = '\0';
-    strcat(out, "/");
-    strcat(out, chip_id);
-    strcat(out, ".json");
-    return out;
+    char *raw = (char *)malloc(chip_len + 6);
+    if (!raw) return NULL;
+
+    memcpy(raw, chip_id, chip_len);
+    memcpy(raw + chip_len, ".json", 6);
+
+    JZLocation loc = {
+        project_filename ? project_filename : "<chip-data>",
+        1,
+        1
+    };
+    char *validated = jz_path_validate(raw, dir, loc, NULL);
+    free(base_dir);
+    free(raw);
+    return validated;
 }
 
 /* Check if chip_id is a prefix of target (case-insensitive).
@@ -236,6 +334,33 @@ int jz_json_skip(const jsmntok_t *toks, int count, int index)
         }
     }
     return next;
+}
+
+static int jz_json_check_nesting_limit(const jsmntok_t *toks,
+                                       int count,
+                                       unsigned max_depth)
+{
+    unsigned depth = 0;
+    int end_stack[JZ_MAX_CHIP_JSON_NESTING_DEPTH];
+
+    if (!toks || count <= 0) return 0;
+    if (max_depth == 0 || max_depth > JZ_MAX_CHIP_JSON_NESTING_DEPTH) {
+        max_depth = JZ_MAX_CHIP_JSON_NESTING_DEPTH;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        while (depth > 0 && toks[i].start >= end_stack[depth - 1]) {
+            --depth;
+        }
+        if (toks[i].type == JSMN_OBJECT || toks[i].type == JSMN_ARRAY) {
+            if (depth >= max_depth) {
+                return -1;
+            }
+            end_stack[depth++] = toks[i].end;
+        }
+    }
+
+    return 0;
 }
 
 const char *jz_chip_mem_type_name(JZChipMemType type)
@@ -600,12 +725,21 @@ static void jz_chip_parse_clock_gen_map_into(const char *json,
         for (int i = 0; i < val->size && arr_idx < count; ++i) {
             const jsmntok_t *elem = &toks[arr_idx];
             if (elem->type == JSMN_STRING) {
-                total_len += (size_t)(elem->end - elem->start);
+                size_t elem_len = (size_t)(elem->end - elem->start);
+                if (jz_size_add_checked(total_len, elem_len, &total_len) != 0) {
+                    free(backend);
+                    return;
+                }
             }
             arr_idx = jz_json_skip(toks, count, arr_idx);
         }
 
-        char *template_text = (char *)malloc(total_len + 1);
+        size_t alloc_len = 0;
+        if (jz_size_add_checked(total_len, 1, &alloc_len) != 0) {
+            free(backend);
+            return;
+        }
+        char *template_text = (char *)malloc(alloc_len);
         if (template_text) {
             size_t offset = 0;
             arr_idx = cur + 1;
@@ -1173,15 +1307,16 @@ static int jz_chip_parse_clock_gen_variants(const char *json,
 
 /* ---- Variant fact matching and exhaustive/disjoint validation ---- */
 
-/* Axis used to enumerate the cartesian product at load time.
- * kind == JZ_CG_FACT_INPUT_SOURCE: name[] of fact; values are strings.
- * kind == JZ_CG_FACT_OUTPUT_COUNT: values are ints. */
+/**
+ * @struct VariantAxis
+ * @brief One fact axis used to validate clock-generator variant coverage.
+ */
 typedef struct VariantAxis {
-    JZChipVariantFactKind kind;
-    char *name;          /* input name for INPUT_SOURCE, NULL for OUTPUT_COUNT */
-    char **svals;        /* distinct string values for INPUT_SOURCE */
-    int   *ivals;        /* distinct int values for OUTPUT_COUNT */
-    size_t val_count;
+    JZChipVariantFactKind kind; /**< Fact kind represented by the axis. */
+    char *name;                 /**< Input name for input-source facts, or `NULL` otherwise. */
+    char **svals;               /**< Distinct string values for input-source facts. */
+    int *ivals;                 /**< Distinct integer values for output-count facts. */
+    size_t val_count;           /**< Number of values stored in `svals` or `ivals`. */
 } VariantAxis;
 
 static void variant_axes_free(VariantAxis *axes, size_t count)
@@ -1200,10 +1335,18 @@ static void variant_axes_free(VariantAxis *axes, size_t count)
 
 static int variant_axes_add_sval(VariantAxis *ax, const char *v)
 {
+    size_t new_count = 0;
+    size_t new_bytes = 0;
+    char **nv = NULL;
+
     for (size_t i = 0; i < ax->val_count; ++i) {
         if (strcmp(ax->svals[i], v) == 0) return 1;
     }
-    char **nv = (char **)realloc(ax->svals, sizeof(char *) * (ax->val_count + 1));
+    if (jz_size_add_checked(ax->val_count, 1, &new_count) != 0 ||
+        jz_size_mul_checked(new_count, sizeof(char *), &new_bytes) != 0) {
+        return 0;
+    }
+    nv = (char **)realloc(ax->svals, new_bytes);
     if (!nv) return 0;
     ax->svals = nv;
     ax->svals[ax->val_count] = strdup(v);
@@ -1214,10 +1357,18 @@ static int variant_axes_add_sval(VariantAxis *ax, const char *v)
 
 static int variant_axes_add_ival(VariantAxis *ax, int v)
 {
+    size_t new_count = 0;
+    size_t new_bytes = 0;
+    int *nv = NULL;
+
     for (size_t i = 0; i < ax->val_count; ++i) {
         if (ax->ivals[i] == v) return 1;
     }
-    int *nv = (int *)realloc(ax->ivals, sizeof(int) * (ax->val_count + 1));
+    if (jz_size_add_checked(ax->val_count, 1, &new_count) != 0 ||
+        jz_size_mul_checked(new_count, sizeof(int), &new_bytes) != 0) {
+        return 0;
+    }
+    nv = (int *)realloc(ax->ivals, new_bytes);
     if (!nv) return 0;
     ax->ivals = nv;
     ax->ivals[ax->val_count++] = v;
@@ -1257,10 +1408,19 @@ static int variant_build_axes(const JZChipClockGen *cg,
             }
             if (ai == *out_count) {
                 if (*out_count == cap) {
-                    cap = cap ? cap * 2 : 4;
-                    VariantAxis *na = (VariantAxis *)realloc(axes, sizeof(VariantAxis) * cap);
+                    size_t new_cap = 0;
+                    size_t new_bytes = 0;
+                    VariantAxis *na = NULL;
+
+                    if (jz_size_grow_doubling_checked(cap, *out_count + 1, 4, &new_cap) != 0 ||
+                        jz_size_mul_checked(new_cap, sizeof(VariantAxis), &new_bytes) != 0) {
+                        variant_axes_free(axes, *out_count);
+                        return 0;
+                    }
+                    na = (VariantAxis *)realloc(axes, new_bytes);
                     if (!na) { variant_axes_free(axes, *out_count); return 0; }
                     axes = na;
+                    cap = new_cap;
                 }
                 memset(&axes[*out_count], 0, sizeof(VariantAxis));
                 axes[*out_count].kind = fs[fi].kind;
@@ -1748,12 +1908,21 @@ static void jz_chip_parse_diff_map_into(const char *json,
         for (int i = 0; i < val->size && arr_idx < count; ++i) {
             const jsmntok_t *elem = &toks[arr_idx];
             if (elem->type == JSMN_STRING) {
-                total_len += (size_t)(elem->end - elem->start);
+                size_t elem_len = (size_t)(elem->end - elem->start);
+                if (jz_size_add_checked(total_len, elem_len, &total_len) != 0) {
+                    free(backend);
+                    return;
+                }
             }
             arr_idx = jz_json_skip(toks, count, arr_idx);
         }
 
-        char *template_text = (char *)malloc(total_len + 1);
+        size_t alloc_len = 0;
+        if (jz_size_add_checked(total_len, 1, &alloc_len) != 0) {
+            free(backend);
+            return;
+        }
+        char *template_text = (char *)malloc(alloc_len);
         if (template_text) {
             size_t offset = 0;
             arr_idx = cur + 1;
@@ -2083,15 +2252,42 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
     char *path = jz_build_chip_json_path(project_filename, chip_id);
     char *path_lower = NULL;
     char *json = NULL;
+    size_t json_size = 0;
     if (path) {
-        json = jz_read_entire_file(path, NULL);
+        if (jz_get_file_size(path, &json_size) == 0 &&
+            json_size > jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES)) {
+            jz_chip_set_error("CHIP_JSON_TOO_LARGE: local chip JSON '%s' is %zu byte(s), exceeding the safety limit of %u byte(s)",
+                              path,
+                              json_size,
+                              (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES));
+        } else {
+            json = jz_read_entire_file_limit(path,
+                                             jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                             &json_size);
+        }
+    }
+    if (!json && path == NULL) {
+        jz_chip_set_error("local chip JSON path for '%s' could not be resolved safely", chip_id);
     }
     if (!json) {
         char *lower = jz_strdup_lower(chip_id);
         if (lower) {
             path_lower = jz_build_chip_json_path(project_filename, lower);
             if (path_lower) {
-                json = jz_read_entire_file(path_lower, NULL);
+                if (jz_get_file_size(path_lower, &json_size) == 0 &&
+                    json_size > jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES)) {
+                    jz_chip_set_error("CHIP_JSON_TOO_LARGE: local chip JSON '%s' is %zu byte(s), exceeding the safety limit of %u byte(s)",
+                                      path_lower,
+                                      json_size,
+                                      (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES));
+                } else {
+                    json = jz_read_entire_file_limit(path_lower,
+                                                     jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                                     &json_size);
+                }
+            }
+            if (!json && !path_lower) {
+                jz_chip_set_error("local chip JSON path for '%s' could not be resolved safely", chip_id);
             }
         }
         free(lower);
@@ -2105,10 +2301,16 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
         if (!builtin_json) {
             builtin_json = jz_chip_builtin_json(out->chip_id);
         }
+        if (builtin_json) {
+            jz_chip_clear_error();
+        }
     }
 
     const char *json_source = json ? json : builtin_json;
     if (!json_source) {
+        if (!jz_chip_data_last_error()) {
+            jz_chip_set_error("no built-in or local chip JSON found for '%s'", chip_id);
+        }
         jz_chip_data_free(out);
         return JZ_CHIP_LOAD_NOT_FOUND;
     }
@@ -2117,6 +2319,13 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
     jsmn_init(&parser);
     int tok_count = jsmn_parse(&parser, json_source, strlen(json_source), NULL, 0);
     if (tok_count <= 0) {
+        free(json);
+        jz_chip_data_free(out);
+        return JZ_CHIP_LOAD_JSON_ERROR;
+    }
+    if ((size_t)tok_count > jz_input_limit_value(JZ_LIMIT_CHIP_JSON_TOKENS)) {
+        jz_chip_set_error("CHIP_JSON_TOKEN_LIMIT_EXCEEDED: chip JSON token count %d exceeds the safety limit of %u token(s)",
+                          tok_count, (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_TOKENS));
         free(json);
         jz_chip_data_free(out);
         return JZ_CHIP_LOAD_JSON_ERROR;
@@ -2132,6 +2341,16 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
     jsmn_init(&parser);
     tok_count = jsmn_parse(&parser, json_source, strlen(json_source), toks, (unsigned int)tok_count);
     if (tok_count <= 0) {
+        free(toks);
+        free(json);
+        jz_chip_data_free(out);
+        return JZ_CHIP_LOAD_JSON_ERROR;
+    }
+    if (jz_json_check_nesting_limit(toks,
+                                    tok_count,
+                                    (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_NESTING_DEPTH)) != 0) {
+        jz_chip_set_error("CHIP_JSON_NESTING_LIMIT_EXCEEDED: chip JSON nesting exceeds the safety limit of %u level(s)",
+                          (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_NESTING_DEPTH));
         free(toks);
         free(json);
         jz_chip_data_free(out);

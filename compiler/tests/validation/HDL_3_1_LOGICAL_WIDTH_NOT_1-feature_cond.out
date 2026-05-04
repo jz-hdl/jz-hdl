@@ -1,0 +1,4 @@
+File: HDL_3_1_LOGICAL_WIDTH_NOT_1-feature_cond.jz
+      20:23   error LOGICAL_WIDTH_NOT_1 S3.2/S8.1 Logical `&&`, `||`, `!` require 1-bit operands; did you mean bitwise `&`, `|`, `~`?
+      27:23   error LOGICAL_WIDTH_NOT_1 S3.2/S8.1 Logical `&&`, `||`, `!` require 1-bit operands; did you mean bitwise `&`, `|`, `~`?
+      34:15   error LOGICAL_WIDTH_NOT_1 S3.2/S8.1 Logical `&&`, `||`, `!` require 1-bit operands; did you mean bitwise `&`, `|`, `~`?

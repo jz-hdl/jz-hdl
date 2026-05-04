@@ -1,2 +1,0 @@
-File: 4_1_DIRECTIVE_INVALID_CONTEXT-endmod_inside_block.jz
-      23:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location

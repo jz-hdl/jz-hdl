@@ -1,0 +1,3 @@
+File: HDL_4_1_DUPLICATE_BLOCK-same_clock_different_params.jz
+      30:5    error DUPLICATE_BLOCK S4.11/S4.12 More than one SYNCHRONOUS block declared for the same clock signal in a module
+      62:5    error DUPLICATE_BLOCK S4.11/S4.12 More than one SYNCHRONOUS block declared for the same clock signal in a module

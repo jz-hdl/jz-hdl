@@ -1,0 +1,2 @@
+File: TB_7_5_TMODE_FORMAT_STRING_LITERAL_REQUIRED-non_string_format_arg.jz
+      48:16   error PARSE000 parse error near token 'data_out': expected format string in @print/@print_if (orig: PARSE000)

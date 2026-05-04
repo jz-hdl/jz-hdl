@@ -1,5 +1,0 @@
-File: 3_1_SPECIAL_DRIVER_IN_CONCAT-gnd_vcc_in_concat.jz
-      29:30   error SPECIAL_DRIVER_IN_CONCAT S2.3 GND/VCC may not appear in concatenations
-      31:19   error SPECIAL_DRIVER_IN_CONCAT S2.3 GND/VCC may not appear in concatenations
-      37:26   error SPECIAL_DRIVER_IN_CONCAT S2.3 GND/VCC may not appear in concatenations
-      70:30   error SPECIAL_DRIVER_IN_CONCAT S2.3 GND/VCC may not appear in concatenations

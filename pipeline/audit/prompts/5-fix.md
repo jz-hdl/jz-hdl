@@ -70,6 +70,11 @@ For every issue, verify all of the following using the spec, `compiler/src/rules
 5. **Purely descriptive rows are not issues**
    - If the requirement is descriptive, punctuation-only, rationale-only, or a grammar placeholder with no independent compiler behavior, it is not a validation task
 
+6. **No preempting-rule closures**
+   - If the proposed fixture emits a diagnostic owned by a different rule than the audit row is supposed to exercise, the issue is not closable as a validation-fixture fix.
+   - Do not treat "some diagnostic happened" as evidence that the requirement was validated.
+   - If the fixture is preempted by an earlier parser, literal, width, placement, or constant-expression rule, mark `[ISSUE-TEST]` instead of `[DONE]`.
+
 ### How to classify non-actionable issues
 
 If any required check fails, do **not** try to force the issue closed with a noisy or misleading fixture.
@@ -103,31 +108,127 @@ Do not create fixtures that merely trigger a different parser or constant-expres
 
 Before adding a happy-path test, verify the requirement describes a valid allowed behavior rather than a prohibition. If the requirement is `forbidden`, `invalid`, `must not`, `compile error`, or equivalent, mark `[ISSUE-TEST]` instead of creating a contradictory happy-path fixture.
 
+### Rows with no primary rule ID
+
+Rows whose `Primary Rule ID` is `—` are high-risk and must be treated conservatively.
+
+Do **not** create a negative validation fixture for such a row unless one of the following is true:
+
+1. the requirement text itself explicitly names the diagnostic behavior being exercised, or
+2. an existing sibling fixture for the same requirement already proves the same underlying behavior in another context and the new fixture is extending that exact behavior, or
+3. the emitted diagnostic is clearly the intended and nearest rule-owned manifestation of the requirement rather than an unrelated preempting rule
+
+If you cannot make that case concretely, default to `[ISSUE-TEST]` with a runner-log note explaining that the row has no stable rule ownership and any attempted fixture would be preempted by another rule.
+
+In particular, do **not** close a `Primary Rule ID = —` row by introducing a fixture that merely triggers a rule already owned by another spec section.
+
 ## Fix Actions by Category
 
 | Issue category | What to do |
 |---------------|------------|
 | `missing-coverage` | After the Actionability Review passes, write a new negative test (and happy-path test if applicable) covering the requirement. |
 | `missing-negative` | After the Actionability Review passes, write a new negative test that intentionally violates the rule and expects the diagnostic. |
-| `missing-happy-path` | After the Actionability Review passes, write a new happy-path test with valid code exercising the construct. The `.out` file contains only the `File:` header and a trailing newline. |
+| `missing-happy-path` | After the Actionability Review passes, write a new happy-path test with valid code exercising the construct. The paired `.out` file must be empty (zero bytes). |
 | `missing-context` | After the Actionability Review passes, write new tests (or extend existing ones) to cover only the actually applicable missing contexts listed in the issue description. |
 | `missing-items` | After the Actionability Review passes, write new tests (or extend existing ones) to cover the missing enumerated items listed in the issue description. |
 
 ## Test File Naming
 
+Use these rules mechanically. Do not improvise from existing corpus patterns when they conflict with this section.
+
+### Canonical basename pattern
+
 ```text
-compiler/tests/validation/<section>_<RULE_ID>-<test_name>.jz
-compiler/tests/validation/<section>_<RULE_ID>-<test_name>.out
+compiler/tests/validation/<source>_<section><optional_runner_markers>_<TARGET_ID>-<scenario>.jz
+compiler/tests/validation/<source>_<section><optional_runner_markers>_<TARGET_ID>-<scenario>.out
 ```
 
 Where:
 
-- `<section>` is the spec section with dots replaced by underscores (e.g. `1_1`, `4_13`)
-- `<RULE_ID>` is the uppercase rule ID from `rules.c` (e.g. `ID_SYNTAX_INVALID`, `KEYWORD_AS_IDENTIFIER`)
-- `<test_name>` is a lowercase snake_case description of the test scenario
-- Happy-path tests append `_ok` to the test name (e.g. `1_1_KEYWORD_AS_IDENTIFIER-project_keywords_ok.jz`)
+- `<source>` is the spec the test is for `HDL`, `CHIP`, `SIM`, `TB`, `JZW`.
+- `<section>` is the spec section with dots replaced by underscores, for example `1_1`, `4_13`, `11_7_2`
+- `<optional_runner_markers>` is empty or one of `_TMODE`, `_SMODE`, `_GND`, `_VCC`
+- `<TARGET_ID>` is an uppercase snake_case identifier naming the exact rule or positive behavior the fixture owns
+- `<scenario>` is lowercase snake_case
 
-For issues with no primary rule ID (shown as `Req #N` or `—`), use the requirement description to derive a reasonable name.
+### How to choose `<TARGET_ID>`
+
+1. If the requirement row has a real `Primary Rule ID`, use that exact rule ID as `<TARGET_ID>`.
+2. If the requirement row has `Primary Rule ID = —` or `N/A`, derive a canonical uppercase snake_case behavior name from the requirement text for `<TARGET_ID>`.
+3. The derived `<TARGET_ID>` must name the concrete behavior being tested, not the fact that the test is positive or negative.
+
+Examples of good derived `<TARGET_ID>` values:
+
+- `TEMPLATE_ALLOWED_CONTENT`
+- `TEMPLATE_CONST_CONFIG_REFS`
+- `READ_ONLY_MEMORY_OUT_ONLY`
+- `TRISTATE_DEFAULT_GND`
+
+Forbidden placeholders for `<TARGET_ID>`:
+
+- `REQ`
+- `REQ1`, `REQ2`, or any other `REQ<number>`
+- `HAPPY_PATH`
+- `NEGATIVE`, `POSITIVE`, `VALID`, `INVALID`, `TEST`
+- section titles or issue-category names used as generic buckets
+
+### How to choose `<scenario>`
+
+- Negative tests use a descriptive scenario name such as `bad_reset_type`, `duplicate_param_names`, `missing_required_input`.
+- Happy-path tests use the fixed scenario name `happy_path`.
+- Do not append `_ok` to happy-path basenames.
+
+### Happy-path uniqueness rule
+
+There must not be multiple files whose basenames would collapse to the same `<source>_<section><optional_runner_markers>_<TARGET_ID>-happy_path`.
+
+If you need more than one positive fixture for the same broad section topic, do **not** use `HAPPY_PATH` as a bucket and do **not** invent `REQ<number>` placeholders. Instead:
+
+1. Split the topic into distinct owned behaviors.
+2. Give each behavior its own specific `<TARGET_ID>`.
+3. Name each resulting positive fixture with `-happy_path`.
+
+Examples:
+
+```text
+compiler/tests/validation/HDL_1_1_ID_SYNTAX_INVALID-bad_leading_digit.jz
+compiler/tests/validation/HDL_1_1_ID_SYNTAX_INVALID-happy_path.jz
+compiler/tests/validation/HDL_HDL_10_3_TEMPLATE_ALLOWED_CONTENT-happy_path.jz
+compiler/tests/validation/HDL_HDL_10_3_TEMPLATE_CONST_CONFIG_REFS-happy_path.jz
+compiler/tests/validation/HDL_11_1_GND_TRISTATE_DEFAULT_GND-happy_path.jz
+compiler/tests/validation/HDL_11_1_VCC_TRISTATE_DEFAULT_VCC-happy_path.jz
+```
+
+### Helper and imported library files
+
+Files that exist only to be imported by another validation fixture are not standalone validation test basenames and must not consume the canonical `-happy_path` slot.
+
+Name helper files by extending the owning test basename, for example:
+
+```text
+compiler/tests/validation/HDL_6_2_1_IMPORTED_NAMESPACE-happy_path_helper_lib.jz
+compiler/tests/validation/HDL_HDL_6_2_1_IMPORTED_NAMESPACE-happy_path_content_lib.jz
+```
+
+### Runner filename markers
+
+`compiler/tests/run_validation.sh` derives some execution flags from the validation filename itself.
+
+- If the basename contains `_TMODE_`, the runner uses `--test`
+- If the basename contains `_SMODE_`, the runner uses `--simulate`
+- If the basename contains `_GND_`, the runner adds `--tristate-default=GND`
+- If the basename contains `_VCC_`, the runner adds `--tristate-default=VCC`
+
+Use these markers only when the test genuinely needs that runner mode or flag. Put the marker directly in the normal validation basename, for example:
+
+```text
+compiler/tests/validation/TB_6_4_TMODE_CLOCK_DIRECTIVE_FORM-clock_directive_form.jz
+compiler/tests/validation/SIM_4_12_SMODE_MARK_IF_CONDITION_COLOR-mark_if_condition_color_form.jz
+compiler/tests/validation/HDL_11_1_GND_TRISTATE_DEFAULT_GND-happy_path.jz
+compiler/tests/validation/HDL_11_1_VCC_TRISTATE_DEFAULT_VCC-happy_path.jz
+```
+
+Do not add `_TMODE_`, `_SMODE_`, `_GND_`, or `_VCC_` to unrelated tests, because doing so changes how the validation runner executes the file.
 
 ## Test Authoring Rules
 
@@ -136,10 +237,10 @@ These match the project's existing test conventions.
 ### `.jz` File Structure
 
 ```jz
-// <RULE_ID>: <brief description of what is being tested>.
+// <TARGET_ID>: <brief description of what is being tested>.
 // Each trigger is commented. Valid uses are included to verify no false positives.
 
-@project <RULE_ID>_<test_name>
+@project <TARGET_ID>_<scenario>
     CONFIG {
         WIDTH = 8;
     }
@@ -183,11 +284,13 @@ File: <FILENAME>.jz
       <line>:<col>    <severity> <RULE_ID> <message>
 ```
 
+This format applies only to diagnostic-bearing tests.
+
 - First line: `File: <filename>.jz` (basename only, no path)
 - Each diagnostic: 6-space indent, `<line>:<col>` left-aligned, then `<severity> <RULE_ID> <message>`
 - Diagnostics ordered by line number, then column number
 - Trailing newline
-- For happy-path tests: only the `File:` header line and a trailing newline
+- For happy-path tests: the paired `.out` file is empty (zero bytes). Do not include a `File:` header, diagnostics, or trailing newline.
 
 ### Getting Exact Diagnostic Output
 
@@ -198,6 +301,14 @@ compiler/build/jz-hdl --info --lint <file>.jz
 ```
 
 Use the **actual compiler output** as the `.out` file content. Do not guess line/column numbers or messages.
+
+### Post-fixture ownership verification
+
+Before marking an issue `[DONE]`, verify that the new fixture's `.out` file proves the intended issue rather than a different one.
+
+1. If the issue had a non-`—` `Primary Rule ID`, the emitted diagnostic must match that rule ownership.
+2. If the issue was a `missing-context` fix, the new context must exercise the same underlying rule behavior as the already-covered context, not a different earlier diagnostic.
+3. If the emitted diagnostic is owned by another spec section or an already-covered validation rule family, do **not** mark `[DONE]`; mark `[ISSUE-TEST]` and append a runner-log note explaining the preemption.
 
 ### Quality Checklist
 

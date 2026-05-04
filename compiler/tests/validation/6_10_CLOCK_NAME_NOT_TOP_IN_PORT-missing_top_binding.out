@@ -1,2 +1,0 @@
-File: 6_10_CLOCK_NAME_NOT_TOP_IN_PORT-missing_top_binding.jz
-      10:9    error CLOCK_NAME_NOT_TOP_IN_PORT S6.10 Clock with period in CLOCKS is not bound to any IN port on the top module

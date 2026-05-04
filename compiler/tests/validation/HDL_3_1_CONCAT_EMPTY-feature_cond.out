@@ -1,0 +1,2 @@
+File: HDL_3_1_CONCAT_EMPTY-feature_cond.jz
+      20:14   error CONCAT_EMPTY S3.2/S8.1 Empty concatenation `{}` is not allowed

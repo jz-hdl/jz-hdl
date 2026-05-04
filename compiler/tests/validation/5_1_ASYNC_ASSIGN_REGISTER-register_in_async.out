@@ -1,5 +1,0 @@
-File: 5_1_ASYNC_ASSIGN_REGISTER-register_in_async.jz
-      30:16   error ASYNC_ASSIGN_REGISTER S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block
-      63:9    error ASYNC_ASSIGN_REGISTER S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block
-      68:17   error ASYNC_ASSIGN_REGISTER S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block
-      71:17   error ASYNC_ASSIGN_REGISTER S4.7/S5.1 Cannot write REGISTER in ASYNCHRONOUS block; move assignment to a SYNCHRONOUS block

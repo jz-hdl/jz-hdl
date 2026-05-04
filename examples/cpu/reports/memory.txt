@@ -3,7 +3,7 @@ Memory Report
 Project: src/tang_nano_20k.jz
 Chip: GW2AR-18-QN88-C8-I7
 
-/Users/justinzaun/Development/jz-hdl-dev/examples/cpu/src/cpu.jz@ 68 = BLOCK MEMORY 256 Bytes (rom)
+cpu.jz@ 68 = BLOCK MEMORY 256 Bytes (rom)
     Mode:
     Requested | Read Only Memory
     Matched   | Read Only Memory
@@ -18,7 +18,7 @@ Chip: GW2AR-18-QN88-C8-I7
     Matched   | 36 bit | 9 bit      
 
 
-/Users/justinzaun/Development/jz-hdl-dev/examples/cpu/src/cpu.jz@ 71 = BLOCK MEMORY 256 Bytes (ram)
+cpu.jz@ 71 = BLOCK MEMORY 256 Bytes (ram)
     Mode:
     Requested | Semi-Dual Port
     Matched   | Semi-Dual Port

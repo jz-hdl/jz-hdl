@@ -1,8 +1,6 @@
-/*
- * alias.c - Alias context and union-find for the Verilog-2005 backend.
- *
- * This file implements signal alias resolution using disjoint-set (union-find)
- * data structures. It also handles emission of continuous alias assignments.
+/**
+ * @file alias.c
+ * @brief Alias analysis and alias-assignment emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,20 +8,91 @@
 
 #include "verilog_internal.h"
 #include "ir.h"
+#include "../../../include/util.h"
 
 /* -------------------------------------------------------------------------
  * Alias context globals
  * -------------------------------------------------------------------------
  */
 
+/**
+ * @struct AliasContext
+ * @brief Active alias-canonicalization state for one module emission pass.
+ */
 typedef struct AliasContext {
-    const IR_Module *mod;
-    int             *canonical_index; /* length = mod->num_signals */
-    int             *is_repr;         /* non-zero if signals[i] is canonical */
-    int              size;
+    const IR_Module *mod; /**< Module that owns the cached alias arrays. */
+    int *canonical_index; /**< Canonical signal index for each module signal. */
+    int *is_repr;         /**< Non-zero when the signal is the chosen representative. */
+    int size;             /**< Number of entries available in the alias arrays. */
 } AliasContext;
 
 static AliasContext g_alias_ctx = {0};
+
+/**
+ * @brief Find the representative element of a union-find set.
+ * @param parent Parent array for the disjoint-set forest.
+ * @param i Element index to resolve.
+ * @return Canonical root index for `i`.
+ */
+static int uf_find(int *parent, int i);
+
+/**
+ * @brief Merge two union-find sets by rank.
+ * @param parent Parent array for the disjoint-set forest.
+ * @param rank Rank array used for balanced unions.
+ * @param a First element to merge.
+ * @param b Second element to merge.
+ */
+static void uf_union(int *parent, int *rank, int a, int b);
+
+/**
+ * @brief Score a signal index for canonical alias selection.
+ * @param mod Module that owns the signal.
+ * @param index Signal index to score.
+ * @return Lower-is-better score used to choose the representative.
+ */
+static int alias_canonical_score(const IR_Module *mod, int index);
+
+/**
+ * @brief Choose the preferred canonical signal index for an alias pair.
+ * @param mod Module that owns both signal indices.
+ * @param a First candidate index.
+ * @param b Second candidate index.
+ * @return Selected canonical index.
+ */
+static int choose_canonical_index(const IR_Module *mod, int a, int b);
+
+/**
+ * @brief Collect alias-equivalence unions from a statement subtree.
+ * @param mod Module that owns the statement tree.
+ * @param stmt Statement subtree to inspect.
+ * @param parent Parent array for the union-find forest.
+ * @param rank Rank array for the union-find forest.
+ */
+static void collect_alias_unions_from_stmt(const IR_Module *mod,
+                                           const IR_Stmt *stmt,
+                                           int *parent,
+                                           int *rank);
+
+/**
+ * @brief Emit one continuous alias assignment when it cannot be elided.
+ * @param out Output stream for Verilog text.
+ * @param mod Module that owns the assignment.
+ * @param a Alias assignment to emit.
+ */
+static void emit_continuous_alias_assignment(FILE *out,
+                                             const IR_Module *mod,
+                                             const IR_Assignment *a);
+
+/**
+ * @brief Walk a statement tree and emit continuous alias assignments.
+ * @param out Output stream for Verilog text.
+ * @param mod Module that owns the statements.
+ * @param stmt Statement subtree to inspect.
+ */
+static void emit_continuous_alias_assignments_from_stmt(FILE *out,
+                                                        const IR_Module *mod,
+                                                        const IR_Stmt *stmt);
 
 /* -------------------------------------------------------------------------
  * Union-find helpers
@@ -543,41 +612,80 @@ void emit_continuous_alias_assignments(FILE *out, const IR_Module *mod)
  * -------------------------------------------------------------------------
  */
 
-/* Per-signal bit-coverage tracker. */
+/**
+ * @struct SignalCoverage
+ * @brief Tracks which bits of a wire are covered by alias assignments.
+ */
 typedef struct {
-    int  signal_id;
-    int  width;
-    bool has_full_alias;      /* true if any non-sliced alias covers all bits */
-    bool has_any_sliced_alias;
-    char *driven;             /* driven[bit] = 1 if covered by a sliced alias */
+    int signal_id;             /**< Signal identifier being tracked. */
+    int width;                 /**< Declared width of the tracked signal. */
+    bool has_full_alias;       /**< True when a non-sliced alias covers the full signal. */
+    bool has_any_sliced_alias; /**< True when any sliced alias targets the signal. */
+    char *driven;              /**< Per-bit flags for sliced alias coverage. */
 } SignalCoverage;
 
 static SignalCoverage *s_cov     = NULL;
 static int             s_cov_cap = 0;
 static int             s_cov_len = 0;
 
+/**
+ * @brief Find or allocate coverage storage for one signal.
+ * @param signal_id Signal identifier to track.
+ * @param width Expected width of the tracked signal.
+ * @return Coverage entry for the signal, or `NULL` on allocation failure.
+ */
 static SignalCoverage *find_or_create_coverage(int signal_id, int width)
 {
+    SignalCoverage *c = NULL;
+
     for (int i = 0; i < s_cov_len; ++i) {
         if (s_cov[i].signal_id == signal_id) {
             return &s_cov[i];
         }
     }
     if (s_cov_len >= s_cov_cap) {
-        s_cov_cap = s_cov_cap ? s_cov_cap * 2 : 16;
-        s_cov = realloc(s_cov, (size_t)s_cov_cap * sizeof(*s_cov));
+        int new_cap = s_cov_cap ? s_cov_cap * 2 : 16;
+        SignalCoverage *new_cov = NULL;
+        size_t new_bytes = 0;
+
+        if (new_cap <= s_cov_cap) {
+            return NULL;
+        }
+        if (jz_size_mul_checked((size_t)new_cap, sizeof(*s_cov), &new_bytes) != 0) {
+            return NULL;
+        }
+        new_cov = (SignalCoverage *)realloc(s_cov, new_bytes);
+        if (!new_cov) {
+            return NULL;
+        }
+        s_cov = new_cov;
+        s_cov_cap = new_cap;
     }
-    SignalCoverage *c = &s_cov[s_cov_len++];
+
+    if (width <= 0) {
+        return NULL;
+    }
+
+    c = &s_cov[s_cov_len];
     c->signal_id = signal_id;
     c->width = width;
     c->has_full_alias = false;
     c->has_any_sliced_alias = false;
-    c->driven = calloc((size_t)width, 1);
+    c->driven = (char *)calloc((size_t)width, 1);
+    if (!c->driven) {
+        return NULL;
+    }
+    s_cov_len++;
     return c;
 }
 
+/**
+ * @brief Record driven alias slices for later tieoff emission.
+ * @param mod Module that owns the statements.
+ * @param stmt Statement subtree to inspect.
+ */
 static void collect_alias_coverage_from_stmt(const IR_Module *mod,
-                                              const IR_Stmt *stmt)
+                                             const IR_Stmt *stmt)
 {
     if (!stmt) return;
 
@@ -593,6 +701,7 @@ static void collect_alias_coverage_from_stmt(const IR_Module *mod,
         if (sig->can_be_z) break;
 
         SignalCoverage *c = find_or_create_coverage(sig->id, sig->width);
+        if (!c) break;
         if (a->is_sliced) {
             c->has_any_sliced_alias = true;
             int lo = a->lhs_lsb;

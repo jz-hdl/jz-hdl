@@ -1,2 +1,0 @@
-File: 4_8_LATCH_AS_CLOCK_OR_CDC-latch_as_cdc_clock.jz
-      35:38   error LATCH_AS_CLOCK_OR_CDC S4.8/S4.12 LATCH may not be used as a clock signal or in CDC declarations

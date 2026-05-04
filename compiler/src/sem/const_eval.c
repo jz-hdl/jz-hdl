@@ -1,3 +1,8 @@
+/**
+ * @file const_eval.c
+ * @brief Integer constant-expression evaluation for semantic analysis.
+ */
+
 #include <ctype.h>
 #include <limits.h>
 #include <math.h>
@@ -5,6 +10,7 @@
 #include <string.h>
 
 #include "sem.h"
+#include "util.h"
 
 /* Simple recursive-descent expression parser for integer constant expressions.
  * Grammar (roughly, with standard precedence):
@@ -25,38 +31,50 @@
  *                | "(" expr ")"
  */
 
+/**
+ * @enum TokenKind
+ * @brief Lexer token kinds for the standalone constant-expression parser.
+ */
 typedef enum TokenKind {
-    TK_EOF = 0,
-    TK_INT,
-    TK_IDENT,
-    TK_PLUS,
-    TK_MINUS,
-    TK_STAR,
-    TK_SLASH,
-    TK_PERCENT,
-    TK_LPAREN,
-    TK_RPAREN,
-    TK_EQEQ,
-    TK_NEQ,
-    TK_LT,
-    TK_LE,
-    TK_GT,
-    TK_GE,
-    TK_SHL,
-    TK_SHR,
-    TK_ASHR,
-    TK_AND_AND,
-    TK_OR_OR
+    TK_EOF = 0, /**< End of input. */
+    TK_INT,     /**< Decimal integer literal. */
+    TK_IDENT,   /**< Identifier or builtin name. */
+    TK_PLUS,    /**< `+`. */
+    TK_MINUS,   /**< `-`. */
+    TK_STAR,    /**< `*`. */
+    TK_SLASH,   /**< `/`. */
+    TK_PERCENT, /**< `%`. */
+    TK_LPAREN,  /**< `(`. */
+    TK_RPAREN,  /**< `)`. */
+    TK_EQEQ,    /**< `==`. */
+    TK_NEQ,     /**< `!=`. */
+    TK_LT,      /**< `<`. */
+    TK_LE,      /**< `<=`. */
+    TK_GT,      /**< `>`. */
+    TK_GE,      /**< `>=`. */
+    TK_SHL,     /**< `<<`. */
+    TK_SHR,     /**< `>>`. */
+    TK_ASHR,    /**< `>>>`. */
+    TK_AND_AND, /**< `&&`. */
+    TK_OR_OR    /**< `||`. */
 } TokenKind;
 
+/**
+ * @struct Token
+ * @brief One token emitted by the constant-expression lexer.
+ */
 typedef struct Token {
-    TokenKind kind;
-    long long int_val; /* valid when kind == TK_INT */
-    char      ident[64]; /* small, fixed-size identifier buffer */
+    TokenKind kind;      /**< Token category. */
+    long long int_val;   /**< Integer literal value when `kind == TK_INT`. */
+    char      ident[64]; /**< Small fixed-size identifier buffer. */
 } Token;
 
+/**
+ * @struct Lexer
+ * @brief Cursor state for the standalone constant-expression lexer.
+ */
 typedef struct Lexer {
-    const char *p;
+    const char *p; /**< Current source pointer. */
 } Lexer;
 
 static void lex_init(Lexer *lx, const char *src)
@@ -223,6 +241,7 @@ typedef struct Parser {
     Token cur;
     const JZConstEvalOptions *opts;
     int   error;
+    unsigned expr_depth;
 } Parser;
 
 static void parser_init(Parser *p, const char *src, const JZConstEvalOptions *opts)
@@ -231,6 +250,7 @@ static void parser_init(Parser *p, const char *src, const JZConstEvalOptions *op
     p->cur = lex_one(&p->lx);
     p->opts = opts;
     p->error = 0;
+    p->expr_depth = 0;
 }
 
 static void parser_diag(Parser *p, const char *msg)
@@ -244,6 +264,19 @@ static void parser_diag(Parser *p, const char *msg)
         loc.column = 1;
         jz_diagnostic_report(p->opts->diagnostics, loc, JZ_SEVERITY_ERROR,
                              "CONST001", msg);
+    }
+}
+
+static void parser_diag_rule(Parser *p, const char *code, const char *msg)
+{
+    if (p->error) return;
+    p->error = 1;
+    if (p->opts && p->opts->diagnostics) {
+        JZLocation loc;
+        loc.filename = p->opts->filename;
+        loc.line = 1;
+        loc.column = 1;
+        (void)jz_diagnostic_report_rule(p->opts->diagnostics, loc, code, msg);
     }
 }
 
@@ -268,6 +301,22 @@ static void advance(Parser *p)
 
 static long long parse_expr(Parser *p);
 static long long parse_shift(Parser *p);
+
+static int parser_enter_expr_depth(Parser *p)
+{
+    if (jz_depth_enter_checked(&p->expr_depth, JZ_LIMIT_CONST_EVAL_DEPTH) != 0) {
+        parser_diag_rule(p,
+                         "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",
+                         "constant expression nesting exceeds the compiler safety limit");
+        return -1;
+    }
+    return 0;
+}
+
+static void parser_leave_expr_depth(Parser *p)
+{
+    jz_depth_leave(&p->expr_depth);
+}
 
 static long long parse_primary(Parser *p)
 {
@@ -331,11 +380,16 @@ static long long parse_unary(Parser *p)
 
     if (p->cur.kind == TK_PLUS) {
         advance(p);
-        return parse_unary(p);
+        if (parser_enter_expr_depth(p) != 0) return 0;
+        long long v = parse_unary(p);
+        parser_leave_expr_depth(p);
+        return v;
     }
     if (p->cur.kind == TK_MINUS) {
         advance(p);
+        if (parser_enter_expr_depth(p) != 0) return 0;
         long long v = parse_unary(p);
+        parser_leave_expr_depth(p);
         return -v;
     }
     return parse_primary(p);
@@ -477,7 +531,11 @@ static long long parse_logical_or(Parser *p)
 
 static long long parse_expr(Parser *p)
 {
-    return parse_logical_or(p);
+    long long value = 0;
+    if (parser_enter_expr_depth(p) != 0) return 0;
+    value = parse_logical_or(p);
+    parser_leave_expr_depth(p);
+    return value;
 }
 
 int jz_const_eval_expr(const char *expr,
@@ -543,6 +601,7 @@ typedef struct EnvParser {
     EvalEnv *env;
     size_t  current_index;
     int     error;
+    unsigned expr_depth;
 } EnvParser;
 
 static void env_parser_diag(EnvParser *p, const char *msg)
@@ -559,6 +618,19 @@ static void env_parser_diag(EnvParser *p, const char *msg)
     }
 }
 
+static void env_parser_diag_rule(EnvParser *p, const char *code, const char *msg)
+{
+    if (p->error) return;
+    p->error = 1;
+    if (p->env && p->env->opts && p->env->opts->diagnostics) {
+        JZLocation loc;
+        loc.filename = p->env->opts->filename;
+        loc.line = 1;
+        loc.column = 1;
+        (void)jz_diagnostic_report_rule(p->env->opts->diagnostics, loc, code, msg);
+    }
+}
+
 static void env_parser_init(EnvParser *p, const char *src,
                             EvalEnv *env, size_t index)
 {
@@ -567,6 +639,7 @@ static void env_parser_init(EnvParser *p, const char *src,
     p->env = env;
     p->current_index = index;
     p->error = 0;
+    p->expr_depth = 0;
 }
 
 static void env_advance(EnvParser *p)
@@ -579,6 +652,22 @@ static void env_advance(EnvParser *p)
 static int eval_one(EvalEnv *env, size_t index);
 static long long env_parse_expr(EnvParser *p);
 static long long env_parse_shift(EnvParser *p);
+
+static int env_parser_enter_expr_depth(EnvParser *p)
+{
+    if (jz_depth_enter_checked(&p->expr_depth, JZ_LIMIT_CONST_EVAL_DEPTH) != 0) {
+        env_parser_diag_rule(p,
+                             "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",
+                             "constant expression nesting exceeds the compiler safety limit");
+        return -1;
+    }
+    return 0;
+}
+
+static void env_parser_leave_expr_depth(EnvParser *p)
+{
+    jz_depth_leave(&p->expr_depth);
+}
 
 static long long env_parse_primary(EnvParser *p)
 {
@@ -659,11 +748,16 @@ static long long env_parse_unary(EnvParser *p)
     if (p->error) return 0;
     if (p->cur.kind == TK_PLUS) {
         env_advance(p);
-        return env_parse_unary(p);
+        if (env_parser_enter_expr_depth(p) != 0) return 0;
+        long long v = env_parse_unary(p);
+        env_parser_leave_expr_depth(p);
+        return v;
     }
     if (p->cur.kind == TK_MINUS) {
         env_advance(p);
+        if (env_parser_enter_expr_depth(p) != 0) return 0;
         long long v = env_parse_unary(p);
+        env_parser_leave_expr_depth(p);
         return -v;
     }
     return env_parse_primary(p);
@@ -805,7 +899,11 @@ static long long env_parse_logical_or(EnvParser *p)
 
 static long long env_parse_expr(EnvParser *p)
 {
-    return env_parse_logical_or(p);
+    long long value = 0;
+    if (env_parser_enter_expr_depth(p) != 0) return 0;
+    value = env_parse_logical_or(p);
+    env_parser_leave_expr_depth(p);
+    return value;
 }
 
 static int eval_one(EvalEnv *env, size_t index)

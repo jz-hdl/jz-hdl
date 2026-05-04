@@ -1,7 +1,13 @@
+/**
+ * @file arena.c
+ * @brief Implements the region allocator declared in arena.h.
+ */
+
 #include <stdlib.h>
 #include <string.h>
 
 #include "../include/arena.h"
+#include "../include/util.h"
 
 #define JZ_ARENA_DEFAULT_BLOCK_SIZE 4096
 
@@ -21,17 +27,32 @@ void *jz_arena_alloc(JZArena *arena, size_t size)
     }
 
     /* Ensure alignment to pointer size. */
-    size = (size + sizeof(void *) - 1) & ~(sizeof(void *) - 1);
+    if (jz_size_align_up_checked(size, sizeof(void *), &size) != 0) {
+        return NULL;
+    }
 
     JZArenaBlock *block = arena->head;
-    if (!block || block->used + size > block->capacity) {
-        size_t min_bytes = size + sizeof(JZArenaBlock);
+    JZArenaBlock *head = arena->head;
+    if (!block) {
+        /* handled below */
+    } else {
+        size_t used_plus_size = 0;
+        if (jz_size_add_checked(block->used, size, &used_plus_size) != 0 ||
+            used_plus_size > block->capacity) {
+            block = NULL;
+        }
+    }
+    if (!block) {
+        size_t min_bytes = 0;
+        if (jz_size_add_checked(size, sizeof(JZArenaBlock), &min_bytes) != 0) {
+            return NULL;
+        }
         size_t req = arena->block_size > min_bytes ? arena->block_size : min_bytes;
         JZArenaBlock *new_block = (JZArenaBlock *)malloc(req);
         if (!new_block) {
             return NULL;
         }
-        new_block->next = block;
+        new_block->next = head;
         new_block->used = 0;
         new_block->capacity = req - sizeof(JZArenaBlock);
         arena->head = new_block;
@@ -39,7 +60,9 @@ void *jz_arena_alloc(JZArena *arena, size_t size)
     }
 
     void *ptr = block->data + block->used;
-    block->used += size;
+    if (jz_size_add_checked(block->used, size, &block->used) != 0) {
+        return NULL;
+    }
     return ptr;
 }
 

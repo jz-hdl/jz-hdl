@@ -1,0 +1,57 @@
+// TYPE_BINOP_WIDTH_MISMATCH: differing-width operands are explicitly extended
+// before multiplication so the `*` sees equal-width operands.
+
+@project TYPE_BINOP_WIDTH_MISMATCH_explicit_extension_before_multiply_ok
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [4]  a4 = _;
+        IN  [4]  b4 = _;
+        OUT [10] prod = _;
+    }
+@endproj
+
+@module MulHelper
+    PORT {
+        IN  [1]  clk;
+        IN  [4]  a4;
+        IN  [4]  b4;
+        OUT [10] prod;
+    }
+    REGISTER {
+        r_prod [10] = 10'd0;
+    }
+    ASYNCHRONOUS {
+        prod = r_prod;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger-free happy path: both operands are explicitly widened to 5 bits
+        // with concatenation before multiplication.
+        r_prod <= {1'b0, a4} * {1'b0, b4};
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [4]  a4;
+        IN  [4]  b4;
+        OUT [10] prod;
+    }
+    WIRE {
+        helper_prod [10];
+    }
+    ASYNCHRONOUS {
+        prod = helper_prod;
+    }
+
+    @new mul_ok MulHelper {
+        IN  [1]  clk = clk;
+        IN  [4]  a4 = a4;
+        IN  [4]  b4 = b4;
+        OUT [10] prod = helper_prod;
+    };
+@endmod

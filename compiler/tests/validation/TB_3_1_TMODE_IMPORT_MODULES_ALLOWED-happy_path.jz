@@ -1,0 +1,33 @@
+// IMPORT_MODULES_ALLOWED: @import inside @testbench is accepted and brings
+// the imported module into scope for the testbench header and @new binding.
+
+@testbench ImportedTbDirectiveDut
+    @import "TB_3_1_TMODE_IMPORT_MODULES_ALLOWED-happy_path_helper_lib.jz";
+
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        en [1];
+        din [1];
+        q [1];
+    }
+
+    TEST "imported module is in scope" {
+        @new dut ImportedTbDirectiveDut {
+            clk [1] = clk;
+            en [1] = en;
+            din [1] = din;
+            q [1] = q;
+        }
+
+        @setup {
+            en <= 1'b1;
+            din <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(q, 1'b1)
+    }
+@endtb

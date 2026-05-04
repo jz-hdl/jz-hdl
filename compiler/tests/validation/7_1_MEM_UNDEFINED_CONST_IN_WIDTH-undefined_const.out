@@ -1,3 +1,0 @@
-File: 7_1_MEM_UNDEFINED_CONST_IN_WIDTH-undefined_const.jz
-      27:9    error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly
-      61:9    error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly

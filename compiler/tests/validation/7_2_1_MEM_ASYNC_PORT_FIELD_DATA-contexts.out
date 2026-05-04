@@ -1,4 +1,0 @@
-File: 7_2_1_MEM_ASYNC_PORT_FIELD_DATA-contexts.jz
-      56:13   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)
-      59:14   error FEATURE_EXPR_INVALID_CONTEXT S4.14 Feature guard condition may only reference CONFIG.<name>, module CONST, and literals
-      72:14   error MEM_ASYNC_PORT_FIELD_DATA S7.2.1/S7.3.1/S7.7.2 ASYNC read ports must be indexed; mem.port.data is SYNC-only

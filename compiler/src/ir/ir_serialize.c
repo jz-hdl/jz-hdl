@@ -5,8 +5,49 @@
 
 #include "../../include/ir_serialize.h"
 #include "../../include/diagnostic.h"
+#include "../../include/util.h"
+
+static unsigned s_ir_json_expr_depth = 0;
+static unsigned s_ir_json_stmt_depth = 0;
+static int s_ir_json_expr_depth_reported = 0;
+static int s_ir_json_stmt_depth_reported = 0;
+static int s_ir_json_depth_failed = 0;
+static JZDiagnosticList *s_ir_json_diagnostics = NULL;
+static const char *s_ir_json_input_filename = NULL;
+
+/**
+ * @brief Report an IR JSON serialization depth-limit diagnostic once.
+ *
+ * @param reported    Flag used to suppress duplicate reports for the same limit.
+ * @param code        Diagnostic rule code to emit.
+ * @param fallback    Human-readable fallback message.
+ * @param source_line Source line associated with the current IR node.
+ */
+static void ir_json_report_depth_limit_once(int *reported,
+                                            const char *code,
+                                            const char *fallback,
+                                            int source_line)
+{
+    JZLocation loc;
+
+    loc.filename = s_ir_json_input_filename ? s_ir_json_input_filename : "<ir>";
+    loc.line = source_line > 0 ? source_line : 1;
+    loc.column = 0;
+    s_ir_json_depth_failed = 1;
+    (void)jz_diagnostic_report_rule_once(reported,
+                                         s_ir_json_diagnostics,
+                                         loc,
+                                         code,
+                                         fallback);
+}
 
 /* Simple JSON string escaper for names and paths. */
+/**
+ * @brief Write a JSON-escaped string value.
+ *
+ * @param out Destination output stream.
+ * @param s   String value to emit, or NULL for an empty string.
+ */
 static void json_write_string(FILE *out, const char *s)
 {
     fputc('"', out);
@@ -32,6 +73,12 @@ static void json_write_string(FILE *out, const char *s)
     fputc('"', out);
 }
 
+/**
+ * @brief Convert an IR signal kind to its JSON tag.
+ *
+ * @param kind IR signal kind.
+ * @return Stable JSON string for the kind.
+ */
 static const char *ir_signal_kind_string(IR_SignalKind kind)
 {
     switch (kind) {
@@ -43,6 +90,12 @@ static const char *ir_signal_kind_string(IR_SignalKind kind)
     }
 }
 
+/**
+ * @brief Convert an IR port direction to its JSON tag.
+ *
+ * @param dir IR port direction.
+ * @return Stable JSON string for the direction.
+ */
 static const char *ir_port_direction_string(IR_PortDirection dir)
 {
     switch (dir) {
@@ -53,6 +106,12 @@ static const char *ir_port_direction_string(IR_PortDirection dir)
     }
 }
 
+/**
+ * @brief Convert an IR assignment kind to its JSON tag.
+ *
+ * @param kind IR assignment kind.
+ * @return Stable JSON string for the kind.
+ */
 static const char *ir_assignment_kind_string(IR_AssignmentKind kind)
 {
     switch (kind) {
@@ -69,6 +128,12 @@ static const char *ir_assignment_kind_string(IR_AssignmentKind kind)
     }
 }
 
+/**
+ * @brief Convert an IR expression kind to its JSON tag.
+ *
+ * @param kind IR expression kind.
+ * @return Stable JSON string for the kind.
+ */
 static const char *ir_expr_kind_string(IR_ExprKind kind)
 {
     switch (kind) {
@@ -138,7 +203,35 @@ static const char *ir_expr_kind_string(IR_ExprKind kind)
     }
 }
 
+/**
+ * @brief Serialize an expression node without performing depth checks.
+ *
+ * @param out  Destination output stream.
+ * @param expr Expression to serialize.
+ */
+static void json_write_expr_impl(FILE *out, const IR_Expr *expr);
+
+/**
+ * @brief Serialize an IR expression as JSON with depth protection.
+ *
+ * @param out  Destination output stream.
+ * @param expr Expression to serialize.
+ */
 static void json_write_expr(FILE *out, const IR_Expr *expr)
+{
+    if (jz_depth_enter_checked(&s_ir_json_expr_depth, JZ_LIMIT_IR_EXPR_DEPTH) != 0) {
+        ir_json_report_depth_limit_once(&s_ir_json_expr_depth_reported,
+                                        "IR_EXPR_DEPTH_LIMIT_EXCEEDED",
+                                        "IR expression serialization exceeds the compiler safety limit",
+                                        expr ? expr->source_line : 0);
+        fputs("{ \"kind\": \"expr_depth_limit\" }", out);
+        return;
+    }
+    json_write_expr_impl(out, expr);
+    jz_depth_leave(&s_ir_json_expr_depth);
+}
+
+static void json_write_expr_impl(FILE *out, const IR_Expr *expr)
 {
     if (!expr) {
         fputs("null", out);
@@ -274,7 +367,29 @@ static void json_write_expr(FILE *out, const IR_Expr *expr)
     fputs(" }", out);
 }
 
+static void json_write_stmt_impl(FILE *out, const IR_Stmt *stmt);
+
+/**
+ * @brief Serialize an IR statement as JSON with depth protection.
+ *
+ * @param out  Destination output stream.
+ * @param stmt Statement to serialize.
+ */
 static void json_write_stmt(FILE *out, const IR_Stmt *stmt)
+{
+    if (jz_depth_enter_checked(&s_ir_json_stmt_depth, JZ_LIMIT_IR_STATEMENT_DEPTH) != 0) {
+        ir_json_report_depth_limit_once(&s_ir_json_stmt_depth_reported,
+                                        "IR_STMT_DEPTH_LIMIT_EXCEEDED",
+                                        "IR statement serialization exceeds the compiler safety limit",
+                                        stmt ? stmt->source_line : 0);
+        fputs("{ \"kind\": \"stmt_depth_limit\" }", out);
+        return;
+    }
+    json_write_stmt_impl(out, stmt);
+    jz_depth_leave(&s_ir_json_stmt_depth);
+}
+
+static void json_write_stmt_impl(FILE *out, const IR_Stmt *stmt)
 {
     if (!stmt) {
         fputs("null", out);
@@ -1053,6 +1168,13 @@ int jz_ir_write_json(const IR_Design *design,
     if (!design || !filename) {
         return -1;
     }
+    s_ir_json_expr_depth = 0;
+    s_ir_json_stmt_depth = 0;
+    s_ir_json_expr_depth_reported = 0;
+    s_ir_json_stmt_depth_reported = 0;
+    s_ir_json_depth_failed = 0;
+    s_ir_json_diagnostics = diagnostics;
+    s_ir_json_input_filename = input_filename;
 
     FILE *out = NULL;
     int close_out = 0;
@@ -1064,24 +1186,7 @@ int jz_ir_write_json(const IR_Design *design,
         out = stdout;
         close_out = 0;
     } else {
-        /* Write to a temporary file in the same directory, then rename on
-         * success so callers never see a partially written IR file.
-         */
-        int n = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", filename);
-        if (n <= 0 || (size_t)n >= sizeof(tmp_path)) {
-            if (diagnostics && input_filename) {
-                JZLocation loc = { input_filename, 1, 1 };
-                jz_diagnostic_report(diagnostics,
-                                     loc,
-                                     JZ_SEVERITY_ERROR,
-                                     "IO_IR",
-                                     "failed to construct temporary IR output filename");
-            }
-            return -1;
-        }
-
-        out = fopen(tmp_path, "w");
-        if (!out) {
+        if (jz_open_exclusive_temp_output(filename, &out, tmp_path, sizeof(tmp_path)) != 0) {
             if (diagnostics && input_filename) {
                 JZLocation loc = { input_filename, 1, 1 };
                 jz_diagnostic_report(diagnostics,
@@ -1182,53 +1287,24 @@ int jz_ir_write_json(const IR_Design *design,
     fprintf(out, "}\n");
 
     if (close_out) {
-        /* For file-backed output, ensure we detect I/O errors before renaming
-         * the temporary file into place.
-         */
-        if (fflush(out) != 0 || ferror(out)) {
-            fclose(out);
-            if (tmp_path[0] != '\0') {
-                /* Best-effort cleanup; ignore errors. */
-                (void)remove(tmp_path);
-            }
+        if (tmp_path[0] != '\0' &&
+            jz_commit_exclusive_temp_output(out, tmp_path, filename) != 0) {
             if (diagnostics && input_filename) {
                 JZLocation loc = { input_filename, 1, 1 };
                 jz_diagnostic_report(diagnostics,
                                      loc,
                                      JZ_SEVERITY_ERROR,
                                      "IO_IR",
-                                     "failed to write complete IR output");
+                                     "failed to finalize IR output file");
             }
             return -1;
-        }
-        if (fclose(out) != 0) {
-            if (tmp_path[0] != '\0') {
-                (void)remove(tmp_path);
-            }
-            if (diagnostics && input_filename) {
-                JZLocation loc = { input_filename, 1, 1 };
-                jz_diagnostic_report(diagnostics,
-                                     loc,
-                                     JZ_SEVERITY_ERROR,
-                                     "IO_IR",
-                                     "failed to close IR output stream");
-            }
-            return -1;
-        }
-        if (tmp_path[0] != '\0') {
-            if (rename(tmp_path, filename) != 0) {
-                (void)remove(tmp_path);
-                if (diagnostics && input_filename) {
-                    JZLocation loc = { input_filename, 1, 1 };
-                    jz_diagnostic_report(diagnostics,
-                                         loc,
-                                         JZ_SEVERITY_ERROR,
-                                         "IO_IR",
-                                         "failed to move temporary IR file into place");
-                }
-                return -1;
-            }
         }
     }
-    return 0;
+    s_ir_json_diagnostics = NULL;
+    s_ir_json_input_filename = NULL;
+    return s_ir_json_depth_failed ? -1 : 0;
 }
+/**
+ * @file ir_serialize.c
+ * @brief JSON serialization for IR designs and nested IR nodes.
+ */

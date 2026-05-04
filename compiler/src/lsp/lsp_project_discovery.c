@@ -32,10 +32,16 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #ifndef _WIN32
+#include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
+#endif
+
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0
 #endif
 
 #define RC_FILENAME ".jzhdl-lsp.rc"
@@ -43,6 +49,58 @@
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
+
+/**
+ * @brief Extract CHIP and project-name metadata from project source text.
+ * @param content Full source text to scan.
+ * @param chip Buffer that receives the CHIP attribute value.
+ * @param chip_cap Capacity of @p chip in bytes.
+ * @param name Buffer that receives the project name.
+ * @param name_cap Capacity of @p name in bytes.
+ */
+static void extract_project_metadata(const char *content,
+                                     char *chip, size_t chip_cap,
+                                     char *name, size_t name_cap);
+
+/**
+ * @brief Read a `.jz` file and detect whether it contains `@project`.
+ * @param path Source file to inspect.
+ * @param chip Buffer that receives the CHIP attribute value.
+ * @param chip_cap Capacity of @p chip in bytes.
+ * @param name Buffer that receives the project name.
+ * @param name_cap Capacity of @p name in bytes.
+ * @return 1 when a project directive is found or 0 otherwise.
+ */
+static int file_get_project_info(const char *path,
+                                 char *chip, size_t chip_cap,
+                                 char *name, size_t name_cap);
+
+/**
+ * @brief Split a file path into its containing directory.
+ * @param filepath Source path to split.
+ * @param dir Output buffer for the directory path.
+ * @param dir_cap Capacity of @p dir in bytes.
+ */
+static void extract_directory(const char *filepath, char *dir, size_t dir_cap);
+
+/**
+ * @brief Canonicalize a path when possible.
+ * @param path Path to canonicalize.
+ * @param out Output buffer for the normalized path.
+ * @param out_cap Capacity of @p out in bytes.
+ */
+static void canonicalize_path(const char *path, char *out, size_t out_cap);
+
+/**
+ * @brief Append a deduplicated project entry to a list.
+ * @param list Project list to update.
+ * @param file Canonical project file path.
+ * @param chip CHIP metadata to store.
+ * @param name Project name metadata to store.
+ */
+static void add_project_entry(LspProjectList *list,
+                              const char *file, const char *chip,
+                              const char *name);
 
 /**
  * @brief Extract CHIP and PROJECT_NAME from a @project directive line.
@@ -125,7 +183,9 @@ static int file_get_project_info(const char *path,
                                  char *name, size_t name_cap)
 {
     size_t size = 0;
-    char *content = jz_read_entire_file(path, &size);
+    char *content = jz_read_entire_file_limit(path,
+                                              jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                              &size);
     if (!content) return 0;
 
     chip[0] = '\0';
@@ -212,7 +272,9 @@ static void add_project_entry(LspProjectList *list,
 static int read_rc_file(const char *rc_path, LspProjectList *out)
 {
     size_t size = 0;
-    char *content = jz_read_entire_file(rc_path, &size);
+    char *content = jz_read_entire_file_limit(rc_path,
+                                              jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                              &size);
     if (!content || size == 0) {
         free(content);
         return -1;
@@ -292,20 +354,63 @@ static int read_rc_file(const char *rc_path, LspProjectList *out)
 static void write_rc_file(const char *dir, const LspProjectList *projects)
 {
     char rc_path[2048];
+    FILE *f = NULL;
+    char tmp_path[2048];
     snprintf(rc_path, sizeof(rc_path), "%s/%s", dir, RC_FILENAME);
 
-    FILE *f = fopen(rc_path, "w");
+#ifndef _WIN32
+    if (jz_open_exclusive_temp_output(rc_path, &f, tmp_path, sizeof(tmp_path)) != 0) {
+        lsp_log("failed to create temporary rc file for %s", rc_path);
+        return;
+    }
+#else
+    f = fopen(rc_path, "w");
     if (!f) {
         lsp_log("failed to write %s", rc_path);
         return;
     }
+#endif
 
     for (size_t i = 0; i < projects->count; i++) {
         const LspProjectEntry *e = &projects->entries[i];
         fprintf(f, "%s %s %s\n", e->file, e->chip, e->name);
     }
 
-    fclose(f);
+    if (fflush(f) != 0 || ferror(f)) {
+#ifndef _WIN32
+        fclose(f);
+        if (tmp_path[0] != '\0') {
+            unlink(tmp_path);
+        }
+        lsp_log("failed to flush %s", tmp_path);
+#else
+        fclose(f);
+        lsp_log("failed to flush %s", rc_path);
+#endif
+        return;
+    }
+
+    if (fclose(f) != 0) {
+#ifndef _WIN32
+        unlink(tmp_path);
+        lsp_log("failed to close %s", tmp_path);
+#else
+        lsp_log("failed to close %s", rc_path);
+#endif
+        return;
+    }
+
+#ifndef _WIN32
+    if (jz_commit_exclusive_temp_output(f, tmp_path, rc_path) != 0) {
+        lsp_log("failed to replace %s", rc_path);
+        return;
+    }
+#else
+    if (fclose(f) != 0) {
+        lsp_log("failed to close %s", rc_path);
+        return;
+    }
+#endif
     lsp_log("wrote %s with %zu project(s)", rc_path, projects->count);
 }
 
@@ -441,7 +546,9 @@ static int project_imports_file(const char *project_path,
                                 const char *target_file)
 {
     size_t size = 0;
-    char *content = jz_read_entire_file(project_path, &size);
+    char *content = jz_read_entire_file_limit(project_path,
+                                              jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                              &size);
     if (!content) return 0;
 
     /* Get the project file's directory for resolving relative imports. */
@@ -535,7 +642,9 @@ int lsp_discover_projects(const char *filepath,
         } else {
             /* Fall back to reading from disk. */
             size_t fsize = 0;
-            char *content = jz_read_entire_file(filepath, &fsize);
+            char *content = jz_read_entire_file_limit(filepath,
+                                                      jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                                      &fsize);
             if (content) {
                 extract_project_metadata(content, chip, sizeof(chip),
                                          name, sizeof(name));

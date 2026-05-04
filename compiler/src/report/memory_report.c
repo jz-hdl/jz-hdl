@@ -1,37 +1,57 @@
+/**
+ * @file memory_report.c
+ * @brief Human-readable memory resource reporting for semantic analysis.
+ */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include "sem_driver.h"
 #include "chip_data.h"
+#include "path_security.h"
 #include "util.h"
 #include "../sem/driver_internal.h"
 #include "../chip_data_internal.h"
 
+/**
+ * @struct JZChipMemConfigEntry
+ * @brief One width/depth operating point for a memory resource.
+ */
 typedef struct JZChipMemConfigEntry {
-    unsigned width;
-    unsigned depth;
+    unsigned width; /**< Supported data width in bits. */
+    unsigned depth; /**< Supported storage depth in words. */
 } JZChipMemConfigEntry;
 
+/**
+ * @struct JZChipMemModeInfo
+ * @brief One named mode for a chip memory resource.
+ */
 typedef struct JZChipMemModeInfo {
-    char    *name;
-    unsigned r_ports;
-    unsigned w_ports;
-    unsigned port_count; /* Number of physical ports (1=shared, 2=separate) */
-    JZBuffer configs; /* JZChipMemConfigEntry[] */
+    char    *name;       /**< Heap-allocated mode name. */
+    unsigned r_ports;    /**< Number of logical read ports. */
+    unsigned w_ports;    /**< Number of logical write ports. */
+    unsigned port_count; /**< Number of physical ports, such as 1 shared or 2 separate. */
+    JZBuffer configs;    /**< Array of `JZChipMemConfigEntry` values for the mode. */
 } JZChipMemModeInfo;
 
+/**
+ * @struct JZChipMemInfo
+ * @brief Aggregated chip-memory capabilities for one memory class.
+ */
 typedef struct JZChipMemInfo {
-    JZChipMemType type;
-    unsigned total_bits;
-    unsigned quantity;
-    unsigned bits_per_block;
-    unsigned r_ports;
-    unsigned w_ports;
-    JZBuffer configs; /* JZChipMemConfigEntry[] */
-    JZBuffer modes;   /* JZChipMemModeInfo[] */
+    JZChipMemType type;      /**< Memory class, such as block RAM or distributed RAM. */
+    unsigned total_bits;     /**< Total available bits across all blocks of this class. */
+    unsigned quantity;       /**< Number of blocks or resources of this class. */
+    unsigned bits_per_block; /**< Capacity of one block in bits when known. */
+    unsigned r_ports;        /**< Aggregate read-port capability. */
+    unsigned w_ports;        /**< Aggregate write-port capability. */
+    JZBuffer configs;        /**< Array of `JZChipMemConfigEntry` values for generic configs. */
+    JZBuffer modes;          /**< Array of `JZChipMemModeInfo` values for named modes. */
 } JZChipMemInfo;
 
 static int g_mem_report_enabled = 0;
@@ -42,8 +62,10 @@ static const char *g_mem_report_input = NULL;
 
 void jz_sem_enable_memory_report(FILE *out,
                                  const char *tool_version,
-                                 const char *input_filename)
+                                 const char *input_filename,
+                                 JZDiagnosticList *diagnostics)
 {
+    (void)diagnostics;
     g_mem_report_enabled = (out != NULL);
     g_mem_report_out = out;
     g_mem_report_version = tool_version;
@@ -97,6 +119,7 @@ static char *jz_build_chip_json_path(const char *project_filename,
                                      const char *chip_id)
 {
     if (!chip_id || !chip_id[0]) return NULL;
+    char *base_dir = NULL;
     const char *slash = NULL;
     if (project_filename) {
         slash = strrchr(project_filename, '/');
@@ -107,23 +130,37 @@ static char *jz_build_chip_json_path(const char *project_filename,
     }
 
     const char *dir = ".";
-    size_t dir_len = 1;
     if (slash) {
-        dir = project_filename;
-        dir_len = (size_t)(slash - project_filename);
+        size_t dir_len = (size_t)(slash - project_filename);
+        if (dir_len == 0) {
+            dir = "/";
+        } else {
+            base_dir = (char *)malloc(dir_len + 1);
+            if (!base_dir) return NULL;
+            memcpy(base_dir, project_filename, dir_len);
+            base_dir[dir_len] = '\0';
+            dir = base_dir;
+        }
     }
 
     size_t chip_len = strlen(chip_id);
-    size_t total = dir_len + 1 + chip_len + 5;
-    char *out = (char *)malloc(total);
-    if (!out) return NULL;
+    if (chip_len > SIZE_MAX - 6) return NULL;
 
-    memcpy(out, dir, dir_len);
-    out[dir_len] = '\0';
-    strcat(out, "/");
-    strcat(out, chip_id);
-    strcat(out, ".json");
-    return out;
+    char *raw = (char *)malloc(chip_len + 6);
+    if (!raw) return NULL;
+
+    memcpy(raw, chip_id, chip_len);
+    memcpy(raw + chip_len, ".json", 6);
+
+    JZLocation loc = {
+        project_filename ? project_filename : "<memory-report>",
+        1,
+        1
+    };
+    char *validated = jz_path_validate(raw, dir, loc, NULL);
+    free(base_dir);
+    free(raw);
+    return validated;
 }
 
 static const char *jz_load_chip_json(const char *chip_id,
@@ -137,14 +174,18 @@ static const char *jz_load_chip_json(const char *chip_id,
     char *path_lower = NULL;
     char *json = NULL;
     if (path) {
-        json = jz_read_entire_file(path, NULL);
+        json = jz_read_entire_file_limit(path,
+                                         jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                         NULL);
     }
     if (!json) {
         char *lower = jz_strdup_lower(chip_id);
         if (lower) {
             path_lower = jz_build_chip_json_path(project_filename, lower);
             if (path_lower) {
-                json = jz_read_entire_file(path_lower, NULL);
+                json = jz_read_entire_file_limit(path_lower,
+                                                 jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                                 NULL);
             }
         }
         free(lower);

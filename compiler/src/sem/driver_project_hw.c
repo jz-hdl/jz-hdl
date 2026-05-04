@@ -1,7 +1,13 @@
+/**
+ * @file driver_project_hw.c
+ * @brief Hardware-focused project semantic checks.
+ */
+
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdio.h>
 
 #include "sem_driver.h"
 #include "sem.h"
@@ -14,12 +20,28 @@
  * -------------------------------------------------------------------------
  */
 
+/**
+ * @brief Parse a non-negative decimal integer.
+ * @param s Source text to parse.
+ * @param out Output location for the parsed value.
+ * @return Non-zero on success.
+ */
 static int sem_parse_nonnegative_simple(const char *s, unsigned *out)
 {
     return parse_simple_nonnegative_int(s, out);
 }
 
+/** @brief Check whether a clock name is produced by a `CLOCK_GEN` unit.
+ *  @param project Project root node.
+ *  @param clock_name Clock name to search for.
+ *  @return Non-zero when the name matches a generated clock output.
+ */
 static int is_clock_gen_output(JZASTNode *project, const char *clock_name);
+/** @brief Check whether a clock name is consumed by a `CLOCK_GEN` unit.
+ *  @param project Project root node.
+ *  @param clock_name Clock name to search for.
+ *  @return Non-zero when the name matches a generated clock input.
+ */
 static int is_clock_gen_input(JZASTNode *project, const char *clock_name);
 static int is_clock_gen_named_signal(JZASTNode *project,
                                      const char *signal_name,
@@ -31,6 +53,14 @@ static int sem_is_valid_diff_reset_ref(JZASTNode *project,
                                        const JZBuffer *project_symbols,
                                        const char *name);
 
+/**
+ * @brief Parse the `period` and `edge` attributes of a clock declaration.
+ * @param attrs Attribute text attached to the declaration.
+ * @param out_period Output location for the parsed period.
+ * @param out_edge Buffer that receives the normalized edge name.
+ * @param out_edge_size Size of @p out_edge in bytes.
+ * @return Non-zero on success.
+ */
 static int sem_clock_parse_attrs(const char *attrs,
                                  double *out_period,
                                  char *out_edge,
@@ -1322,6 +1352,15 @@ void sem_check_project_pins(JZASTNode *project,
                                     decl->loc,
                                     "PIN_BUS_WIDTH_INVALID",
                                     "bus pin width must be a positive integer");
+                } else if (rc == 1 && w > JZ_MAX_MAP_PIN_WIDTH) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "pin width %u exceeds the compiler safety limit of %u bits",
+                             w, (unsigned)JZ_MAX_MAP_PIN_WIDTH);
+                    sem_report_rule(diagnostics,
+                                    decl->loc,
+                                    "PIN_WIDTH_LIMIT_EXCEEDED",
+                                    msg);
                 } else if (rc == 0) {
                     long long sval = 0;
                     if (parse_simple_signed_int(decl->width, &sval) && sval <= 0) {
@@ -1681,6 +1720,7 @@ void sem_check_project_map(JZASTNode *project,
     } JZPinCoverage;
 
     JZPinCoverage *pins = (JZPinCoverage *)calloc(pin_count, sizeof(JZPinCoverage));
+    size_t total_bitmap_bytes = 0;
     if (!pins) return;
 
     size_t pi = 0;
@@ -1693,6 +1733,17 @@ void sem_check_project_map(JZASTNode *project,
             int rc = eval_simple_positive_decl_int(syms[i].node->width, &w);
             if (rc == 1 && w > 0u) {
                 pins[pi].width = w;
+                if (w > JZ_MAX_MAP_PIN_WIDTH) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "pin width %u exceeds the compiler safety limit of %u bits",
+                             w, (unsigned)JZ_MAX_MAP_PIN_WIDTH);
+                    sem_report_rule(diagnostics,
+                                    syms[i].node->loc,
+                                    "PIN_WIDTH_LIMIT_EXCEEDED",
+                                    msg);
+                    pins[pi].width = 0u;
+                }
             } else if (rc == -1) {
                 sem_report_rule(diagnostics,
                                 syms[i].node->loc,
@@ -1707,7 +1758,23 @@ void sem_check_project_map(JZASTNode *project,
          * reporting MAP_PIN_DECLARED_NOT_MAPPED.
          */
         if (pins[pi].width >= 1u) {
-            pins[pi].bit_mapped = (unsigned char *)calloc(pins[pi].width, sizeof(unsigned char));
+            if (jz_size_add_checked(total_bitmap_bytes,
+                                    (size_t)pins[pi].width,
+                                    &total_bitmap_bytes) != 0 ||
+                total_bitmap_bytes > JZ_MAX_MAP_BITMAP_BYTES) {
+                char msg[256];
+                snprintf(msg, sizeof(msg),
+                         "MAP pin coverage bitmap footprint exceeds the compiler safety limit of %u byte(s)",
+                         (unsigned)JZ_MAX_MAP_BITMAP_BYTES);
+                sem_report_rule(diagnostics,
+                                syms[i].node ? syms[i].node->loc : project->loc,
+                                "MAP_BITMAP_FOOTPRINT_LIMIT_EXCEEDED",
+                                msg);
+                pins[pi].width = 0u;
+            } else {
+                pins[pi].bit_mapped =
+                    (unsigned char *)calloc(pins[pi].width, sizeof(unsigned char));
+            }
         }
         ++pi;
     }
@@ -2880,8 +2947,12 @@ void sem_check_globals(JZASTNode *project,
         }
 
         /* Dependency graph for forward-ref and cycle detection. */
-        unsigned char *edges = (unsigned char *)calloc(decl_count * decl_count,
-                                                       sizeof(unsigned char));
+        size_t edge_count = 0;
+        if (jz_size_mul_checked(decl_count, decl_count, &edge_count) != 0) {
+            free(decls);
+            return;
+        }
+        unsigned char *edges = (unsigned char *)calloc(edge_count, sizeof(unsigned char));
         int *has_forward_ref = (int *)calloc(decl_count, sizeof(int));
         int *has_cycle = (int *)calloc(decl_count, sizeof(int));
         int any_static_error = 0;
@@ -2923,8 +2994,12 @@ void sem_check_globals(JZASTNode *project,
             for (size_t i = 0; i < decl_count; ++i) {
                 if (visit[i] != 0) continue;
 
-                size_t *stack = (size_t *)malloc(decl_count * sizeof(size_t));
-                size_t *iter  = (size_t *)malloc(decl_count * sizeof(size_t));
+                size_t frame_bytes = 0;
+                if (jz_size_mul_checked(decl_count, sizeof(size_t), &frame_bytes) != 0) {
+                    break;
+                }
+                size_t *stack = (size_t *)malloc(frame_bytes);
+                size_t *iter  = (size_t *)malloc(frame_bytes);
                 if (!stack || !iter) {
                     free(stack);
                     free(iter);

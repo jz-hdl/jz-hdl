@@ -31,6 +31,71 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief Confirm that JSON construction succeeded before sending a reply.
+ * @param j JSON builder to inspect.
+ * @param context Short label used in the log message on failure.
+ * @return 1 when the builder is usable or 0 after an allocation failure.
+ */
+static int lsp_json_ready(const LspJson *j, const char *context);
+
+/**
+ * @brief Resolve an LSP line/character position into pointers within document text.
+ * @param doc Open document to inspect.
+ * @param pos_json JSON object containing `line` and `character`.
+ * @param out_line_start Output pointer for the start of the resolved line.
+ * @param out_cursor Output pointer for the resolved cursor position.
+ * @return 0 on success or -1 when the position is invalid.
+ */
+static int lsp_resolve_document_position(const LspDocument *doc,
+                                         const char *pos_json,
+                                         const char **out_line_start,
+                                         const char **out_cursor);
+
+/**
+ * @brief Return the default expansion-safety limits used by the LSP server.
+ * @return Pointer to the shared expansion-limits configuration.
+ */
+static const JZExpansionLimits *lsp_expansion_limits(void);
+
+static int lsp_json_ready(const LspJson *j, const char *context) {
+    if (!lsp_json_failed(j)) return 1;
+    lsp_log("%s: out of memory while building JSON", context);
+    return 0;
+}
+
+static int lsp_resolve_document_position(const LspDocument *doc,
+                                         const char *pos_json,
+                                         const char **out_line_start,
+                                         const char **out_cursor) {
+    int line = 0;
+    int character = 0;
+    const char *line_start;
+    const char *line_end;
+
+    if (!doc || !doc->content) return -1;
+    if (lsp_json_get_int(pos_json, "line", &line) != 0 ||
+        lsp_json_get_int(pos_json, "character", &character) != 0) {
+        return -1;
+    }
+    if (line < 0 || character < 0) return -1;
+
+    line_start = doc->content;
+    for (int cur_line = 0; cur_line < line; ++cur_line) {
+        const char *newline = strchr(line_start, '\n');
+        if (!newline) return -1;
+        line_start = newline + 1;
+    }
+
+    line_end = line_start;
+    while (*line_end && *line_end != '\n') ++line_end;
+    if ((size_t)character > (size_t)(line_end - line_start)) return -1;
+
+    *out_line_start = line_start;
+    *out_cursor = line_start + (size_t)character;
+    return 0;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Forward declarations                                              */
 /* ------------------------------------------------------------------ */
@@ -42,6 +107,11 @@ static char s_workspace_root[2048] = {0};
 static int s_hover_clocks = 1;
 static int s_hover_declarations = 1;
 
+static const JZExpansionLimits *lsp_expansion_limits(void) {
+    static const JZExpansionLimits limits = JZ_EXPANSION_LIMITS_DEFAULT_INIT;
+    return &limits;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Project override map                                              */
 /*                                                                    */
@@ -52,14 +122,23 @@ static int s_hover_declarations = 1;
 
 #define LSP_MAX_OVERRIDES 128
 
+/**
+ * @struct LspProjectOverride
+ * @brief Manual project selection attached to an open source file.
+ */
 typedef struct {
-    char file_path[2048];     /* Canonical path of the source file. */
-    char project_path[2048];  /* Canonical path of the selected project. */
+    char file_path[2048];    /**< Canonical path of the source file. */
+    char project_path[2048]; /**< Canonical path of the selected project file. */
 } LspProjectOverride;
 
 static LspProjectOverride s_project_overrides[LSP_MAX_OVERRIDES];
 static size_t s_project_override_count = 0;
 
+/**
+ * @brief Look up a manually selected project for a source file.
+ * @param filepath Canonical path of the edited source file.
+ * @return Canonical project path or NULL when no override exists.
+ */
 static const char *lookup_project_override(const char *filepath) {
     for (size_t i = 0; i < s_project_override_count; i++) {
         if (strcmp(s_project_overrides[i].file_path, filepath) == 0) {
@@ -69,6 +148,11 @@ static const char *lookup_project_override(const char *filepath) {
     return NULL;
 }
 
+/**
+ * @brief Record or replace a manual project selection for a source file.
+ * @param filepath Canonical path of the edited source file.
+ * @param project_path Canonical project file path to associate with it.
+ */
 static void set_project_override(const char *filepath, const char *project_path) {
     /* Update existing entry. */
     for (size_t i = 0; i < s_project_override_count; i++) {
@@ -90,6 +174,11 @@ static void set_project_override(const char *filepath, const char *project_path)
     }
 }
 
+/**
+ * @brief Handle the custom `jz-hdl/selectProject` request.
+ * @param msg Raw JSON-RPC request payload.
+ * @param store Open-document store used for revalidation.
+ */
 static void handle_select_project(const char *msg, LspDocStore *store);
 
 /* ------------------------------------------------------------------ */
@@ -102,21 +191,30 @@ static void handle_select_project(const char *msg, LspDocStore *store);
 
 #define LSP_MAX_CLOCKS 128
 
+/**
+ * @struct LspClockInfo
+ * @brief Cached clock metadata used by hover responses.
+ */
 typedef struct {
-    char name[128];           /* Lookup key (project clock name or port alias). */
-    char project_clock[128];  /* Canonical project-level clock name. */
-    double period_ns;         /* 0 if generated (no explicit period). */
-    char edge[16];            /* "Rising", "Falling", or empty. */
-    int is_external;          /* Has period → external pin clock. */
-    int is_generated;         /* Output of a CLOCK_GEN unit. */
-    char gen_type[16];        /* "PLL", "CLKDIV", "DLL", "OSC", "BUF", or empty. */
-    char gen_output[16];      /* "BASE", "PHASE", "DIV", "DIV3", or empty. */
-    char gen_input_clock[128]; /* Name of the reference clock feeding the generator. */
+    char name[128];            /**< Lookup key: project clock name or propagated alias. */
+    char project_clock[128];   /**< Canonical project-level clock name. */
+    double period_ns;          /**< Clock period in nanoseconds, or 0 when unknown. */
+    char edge[16];             /**< Trigger edge text such as `Rising` or `Falling`. */
+    int is_external;           /**< Non-zero when the clock is sourced from an input pin. */
+    int is_generated;          /**< Non-zero when the clock comes from a clock generator. */
+    char gen_type[16];         /**< Generator type such as `PLL` or `CLKDIV`. */
+    char gen_output[16];       /**< Generator output selector such as `BASE` or `DIV`. */
+    char gen_input_clock[128]; /**< Reference clock name feeding the generator. */
 } LspClockInfo;
 
 static LspClockInfo s_clock_cache[LSP_MAX_CLOCKS];
 static size_t s_clock_cache_count = 0;
 
+/**
+ * @brief Look up cached clock metadata by name.
+ * @param name Clock or alias name to resolve.
+ * @return Matching clock info or NULL when absent.
+ */
 static const LspClockInfo *lookup_clock_info(const char *name);
 
 static LspClockInfo *add_clock_entry(const char *name) {
@@ -410,20 +508,117 @@ static const LspClockInfo *lookup_clock_info(const char *name) {
     return NULL;
 }
 
+/**
+ * @brief Search an AST for a declaration with a given identifier.
+ * @param node Root of the subtree to search.
+ * @param name Identifier to match.
+ * @return Matching declaration node or NULL when absent.
+ */
 static JZASTNode *find_declaration(JZASTNode *node, const char *name);
+/**
+ * @brief Handle the `initialize` request.
+ * @param msg Raw JSON-RPC request payload.
+ * @param id Request identifier.
+ * @param store Open-document store.
+ */
 static void handle_initialize(const char *msg, int id, LspDocStore *store);
+/**
+ * @brief Handle the `initialized` notification.
+ */
 static void handle_initialized(void);
+/**
+ * @brief Handle the `shutdown` request.
+ * @param id Request identifier.
+ */
 static void handle_shutdown(int id);
+/**
+ * @brief Handle `textDocument/didOpen`.
+ * @param msg Raw JSON-RPC notification payload.
+ * @param store Open-document store.
+ */
 static void handle_text_document_did_open(const char *msg, LspDocStore *store);
+/**
+ * @brief Handle `textDocument/didChange`.
+ * @param msg Raw JSON-RPC notification payload.
+ * @param store Open-document store.
+ */
 static void handle_text_document_did_change(const char *msg, LspDocStore *store);
+/**
+ * @brief Handle `textDocument/didClose`.
+ * @param msg Raw JSON-RPC notification payload.
+ * @param store Open-document store.
+ */
 static void handle_text_document_did_close(const char *msg, LspDocStore *store);
+/**
+ * @brief Handle `textDocument/didSave`.
+ * @param msg Raw JSON-RPC notification payload.
+ * @param store Open-document store.
+ */
 static void handle_text_document_did_save(const char *msg, LspDocStore *store);
+/**
+ * @brief Handle `textDocument/hover`.
+ * @param msg Raw JSON-RPC request payload.
+ * @param id Request identifier.
+ * @param store Open-document store.
+ */
 static void handle_text_document_hover(const char *msg, int id, LspDocStore *store);
+/**
+ * @brief Handle `textDocument/completion`.
+ * @param msg Raw JSON-RPC request payload.
+ * @param id Request identifier.
+ * @param store Open-document store.
+ */
 static void handle_text_document_completion(const char *msg, int id, LspDocStore *store);
+/**
+ * @brief Handle `textDocument/definition`.
+ * @param msg Raw JSON-RPC request payload.
+ * @param id Request identifier.
+ * @param store Open-document store.
+ */
 static void handle_text_document_definition(const char *msg, int id, LspDocStore *store);
+/**
+ * @brief Recompute diagnostics for one open document and publish them.
+ * @param uri Document URI to analyze.
+ * @param store Open-document store.
+ */
 static void publish_diagnostics(const char *uri, LspDocStore *store);
+/**
+ * @brief Notify the client which projects are available for a file.
+ * @param uri Document URI being described.
+ * @param projects Candidate projects discovered for the file.
+ * @param active_index Index of the active project, or -1 when none is active.
+ */
+static void send_project_info(const char *uri, const LspProjectList *projects, int active_index);
+/**
+ * @brief Compile diagnostics through a discovered project context.
+ * @param uri URI of the edited file.
+ * @param filepath Canonical filesystem path of the edited file.
+ * @param project_path Canonical filesystem path of the selected project file.
+ * @param projects Candidate project list to report back to the client.
+ * @param active_index Index of the active project in @p projects.
+ */
+static void publish_diagnostics_via_project(const char *uri, const char *filepath,
+                                            const char *project_path,
+                                            const LspProjectList *projects,
+                                            int active_index);
+/**
+ * @brief Send a JSON-RPC success response.
+ * @param id Request identifier.
+ * @param result_json Raw JSON result payload, or NULL for `null`.
+ */
 static void send_response(int id, const char *result_json);
+/**
+ * @brief Send a JSON-RPC error response.
+ * @param id Request identifier.
+ * @param code JSON-RPC error code.
+ * @param message Human-readable error message.
+ */
 static void send_error(int id, int code, const char *message);
+/**
+ * @brief Send a JSON-RPC notification.
+ * @param method Notification method name.
+ * @param params_json Raw JSON params object.
+ */
 static void send_notification(const char *method, const char *params_json);
 
 /* ------------------------------------------------------------------ */
@@ -501,13 +696,16 @@ int jz_lsp_run(void) {
 
 static void send_response(int id, const char *result_json) {
     LspJson j;
+    if (!result_json) result_json = "null";
     lsp_json_init(&j);
     lsp_json_append(&j, "{\"jsonrpc\":\"2.0\",\"id\":");
     lsp_json_append_int(&j, id);
     lsp_json_append(&j, ",\"result\":");
     lsp_json_append(&j, result_json);
     lsp_json_append_char(&j, '}');
-    lsp_io_write_message(j.data, j.len);
+    if (lsp_json_ready(&j, "send_response")) {
+        lsp_io_write_message(j.data, j.len);
+    }
     lsp_json_free(&j);
 }
 
@@ -521,19 +719,27 @@ static void send_error(int id, int code, const char *message) {
     lsp_json_append(&j, ",\"message\":");
     lsp_json_append_escaped(&j, message);
     lsp_json_append(&j, "}}");
-    lsp_io_write_message(j.data, j.len);
+    if (lsp_json_ready(&j, "send_error")) {
+        lsp_io_write_message(j.data, j.len);
+    }
     lsp_json_free(&j);
 }
 
 static void send_notification(const char *method, const char *params_json) {
     LspJson j;
+    if (!params_json) {
+        lsp_log("send_notification: NULL params for method %s", method);
+        return;
+    }
     lsp_json_init(&j);
     lsp_json_append(&j, "{\"jsonrpc\":\"2.0\",\"method\":");
     lsp_json_append_escaped(&j, method);
     lsp_json_append(&j, ",\"params\":");
     lsp_json_append(&j, params_json);
     lsp_json_append_char(&j, '}');
-    lsp_io_write_message(j.data, j.len);
+    if (lsp_json_ready(&j, "send_notification")) {
+        lsp_io_write_message(j.data, j.len);
+    }
     lsp_json_free(&j);
 }
 
@@ -543,12 +749,18 @@ static void send_notification(const char *method, const char *params_json) {
 
 static void handle_initialize(const char *msg, int id, LspDocStore *store) {
     (void)store;
+    (void)id;
     lsp_log("received initialize request");
 
     /* Extract workspace root from params.rootUri (preferred) or
      * params.rootPath (deprecated fallback). */
-    char params[4096];
-    if (lsp_json_get_object(msg, "params", params, sizeof(params)) == 0) {
+    char params[4096] = {0};
+    if (lsp_json_get_object(msg, "params", params, sizeof(params)) != 0) {
+        lsp_log("initialize request missing valid params object");
+        return;
+    }
+
+    {
         char root_uri[2048] = {0};
         if (lsp_json_get_string(params, "rootUri", root_uri, sizeof(root_uri)) == 0 &&
             root_uri[0] != '\0') {
@@ -687,7 +899,24 @@ static void publish_diagnostics_via_project(const char *uri,
 
     /* Read the project file from disk. */
     size_t proj_size = 0;
-    char *proj_source = jz_read_entire_file(project_path, &proj_size);
+    if (jz_get_file_size(project_path, &proj_size) == 0 &&
+        proj_size > jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES)) {
+        lsp_log("project file exceeds safety limit: %s (%zu bytes)",
+                project_path, proj_size);
+        jz_compiler_dispose(&compiler);
+        jz_path_security_cleanup();
+        LspJson j;
+        lsp_json_init(&j);
+        lsp_json_append(&j, "{\"uri\":");
+        lsp_json_append_escaped(&j, uri);
+        lsp_json_append(&j, ",\"diagnostics\":[]}");
+        send_notification("textDocument/publishDiagnostics", j.data);
+        lsp_json_free(&j);
+        return;
+    }
+    char *proj_source = jz_read_entire_file_limit(project_path,
+                                                  jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                                  &proj_size);
     if (!proj_source) {
         lsp_log("failed to read project file: %s", project_path);
         jz_compiler_dispose(&compiler);
@@ -705,7 +934,8 @@ static void publish_diagnostics_via_project(const char *uri,
 
     /* Expand @repeat blocks in the project source. */
     char *expanded = jz_repeat_expand(proj_source, project_path,
-                                      &compiler.diagnostics);
+                                      &compiler.diagnostics,
+                                      lsp_expansion_limits());
     char *source = expanded ? expanded : proj_source;
     int free_source = (expanded != NULL);
 
@@ -724,7 +954,8 @@ static void publish_diagnostics_via_project(const char *uri,
 
     /* Template expansion + semantic analysis on the full project AST. */
     if (ast) {
-        jz_template_expand(ast, &compiler.diagnostics, project_path);
+        jz_template_expand(ast, &compiler.diagnostics, project_path,
+                           lsp_expansion_limits());
         jz_sem_run(ast, &compiler.diagnostics, project_path, 0);
 
         /* Build IR for clock info extraction.  The IR gives us resolved
@@ -860,7 +1091,8 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
 
     /* Expand @repeat blocks. */
     char *expanded = jz_repeat_expand(doc->content, filepath,
-                                      &compiler.diagnostics);
+                                      &compiler.diagnostics,
+                                      lsp_expansion_limits());
     char *source = expanded ? expanded : doc->content;
     int free_source = (expanded != NULL);
 
@@ -982,7 +1214,8 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
 
     /* Template expansion + semantic analysis. */
     if (ast) {
-        jz_template_expand(ast, &compiler.diagnostics, filepath);
+        jz_template_expand(ast, &compiler.diagnostics, filepath,
+                           lsp_expansion_limits());
         jz_sem_run(ast, &compiler.diagnostics, filepath, 0);
         if (has_project) {
             {
@@ -1103,7 +1336,10 @@ static void handle_text_document_did_open(const char *msg, LspDocStore *store) {
 
     lsp_log("didOpen: %s (version %d)", uri, version);
 
-    lsp_docstore_open(store, uri, text, version);
+    if (!lsp_docstore_open(store, uri, text, version)) {
+        lsp_log("didOpen: failed to store document %s", uri);
+        return;
+    }
     publish_diagnostics(uri, store);
 }
 
@@ -1158,7 +1394,10 @@ static void handle_text_document_did_change(const char *msg, LspDocStore *store)
         if (lsp_json_get_string(element, "text", text, sizeof(text)) == 0) {
             LspDocument *doc = lsp_docstore_find(store, uri);
             if (doc) {
-                lsp_docstore_update(doc, text, version);
+                if (lsp_docstore_update(doc, text, version) != 0) {
+                    lsp_log("didChange: failed to update document %s", uri);
+                    return;
+                }
             }
         }
     }
@@ -1213,7 +1452,10 @@ static void handle_text_document_did_save(const char *msg, LspDocStore *store) {
     if (lsp_json_get_string(params, "text", text, sizeof(text)) == 0) {
         LspDocument *doc = lsp_docstore_find(store, uri);
         if (doc) {
-            lsp_docstore_update(doc, text, doc->version);
+            if (lsp_docstore_update(doc, text, doc->version) != 0) {
+                lsp_log("didSave: failed to update document %s", uri);
+                return;
+            }
         }
     }
 
@@ -1297,10 +1539,6 @@ static void handle_text_document_hover(const char *msg, int id,
         return;
     }
 
-    int line = 0, character = 0;
-    lsp_json_get_int(pos_json, "line", &line);
-    lsp_json_get_int(pos_json, "character", &character);
-
     LspDocument *doc = lsp_docstore_find(store, uri);
     if (!doc) {
         send_response(id, "null");
@@ -1308,17 +1546,9 @@ static void handle_text_document_hover(const char *msg, int id,
     }
 
     /* Find the word at the given position. */
-    const char *src = doc->content;
-    int cur_line = 0;
-    const char *line_start = src;
-    while (*line_start && cur_line < line) {
-        if (*line_start == '\n') ++cur_line;
-        ++line_start;
-    }
-
-    /* Find word boundaries at the character offset. */
-    const char *p = line_start + character;
-    if (p >= src + strlen(src)) {
+    const char *line_start = NULL;
+    const char *p = NULL;
+    if (lsp_resolve_document_position(doc, pos_json, &line_start, &p) != 0) {
         send_response(id, "null");
         return;
     }
@@ -1469,7 +1699,8 @@ static void handle_text_document_hover(const char *msg, int id,
             jz_compiler_init(&hover_compiler, JZ_COMPILER_MODE_LINT);
 
             char *hover_expanded = jz_repeat_expand(doc->content, hover_filepath,
-                                                     &hover_compiler.diagnostics);
+                                                     &hover_compiler.diagnostics,
+                                                     lsp_expansion_limits());
             char *hover_src = hover_expanded ? hover_expanded : doc->content;
 
             JZTokenStream hover_tokens;
@@ -1480,7 +1711,7 @@ static void handle_text_document_hover(const char *msg, int id,
                                                       &hover_compiler.diagnostics);
                 if (hover_ast) {
                     jz_template_expand(hover_ast, &hover_compiler.diagnostics,
-                                       hover_filepath);
+                                       hover_filepath, lsp_expansion_limits());
                     JZASTNode *decl = find_declaration(hover_ast, word);
                     if (decl) {
                         char *bp = hover_buf;
@@ -1702,10 +1933,6 @@ static void handle_text_document_definition(const char *msg, int id,
         return;
     }
 
-    int line = 0, character = 0;
-    lsp_json_get_int(pos_json, "line", &line);
-    lsp_json_get_int(pos_json, "character", &character);
-
     LspDocument *doc = lsp_docstore_find(store, uri);
     if (!doc) {
         send_response(id, "null");
@@ -1713,22 +1940,15 @@ static void handle_text_document_definition(const char *msg, int id,
     }
 
     /* Find word under cursor. */
-    const char *src = doc->content;
-    int cur_line = 0;
-    const char *line_start = src;
-    while (*line_start && cur_line < line) {
-        if (*line_start == '\n') ++cur_line;
-        ++line_start;
-    }
-
-    const char *p = line_start + character;
-    if (p >= src + strlen(src)) {
+    const char *line_start = NULL;
+    const char *p = NULL;
+    if (lsp_resolve_document_position(doc, pos_json, &line_start, &p) != 0) {
         send_response(id, "null");
         return;
     }
 
     const char *word_start = p;
-    while (word_start > src &&
+    while (word_start > line_start &&
            (word_start[-1] == '_' ||
             (word_start[-1] >= 'a' && word_start[-1] <= 'z') ||
             (word_start[-1] >= 'A' && word_start[-1] <= 'Z') ||
@@ -1771,7 +1991,8 @@ static void handle_text_document_definition(const char *msg, int id,
     jz_compiler_init(&compiler, JZ_COMPILER_MODE_LINT);
 
     char *expanded = jz_repeat_expand(doc->content, filepath,
-                                      &compiler.diagnostics);
+                                      &compiler.diagnostics,
+                                      lsp_expansion_limits());
     char *compile_src = expanded ? expanded : doc->content;
     int free_src = (expanded != NULL);
 
@@ -1786,7 +2007,8 @@ static void handle_text_document_definition(const char *msg, int id,
     }
 
     if (ast) {
-        jz_template_expand(ast, &compiler.diagnostics, filepath);
+        jz_template_expand(ast, &compiler.diagnostics, filepath,
+                           lsp_expansion_limits());
     }
 
     JZASTNode *target = ast ? find_declaration(ast, word) : NULL;

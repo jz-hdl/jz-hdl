@@ -30,6 +30,13 @@ tmp_out="$(mktemp)"
 tmp_err="$(mktemp)"
 trap 'rm -f "${tmp_out}" "${tmp_err}"' EXIT
 
+normalize_validation_output() {
+  local src="$1"
+  local dst="$2"
+
+  sed -E 's|^(VCD written to: ).*/compiler/tests/validation/([^/]+\.vcd)$|\1compiler/tests/validation/\2|' "${src}" > "${dst}"
+}
+
 copy_generated_mem_sidecars() {
   local src_dir="$1"
   local dst_dir="$2"
@@ -83,10 +90,10 @@ for file in "${validation_files[@]}"; do
   case "$(basename "${file}")" in
     *_GND_*) extra_flags+=(--tristate-default=GND) ;;
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
-    12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
-    12_4_HAPPY_PATH-textual_normalization_nonexistent_outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
-    12_4_REQ11-additional_sandbox_root_ok.jz) extra_flags+=(--allow-traversal "--sandbox-root=${ROOT_DIR}/tests") ;;
-    12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz)
+    HDL_12_4_PATH_OUTSIDE_SANDBOX-outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    HDL_12_4_TEXTUAL_NORMALIZATION_NONEXISTENT_OUTSIDE_SANDBOX-textual_normalization_nonexistent_outside_sandbox.jz) extra_flags+=(--allow-traversal) ;;
+    HDL_12_4_ADDITIONAL_SANDBOX_ROOT-happy_path.jz) extra_flags+=(--allow-traversal "--sandbox-root=${ROOT_DIR}/tests") ;;
+    HDL_12_4_PATH_ABSOLUTE_FORBIDDEN-allow_absolute_still_sandboxed.jz)
       extra_flags+=(--allow-absolute-paths)
       temp_input_dir="$(mktemp -d "${VALIDATION_DIR}/.allow_absolute_still_sandboxed.XXXXXX")"
       temp_input="${temp_input_dir}/$(basename "${file}")"
@@ -97,7 +104,7 @@ for file in "${validation_files[@]}"; do
       fi
       input_file="${temp_input}"
       ;;
-    12_4_PATH_ABSOLUTE_FORBIDDEN-absolute_import_ok.jz)
+    HDL_12_4_PATH_ABSOLUTE_FORBIDDEN-happy_path.jz)
       extra_flags+=(--allow-absolute-paths)
       temp_input="$(mktemp "${VALIDATION_DIR}/.absolute_import_ok.XXXXXX.jz")"
       if ! sed "s|__JZ_VALIDATION_DIR__|${VALIDATION_DIR}|g" "${file}" > "${temp_input}"; then
@@ -107,19 +114,24 @@ for file in "${validation_files[@]}"; do
       fi
       input_file="${temp_input}"
       ;;
-    12_4_PATH_TRAVERSAL_FORBIDDEN-traversal_import_ok.jz) extra_flags+=(--allow-traversal) ;;
+    HDL_12_4_PATH_TRAVERSAL_FORBIDDEN-happy_path.jz) extra_flags+=(--allow-traversal) ;;
   esac
 
-  # Run linter by default; serializer coverage needs backend emission because
-  # those diagnostics are produced while generating wrapper code.
+  # Run linter by default. Filename markers can opt into testbench/simulation
+  # mode, and serializer coverage needs backend emission because those
+  # diagnostics are produced while generating wrapper code.
   cmd_flags=(--info --lint)
+  case "$(basename "${file}")" in
+    *_TMODE_*) cmd_flags=(--test) ;;
+    *_SMODE_*) cmd_flags=(--simulate) ;;
+  esac
   tmp_artifact=""
   case "$(basename "${file}")" in
-    misc_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
+    CHIP_10_4_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
       cmd_flags=(--info --verilog)
       tmp_artifact="$(mktemp)"
       ;;
-    misc_SERIALIZER_WIDTH_EXCEEDS_RATIO-width_exceeds_ratio.jz)
+    CHIP_10_4_SERIALIZER_WIDTH_EXCEEDS_RATIO-width_exceeds_ratio.jz)
       cmd_flags=(--verilog)
       tmp_artifact="$(mktemp)"
       ;;
@@ -141,15 +153,23 @@ for file in "${validation_files[@]}"; do
     rm -rf "${temp_input_dir}"
   fi
 
-  if diff -u "${expected_out}" "${tmp_out}" > /dev/null; then
+  normalized_expected="$(mktemp)"
+  normalized_actual="$(mktemp)"
+  trap 'rm -f "${tmp_out}" "${tmp_err}" "${normalized_expected}" "${normalized_actual}"' EXIT
+  normalize_validation_output "${expected_out}" "${normalized_expected}"
+  normalize_validation_output "${tmp_out}" "${normalized_actual}"
+
+  if diff -u "${normalized_expected}" "${normalized_actual}" > /dev/null; then
     echo "PASS ${rel_path}"
     ((pass++))
   else
     echo "FAIL ${rel_path}"
-    diff -u "${expected_out}" "${tmp_out}" || true
+    diff -u "${normalized_expected}" "${normalized_actual}" || true
     ((fail++))
     exit 1
   fi
+
+  rm -f "${normalized_expected}" "${normalized_actual}"
 
 done
 

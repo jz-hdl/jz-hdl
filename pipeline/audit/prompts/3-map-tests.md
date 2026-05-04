@@ -182,10 +182,10 @@ Total: N requirements
 
 ### Tests column format
 
-- List each test file as its basename (no path), e.g. `1_1_ID_SYNTAX_INVALID-length_exceeded.jz`
+- List each test file as its basename (no path), e.g. `HDL_1_1_ID_SYNTAX_INVALID-length_exceeded.jz`
 - After each filename, add `(negative)` or `(happy)` in parentheses
 - After the test type, add the actually exercised contexts in braces, e.g. `(negative) {module-name, wire-name}`
-- For enumerated-list items, also add the specific list members tested in brackets, e.g. `1_1_KEYWORD_AS_IDENTIFIER-more_keywords.jz (negative) {module-name, wire-name} [IF, ELSE, CASE]`
+- For enumerated-list items, also add the specific list members tested in brackets, e.g. `HDL_1_1_KEYWORD_AS_IDENTIFIER-more_keywords.jz (negative) {module-name, wire-name} [IF, ELSE, CASE]`
 - Separate multiple test files with `, `
 - Use `—` if no validation test was found
 - Use `N/A` for rows whose `Coverage Domain` is not `validation`

@@ -1,2 +1,0 @@
-File: 2_3_TYPE_BINOP_WIDTH_MISMATCH-mux_block.jz
-      36:30   error TYPE_BINOP_WIDTH_MISMATCH S2.2/3.2/8.1 Binary operator requires equal operand widths but receives mismatched widths

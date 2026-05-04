@@ -1,0 +1,2 @@
+File: TB_6_2_1_TMODE_TB_BUS_NOT_FOUND-unknown_new_binding_bus.jz
+      34:13   error TB_BUS_NOT_FOUND TB-006 Testbench BUS wire declaration must refer to a BUS definition in scope

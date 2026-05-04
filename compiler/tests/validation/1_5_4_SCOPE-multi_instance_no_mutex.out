@@ -1,2 +1,0 @@
-File: 1_5_4_SCOPE-multi_instance_no_mutex.jz
-      48:9    error NET_MULTIPLE_ACTIVE_DRIVERS S1.2/S1.5/S4.10 Multiple active drivers on same signal; for tri-state, all but one must assign `z`

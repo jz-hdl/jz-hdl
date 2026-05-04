@@ -1,3 +1,8 @@
+/**
+ * @file tristate_report.c
+ * @brief Human-readable tri-state resolution reporting for semantic analysis.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -22,19 +27,24 @@ static char g_tristate_report_generated[64];
 static const char *g_tristate_report_version = NULL;
 static const char *g_tristate_report_input = NULL;
 
-/* Overall summary accumulator: one entry per net name across all modules. */
+/**
+ * @struct JZTristateSummaryEntry
+ * @brief Cross-module summary entry for one reported tri-state net.
+ */
 typedef struct {
-    char   name[128];       /* Net name (e.g., "pbus.DATA") */
-    size_t total_drivers;   /* Sum of drivers across all modules */
-    int    worst_result;    /* Worst result seen (PROVEN < UNKNOWN < DISPROVEN) */
+    char   name[128];     /**< Report display name, such as `pbus.DATA`. */
+    size_t total_drivers; /**< Sum of drivers observed across all modules. */
+    int    worst_result;  /**< Worst proof result seen for the net. */
 } JZTristateSummaryEntry;
 
 static JZBuffer g_tristate_summary = {0};  /* Array of JZTristateSummaryEntry */
 
 void jz_sem_enable_tristate_report(FILE *out,
                                    const char *tool_version,
-                                   const char *input_filename)
+                                   const char *input_filename,
+                                   JZDiagnosticList *diagnostics)
 {
+    (void)diagnostics;
     g_tristate_report_enabled = (out != NULL);
     g_tristate_report_header_printed = 0;
     g_tristate_report_out = out;
@@ -72,7 +82,9 @@ static void tristate_print_source_at_loc(FILE *out, JZLocation loc)
     if (!out || !loc.filename || loc.line <= 0) return;
 
     size_t size = 0;
-    char *contents = jz_read_entire_file(loc.filename, &size);
+    char *contents = jz_read_entire_file_limit(loc.filename,
+                                               jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                               &size);
     if (!contents || size == 0) {
         if (contents) free(contents);
         return;

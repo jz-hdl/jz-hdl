@@ -1,0 +1,46 @@
+// TB_BUS_WIRE_WIDTH_PRESERVATION: each BUS member expands to a testbench wire
+// with the width declared by the BUS definition from §5.2.
+
+@testbench TbBusWireWidthPreservationDut
+    @import "TB_5_2_TMODE_TB_BUS_WIRE_WIDTH_PRESERVATION-happy_path_helper_lib.jz";
+
+    BUS WIDTH_BUS {
+        OUT   [16] ADDR;
+        OUT   [3]  MODE;
+        INOUT [9]  DATA;
+        IN    [1]  READY;
+    }
+
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        keep [1];
+        q [1];
+        BUS WIDTH_BUS probe;
+    }
+
+    TEST "bus wire widths follow the BUS definition" {
+        @new dut TbBusWireWidthPreservationDut {
+            clk [1] = clk;
+            keep [1] = keep;
+            q [1] = q;
+        }
+
+        @setup {
+            keep <= 1'b1;
+            probe_ADDR <= 16'hBEEF;
+            probe_MODE <= 3'b101;
+            probe_DATA <= 9'h155;
+            probe_READY <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(q, 1'b1)
+        @expect_equal(probe_ADDR, 16'hBEEF)
+        @expect_equal(probe_MODE, 3'b101)
+        @expect_equal(probe_DATA, 9'h155)
+        @expect_equal(probe_READY, 1'b1)
+    }
+@endtb

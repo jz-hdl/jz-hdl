@@ -1,2 +1,0 @@
-File: 5_5_WIDTHOF_INVALID_TARGET-project_pin.jz
-      30:9    error WIDTHOF_INVALID_TARGET S5.5.10 widthof() argument does not resolve to a WIRE, REGISTER, PORT, or BUS

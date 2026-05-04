@@ -1,0 +1,2 @@
+File: HDL_9_4_CHECK_INVALID_EXPR_TYPE-nested_forbidden.jz
+      34:21   error CHECK_INVALID_EXPR_TYPE S9.1 @check condition must be a nonnegative integer constant expression over literals, module CONST, and project CONFIG.<name> (no runtime signals)

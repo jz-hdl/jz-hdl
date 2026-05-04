@@ -1,0 +1,4 @@
+File: HDL_2_4_SPECIAL_DRIVER_SLICED-mux_block.jz
+      39:17   error SPECIAL_DRIVER_SLICED S2.3 GND/VCC may not be sliced or indexed
+      83:17   error SPECIAL_DRIVER_SLICED S2.3 GND/VCC may not be sliced or indexed
+      88:14   error SPECIAL_DRIVER_SLICED S2.3 GND/VCC may not be sliced or indexed

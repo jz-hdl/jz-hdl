@@ -1,0 +1,2 @@
+File: HDL_4_4_1_ASSIGN_WIDTH_NO_MODIFIER-bus_truncation_implicit.jz
+      33:9    error ASSIGN_WIDTH_NO_MODIFIER S4.10/S5.0 Width mismatch: use `<=z`/`<=s` (zero/sign-extend), `<=t` (truncate), or match widths explicitly

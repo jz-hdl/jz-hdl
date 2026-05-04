@@ -18,29 +18,15 @@
 
 #include "parser_internal.h"
 
-/* Forward declaration for mutual recursion with parse_module_scope_feature_body. */
+/**
+ * @brief Parse module-scope items inside a @feature branch body.
+ *
+ * @param p      Active parser
+ * @param parent Feature branch AST node receiving parsed children
+ * @return 0 on success, -1 on error
+ */
 static int parse_module_scope_feature_body(Parser *p, JZASTNode *parent);
 
-/**
- * @brief Parse a module definition.
- *
- * Expects the @module keyword to have already been consumed. This function
- * parses the module name and all valid module-scope constructs until the
- * matching @endmod directive is encountered.
- *
- * Valid constructs inside a module include:
- * - CONST, PORT, WIRE, REGISTER, LATCH, MEM, MUX blocks
- * - CDC blocks
- * - ASYNCHRONOUS and SYNCHRONOUS blocks
- * - Module-level @new instantiations
- * - Module-level @check assertions
- *
- * Control-flow statements and structural directives that are not valid at
- * module scope are diagnosed but do not immediately terminate parsing.
- *
- * @param p Active parser
- * @return Module AST node, or NULL on error
- */
 JZASTNode *parse_module(Parser *p) {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* already consumed @module */
 
@@ -207,16 +193,6 @@ JZASTNode *parse_module(Parser *p) {
     return mod;
 }
 
-/**
- * @brief Parse module-scope items inside a @feature guard body.
- *
- * This function iterates module-scope items (blocks, @new, @check) until
- * it encounters @else or @endfeat sentinel tokens, at which point it returns 0.
- *
- * @param p      Active parser
- * @param parent Feature branch AST node
- * @return 0 on success, -1 on error
- */
 static int parse_module_scope_feature_body(Parser *p, JZASTNode *parent)
 {
     for (;;) {
@@ -307,21 +283,6 @@ static int parse_module_scope_feature_body(Parser *p, JZASTNode *parent)
     }
 }
 
-/**
- * @brief Parse the body of a @blackbox definition.
- *
- * A blackbox body may contain:
- * - CONST blocks
- * - PORT blocks
- *
- * Semantic analysis diagnoses forbidden internal blocks. Parsing accepts the
- * S6.7-forbidden block kinds so they can receive rule-specific diagnostics
- * instead of generic syntax errors.
- *
- * @param p  Active parser
- * @param bb Blackbox AST node
- * @return 0 on success, -1 on error
- */
 int parse_blackbox_body(Parser *p, JZASTNode *bb) {
     for (;;) {
         const JZToken *t = peek(p);

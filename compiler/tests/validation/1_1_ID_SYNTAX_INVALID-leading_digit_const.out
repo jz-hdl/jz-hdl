@@ -1,2 +1,0 @@
-File: 1_1_ID_SYNTAX_INVALID-leading_digit_const.jz
-      20:9    error PARSE000 parse error near token '2val': expected identifier in CONST block (orig: PARSE000)

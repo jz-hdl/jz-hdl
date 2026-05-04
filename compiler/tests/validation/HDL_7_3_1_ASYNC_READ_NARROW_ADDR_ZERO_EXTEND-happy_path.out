@@ -1,0 +1,4 @@
+File: HDL_7_3_1_ASYNC_READ_NARROW_ADDR_ZERO_EXTEND-happy_path.jz
+      51:23   error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access
+      57:16   error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access
+      62:14   error MEM_ADDR_WIDTH_MISMATCH S7.2/S7.3/S7.7.2 Runtime MEM address width must equal ceil(log2(depth)); widen or slice explicitly before access

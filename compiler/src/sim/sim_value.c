@@ -1,6 +1,6 @@
 /**
  * @file sim_value.c
- * @brief 4-state bit-vector arithmetic, logic, comparison, and formatting.
+ * @brief Implements four-state bit-vector operations for simulation.
  *
  * Multi-word support: values up to SIM_VAL_WORDS * 64 bits (256 bits).
  * Word 0 is the least-significant 64 bits.
@@ -10,15 +10,50 @@
 #include <stdio.h>
 #include <string.h>
 
-/* ---- helpers ---- */
+/**
+ * @brief Return the number of storage words needed for a width.
+ * @param w Logical width in bits.
+ * @return Number of 64-bit words needed to store the value.
+ */
+static int num_words(int w);
+/**
+ * @brief Compute the active-bit mask for the most-significant storage word.
+ * @param w Logical width in bits.
+ * @return Bit mask covering the active bits in the top word.
+ */
+static uint64_t top_word_mask(int w);
+/**
+ * @brief Compute the active-bit mask for one storage word.
+ * @param w Logical width in bits.
+ * @param wi Zero-based word index.
+ * @return Bit mask for the requested word, or zero when the word is out of range.
+ */
+static uint64_t word_mask(int w, int wi);
+/**
+ * @brief Return an all-`x` result when arithmetic inputs contain `x` or `z`.
+ * @param a Left operand.
+ * @param b Right operand.
+ * @param rw Result width in bits.
+ * @return All-`x` result, or a sentinel value whose width is `-1` when arithmetic may proceed.
+ */
+static SimValue arith_xz_check(SimValue a, SimValue b, int rw);
+/**
+ * @brief Build a one-bit comparison result.
+ * @param result_bit Comparison truth value to encode.
+ * @return One-bit simulator value containing the requested result.
+ */
+static SimValue cmp_result(int result_bit);
+/**
+ * @brief Build a one-bit unknown comparison result.
+ * @return One-bit simulator value set to `x`.
+ */
+static SimValue cmp_x(void);
 
-/** Return the number of words needed for w bits (1..SIM_VAL_WORDS). */
 static int num_words(int w) {
     if (w <= 0) return 1;
     return (w + 63) / 64;
 }
 
-/** Return a mask for the top word of a w-bit value. */
 static uint64_t top_word_mask(int w) {
     if (w <= 0) return 0;
     int bits_in_top = ((w - 1) % 64) + 1;
@@ -26,7 +61,6 @@ static uint64_t top_word_mask(int w) {
     return ((uint64_t)1 << bits_in_top) - 1;
 }
 
-/** Return a full 64-bit mask for word index wi of a w-bit value. */
 static uint64_t word_mask(int w, int wi) {
     int nw = num_words(w);
     if (wi < 0 || wi >= nw) return 0;

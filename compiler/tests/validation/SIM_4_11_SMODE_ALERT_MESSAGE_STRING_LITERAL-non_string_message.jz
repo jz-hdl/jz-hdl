@@ -1,0 +1,40 @@
+// ALERT_MESSAGE_STRING_LITERAL: @alert message must be a string literal.
+// Trigger 1: identifier message emits only the targeted parse error.
+
+@module AlertMessageStringLiteralDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation AlertMessageStringLiteralDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut AlertMessageStringLiteralDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    // Trigger 1: message must be a string literal, not an identifier.
+    @alert(RED, label)
+    @run(ns=10)
+@endsim

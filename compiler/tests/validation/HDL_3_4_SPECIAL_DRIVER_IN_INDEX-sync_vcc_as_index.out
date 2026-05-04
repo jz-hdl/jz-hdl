@@ -1,0 +1,2 @@
+File: HDL_3_4_SPECIAL_DRIVER_IN_INDEX-sync_vcc_as_index.jz
+      24:16   error SPECIAL_DRIVER_IN_INDEX S2.3 GND/VCC may not appear in slice/index expressions

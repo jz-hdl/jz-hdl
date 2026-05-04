@@ -4,10 +4,43 @@
  */
 
 #include "lsp/lsp_internal.h"
+#include "util.h"
 
+#include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+/**
+ * @brief Ensure a JSON builder has room for an additional payload.
+ * @param j Builder state to grow.
+ * @param need Additional bytes required, including any terminator space.
+ * @return 0 on success or -1 on allocation failure.
+ */
+static int lsp_json_grow(LspJson *j, size_t need);
+
+/**
+ * @brief Skip leading JSON whitespace.
+ * @param p Input cursor.
+ * @return Pointer to the first non-whitespace byte.
+ */
+static const char *skip_ws(const char *p);
+
+/**
+ * @brief Advance past a JSON value without decoding it.
+ * @param p Input cursor at the start of a JSON value.
+ * @return Pointer just past the value, or NULL on malformed input.
+ */
+static const char *skip_value(const char *p);
+
+/**
+ * @brief Find the value associated with a top-level JSON object key.
+ * @param json JSON object text to scan.
+ * @param key Key name to locate.
+ * @return Pointer to the value text or NULL when not found.
+ */
+static const char *find_key(const char *json, const char *key);
 
 /* ------------------------------------------------------------------ */
 /*  JSON builder                                                      */
@@ -17,6 +50,7 @@ void lsp_json_init(LspJson *j) {
     j->data = NULL;
     j->len = 0;
     j->cap = 0;
+    j->failed = 0;
 }
 
 void lsp_json_free(LspJson *j) {
@@ -24,57 +58,89 @@ void lsp_json_free(LspJson *j) {
     j->data = NULL;
     j->len = 0;
     j->cap = 0;
+    j->failed = 0;
 }
 
-static void lsp_json_grow(LspJson *j, size_t need) {
-    if (j->len + need <= j->cap) return;
-    size_t new_cap = j->cap ? j->cap * 2 : 256;
-    while (new_cap < j->len + need) new_cap *= 2;
-    j->data = realloc(j->data, new_cap);
+static int lsp_json_grow(LspJson *j, size_t need) {
+    size_t required = 0;
+    size_t new_cap = 0;
+    char *tmp = NULL;
+
+    if (j->failed) return -1;
+    if (jz_size_add_checked(j->len, need, &required) != 0) {
+        j->failed = 1;
+        return -1;
+    }
+    if (required <= j->cap) return 0;
+    if (jz_size_grow_doubling_checked(j->cap, required, 256, &new_cap) != 0) {
+        j->failed = 1;
+        return -1;
+    }
+    tmp = realloc(j->data, new_cap);
+    if (!tmp) {
+        j->failed = 1;
+        return -1;
+    }
+    j->data = tmp;
     j->cap = new_cap;
+    return 0;
 }
 
-void lsp_json_append(LspJson *j, const char *s) {
+int lsp_json_append(LspJson *j, const char *s) {
+    if (!s) {
+        j->failed = 1;
+        return -1;
+    }
     size_t n = strlen(s);
-    lsp_json_grow(j, n + 1);
+    if (lsp_json_grow(j, n + 1) != 0) return -1;
     memcpy(j->data + j->len, s, n);
     j->len += n;
     j->data[j->len] = '\0';
+    return 0;
 }
 
-void lsp_json_append_char(LspJson *j, char c) {
-    lsp_json_grow(j, 2);
+int lsp_json_append_char(LspJson *j, char c) {
+    if (lsp_json_grow(j, 2) != 0) return -1;
     j->data[j->len++] = c;
     j->data[j->len] = '\0';
+    return 0;
 }
 
-void lsp_json_append_int(LspJson *j, int v) {
+int lsp_json_append_int(LspJson *j, int v) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%d", v);
-    lsp_json_append(j, buf);
+    return lsp_json_append(j, buf);
 }
 
-void lsp_json_append_escaped(LspJson *j, const char *s) {
-    lsp_json_append_char(j, '"');
+int lsp_json_append_escaped(LspJson *j, const char *s) {
+    if (!s) {
+        j->failed = 1;
+        return -1;
+    }
+    if (lsp_json_append_char(j, '"') != 0) return -1;
     for (const char *p = s; *p; ++p) {
         switch (*p) {
-        case '"':  lsp_json_append(j, "\\\""); break;
-        case '\\': lsp_json_append(j, "\\\\"); break;
-        case '\n': lsp_json_append(j, "\\n"); break;
-        case '\r': lsp_json_append(j, "\\r"); break;
-        case '\t': lsp_json_append(j, "\\t"); break;
+        case '"':  if (lsp_json_append(j, "\\\"") != 0) return -1; break;
+        case '\\': if (lsp_json_append(j, "\\\\") != 0) return -1; break;
+        case '\n': if (lsp_json_append(j, "\\n") != 0) return -1; break;
+        case '\r': if (lsp_json_append(j, "\\r") != 0) return -1; break;
+        case '\t': if (lsp_json_append(j, "\\t") != 0) return -1; break;
         default:
             if ((unsigned char)*p < 0x20) {
                 char esc[8];
                 snprintf(esc, sizeof(esc), "\\u%04x", (unsigned char)*p);
-                lsp_json_append(j, esc);
+                if (lsp_json_append(j, esc) != 0) return -1;
             } else {
-                lsp_json_append_char(j, *p);
+                if (lsp_json_append_char(j, *p) != 0) return -1;
             }
             break;
         }
     }
-    lsp_json_append_char(j, '"');
+    return lsp_json_append_char(j, '"');
+}
+
+int lsp_json_failed(const LspJson *j) {
+    return j->failed;
 }
 
 /* ------------------------------------------------------------------ */
@@ -214,9 +280,12 @@ int lsp_json_get_int(const char *json, const char *key, int *out) {
     const char *v = find_key(json, key);
     if (!v) return -1;
     v = skip_ws(v);
+    errno = 0;
     char *end;
     long val = strtol(v, &end, 10);
-    if (end == v) return -1;
+    if (end == v || errno == ERANGE || val < INT_MIN || val > INT_MAX) {
+        return -1;
+    }
     *out = (int)val;
     return 0;
 }

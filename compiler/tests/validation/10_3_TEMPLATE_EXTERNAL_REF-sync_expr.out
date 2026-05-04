@@ -1,2 +1,0 @@
-File: 10_3_TEMPLATE_EXTERNAL_REF-sync_expr.jz
-      18:12   error TEMPLATE_EXTERNAL_REF S10.3 Identifier in template body must be a parameter, @scratch wire, or compile-time constant; pass external signals as arguments

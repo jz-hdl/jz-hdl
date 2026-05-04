@@ -649,7 +649,7 @@ jz-hdl --simulate sim_file.jz --jitter=clk:200 --drift=clk:50  # jitter + drift
 | `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`. |
 | `--seed=0x<hex>` | 32-bit seed for register randomization. Default: `0xDEADBEEF`. |
 | `--vcd` | Force VCD output format (default). |
-| `--fst` | Force FST output format (not yet supported). |
+| `--fst` | Force FST output format. |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ps>` is the peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times for different clocks. See Section 2.2.1. |
 | `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ppm>` is the maximum drift in parts per million. The actual drift is selected from a Gaussian distribution (σ = ppm/3, clamped at ±ppm) at simulation start. May be specified multiple times for different clocks. See Section 2.2.2. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |

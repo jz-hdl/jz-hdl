@@ -1,4 +1,0 @@
-File: 2_4_SPECIAL_DRIVER_IN_EXPRESSION-mux_block.jz
-      39:26   error SPECIAL_DRIVER_IN_EXPRESSION S2.3 GND/VCC may not appear in arithmetic/logical expressions
-      83:30   error SPECIAL_DRIVER_IN_EXPRESSION S2.3 GND/VCC may not appear in arithmetic/logical expressions
-      88:27   error SPECIAL_DRIVER_IN_EXPRESSION S2.3 GND/VCC may not appear in arithmetic/logical expressions

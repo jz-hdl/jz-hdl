@@ -1,3 +1,8 @@
+/**
+ * @file main.c
+ * @brief Command-line entry point for the JZ-HDL compiler and LSP server.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +24,12 @@
 /* Global verbose flag for timing diagnostics. */
 int jz_verbose = 0;
 
+/**
+ * @brief Run the requested JZ-HDL frontend, analysis, or language-server mode.
+ * @param argc Number of command-line arguments.
+ * @param argv Command-line argument vector.
+ * @return Process exit status.
+ */
 int main(int argc, char **argv) {
     if (argc < 2) {
         jz_cli_print_usage(argv[0]);
@@ -231,15 +242,15 @@ int main(int argc, char **argv) {
 
     if (alias_report_active && opts.input_filename) {
         FILE *out = alias_out ? alias_out : stdout;
-        jz_sem_enable_alias_report(out, "JZ-HDL 1.0", opts.input_filename);
+        jz_sem_enable_alias_report(out, "JZ-HDL 1.0", opts.input_filename, &compiler.diagnostics);
     }
     if (memory_report_active && opts.input_filename) {
         FILE *out = memory_out ? memory_out : stdout;
-        jz_sem_enable_memory_report(out, "JZ-HDL 1.0", opts.input_filename);
+        jz_sem_enable_memory_report(out, "JZ-HDL 1.0", opts.input_filename, &compiler.diagnostics);
     }
     if (tristate_report_active && opts.input_filename) {
         FILE *out = tristate_out ? tristate_out : stdout;
-        jz_sem_enable_tristate_report(out, "JZ-HDL 1.0", opts.input_filename);
+        jz_sem_enable_tristate_report(out, "JZ-HDL 1.0", opts.input_filename, &compiler.diagnostics);
     }
 
     if (opts.tristate_default != 0) {
@@ -255,7 +266,9 @@ int main(int argc, char **argv) {
 
     /* Always run the front end for AST, lint, IR, Verilog, and test modes. */
     phase_t0 = clock();
-    rc = jz_cli_run_frontend(&compiler, opts.input_filename, print_ast_json, ast_out, opts.test_mode, opts.simulate_mode, opts.verbose);
+    rc = jz_cli_run_frontend(&compiler, opts.input_filename, print_ast_json, ast_out,
+                             opts.test_mode, opts.simulate_mode, opts.verbose,
+                             &opts.expansion_limits);
     if (opts.verbose) fprintf(stderr, "[verbose] frontend (total): %.1f ms\n", jz_cli_elapsed_ms(phase_t0));
 
     /* In lint mode, build IR (if no errors) to run the division guard check. */

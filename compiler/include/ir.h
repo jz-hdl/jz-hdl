@@ -530,10 +530,6 @@ typedef struct IR_InstanceConnection {
 } IR_InstanceConnection;
 
 /**
- * @struct IR_Instance
- * @brief A module instantiation within a parent module.
- */
-/**
  * @struct IR_InstanceParam
  * @brief A parameter override for a blackbox instance.
  */
@@ -543,6 +539,10 @@ typedef struct IR_InstanceParam {
     char *string_value;  /**< String value, or NULL for integer params. */
 } IR_InstanceParam;
 
+/**
+ * @struct IR_Instance
+ * @brief A module instantiation within a parent module.
+ */
 typedef struct IR_Instance {
     int                   id;               /**< Unique within owning module. */
     char                 *name;             /**< Instance name. */

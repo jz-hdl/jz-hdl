@@ -1,0 +1,2 @@
+File: TB_6_5_TMODE_TB_UPDATE_NOT_WIRE-assign_nonwire.jz
+      42:13   error TB_UPDATE_NOT_WIRE TB-009 @update may only assign testbench WIRE identifiers

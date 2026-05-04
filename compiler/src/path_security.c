@@ -44,8 +44,10 @@ static int g_allow_traversal = 0;
  * ------------------------------------------------------------------------- */
 
 /**
- * @brief Extract the directory portion of a file path.
- * @return Heap-allocated directory string, or NULL.
+ * @brief Extract the directory portion of a path string.
+ *
+ * @param filepath Source path string.
+ * @return Heap-allocated directory string, or NULL on allocation failure.
  */
 static char *path_dirname(const char *filepath)
 {
@@ -74,7 +76,9 @@ static char *path_dirname(const char *filepath)
 }
 
 /**
- * @brief Canonicalize a path using realpath (POSIX) or _fullpath (Win).
+ * @brief Canonicalize a path with platform-native filesystem resolution.
+ *
+ * @param path Path to resolve.
  * @return Heap-allocated canonical path, or NULL on failure.
  */
 static char *resolve_path(const char *path)
@@ -94,12 +98,8 @@ static char *resolve_path(const char *path)
 
 /**
  * @brief Textual path normalization (collapse ., .., //).
- *
- * Used as fallback when realpath() fails (file doesn't exist yet).
- * Operates purely on the string; no filesystem access.
- *
- * @param path Input path.
- * @return Heap-allocated normalized path, or NULL.
+ * @param path Input path string.
+ * @return Heap-allocated normalized path, or NULL on allocation failure.
  */
 static char *normalize_path_textual(const char *path)
 {
@@ -170,6 +170,9 @@ static char *normalize_path_textual(const char *path)
  * realpath() cannot resolve paths that do not exist yet. For those paths we
  * still need an absolute normalized string so sandbox comparisons use the same
  * coordinate system as the sandbox roots.
+ *
+ * @param path Normalized absolute or relative path text.
+ * @return Heap-allocated absolute normalized path, or NULL on failure.
  */
 static char *make_textual_path_absolute(const char *path)
 {
@@ -208,6 +211,10 @@ static char *make_textual_path_absolute(const char *path)
  *
  * Ensures the match is at a directory boundary (root ends with /,
  * or the character after the prefix in path is / or NUL).
+ *
+ * @param path Canonical path to test.
+ * @param root Canonical sandbox root prefix.
+ * @return Non-zero when the path lies at or under the root.
  */
 static int path_is_under_root(const char *path, const char *root)
 {
@@ -227,7 +234,10 @@ static int path_is_under_root(const char *path, const char *root)
 }
 
 /**
- * @brief Check if raw path contains '..' components.
+ * @brief Detect whether a raw path contains traversal components.
+ *
+ * @param path Raw user-provided path text.
+ * @return Non-zero when any `..` path component is present.
  */
 static int path_has_traversal(const char *path)
 {
@@ -249,7 +259,12 @@ static int path_has_traversal(const char *path)
 }
 
 /**
- * @brief Report a path security diagnostic.
+ * @brief Report a path-security diagnostic using rule metadata when available.
+ *
+ * @param diag Diagnostic list that receives the message.
+ * @param loc Source location associated with the path.
+ * @param rule_id Validation rule identifier to report.
+ * @param fallback Fallback message when no rule metadata is found.
  */
 static void path_report(JZDiagnosticList *diag, JZLocation loc,
                          const char *rule_id, const char *fallback)

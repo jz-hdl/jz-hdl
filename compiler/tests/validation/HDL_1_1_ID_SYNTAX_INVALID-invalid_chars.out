@@ -1,0 +1,2 @@
+File: HDL_1_1_ID_SYNTAX_INVALID-invalid_chars.jz
+      22:12   error PARSE000 parse error near token '-': expected '[' after wire name (orig: PARSE000)

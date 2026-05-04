@@ -1,0 +1,2 @@
+File: SIM_4_7_SMODE_PRINT_ARGUMENT_COUNT_MISMATCH-missing_args.jz
+      42:5    error PRT_ARG_COUNT_MISMATCH PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments

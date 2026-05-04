@@ -1,0 +1,69 @@
+// INDIVIDUAL_BUS_SIGNAL_BINDING: testbench @new may bind expanded BUS signals
+// individually using the same signal names produced by module-level BUS port
+// expansion.
+
+BUS CTRL_BUS {
+    IN  [8] DATA;
+    IN  [1] VALID;
+    OUT [1] READY;
+}
+
+@module TbIndividualBusSignalBindingDut
+    PORT {
+        IN  [1] clk;
+        BUS CTRL_BUS SOURCE src;
+        OUT [8] seen_data;
+        OUT [1] seen_valid;
+    }
+
+    REGISTER {
+        latched_data [8] = 8'h00;
+        latched_valid [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        seen_data = latched_data;
+        seen_valid = latched_valid;
+        src.READY = latched_valid;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        latched_data <= src.DATA;
+        latched_valid <= src.VALID;
+    }
+@endmod
+
+@testbench TbIndividualBusSignalBindingDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        seen_data [8];
+        seen_valid [1];
+        tb_DATA [8];
+        tb_VALID [1];
+        tb_READY [1];
+    }
+
+    TEST "expanded BUS signals may be bound individually" {
+        @new dut TbIndividualBusSignalBindingDut {
+            clk [1] = clk;
+            src_DATA [8] = tb_DATA;
+            src_VALID [1] = tb_VALID;
+            src_READY [1] = tb_READY;
+            seen_data [8] = seen_data;
+            seen_valid [1] = seen_valid;
+        }
+
+        @setup {
+            tb_DATA <= 8'h5A;
+            tb_VALID <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(seen_data, 8'h5A)
+        @expect_equal(seen_valid, 1'b1)
+        @expect_equal(tb_READY, 1'b1)
+    }
+@endtb

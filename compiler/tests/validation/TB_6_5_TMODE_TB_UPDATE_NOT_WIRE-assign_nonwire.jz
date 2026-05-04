@@ -1,0 +1,45 @@
+// TB_UPDATE_NOT_WIRE: @update may only assign testbench WIRE identifiers.
+// Target diagnostic: TB_UPDATE_NOT_WIRE on the instance-name assignment in
+// @update.
+// Non-target diagnostics: none.
+// Fixture plan: keep @new and @setup valid, then assign to the @new instance
+// name so the @update target is in scope but not a WIRE or CLOCK.
+
+@module UpdateNotWireDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] data_in;
+        OUT [1] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out = data_in;
+    }
+@endmod
+
+@testbench UpdateNotWireDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [1];
+        data_out [1];
+    }
+
+    TEST "update assigns a non-wire" {
+        @new dut UpdateNotWireDut {
+            clk [1] = clk;
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+
+        @setup {
+            data_in <= 1'b0;
+        }
+
+        @update {
+            dut <= 1'b1;
+        }
+    }
+@endtb

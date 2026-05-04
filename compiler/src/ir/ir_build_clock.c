@@ -11,6 +11,120 @@
 #include <ctype.h>
 
 #include "ir_internal.h"
+#include "../../include/util.h"
+
+/**
+ * @brief Build an IR signal-reference expression for a known signal ID.
+ *
+ * @param arena       Arena used for allocation.
+ * @param signal_id   Referenced IR signal ID.
+ * @param width       Expression width in bits.
+ * @param source_line Source line for the generated expression.
+ * @return Newly allocated IR expression, or NULL on allocation failure.
+ */
+static IR_Expr *ir_make_signal_ref_expr(JZArena *arena,
+                                        int signal_id,
+                                        int width,
+                                        int source_line);
+
+/**
+ * @brief Build an IR literal expression from an existing literal payload.
+ *
+ * @param arena       Arena used for allocation.
+ * @param lit         Literal payload to embed.
+ * @param source_line Source line for the generated expression.
+ * @return Newly allocated IR expression, or NULL on allocation failure.
+ */
+static IR_Expr *ir_make_literal_expr(JZArena *arena,
+                                     IR_Literal lit,
+                                     int source_line);
+
+/**
+ * @brief Build the reset-condition expression for a clock domain.
+ *
+ * @param arena       Arena used for allocation.
+ * @param mod         Owning IR module used for reset width lookup.
+ * @param cd          Clock domain whose reset condition is needed.
+ * @param source_line Source line for the generated expression.
+ * @return Reset condition expression, or NULL when no reset expression can be built.
+ */
+static IR_Expr *ir_build_reset_condition(JZArena *arena,
+                                         IR_Module *mod,
+                                         const IR_ClockDomain *cd,
+                                         int source_line);
+
+/**
+ * @brief Build the block of reset assignments for one clock domain.
+ *
+ * @param arena          Arena used for allocation.
+ * @param mod            Owning IR module.
+ * @param cd             Clock domain whose registers need reset assignments.
+ * @param next_assign_id Running assignment ID counter to update in place.
+ * @param source_line    Source line for generated statements.
+ * @return Reset-assignment block, or NULL when no reset block is needed.
+ */
+static IR_Stmt *ir_build_reset_assignments_block(JZArena *arena,
+                                                 IR_Module *mod,
+                                                 const IR_ClockDomain *cd,
+                                                 int *next_assign_id,
+                                                 int source_line);
+
+/**
+ * @brief Wrap a synchronous block with reset handling when the domain has a reset.
+ *
+ * @param arena          Arena used for allocation.
+ * @param mod            Owning IR module.
+ * @param cd             Clock domain whose reset behavior is being lowered.
+ * @param body           Existing synchronous body.
+ * @param next_assign_id Running assignment ID counter to update in place.
+ * @param source_line    Source line for generated statements.
+ * @return Wrapped statement tree, or `body` when no wrapping was needed.
+ */
+static IR_Stmt *ir_wrap_sync_block_with_reset(JZArena *arena,
+                                              IR_Module *mod,
+                                              const IR_ClockDomain *cd,
+                                              IR_Stmt *body,
+                                              int *next_assign_id,
+                                              int source_line);
+
+/**
+ * @brief Parse SYNCHRONOUS(...) header parameters into IR_ClockDomain fields.
+ *
+ * Mirrors the semantic expectations for clock domains, but performs parsing
+ * locally so that IR construction remains independent of the semantic
+ * clock-domain pass.
+ *
+ * @param scope               Module scope for symbol resolution.
+ * @param block               AST block node representing SYNCHRONOUS.
+ * @param out_clock_signal_id Output clock signal semantic ID.
+ * @param out_edge            Output clock edge.
+ * @param out_reset_signal_id Output reset signal semantic ID.
+ * @param out_reset_active    Output reset polarity.
+ * @param out_reset_type      Output reset type.
+ */
+static void ir_parse_sync_header(const JZModuleScope *scope,
+                                 JZASTNode *block,
+                                 int *out_clock_signal_id,
+                                 IR_ClockEdge *out_edge,
+                                 int *out_reset_signal_id,
+                                 IR_ResetPolarity *out_reset_active,
+                                 IR_ResetType *out_reset_type);
+
+/**
+ * @brief Walk an IR statement tree and collect registers written in a clock domain.
+ *
+ * Registers discovered here are added to the clock domain's register list and
+ * assigned a home clock-domain ID when they do not already have one.
+ *
+ * @param stmt            IR statement to inspect.
+ * @param mod             Owning IR module.
+ * @param clock_domain_id Clock-domain identifier to assign.
+ * @param ids_buf         Buffer that receives unique register IDs.
+ */
+static void ir_collect_register_ids_from_stmt(const IR_Stmt *stmt,
+                                              IR_Module *mod,
+                                              int clock_domain_id,
+                                              JZBuffer *ids_buf);
 
 static IR_Expr *ir_make_signal_ref_expr(JZArena *arena,
                                         int signal_id,
@@ -178,21 +292,6 @@ static IR_Stmt *ir_wrap_sync_block_with_reset(JZArena *arena,
     return if_stmt;
 }
 
-/**
- * @brief Parse SYNCHRONOUS(...) header parameters into IR_ClockDomain fields.
- *
- * Mirrors the semantic expectations for clock domains, but performs parsing
- * locally so that IR construction remains independent of the semantic
- * clock-domain pass.
- *
- * @param scope               Module scope for symbol resolution.
- * @param block               AST block node representing SYNCHRONOUS.
- * @param out_clock_signal_id Output clock signal semantic ID.
- * @param out_edge            Output clock edge.
- * @param out_reset_signal_id Output reset signal semantic ID.
- * @param out_reset_active    Output reset polarity.
- * @param out_reset_type      Output reset type.
- */
 static void ir_parse_sync_header(const JZModuleScope *scope,
                           JZASTNode *block,
                           int *out_clock_signal_id,
@@ -283,18 +382,6 @@ static void ir_parse_sync_header(const JZModuleScope *scope,
     }
 }
 
-/**
- * @brief Walk an IR statement tree and collect registers written in a clock domain.
- *
- * Registers discovered here are:
- * - Added to the clock domain's register list
- * - Assigned a home_clock_domain_id if previously unset
- *
- * @param stmt             IR statement to inspect.
- * @param mod              Owning IR module.
- * @param clock_domain_id  Clock domain identifier.
- * @param ids_buf          Buffer to append unique register IDs into.
- */
 static void ir_collect_register_ids_from_stmt(const IR_Stmt *stmt,
                                       IR_Module *mod,
                                       int clock_domain_id,
@@ -302,89 +389,107 @@ static void ir_collect_register_ids_from_stmt(const IR_Stmt *stmt,
 {
     if (!stmt || !mod || !ids_buf) return;
 
-    switch (stmt->kind) {
-    case STMT_ASSIGNMENT: {
-        const IR_Assignment *a = &stmt->u.assign;
-        IR_Signal *sig = ir_find_signal_by_id(mod, a->lhs_signal_id);
-        if (!sig || sig->kind != SIG_REGISTER) {
-            return;
-        }
-        if (sig->u.reg.home_clock_domain_id == -1) {
-            sig->u.reg.home_clock_domain_id = clock_domain_id;
-        }
-        int id = sig->id;
-        int *arr = (int *)ids_buf->data;
-        size_t count = ids_buf->len / sizeof(int);
-        for (size_t i = 0; i < count; ++i) {
-            if (arr[i] == id) {
-                return; /* already recorded */
-            }
-        }
-        (void)jz_buf_append(ids_buf, &id, sizeof(int));
+    JZBuffer stack = (JZBuffer){0};
+    if (jz_buf_append(&stack, &stmt, sizeof(stmt)) != 0) {
         return;
     }
 
-    case STMT_IF: {
-        const IR_IfStmt *ifs = &stmt->u.if_stmt;
-        if (ifs->then_block) {
-            ir_collect_register_ids_from_stmt(ifs->then_block, mod, clock_domain_id, ids_buf);
+    while (stack.len >= sizeof(const IR_Stmt *)) {
+        const IR_Stmt *cur = NULL;
+        stack.len -= sizeof(cur);
+        memcpy(&cur, stack.data + stack.len, sizeof(cur));
+        if (!cur) {
+            continue;
         }
-        /* Walk the elif chain iteratively.  Each elif is a STMT_IF whose
-         * then_block holds that branch's body.  We must NOT call the full
-         * recursive function on the elif node itself, because that would
-         * re-walk the remaining elif_chain inside the recursion AND then
-         * the while loop would walk it again — leading to exponential
-         * (O(2^N)) processing time for N elif branches.
-         */
-        const IR_Stmt *elif = ifs->elif_chain;
-        while (elif) {
-            if (elif->kind == STMT_IF) {
-                if (elif->u.if_stmt.then_block) {
-                    ir_collect_register_ids_from_stmt(elif->u.if_stmt.then_block,
-                                                      mod, clock_domain_id, ids_buf);
-                }
-                if (elif->u.if_stmt.else_block) {
-                    ir_collect_register_ids_from_stmt(elif->u.if_stmt.else_block,
-                                                      mod, clock_domain_id, ids_buf);
-                }
-                elif = elif->u.if_stmt.elif_chain;
-            } else {
-                /* Non-IF node in elif chain (shouldn't happen, but handle safely). */
-                ir_collect_register_ids_from_stmt(elif, mod, clock_domain_id, ids_buf);
+
+        switch (cur->kind) {
+        case STMT_ASSIGNMENT: {
+            const IR_Assignment *a = &cur->u.assign;
+            IR_Signal *sig = ir_find_signal_by_id(mod, a->lhs_signal_id);
+            if (!sig || sig->kind != SIG_REGISTER) {
                 break;
             }
-        }
-        if (ifs->else_block) {
-            ir_collect_register_ids_from_stmt(ifs->else_block, mod, clock_domain_id, ids_buf);
-        }
-        return;
-    }
-
-    case STMT_SELECT: {
-        const IR_SelectStmt *sel = &stmt->u.select_stmt;
-        for (int i = 0; i < sel->num_cases; ++i) {
-            if (sel->cases[i].body) {
-                ir_collect_register_ids_from_stmt(sel->cases[i].body,
-                                                  mod,
-                                                  clock_domain_id,
-                                                  ids_buf);
+            if (sig->u.reg.home_clock_domain_id == -1) {
+                sig->u.reg.home_clock_domain_id = clock_domain_id;
             }
+            int id = sig->id;
+            int *arr = (int *)ids_buf->data;
+            size_t count = ids_buf->len / sizeof(int);
+            int seen = 0;
+            for (size_t i = 0; i < count; ++i) {
+                if (arr[i] == id) {
+                    seen = 1;
+                    break;
+                }
+            }
+            if (!seen) {
+                (void)jz_buf_append(ids_buf, &id, sizeof(id));
+            }
+            break;
         }
-        return;
+
+        case STMT_IF: {
+            const IR_IfStmt *ifs = &cur->u.if_stmt;
+            JZBuffer pending = (JZBuffer){0};
+            if (ifs->then_block) {
+                const IR_Stmt *then_block = ifs->then_block;
+                (void)jz_buf_append(&pending, &then_block, sizeof(then_block));
+            }
+            const IR_Stmt *elif = ifs->elif_chain;
+            while (elif) {
+                if (elif->kind == STMT_IF) {
+                    if (elif->u.if_stmt.then_block) {
+                        const IR_Stmt *then_block = elif->u.if_stmt.then_block;
+                        (void)jz_buf_append(&pending, &then_block, sizeof(then_block));
+                    }
+                    if (elif->u.if_stmt.else_block) {
+                        const IR_Stmt *else_block = elif->u.if_stmt.else_block;
+                        (void)jz_buf_append(&pending, &else_block, sizeof(else_block));
+                    }
+                    elif = elif->u.if_stmt.elif_chain;
+                } else {
+                    (void)jz_buf_append(&pending, &elif, sizeof(elif));
+                    break;
+                }
+            }
+            if (ifs->else_block) {
+                const IR_Stmt *else_block = ifs->else_block;
+                (void)jz_buf_append(&pending, &else_block, sizeof(else_block));
+            }
+            size_t pending_count = pending.len / sizeof(const IR_Stmt *);
+            const IR_Stmt **pending_items = (const IR_Stmt **)pending.data;
+            for (size_t i = pending_count; i > 0; --i) {
+                const IR_Stmt *next = pending_items[i - 1];
+                (void)jz_buf_append(&stack, &next, sizeof(next));
+            }
+            jz_buf_free(&pending);
+            break;
+        }
+
+        case STMT_SELECT: {
+            const IR_SelectStmt *sel = &cur->u.select_stmt;
+            for (int i = sel->num_cases - 1; i >= 0; --i) {
+                if (sel->cases[i].body) {
+                    const IR_Stmt *body = sel->cases[i].body;
+                    (void)jz_buf_append(&stack, &body, sizeof(body));
+                }
+            }
+            break;
+        }
+
+        case STMT_BLOCK:
+            for (int i = cur->u.block.count - 1; i >= 0; --i) {
+                const IR_Stmt *child = &cur->u.block.stmts[i];
+                (void)jz_buf_append(&stack, &child, sizeof(child));
+            }
+            break;
+
+        default:
+            break;
+        }
     }
 
-    case STMT_BLOCK:
-        for (int i = 0; i < stmt->u.block.count; ++i) {
-            ir_collect_register_ids_from_stmt(&stmt->u.block.stmts[i],
-                                              mod,
-                                              clock_domain_id,
-                                              ids_buf);
-        }
-        return;
-
-    default:
-        return;
-    }
+    jz_buf_free(&stack);
 }
 
 /**

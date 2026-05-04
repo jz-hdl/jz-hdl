@@ -21,7 +21,7 @@
 #include "../sem/driver_internal.h"
 
 /**
- * @brief Map assignment block_kind strings to IR_AssignmentKind values.
+ * @brief Map assignment `block_kind` strings to IR assignment kinds.
  *
  * @param kind AST block_kind string.
  * @param out  Output assignment kind.
@@ -48,12 +48,10 @@ static int ir_map_assignment_kind(const char *kind, IR_AssignmentKind *out)
 }
 
 /**
- * @brief Recursively propagate a target width to width-0 VCC/GND literals.
+ * @brief Propagate a known target width into width-zero `VCC` and `GND` literals.
  *
- * When an assignment has a known LHS width (from slicing or symbol width)
- * but the RHS contains polymorphic VCC/GND literals with width 0 (e.g.,
- * inside a ternary whose type width could not be inferred), this helper
- * walks the expression tree and patches those literals in-place.
+ * @param expr         Expression tree to rewrite in place.
+ * @param target_width Width to assign to polymorphic literals.
  */
 static void ir_propagate_vcc_gnd_width(IR_Expr *expr, int target_width)
 {

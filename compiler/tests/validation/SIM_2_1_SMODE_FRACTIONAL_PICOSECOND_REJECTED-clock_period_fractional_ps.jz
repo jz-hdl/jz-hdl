@@ -1,0 +1,40 @@
+// FRACTIONAL_PICOSECOND_REJECTED: simulation clock periods that do not map
+// to an exact integer picosecond count must be rejected.
+
+@module FractionalPsClockPeriodDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation FractionalPsClockPeriodDut
+    CLOCK {
+        // Trigger 1: 3.3335 ns = 3333.5 ps, which is not an integer
+        // picosecond count.
+        clk = { period=3.3335 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut FractionalPsClockPeriodDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @run(ns=10)
+@endsim

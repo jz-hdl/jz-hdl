@@ -1,2 +1,0 @@
-File: 9_3_DIRECTIVE_INVALID_CONTEXT-check_in_async.jz
-      57:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location

@@ -1,3 +1,0 @@
-File: 7_0_MEM_INOUT_ASYNC-inout_async.jz
-      28:22   error MEM_INOUT_ASYNC S7.1 INOUT ports are always synchronous; ASYNC/SYNC keyword not permitted
-      58:22   error MEM_INOUT_ASYNC S7.1 INOUT ports are always synchronous; ASYNC/SYNC keyword not permitted

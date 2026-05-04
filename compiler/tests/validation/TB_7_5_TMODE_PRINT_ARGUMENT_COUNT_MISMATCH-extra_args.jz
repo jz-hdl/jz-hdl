@@ -1,0 +1,55 @@
+// PRINT_ARGUMENT_COUNT_MISMATCH: extra @print arguments must emit only
+// PRT_ARG_COUNT_MISMATCH.
+// Target diagnostic: PRT_ARG_COUNT_MISMATCH on the @print directive.
+// Non-target diagnostics: none.
+// Fixture plan: keep the TEST structure valid, advance one clock so the DUT is
+// settled, then call @print with only autonomous specifiers and one value arg.
+
+@module PrintArgCountMismatchTbDut
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data_out = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= data_in;
+    }
+@endmod
+
+@testbench PrintArgCountMismatchTbDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [8];
+        data_out [8];
+    }
+
+    TEST "extra @print arg is rejected" {
+        @new dut PrintArgCountMismatchTbDut {
+            clk [1] = clk;
+            data_in [8] = data_in;
+            data_out [8] = data_out;
+        }
+
+        @setup {
+            data_in <= 8'h34;
+        }
+
+        @clock(clk, cycle=1)
+
+        // Trigger 1: %tick is autonomous, so the value argument is extra.
+        @print("tick=%tick", data_out)
+        @expect_equal(data_out, 8'h34)
+    }
+@endtb

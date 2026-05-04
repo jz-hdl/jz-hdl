@@ -13,16 +13,6 @@
 
 #include "parser_internal.h"
 
-/**
- * @brief Parse the body of a PORT block.
- *
- * Supports standard IN/OUT/INOUT port declarations as well as BUS-based
- * port declarations with optional array widths.
- *
- * @param p      Active parser
- * @param parent PORT block AST node
- * @return 0 on success, -1 on error
- */
 int parse_port_block_body(Parser *p, JZASTNode *parent) {
     for (;;) {
         const JZToken *t = peek(p);

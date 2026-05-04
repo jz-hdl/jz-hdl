@@ -23,11 +23,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <limits.h>
+#include <errno.h>
 #include <math.h>
 #include <math.h>
 
-/* ---- Forward declarations ---- */
+#include "../sem/driver_internal.h"
+#include "util.h"
 
+typedef struct SimClock SimClock;
+typedef struct SimTap SimTap;
+
+/* ---- Private declarations ---- */
+
+/**
+ * @brief Run one `TEST` block inside a `@testbench`.
+ *
+ * @param root Root AST node for the compilation unit.
+ * @param tb_node Parent `@testbench` AST node.
+ * @param test_node `TEST` AST node to execute.
+ * @param dut_module DUT module referenced by the testbench.
+ * @param design Full IR design containing compiled modules.
+ * @param seed Random seed for simulator initialization.
+ * @param verbose Non-zero to print per-step details.
+ * @param filename Source filename used in diagnostics.
+ * @return `0` when the test passes, or non-zero on failure.
+ */
 static int  sim_run_test(const JZASTNode *root,
                          const JZASTNode *tb_node,
                          const JZASTNode *test_node,
@@ -37,21 +59,377 @@ static int  sim_run_test(const JZASTNode *root,
                          int verbose,
                          const char *filename);
 
+/**
+ * @brief Copy testbench drive values into bound DUT input ports.
+ *
+ * @param ts Shared test or simulation state.
+ */
 static void sim_propagate_inputs(SimTestState *ts);
+/**
+ * @brief Copy bound DUT outputs back into testbench wires.
+ *
+ * @param ts Shared test or simulation state.
+ */
 static void sim_propagate_outputs(SimTestState *ts);
+/**
+ * @brief Run the full input-settle-inout-output propagation pipeline.
+ *
+ * @param ts Shared test or simulation state.
+ */
 static void sim_full_settle(SimTestState *ts);
+/**
+ * @brief Force all registers in one clock domain to their reset values.
+ *
+ * @param ctx Simulation context that owns the domain.
+ * @param cd Clock domain whose reset values should be applied.
+ */
 static void sim_apply_domain_reset(SimContext *ctx, const IR_ClockDomain *cd);
+/**
+ * @brief Fire clock domains that match a particular clock edge.
+ *
+ * @param ts Shared test or simulation state.
+ * @param clock_port_id DUT clock signal identifier, or `-1` to match all.
+ * @param new_clk_val Clock value after the edge.
+ * @param apply_nba_per_domain Non-zero to apply NBA updates after each fired domain.
+ */
 static void sim_fire_domains_for_clock(SimTestState *ts, int clock_port_id,
                                         uint64_t new_clk_val,
                                         int apply_nba_per_domain);
+/**
+ * @brief Advance a named testbench clock by a number of cycles.
+ *
+ * @param ts Shared testbench state.
+ * @param clock_name Testbench clock wire name.
+ * @param num_cycles Number of full cycles to execute.
+ */
 static void sim_clock_advance(SimTestState *ts, const char *clock_name, int num_cycles);
+/**
+ * @brief Append a formatted failure message to the current test state.
+ *
+ * @param ts Shared test or simulation state.
+ * @param msg Failure message to duplicate and store.
+ */
 static void record_failure(SimTestState *ts, const char *msg);
+/**
+ * @brief Mirror a DUT hierarchy runtime error into the enclosing test state.
+ *
+ * @param ts Shared test or simulation state.
+ */
+static void propagate_ctx_runtime_error(SimTestState *ts);
+/**
+ * @brief Settle combinational logic and record a runtime error on oscillation.
+ *
+ * @param ts Shared test or simulation state.
+ */
+static void sim_settle_checked(SimTestState *ts);
+/**
+ * @brief Find a compiled module by name in the IR design.
+ *
+ * @param design IR design to search.
+ * @param name Module name to resolve.
+ * @return Matching module, or `NULL` if it is not present.
+ */
+static const IR_Module *find_module_by_name(const IR_Design *design, const char *name);
+/**
+ * @brief Find the index of a named testbench wire.
+ *
+ * @param ts Shared test or simulation state.
+ * @param name Testbench wire name to look up.
+ * @return Wire index, or `-1` if not found.
+ */
+static int find_tb_wire(SimTestState *ts, const char *name);
+/**
+ * @brief Resolve a module port signal identifier from its name.
+ *
+ * @param mod Module whose ports should be searched.
+ * @param name Port name to look up.
+ * @return Matching signal identifier, or `-1` if not found.
+ */
+static int find_port_signal_id(const IR_Module *mod, const char *name);
+/**
+ * @brief Check whether a BUS definition contains a named member signal.
+ *
+ * @param bus_def BUS definition AST node.
+ * @param signal_name Member signal name to look up.
+ * @return Non-zero if the signal is present, or zero otherwise.
+ */
+static int tb_bus_def_has_signal(const JZASTNode *bus_def, const char *signal_name);
+/**
+ * @brief Check whether a DUT port name matches a BUS shorthand binding.
+ *
+ * @param bus_def BUS definition referenced by the shorthand.
+ * @param port_prefix BUS port prefix on the DUT side.
+ * @param signal_name Full DUT signal name to test.
+ * @return Non-zero if the signal matches the shorthand, or zero otherwise.
+ */
+static int tb_bus_shorthand_matches_signal(const JZASTNode *bus_def,
+                                           const char *port_prefix,
+                                           const char *signal_name);
+/**
+ * @brief Find a BUS definition by name in root or simulation/testbench scope.
+ *
+ * @param root Root AST node to search.
+ * @param bus_name BUS block name to resolve.
+ * @return Matching BUS AST node, or `NULL` if not found.
+ */
+static const JZASTNode *find_bus_def(const JZASTNode *root, const char *bus_name);
+/**
+ * @brief Parse a width string used by testbench wire declarations.
+ *
+ * @param text Width text such as `8` or `[8]`.
+ * @return Parsed positive width, defaulting to `1` on invalid input.
+ */
+static int parse_width_text(const char *text);
+/**
+ * @brief Parse a textual HDL literal into a simulation value.
+ *
+ * @param text Literal text to parse.
+ * @return Parsed simulation value.
+ */
+static SimValue parse_literal_to_simval(const char *text);
+/**
+ * @brief Evaluate `lit(...)` testbench helper syntax into a simulation value.
+ *
+ * @param expr Raw helper expression text.
+ * @param project_symbols Project symbol table used for constant subexpressions.
+ * @param out Output slot for the parsed value.
+ * @return Non-zero on success, or zero if the expression is malformed.
+ */
+static int eval_lit_call_to_simval(const char *expr,
+                                   const JZBuffer *project_symbols,
+                                   SimValue *out);
+/**
+ * @brief Resolve a `GLOBAL.CONST` reference into a simulation value.
+ *
+ * @param qname Qualified constant name.
+ * @param out Output slot for the resolved constant value.
+ * @return Non-zero on success, or zero if the constant cannot be resolved.
+ */
+static int resolve_global_const_simval(const char *qname, SimValue *out);
+/**
+ * @brief Resolve a named signal within one simulation context.
+ *
+ * @param ctx Simulation context to inspect.
+ * @param name Signal path to resolve relative to `ctx`.
+ * @param out Output slot for the current signal value.
+ * @return Non-zero on success, or zero if the signal is not present.
+ */
+static int resolve_ctx_signal_value(const SimContext *ctx, const char *name, SimValue *out);
+/**
+ * @brief Resolve a hierarchical testbench signal reference into a value.
+ *
+ * @param ts Shared test or simulation state.
+ * @param hier_name Hierarchical signal path to resolve.
+ * @param out Output slot for the current signal value.
+ * @return Non-zero on success, or zero if the path cannot be resolved.
+ */
+static int resolve_tb_hier_signal_simval(const SimTestState *ts,
+                                         const char *hier_name,
+                                         SimValue *out);
+/**
+ * @brief Free symbol tables built for testbench expression evaluation.
+ *
+ * @param module_scopes Module-scope symbol table buffer.
+ * @param project_symbols Project-wide symbol table buffer.
+ */
+static void free_built_symbol_tables(JZBuffer *module_scopes, JZBuffer *project_symbols);
+/**
+ * @brief Evaluate a testbench AST expression into a simulation value.
+ *
+ * @param ts Shared test or simulation state.
+ * @param node AST expression node to evaluate.
+ * @return Evaluated simulation value.
+ */
+static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node);
+/**
+ * @brief Execute a `@print` or `@print_if` directive.
+ *
+ * @param ts Shared test or simulation state.
+ * @param node Print AST node to execute.
+ */
+static void process_print(SimTestState *ts, const JZASTNode *node);
+/**
+ * @brief Count BUS member declarations in a BUS definition.
+ *
+ * @param bus_def BUS definition AST node.
+ * @return Number of `BUS_DECL` child nodes.
+ */
+static int count_bus_signals(const JZASTNode *bus_def);
+/**
+ * @brief Parse the array count attached to a BUS wire declaration.
+ *
+ * @param decl BUS wire declaration AST node.
+ * @param out_count Output slot for the parsed array count.
+ * @return `0` on success, or `-1` on overflow.
+ */
+static int parse_tb_bus_array_count(const JZASTNode *decl, int *out_count);
+/**
+ * @brief Collect clock and wire declarations for a testbench or simulation.
+ *
+ * @param ts Shared state to populate.
+ * @param container AST node that owns the declarations.
+ * @param root Root AST node used for BUS lookups.
+ * @param clock_block_type AST node type for the enclosing clock block.
+ * @param clock_decl_type AST node type for individual clock declarations.
+ * @return `0` on success, or `-1` on allocation or expansion failure.
+ */
+static int collect_decls(SimTestState *ts, const JZASTNode *container,
+                         const JZASTNode *root,
+                         JZASTNodeType clock_block_type,
+                         JZASTNodeType clock_decl_type);
+/**
+ * @brief Build testbench-to-DUT port bindings from an `@new` instance.
+ *
+ * @param ts Shared state to populate.
+ * @param root Root AST node used for BUS lookups.
+ * @param instance_node Module instance AST node.
+ * @param dut_module DUT module referenced by the instance.
+ * @return `0` on success, or `-1` on allocation failure.
+ */
+static int build_port_bindings(SimTestState *ts,
+                               const JZASTNode *root,
+                               const JZASTNode *instance_node,
+                               const IR_Module *dut_module);
+/**
+ * @brief Restore non-`z` testbench drive values onto inout ports driven as `z`.
+ *
+ * @param ts Shared test or simulation state.
+ */
+static void sim_resolve_inout_z(SimTestState *ts);
+/**
+ * @brief Execute a `@setup` or `@update` block with simultaneous assignment semantics.
+ *
+ * @param ts Shared testbench state.
+ * @param node Setup or update AST node.
+ * @param is_setup Non-zero for `@setup`, zero for `@update`.
+ */
+static void process_setup_update(SimTestState *ts, const JZASTNode *node, int is_setup);
+/**
+ * @brief Execute an equality or inequality expectation.
+ *
+ * @param ts Shared testbench state.
+ * @param node Expectation AST node.
+ * @param is_equal Non-zero for equality, zero for inequality.
+ */
+static void process_expect(SimTestState *ts, const JZASTNode *node, int is_equal);
+/**
+ * @brief Execute an `@expect_tristate` assertion.
+ *
+ * @param ts Shared testbench state.
+ * @param node Expectation AST node.
+ */
+static void process_expect_tristate(SimTestState *ts, const JZASTNode *node);
+/**
+ * @brief Compute the greatest common divisor of two unsigned integers.
+ *
+ * @param a First operand.
+ * @param b Second operand.
+ * @return Greatest common divisor of `a` and `b`.
+ */
+static uint64_t gcd64(uint64_t a, uint64_t b);
+/**
+ * @brief Convert a scaled time value into an exact integer picosecond count.
+ *
+ * @param value Numeric time value.
+ * @param scale Picosecond scale factor for `value`.
+ * @param ps_out Output slot for the converted picosecond count.
+ * @return `0` on success, or `-1` when the conversion is not exact.
+ */
+static int time_to_exact_ps(double value, double scale, uint64_t *ps_out);
+/**
+ * @brief Draw a Gaussian jitter sample for a simulated clock.
+ *
+ * @param clk Clock state that owns the jitter PRNG cache.
+ * @return Jitter offset in picoseconds.
+ */
+static double sim_gaussian(SimClock *clk);
+/**
+ * @brief Draw a clamped Gaussian drift sample.
+ *
+ * @param rng Random number generator state.
+ * @param max_ppm Maximum absolute drift in parts per million.
+ * @return Drift sample in parts per million.
+ */
+static double sim_gaussian_drift(uint32_t *rng, double max_ppm);
+/**
+ * @brief Compute the next actual clock toggle time after applying jitter.
+ *
+ * @param clk Clock state to update.
+ * @param current_time_ps Current simulation time in picoseconds.
+ * @return Scheduled toggle time in picoseconds.
+ */
+static uint64_t sim_jittered_toggle(SimClock *clk, uint64_t current_time_ps);
+/**
+ * @brief Collect simulation clock declarations into runtime clock state.
+ *
+ * @param sim_node `@simulation` AST node to scan.
+ * @param ts Shared simulation state used for wire lookups.
+ * @param clocks Output array for collected clocks.
+ * @param max_clocks Capacity of `clocks`.
+ * @return Number of collected clocks, or `-1` on conversion failure.
+ */
+static int collect_sim_clocks(const JZASTNode *sim_node, SimTestState *ts,
+                              SimClock *clocks, int max_clocks);
+/**
+ * @brief Dump all tracked testbench and tap signals to the waveform writer.
+ *
+ * @param wave Waveform writer to receive value changes.
+ * @param ts Shared simulation state.
+ * @param wave_ids Waveform signal identifiers for testbench wires.
+ * @param taps Registered internal signal taps.
+ * @param num_taps Number of valid tap entries.
+ */
+static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
+                          SimTap *taps, int num_taps);
+/**
+ * @brief Convert an `@run` directive duration into picoseconds.
+ *
+ * @param run_node `@run` AST node to interpret.
+ * @return Duration in picoseconds, or `0` when the directive is invalid.
+ */
+static uint64_t run_to_ps(const JZASTNode *run_node);
+/**
+ * @brief Run one `@simulation` block and emit waveform output.
+ *
+ * @param root Root AST node for the compilation unit.
+ * @param sim_node `@simulation` AST node to execute.
+ * @param dut_module DUT module referenced by the simulation.
+ * @param design Full IR design containing compiled modules.
+ * @param seed Random seed for simulator initialization.
+ * @param verbose Non-zero to print per-step details.
+ * @param filename Source filename used in diagnostics.
+ * @param output_path Waveform output path.
+ * @param format Requested waveform format.
+ * @param jitter_configs Optional per-clock jitter configuration array.
+ * @param num_jitter Number of entries in `jitter_configs`.
+ * @param drift_configs Optional per-clock drift configuration array.
+ * @param num_drift Number of entries in `drift_configs`.
+ * @return `0` on success, or non-zero on failure.
+ */
+static int sim_run_simulation(const JZASTNode *root,
+                              const JZASTNode *sim_node,
+                              const IR_Module *dut_module,
+                              const IR_Design *design,
+                              uint32_t seed,
+                              int verbose,
+                              const char *filename,
+                              const char *output_path,
+                              SimWaveFormat format,
+                              const SimJitterConfig *jitter_configs,
+                              int num_jitter,
+                              const SimDriftConfig *drift_configs,
+                              int num_drift);
+
+
+/* Expression evaluation is shared by @testbench and @simulation execution.
+ * Rebuild project symbols once per run so GLOBAL.CONST can resolve here too.
+ */
+static const JZBuffer *g_tb_expr_project_symbols = NULL;
 
 /* ---- Helpers ---- */
 
-/**
- * Check if any SimContext in the DUT hierarchy has flagged a runtime error
- * (e.g., z reached a non-tristate expression).  Propagate to the test state.
+/* Check if any SimContext in the DUT hierarchy has flagged a runtime error
+ * (e.g., z reached a non-tristate expression). Propagate to the test state.
  */
 static void propagate_ctx_runtime_error(SimTestState *ts) {
     if (ts->runtime_error) return;
@@ -65,10 +443,7 @@ static void propagate_ctx_runtime_error(SimTestState *ts) {
     }
 }
 
-/**
- * Settle combinational logic and check for oscillation.
- * Sets ts->runtime_error if settling does not converge (SE-001).
- */
+/* Settle combinational logic and check for oscillation. */
 static void sim_settle_checked(SimTestState *ts) {
     int rc = sim_settle_combinational(ts->dut, SIM_SETTLE_MAX_ITERS);
     if (rc != 0 && !ts->runtime_error) {
@@ -111,6 +486,47 @@ static int find_port_signal_id(const IR_Module *mod, const char *name) {
             return mod->signals[i].id;
     }
     return -1;
+}
+
+static int tb_bus_def_has_signal(const JZASTNode *bus_def, const char *signal_name) {
+    if (!bus_def || !signal_name || !*signal_name) return 0;
+
+    for (size_t i = 0; i < bus_def->child_count; i++) {
+        const JZASTNode *decl = bus_def->children[i];
+        if (!decl || decl->type != JZ_AST_BUS_DECL || !decl->name) continue;
+        if (strcmp(decl->name, signal_name) == 0)
+            return 1;
+    }
+
+    return 0;
+}
+
+static int tb_bus_shorthand_matches_signal(const JZASTNode *bus_def,
+                                           const char *port_prefix,
+                                           const char *signal_name) {
+    size_t prefix_len;
+    const char *tail;
+    const char *member_name;
+
+    if (!bus_def || !port_prefix || !signal_name) return 0;
+
+    prefix_len = strlen(port_prefix);
+    if (strncmp(signal_name, port_prefix, prefix_len) != 0) {
+        return 0;
+    }
+
+    tail = signal_name + prefix_len;
+    if (*tail == '_') {
+        member_name = tail + 1;
+    } else {
+        const char *digit_tail = tail;
+        if (!isdigit((unsigned char)*digit_tail)) return 0;
+        while (isdigit((unsigned char)*digit_tail)) ++digit_tail;
+        if (*digit_tail != '_') return 0;
+        member_name = digit_tail + 1;
+    }
+
+    return tb_bus_def_has_signal(bus_def, member_name);
 }
 
 static const JZASTNode *find_bus_def(const JZASTNode *root, const char *bus_name) {
@@ -232,6 +648,222 @@ static SimValue parse_literal_to_simval(const char *text) {
     return sim_val_from_words(words, SIM_VAL_WORDS, width);
 }
 
+static int eval_lit_call_to_simval(const char *expr,
+                                   const JZBuffer *project_symbols,
+                                   SimValue *out)
+{
+    const char *p;
+    int depth = 0;
+    const char *arg_start;
+    const char *comma = NULL;
+    const char *end = NULL;
+    const char *w_start;
+    const char *w_end;
+    const char *v_start;
+    const char *v_end;
+    size_t w_len;
+    size_t v_len;
+    char *w_expr;
+    char *v_expr;
+    long long width_value = 0;
+    long long literal_value = 0;
+
+    if (!expr || !project_symbols || !out) return 0;
+
+    p = expr;
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (strncmp(p, "lit", 3) != 0) return 0;
+    p += 3;
+
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (*p != '(') return 0;
+    ++p;
+
+    arg_start = p;
+    for (; *p; ++p) {
+        if (*p == '(') {
+            depth++;
+        } else if (*p == ')') {
+            if (depth == 0) {
+                end = p;
+                break;
+            }
+            depth--;
+        } else if (*p == ',' && depth == 0 && !comma) {
+            comma = p;
+        }
+    }
+
+    if (!comma || !end) return 0;
+
+    w_start = arg_start;
+    w_end = comma;
+    v_start = comma + 1;
+    v_end = end;
+
+    while (w_start < w_end && isspace((unsigned char)*w_start)) ++w_start;
+    while (w_end > w_start && isspace((unsigned char)w_end[-1])) --w_end;
+    while (v_start < v_end && isspace((unsigned char)*v_start)) ++v_start;
+    while (v_end > v_start && isspace((unsigned char)v_end[-1])) --v_end;
+    if (w_start >= w_end || v_start >= v_end) return 0;
+
+    w_len = (size_t)(w_end - w_start);
+    v_len = (size_t)(v_end - v_start);
+    w_expr = (char *)malloc(w_len + 1);
+    v_expr = (char *)malloc(v_len + 1);
+    if (!w_expr || !v_expr) {
+        free(w_expr);
+        free(v_expr);
+        return 0;
+    }
+
+    memcpy(w_expr, w_start, w_len);
+    w_expr[w_len] = '\0';
+    memcpy(v_expr, v_start, v_len);
+    v_expr[v_len] = '\0';
+
+    if (sem_eval_const_expr_in_project(w_expr, project_symbols, &width_value) != 0 ||
+        sem_eval_const_expr_in_project(v_expr, project_symbols, &literal_value) != 0 ||
+        width_value <= 0 || literal_value < 0 || width_value > SIM_VAL_WORDS * 64) {
+        free(w_expr);
+        free(v_expr);
+        return 0;
+    }
+
+    free(w_expr);
+    free(v_expr);
+    *out = sim_val_from_uint((uint64_t)literal_value, (int)width_value);
+    return 1;
+}
+
+static int resolve_global_const_simval(const char *qname, SimValue *out)
+{
+    const char *dot;
+    char namespace_name[256];
+    size_t ns_len;
+    const JZSymbol *glob_sym;
+
+    if (!qname || !out || !g_tb_expr_project_symbols) return 0;
+
+    dot = strchr(qname, '.');
+    if (!dot || dot == qname || dot[1] == '\0') return 0;
+
+    ns_len = (size_t)(dot - qname);
+    if (ns_len >= sizeof(namespace_name)) return 0;
+    memcpy(namespace_name, qname, ns_len);
+    namespace_name[ns_len] = '\0';
+
+    glob_sym = project_lookup(g_tb_expr_project_symbols, namespace_name, JZ_SYM_GLOBAL);
+    if (!glob_sym || !glob_sym->node) return 0;
+
+    for (size_t i = 0; i < glob_sym->node->child_count; ++i) {
+        const JZASTNode *decl = glob_sym->node->children[i];
+        if (!decl || decl->type != JZ_AST_CONST_DECL || !decl->name || !decl->text) continue;
+        if (strcmp(decl->name, dot + 1) != 0) continue;
+
+        if (strchr(decl->text, '\'')) {
+            *out = parse_literal_to_simval(decl->text);
+            return 1;
+        }
+
+        return eval_lit_call_to_simval(decl->text, g_tb_expr_project_symbols, out);
+    }
+
+    return 0;
+}
+
+static int resolve_ctx_signal_value(const SimContext *ctx,
+                                    const char *path,
+                                    SimValue *out)
+{
+    const char *dot;
+
+    if (!ctx || !path || !*path || !out) return 0;
+
+    dot = strchr(path, '.');
+    if (!dot) {
+        for (int i = 0; i < ctx->module->num_signals; ++i) {
+            const IR_Signal *sig = &ctx->module->signals[i];
+            SimSignalEntry *entry;
+
+            if (!sig->name || strcmp(sig->name, path) != 0) continue;
+
+            entry = sim_ctx_lookup((SimContext *)ctx, sig->id);
+            if (!entry) return 0;
+            *out = entry->current;
+            return 1;
+        }
+
+        return 0;
+    }
+
+    {
+        size_t inst_len = (size_t)(dot - path);
+
+        if (inst_len == 0 || dot[1] == '\0') return 0;
+
+        for (int i = 0; i < ctx->num_children; ++i) {
+            const SimChildInstance *child = &ctx->children[i];
+
+            if (!child->ctx || !child->inst || !child->inst->name) continue;
+            if (strlen(child->inst->name) != inst_len ||
+                strncmp(child->inst->name, path, inst_len) != 0) {
+                continue;
+            }
+
+            return resolve_ctx_signal_value(child->ctx, dot + 1, out);
+        }
+    }
+
+    return 0;
+}
+
+static int resolve_tb_hier_signal_simval(const SimTestState *ts,
+                                         const char *qname,
+                                         SimValue *out)
+{
+    const char *dot;
+    size_t root_len;
+
+    if (!ts || !ts->dut || !ts->dut_instance_name || !qname || !out) return 0;
+
+    dot = strchr(qname, '.');
+    if (!dot || dot == qname || dot[1] == '\0') return 0;
+
+    root_len = (size_t)(dot - qname);
+    if (strlen(ts->dut_instance_name) != root_len ||
+        strncmp(ts->dut_instance_name, qname, root_len) != 0) {
+        return 0;
+    }
+
+    return resolve_ctx_signal_value(ts->dut, dot + 1, out);
+}
+
+static void free_built_symbol_tables(JZBuffer *module_scopes, JZBuffer *project_symbols)
+{
+    size_t scope_count;
+    JZModuleScope *scopes;
+
+    if (!module_scopes || !project_symbols) return;
+
+    scope_count = module_scopes->len / sizeof(JZModuleScope);
+    scopes = (JZModuleScope *)module_scopes->data;
+    for (size_t i = 0; i < scope_count; ++i) {
+        jz_buf_free(&scopes[i].symbols);
+        if (scopes[i].bus_signal_decls.len > 0) {
+            size_t bcount = scopes[i].bus_signal_decls.len / sizeof(JZASTNode *);
+            JZASTNode **barr = (JZASTNode **)scopes[i].bus_signal_decls.data;
+            for (size_t bi = 0; bi < bcount; ++bi) {
+                jz_ast_free(barr[bi]);
+            }
+            jz_buf_free(&scopes[i].bus_signal_decls);
+        }
+    }
+
+    jz_buf_free(module_scopes);
+    jz_buf_free(project_symbols);
+}
+
 /* Evaluate an AST expression node from testbench context into a SimValue.
  * For @expect_equal, the arguments are AST nodes — identifiers or literals. */
 static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
@@ -245,6 +877,15 @@ static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
         node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
         int idx = find_tb_wire(ts, node->name);
         if (idx >= 0) return ts->tb_wires[idx].value;
+        if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
+            SimValue resolved_value;
+            if (resolve_global_const_simval(node->name, &resolved_value)) {
+                return resolved_value;
+            }
+            if (resolve_tb_hier_signal_simval(ts, node->name, &resolved_value)) {
+                return resolved_value;
+            }
+        }
         return sim_val_all_x(1);
     }
 
@@ -327,28 +968,37 @@ static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
 
 /* Record a failure message */
 static void record_failure(SimTestState *ts, const char *msg) {
+    char *dup = NULL;
+
     if (ts->num_failure_msgs >= ts->cap_failure_msgs) {
-        int new_cap = ts->cap_failure_msgs < 8 ? 8 : ts->cap_failure_msgs * 2;
-        char **new_buf = realloc(ts->failure_msgs, (size_t)new_cap * sizeof(char *));
+        int new_cap = 0;
+        size_t new_bytes = 0;
+        char **new_buf = NULL;
+
+        if (ts->cap_failure_msgs < 8) {
+            new_cap = 8;
+        } else if (ts->cap_failure_msgs > INT_MAX / 2) {
+            return;
+        } else {
+            new_cap = ts->cap_failure_msgs * 2;
+        }
+        if (new_cap <= ts->cap_failure_msgs ||
+            jz_size_mul_checked((size_t)new_cap, sizeof(char *), &new_bytes) != 0) {
+            return;
+        }
+        new_buf = (char **)realloc(ts->failure_msgs, new_bytes);
         if (!new_buf) return;
         ts->failure_msgs = new_buf;
         ts->cap_failure_msgs = new_cap;
     }
-    ts->failure_msgs[ts->num_failure_msgs++] = strdup(msg);
+    dup = jz_strdup(msg);
+    if (!dup) return;
+    ts->failure_msgs[ts->num_failure_msgs++] = dup;
 }
 
 /* ---- @print / @print_if execution ---- */
 
-/**
- * Process a @print or @print_if AST node.
- *
- * Format specifiers:
- *   %h  - hex value of next arg
- *   %d  - decimal value of next arg
- *   %b  - binary value of next arg
- *   %tick - current tick/cycle count
- *   %ms   - current simulation time in milliseconds
- */
+/* Process a @print or @print_if AST node. */
 static void process_print(SimTestState *ts, const JZASTNode *node) {
     if (!node) return;
 
@@ -439,19 +1089,40 @@ static int count_bus_signals(const JZASTNode *bus_def) {
     return n;
 }
 
-/**
- * Unified declaration collector for both @testbench and @simulation.
- * The only difference is the AST node types for clock blocks/decls:
- *   - Testbench:  JZ_AST_TB_CLOCK_BLOCK / JZ_AST_TB_CLOCK_DECL
- *   - Simulation: JZ_AST_SIM_CLOCK_BLOCK / JZ_AST_SIM_CLOCK_DECL
- * Wire blocks use JZ_AST_TB_WIRE_BLOCK / JZ_AST_TB_WIRE_DECL in both cases.
- */
-static void collect_decls(SimTestState *ts, const JZASTNode *container,
-                           const JZASTNode *root,
-                           JZASTNodeType clock_block_type,
-                           JZASTNodeType clock_decl_type) {
+static int parse_tb_bus_array_count(const JZASTNode *decl, int *out_count) {
+    long arr_count = 1;
+
+    if (decl && decl->width) {
+        errno = 0;
+        arr_count = strtol(decl->width, NULL, 10);
+        if (errno == ERANGE || arr_count > INT_MAX) {
+            fprintf(stderr,
+                    "error: BUS wire '%s' array count exceeds supported size\n",
+                    decl->name ? decl->name : "?");
+            return -1;
+        }
+    }
+
+    if (arr_count <= 0)
+        arr_count = 1;
+
+    *out_count = (int)arr_count;
+    return 0;
+}
+
+/* Unified declaration collector for both @testbench and @simulation. */
+static int collect_decls(SimTestState *ts, const JZASTNode *container,
+                         const JZASTNode *root,
+                         JZASTNodeType clock_block_type,
+                         JZASTNodeType clock_decl_type) {
     /* Count clocks and wires */
-    int num_clocks = 0, num_wires = 0;
+    size_t num_clocks = 0, num_wires = 0;
+    size_t total = 0;
+    const size_t size_max = (size_t)-1;
+    int idx = 0;
+
+    ts->num_tb_wires = 0;
+    ts->tb_wires = NULL;
 
     for (size_t i = 0; i < container->child_count; i++) {
         const JZASTNode *child = container->children[i];
@@ -459,28 +1130,60 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
         if (child->type == clock_block_type) {
             for (size_t j = 0; j < child->child_count; j++)
                 if (child->children[j] &&
-                    child->children[j]->type == clock_decl_type)
+                    child->children[j]->type == clock_decl_type) {
+                    if (num_clocks == (size_t)INT_MAX) {
+                        fprintf(stderr,
+                                "error: too many simulator declarations to allocate\n");
+                        return -1;
+                    }
                     num_clocks++;
+                }
         } else if (child->type == JZ_AST_TB_WIRE_BLOCK) {
             for (size_t j = 0; j < child->child_count; j++) {
                 const JZASTNode *wd = child->children[j];
                 if (!wd || wd->type != JZ_AST_TB_WIRE_DECL) continue;
                 if (wd->block_kind && strcmp(wd->block_kind, "BUS") == 0) {
-                    int arr_count = wd->width ? (int)strtol(wd->width, NULL, 10) : 1;
-                    if (arr_count <= 0) arr_count = 1;
+                    int arr_count = 1;
+                    size_t bus_signals;
+
+                    if (parse_tb_bus_array_count(wd, &arr_count) != 0)
+                        return -1;
+
                     const JZASTNode *bus_def = find_bus_def(root, wd->text);
-                    num_wires += arr_count * count_bus_signals(bus_def);
+                    bus_signals = (size_t)count_bus_signals(bus_def);
+                    if (bus_signals != 0 &&
+                        (size_t)arr_count > (size_max - num_wires) / bus_signals) {
+                        fprintf(stderr,
+                                "error: BUS wire '%s' expands beyond supported allocation size\n",
+                                wd->name ? wd->name : "?");
+                        return -1;
+                    }
+                    num_wires += (size_t)arr_count * bus_signals;
                 } else {
+                    if (num_wires == size_max) {
+                        fprintf(stderr,
+                                "error: too many simulator declarations to allocate\n");
+                        return -1;
+                    }
                     num_wires++;
                 }
             }
         }
     }
 
-    int total = num_clocks + num_wires;
-    ts->num_tb_wires = total;
-    ts->tb_wires = calloc((size_t)(total > 0 ? total : 1), sizeof(SimTbWire));
-    int idx = 0;
+    if (num_clocks > size_max - num_wires || num_clocks + num_wires > (size_t)INT_MAX) {
+        fprintf(stderr, "error: too many simulator declarations to allocate\n");
+        return -1;
+    }
+
+    total = num_clocks + num_wires;
+    ts->num_tb_wires = (int)total;
+    ts->tb_wires = calloc(total > 0 ? total : 1, sizeof(SimTbWire));
+    if (!ts->tb_wires) {
+        fprintf(stderr, "error: failed to allocate simulator declarations\n");
+        ts->num_tb_wires = 0;
+        return -1;
+    }
 
     /* Clocks first */
     for (size_t i = 0; i < container->child_count; i++) {
@@ -489,6 +1192,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
         for (size_t j = 0; j < child->child_count; j++) {
             const JZASTNode *decl = child->children[j];
             if (!decl || decl->type != clock_decl_type) continue;
+            if ((size_t)idx >= total) {
+                fprintf(stderr, "error: declaration expansion count mismatch\n");
+                goto fail;
+            }
             ts->tb_wires[idx].name = decl->name;
             ts->tb_wires[idx].width = 1;
             ts->tb_wires[idx].is_clock = 1;
@@ -506,9 +1213,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
             if (!decl || decl->type != JZ_AST_TB_WIRE_DECL) continue;
 
             if (decl->block_kind && strcmp(decl->block_kind, "BUS") == 0) {
-                int arr_count = decl->width ? (int)strtol(decl->width, NULL, 10) : 1;
-                if (arr_count <= 0) arr_count = 1;
+                int arr_count = 1;
                 const JZASTNode *bus_def = find_bus_def(root, decl->text);
+                if (parse_tb_bus_array_count(decl, &arr_count) != 0)
+                    goto fail;
                 if (!bus_def) continue;
 
                 for (int ai = 0; ai < arr_count; ai++) {
@@ -516,6 +1224,11 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
                         const JZASTNode *bd = bus_def->children[bi];
                         if (!bd || bd->type != JZ_AST_BUS_DECL) continue;
                         int w = parse_width_text(bd->width);
+
+                        if ((size_t)idx >= total) {
+                            fprintf(stderr, "error: declaration expansion count mismatch\n");
+                            goto fail;
+                        }
 
                         char namebuf[128];
                         if (arr_count > 1)
@@ -526,6 +1239,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
                                      decl->name, bd->name);
 
                         ts->tb_wires[idx].name = strdup(namebuf);
+                        if (!ts->tb_wires[idx].name) {
+                            fprintf(stderr, "error: failed to allocate simulator wire name\n");
+                            goto fail;
+                        }
                         ts->tb_wires[idx].width = w;
                         ts->tb_wires[idx].is_clock = 0;
                         ts->tb_wires[idx].owns_name = 1;
@@ -535,6 +1252,10 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
                 }
             } else {
                 int w = parse_width_text(decl->width);
+                if ((size_t)idx >= total) {
+                    fprintf(stderr, "error: declaration expansion count mismatch\n");
+                    goto fail;
+                }
                 ts->tb_wires[idx].name = decl->name;
                 ts->tb_wires[idx].width = w;
                 ts->tb_wires[idx].is_clock = 0;
@@ -544,27 +1265,38 @@ static void collect_decls(SimTestState *ts, const JZASTNode *container,
         }
     }
     ts->num_tb_wires = idx; /* actual count after expansion */
+    return 0;
+
+fail:
+    for (int i = 0; i < idx; i++) {
+        if (ts->tb_wires[i].owns_name)
+            free((char *)ts->tb_wires[i].name);
+    }
+    free(ts->tb_wires);
+    ts->tb_wires = NULL;
+    ts->num_tb_wires = 0;
+    return -1;
 }
 
 /* ---- Build port bindings from @new ---- */
 
-static void build_port_bindings(SimTestState *ts,
-                                const JZASTNode *instance_node,
-                                const IR_Module *dut_module) {
+static int build_port_bindings(SimTestState *ts,
+                               const JZASTNode *root,
+                               const JZASTNode *instance_node,
+                               const IR_Module *dut_module) {
     /* First pass: count how many bindings we'll need (BUS expands to many) */
     int n = 0;
     for (size_t i = 0; i < instance_node->child_count; i++) {
         const JZASTNode *pd = instance_node->children[i];
         if (!pd || pd->type != JZ_AST_PORT_DECL) continue;
         if (pd->block_kind && strcmp(pd->block_kind, "BUS") == 0) {
+            const JZASTNode *bus_def = find_bus_def(root, pd->text);
             /* Count DUT port signals matching this prefix */
             const char *port_prefix = pd->name;
-            size_t plen = strlen(port_prefix);
             for (int s = 0; s < dut_module->num_signals; s++) {
                 if (dut_module->signals[s].kind != SIG_PORT) continue;
                 const char *sn = dut_module->signals[s].name;
-                if (strncmp(sn, port_prefix, plen) == 0 &&
-                    (sn[plen] == '_' || (sn[plen] >= '0' && sn[plen] <= '9')))
+                if (tb_bus_shorthand_matches_signal(bus_def, port_prefix, sn))
                     n++;
             }
         } else {
@@ -572,7 +1304,12 @@ static void build_port_bindings(SimTestState *ts,
         }
     }
 
-    ts->bindings = calloc((size_t)(n > 0 ? n : 1), sizeof(SimPortBinding));
+    ts->bindings = (SimPortBinding *)calloc((size_t)(n > 0 ? n : 1), sizeof(SimPortBinding));
+    if (!ts->bindings) {
+        fprintf(stderr, "error: failed to allocate simulator port bindings\n");
+        ts->num_bindings = 0;
+        return -1;
+    }
     ts->num_bindings = 0;
 
     for (size_t i = 0; i < instance_node->child_count; i++) {
@@ -581,6 +1318,7 @@ static void build_port_bindings(SimTestState *ts,
 
         if (pd->block_kind && strcmp(pd->block_kind, "BUS") == 0) {
             /* BUS port binding: expand by matching DUT port prefix to tb wire prefix */
+            const JZASTNode *bus_def = find_bus_def(root, pd->text);
             const char *port_prefix = pd->name;
             size_t plen = strlen(port_prefix);
 
@@ -593,9 +1331,7 @@ static void build_port_bindings(SimTestState *ts,
             for (int s = 0; s < dut_module->num_signals; s++) {
                 if (dut_module->signals[s].kind != SIG_PORT) continue;
                 const char *sn = dut_module->signals[s].name;
-                if (strncmp(sn, port_prefix, plen) != 0) continue;
-                /* Must be followed by digit or underscore */
-                if (sn[plen] != '_' && !(sn[plen] >= '0' && sn[plen] <= '9'))
+                if (!tb_bus_shorthand_matches_signal(bus_def, port_prefix, sn))
                     continue;
 
                 /* Compute wire name by replacing port_prefix with wire_prefix */
@@ -632,6 +1368,8 @@ static void build_port_bindings(SimTestState *ts,
         ts->bindings[ts->num_bindings].tb_wire_index = wi;
         ts->num_bindings++;
     }
+
+    return 0;
 }
 
 /* ---- Input / output propagation ---- */
@@ -708,11 +1446,7 @@ static void sim_propagate_outputs(SimTestState *ts) {
 
 /* ---- INOUT z-resolution ---- */
 
-/**
- * For INOUT ports, if the DUT drives z (high-impedance), restore the
- * testbench wire value.  This implements simple tri-state resolution:
- * z loses to any real value from the other side of the bus.
- */
+/* Restore testbench drive values when an inout port is driven as z by the DUT. */
 static void sim_resolve_inout_z(SimTestState *ts) {
     PERF_TIMER_START(PERF_RESOLVE_INOUT_Z);
     for (int i = 0; i < ts->num_bindings; i++) {
@@ -785,14 +1519,7 @@ static void sim_apply_domain_reset(SimContext *ctx, const IR_ClockDomain *cd) {
 
 /* ---- Fire clock domains for a given clock edge ---- */
 
-/**
- * Check all clock domains against a clock edge and fire matching ones.
- * @param ts                Test state with DUT context.
- * @param clock_port_id     IR signal ID of the clock port (-1 for unknown).
- * @param new_clk_val       Current clock value after toggle (0 or 1).
- * @param apply_nba_per_domain  If true, apply NBA after each domain (testbench semantics).
- *                              If false, caller must apply NBA after all domains.
- */
+/* Check all clock domains against a clock edge and fire matching ones. */
 static void sim_fire_domains_for_clock(SimTestState *ts, int clock_port_id,
                                         uint64_t new_clk_val,
                                         int apply_nba_per_domain) {
@@ -1108,7 +1835,9 @@ static int sim_run_test(const JZASTNode *root,
     ts.test_passed = 1;
 
     /* Collect clocks and wires from the testbench level */
-    collect_decls(&ts, tb_node, root, JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL);
+    if (collect_decls(&ts, tb_node, root,
+                      JZ_AST_TB_CLOCK_BLOCK, JZ_AST_TB_CLOCK_DECL) != 0)
+        return 1;
 
     /* Find @new instance in this test */
     const JZASTNode *instance_node = NULL;
@@ -1129,6 +1858,8 @@ static int sim_run_test(const JZASTNode *root,
         return 1;
     }
 
+    ts.dut_instance_name = instance_node->name;
+
     /* Create DUT context */
     ts.dut = sim_ctx_create(dut_module, design, seed);
     if (!ts.dut) {
@@ -1140,7 +1871,13 @@ static int sim_run_test(const JZASTNode *root,
     }
 
     /* Build port bindings */
-    build_port_bindings(&ts, instance_node, dut_module);
+    if (build_port_bindings(&ts, root, instance_node, dut_module) != 0) {
+        sim_ctx_destroy(ts.dut);
+        for (int fi = 0; fi < ts.num_tb_wires; fi++)
+            if (ts.tb_wires[fi].owns_name) free((char *)ts.tb_wires[fi].name);
+        free(ts.tb_wires);
+        return 1;
+    }
 
     /* Initial propagation */
     sim_full_settle(&ts);
@@ -1252,9 +1989,16 @@ int jz_sim_run_testbenches(const JZASTNode *root,
                            int verbose,
                            JZDiagnosticList *diagnostics,
                            const char *filename) {
-    (void)diagnostics; /* unused for now */
+    JZBuffer module_scopes = (JZBuffer){0};
+    JZBuffer project_symbols = (JZBuffer){0};
 
     if (!root || !design) return 1;
+
+    if (build_symbol_tables((JZASTNode *)root, &module_scopes, &project_symbols, diagnostics) != 0) {
+        free_built_symbol_tables(&module_scopes, &project_symbols);
+        return 1;
+    }
+    g_tb_expr_project_symbols = &project_symbols;
 
     perf_reset();
 
@@ -1301,6 +2045,8 @@ int jz_sim_run_testbenches(const JZASTNode *root,
 
     if (!any_tb_found) {
         fprintf(stdout, "\nNo testbenches found.\n");
+        g_tb_expr_project_symbols = NULL;
+        free_built_symbol_tables(&module_scopes, &project_symbols);
         return 0;
     }
 
@@ -1311,6 +2057,8 @@ int jz_sim_run_testbenches(const JZASTNode *root,
 
     perf_print_summary();
 
+    g_tb_expr_project_symbols = NULL;
+    free_built_symbol_tables(&module_scopes, &project_symbols);
     return total_failed > 0 ? 1 : 0;
 }
 
@@ -1331,13 +2079,7 @@ static uint64_t gcd64(uint64_t a, uint64_t b) {
     return a;
 }
 
-/**
- * Convert a time value to exact integer picoseconds.
- * @param value  The numeric value (e.g., 10.0 for 10ns).
- * @param scale  Multiplier to picoseconds (1000.0 for ns, 1000000.0 for ms).
- * @param ps_out Output: the integer picosecond count.
- * @return 0 on success, -1 if the result is not an exact integer.
- */
+/* Convert a scaled time value to an exact integer number of picoseconds. */
 static int time_to_exact_ps(double value, double scale, uint64_t *ps_out) {
     double ps = value * scale;
     double rounded = floor(ps + 0.5);
@@ -1351,33 +2093,26 @@ static int time_to_exact_ps(double value, double scale, uint64_t *ps_out) {
 }
 
 /**
- * @brief Collect simulation clocks from a SIM_CLOCK_BLOCK.
- *
- * Fills parallel arrays of clock name, tb wire index, and toggle interval (in ps).
+ * @brief Runtime scheduling state for one simulated clock.
  */
-typedef struct SimClock {
-    const char *name;
-    int         tb_wire_idx;
-    uint64_t    toggle_ps;           /* half period in picoseconds (nominal) */
-    uint64_t    phase_ps;            /* phase offset in picoseconds */
-    uint64_t    next_toggle_ps;      /* next scheduled (actual) toggle time */
-    double      ideal_next_toggle;   /* next ideal toggle time as double (accumulates drift) */
-    double      drifted_toggle_ps;   /* drift-adjusted half period (double for sub-ps precision) */
-    double      drift_actual_ppm;    /* actual selected drift value in ppm */
-    double      drift_max_ppm;       /* configured max drift in ppm (0 = disabled) */
-    uint64_t    jitter_pp_ps;        /* peak-to-peak jitter (0 = disabled) */
-    double      jitter_sigma;        /* σ = pp/6 */
-    uint32_t    jitter_rng;          /* per-clock xorshift32 PRNG state */
-    int         jitter_has_spare;    /* Box-Muller spare available */
-    double      jitter_spare;        /* Box-Muller cached spare value */
-} SimClock;
+struct SimClock {
+    const char *name;          /**< Clock name from the AST declaration. */
+    int tb_wire_idx;           /**< Bound testbench wire index. */
+    uint64_t toggle_ps;        /**< Nominal half-period in picoseconds. */
+    uint64_t phase_ps;         /**< Initial phase offset in picoseconds. */
+    uint64_t next_toggle_ps;   /**< Next scheduled toggle time in picoseconds. */
+    double ideal_next_toggle;  /**< Drift-adjusted ideal toggle time accumulator. */
+    double drifted_toggle_ps;  /**< Drift-adjusted half-period in picoseconds. */
+    double drift_actual_ppm;   /**< Selected drift value for this run. */
+    double drift_max_ppm;      /**< Configured maximum drift magnitude. */
+    uint64_t jitter_pp_ps;     /**< Configured peak-to-peak jitter in picoseconds. */
+    double jitter_sigma;       /**< Jitter standard deviation in picoseconds. */
+    uint32_t jitter_rng;       /**< Per-clock PRNG state for jitter sampling. */
+    int jitter_has_spare;      /**< Non-zero when `jitter_spare` is valid. */
+    double jitter_spare;       /**< Cached Box-Muller sample. */
+};
 
-/**
- * @brief Generate a Gaussian random sample using Box-Muller transform.
- *
- * Consumes two uniform samples from xorshift32 PRNG to produce two
- * independent Gaussian samples. Caches the spare for the next call.
- */
+/* Generate a Gaussian random sample using the clock's jitter PRNG state. */
 static double sim_gaussian(SimClock *clk) {
     if (clk->jitter_has_spare) {
         clk->jitter_has_spare = 0;
@@ -1398,12 +2133,7 @@ static double sim_gaussian(SimClock *clk) {
     return u * factor * clk->jitter_sigma;
 }
 
-/**
- * @brief Generate a clamped Gaussian sample for drift selection.
- *
- * Returns a value in [-max_ppm, +max_ppm] drawn from Gaussian with σ = max/3.
- * Uses a temporary jitter state on the clock to avoid needing a separate PRNG.
- */
+/* Generate a clamped Gaussian sample for drift selection. */
 static double sim_gaussian_drift(uint32_t *rng, double max_ppm) {
     /* Box-Muller (no caching needed, called once per clock) */
     double u, v, s;
@@ -1419,12 +2149,7 @@ static double sim_gaussian_drift(uint32_t *rng, double max_ppm) {
     return sample;
 }
 
-/**
- * @brief Compute jittered next toggle time from ideal position.
- *
- * Applies Gaussian jitter offset clamped to ±pp/2, ensures the result
- * is strictly after current_time_ps.
- */
+/* Compute the next clock toggle time after applying jitter. */
 static uint64_t sim_jittered_toggle(SimClock *clk, uint64_t current_time_ps) {
     uint64_t ideal = (uint64_t)round(clk->ideal_next_toggle);
 
@@ -1511,16 +2236,16 @@ static int collect_sim_clocks(const JZASTNode *sim_node, SimTestState *ts,
     return n;
 }
 
-/**
- * @brief Dump all tracked signals to waveform writer.
- */
 /* ---- TAP signal tracking ---- */
 
-typedef struct SimTap {
-    int          wave_id;      /* waveform signal ID */
-    int          signal_id;    /* IR signal ID in DUT */
-    const char  *full_path;    /* e.g. "dut.count_a" */
-} SimTap;
+/**
+ * @brief Registered internal DUT signal tap for waveform dumping.
+ */
+struct SimTap {
+    int wave_id;            /**< Waveform signal identifier. */
+    int signal_id;          /**< DUT signal identifier in the IR. */
+    const char *full_path;  /**< Fully qualified tap path from the AST. */
+};
 
 static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
                            SimTap *taps, int num_taps) {
@@ -1543,9 +2268,7 @@ static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
     }
 }
 
-/**
- * @brief Convert @run duration to picoseconds.
- */
+/* Convert an @run duration to picoseconds. */
 static uint64_t run_to_ps(const JZASTNode *run_node) {
     if (!run_node || !run_node->text || !run_node->name) return 0;
 
@@ -1574,9 +2297,7 @@ static uint64_t run_to_ps(const JZASTNode *run_node) {
     return 0;
 }
 
-/**
- * @brief Run a single @simulation block.
- */
+/* Run a single @simulation block. */
 static int sim_run_simulation(const JZASTNode *root,
                                const JZASTNode *sim_node,
                                const IR_Module *dut_module,
@@ -1597,7 +2318,9 @@ static int sim_run_simulation(const JZASTNode *root,
     ts.test_passed = 1;
 
     /* Collect clocks and wires */
-    collect_decls(&ts, sim_node, root, JZ_AST_SIM_CLOCK_BLOCK, JZ_AST_SIM_CLOCK_DECL);
+    if (collect_decls(&ts, sim_node, root,
+                      JZ_AST_SIM_CLOCK_BLOCK, JZ_AST_SIM_CLOCK_DECL) != 0)
+        return 1;
 
     /* Find @new instance */
     const JZASTNode *instance_node = NULL;
@@ -1614,6 +2337,8 @@ static int sim_run_simulation(const JZASTNode *root,
         goto cleanup_early;
     }
 
+    ts.dut_instance_name = instance_node->name;
+
     /* Create DUT context */
     ts.dut = sim_ctx_create(dut_module, design, seed);
     if (!ts.dut) {
@@ -1622,7 +2347,9 @@ static int sim_run_simulation(const JZASTNode *root,
     }
 
     /* Build port bindings */
-    build_port_bindings(&ts, instance_node, dut_module);
+    if (build_port_bindings(&ts, root, instance_node, dut_module) != 0) {
+        goto cleanup_dut;
+    }
 
     /* Collect simulation clocks */
     SimClock sim_clocks[64];
@@ -1778,12 +2505,22 @@ static int sim_run_simulation(const JZASTNode *root,
     }
 
     /* Register testbench wires in waveform writer */
-    int *wave_ids = calloc((size_t)ts.num_tb_wires, sizeof(int));
+    int *wave_ids = (int *)calloc((size_t)(ts.num_tb_wires > 0 ? ts.num_tb_wires : 1),
+                                  sizeof(int));
+    if (!wave_ids) {
+        fprintf(stderr, "error: failed to allocate waveform signal IDs\n");
+        goto cleanup_wave;
+    }
     for (int i = 0; i < ts.num_tb_wires; i++) {
         const char *scope = ts.tb_wires[i].is_clock ? "clocks" : "wires";
         const char *type = ts.tb_wires[i].is_clock ? "clock" : "wire";
         wave_ids[i] = sim_wave_add_signal(wave, scope, ts.tb_wires[i].name,
                                            ts.tb_wires[i].width, type);
+        if (wave_ids[i] < 0) {
+            fprintf(stderr, "error: failed to register waveform signal '%s'\n",
+                    ts.tb_wires[i].name ? ts.tb_wires[i].name : "?");
+            goto cleanup_wave_ids;
+        }
     }
 
     /* Collect and register TAP signals in VCD */
@@ -1803,7 +2540,11 @@ static int sim_run_simulation(const JZASTNode *root,
         }
 
         if (tap_count > 0) {
-            sim_taps = calloc((size_t)tap_count, sizeof(SimTap));
+            sim_taps = (SimTap *)calloc((size_t)tap_count, sizeof(SimTap));
+            if (!sim_taps) {
+                fprintf(stderr, "error: failed to allocate waveform TAP table\n");
+                goto cleanup_wave_ids;
+            }
             for (size_t i = 0; i < sim_node->child_count; i++) {
                 const JZASTNode *child = sim_node->children[i];
                 if (!child || child->type != JZ_AST_SIM_TAP_BLOCK) continue;
@@ -1820,7 +2561,11 @@ static int sim_run_simulation(const JZASTNode *root,
 
                     const char *sig_name = last_dot + 1;
                     size_t scope_len = (size_t)(last_dot - path);
-                    char *scope = malloc(scope_len + 1);
+                    char *scope = (char *)malloc(scope_len + 1);
+                    if (!scope) {
+                        fprintf(stderr, "error: failed to allocate waveform TAP scope\n");
+                        goto cleanup_wave_taps;
+                    }
                     memcpy(scope, path, scope_len);
                     scope[scope_len] = '\0';
 
@@ -1841,6 +2586,12 @@ static int sim_run_simulation(const JZASTNode *root,
                         sim_taps[num_sim_taps].signal_id = found_id;
                         sim_taps[num_sim_taps].wave_id =
                             sim_wave_add_signal(wave, scope, sig_name, found_width, "tap");
+                        if (sim_taps[num_sim_taps].wave_id < 0) {
+                            free(scope);
+                            fprintf(stderr, "error: failed to register waveform TAP '%s'\n",
+                                    path);
+                            goto cleanup_wave_taps;
+                        }
                         num_sim_taps++;
                     } else if (verbose) {
                         fprintf(stderr, "warning: TAP signal '%s' not found in DUT\n",
@@ -2347,10 +3098,32 @@ static int sim_run_simulation(const JZASTNode *root,
                 const JZASTNode *mc = child->children[mi];
                 if (!mc) continue;
                 if (num_monitors >= cap_monitors) {
-                    cap_monitors = cap_monitors ? cap_monitors * 2 : 8;
-                    monitor_nodes = (const JZASTNode **)realloc(
-                        (void *)monitor_nodes,
-                        cap_monitors * sizeof(const JZASTNode *));
+                    const JZASTNode **new_nodes = NULL;
+                    int new_cap = 0;
+                    size_t new_bytes = 0;
+
+                    if (cap_monitors == 0) {
+                        new_cap = 8;
+                    } else if (cap_monitors > INT_MAX / 2) {
+                        fprintf(stderr, "error: monitor directive count exceeds supported size\n");
+                        goto cleanup_monitors;
+                    } else {
+                        new_cap = cap_monitors * 2;
+                    }
+                    if (new_cap <= num_monitors ||
+                        jz_size_mul_checked((size_t)new_cap,
+                                            sizeof(const JZASTNode *),
+                                            &new_bytes) != 0) {
+                        fprintf(stderr, "error: monitor directive count exceeds supported size\n");
+                        goto cleanup_monitors;
+                    }
+                    new_nodes = (const JZASTNode **)realloc((void *)monitor_nodes, new_bytes);
+                    if (!new_nodes) {
+                        fprintf(stderr, "error: failed to grow monitor directive table\n");
+                        goto cleanup_monitors;
+                    }
+                    monitor_nodes = new_nodes;
+                    cap_monitors = new_cap;
                 }
                 monitor_nodes[num_monitors++] = mc;
             }
@@ -2380,6 +3153,19 @@ static int sim_run_simulation(const JZASTNode *root,
     free(wave_ids);
     free(sim_taps);
     free((void *)monitor_nodes);
+    sim_wave_close(wave);
+    goto cleanup_dut;
+
+cleanup_monitors:
+    free((void *)monitor_nodes);
+
+cleanup_wave_taps:
+    free(sim_taps);
+
+cleanup_wave_ids:
+    free(wave_ids);
+
+cleanup_wave:
     sim_wave_close(wave);
 
 cleanup_dut:
@@ -2413,9 +3199,16 @@ int jz_sim_run_simulations(const JZASTNode *root,
                             int num_jitter,
                             const SimDriftConfig *drift_configs,
                             int num_drift) {
-    (void)diagnostics;
+    JZBuffer module_scopes = (JZBuffer){0};
+    JZBuffer project_symbols = (JZBuffer){0};
 
     if (!root || !design) return 1;
+
+    if (build_symbol_tables((JZASTNode *)root, &module_scopes, &project_symbols, diagnostics) != 0) {
+        free_built_symbol_tables(&module_scopes, &project_symbols);
+        return 1;
+    }
+    g_tb_expr_project_symbols = &project_symbols;
 
     perf_reset();
 
@@ -2453,5 +3246,7 @@ int jz_sim_run_simulations(const JZASTNode *root,
 
     perf_print_summary();
 
+    g_tb_expr_project_symbols = NULL;
+    free_built_symbol_tables(&module_scopes, &project_symbols);
     return rc;
 }

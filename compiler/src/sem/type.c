@@ -1,7 +1,17 @@
+/**
+ * @file type.c
+ * @brief Bit-vector type inference helpers for semantic analysis.
+ */
+
 #include <stddef.h>
 
 #include "sem.h"
 
+/**
+ * @brief Check whether a bit-vector type is usable for inference.
+ * @param t Type descriptor to validate.
+ * @return Non-zero when @p t exists and has a positive width.
+ */
 static int type_is_valid(const JZBitvecType *t)
 {
     return t && t->width > 0;

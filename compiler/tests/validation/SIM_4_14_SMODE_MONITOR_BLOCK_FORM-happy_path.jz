@@ -1,0 +1,47 @@
+// MONITOR_BLOCK_FORM: valid MONITOR block syntax in @simulation.
+
+@module MonitorBlockFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] flag;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        flag = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= state;
+    }
+@endmod
+
+@simulation MonitorBlockFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        flag [1];
+    }
+
+    TAP {
+        dut.flag;
+    }
+
+    @new dut MonitorBlockFormDut {
+        clk [1] = clk;
+        flag [1] = flag;
+    }
+
+    MONITOR {
+        @print_if(flag & 1'b0, "flag=%b", flag)
+        @mark_if(flag & 1'b0, GREEN)
+        @alert_if(dut.flag & 1'b0, CYAN, "capture point")
+    }
+
+    @run(ns=10)
+@endsim

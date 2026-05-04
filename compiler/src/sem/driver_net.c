@@ -1,3 +1,8 @@
+/**
+ * @file driver_net.c
+ * @brief Net-graph construction and net-level semantic checks.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -10,9 +15,7 @@
 #include "driver_internal.h"
 #include <time.h>
 
-/* Flag set by jz_sem_set_tristate_default() to suppress WARN_INTERNAL_TRISTATE
- * when the IR tri-state transform will handle internal tri-state nets.
- */
+/** Suppresses internal tri-state warnings when the IR tri-state pass will handle them. */
 static int g_tristate_default_active = 0;
 
 void jz_sem_set_tristate_default(int active)
@@ -20,11 +23,10 @@ void jz_sem_set_tristate_default(int active)
     g_tristate_default_active = (active != 0);
 }
 
-/* -------------------------------------------------------------------------
- *  Net graph construction and simple net-usage rules
- * -------------------------------------------------------------------------
+/**
+ * @brief Release all buffers owned by a net record.
+ * @param net Net record to release.
  */
-
 static void sem_net_free(JZNet *net)
 {
     if (!net) return;
@@ -34,6 +36,13 @@ static void sem_net_free(JZNet *net)
     jz_buf_free(&net->alias_edges);
 }
 
+/**
+ * @brief Append a declaration atom to an existing net.
+ * @param nets Net array buffer.
+ * @param net_ix Index of the destination net.
+ * @param decl Declaration node to append.
+ * @return Result from the append operation.
+ */
 static int sem_net_add_decl(JZBuffer *nets,
                             size_t net_ix,
                             JZASTNode *decl)
@@ -45,6 +54,13 @@ static int sem_net_add_decl(JZBuffer *nets,
     return jz_buf_append(&net->atoms, &decl, sizeof(JZASTNode *));
 }
 
+/**
+ * @brief Add a declaration-to-net binding entry.
+ * @param bindings Binding table to extend.
+ * @param decl Declaration node to bind.
+ * @param net_ix Index of the net that owns the declaration.
+ * @return Result from the append operation.
+ */
 static int sem_net_add_binding(JZBuffer *bindings,
                                JZASTNode *decl,
                                size_t net_ix)
@@ -1577,16 +1593,18 @@ static int sem_tristate_check_declared_bus_per_field(
     return 1;
 }
 
+/** @brief One endpoint participating in a BUS bulk-assignment edge. */
 typedef struct JZBusBulkEndpoint {
-    char bus_id[128];
-    char role[128];
-    char key[256];
+    char bus_id[128]; /**< BUS identifier text. */
+    char role[128];   /**< SOURCE or TARGET role text. */
+    char key[256];    /**< Canonical endpoint key used for comparisons. */
 } JZBusBulkEndpoint;
 
+/** @brief Pair of BUS bulk-assignment endpoints connected by one statement. */
 typedef struct JZBusBulkEdge {
-    JZBusBulkEndpoint a;
-    JZBusBulkEndpoint b;
-    JZASTNode *stmt;
+    JZBusBulkEndpoint a; /**< First endpoint. */
+    JZBusBulkEndpoint b; /**< Second endpoint. */
+    JZASTNode *stmt;     /**< Assignment statement that created the edge. */
 } JZBusBulkEdge;
 
 static int sem_net_split_qualified_name(const char *name,

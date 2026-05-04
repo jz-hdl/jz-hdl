@@ -1,0 +1,38 @@
+// ALERT_COLOR_MESSAGE_FORM: valid @alert(<color>, "<message>") syntax in @simulation.
+
+@module AlertColorMessageFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation AlertColorMessageFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut AlertColorMessageFormDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @alert(BLUE, "capture point")
+    @run(ns=10)
+@endsim

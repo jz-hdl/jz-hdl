@@ -1,5 +1,0 @@
-File: 4_12_CDC_DEST_ALIAS_DUP-conflict_with_instance.jz
-      55:32   error INSTANCE_NAME_CONFLICT S4.2/S8.1 Instance name matches another identifier (port/wire/register/CONST) in parent module
-      55:32   error CDC_DEST_ALIAS_DUP S4.12 CDC destination alias name conflicts with an existing identifier in module scope
-      95:32   error INSTANCE_NAME_CONFLICT S4.2/S8.1 Instance name matches another identifier (port/wire/register/CONST) in parent module
-      95:32   error CDC_DEST_ALIAS_DUP S4.12 CDC destination alias name conflicts with an existing identifier in module scope

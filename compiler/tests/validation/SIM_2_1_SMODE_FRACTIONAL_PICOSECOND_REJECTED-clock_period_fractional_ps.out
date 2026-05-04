@@ -1,0 +1,3 @@
+ERROR: Clock 'clk' period 3.3335 ns does not convert to an exact integer number of picoseconds
+
+=== @simulation FractionalPsClockPeriodDut ===

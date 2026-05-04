@@ -1,0 +1,30 @@
+// TB_PROJECT_MIXED: @project and @testbench may not coexist in one file.
+// Trigger 1: A file-level @testbench follows a completed @project block.
+
+@project TB_PROJECT_MIXED_project_then_testbench
+    CONFIG {
+        WIDTH = 1;
+    }
+
+    @top Dut {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+// Trigger 1: @testbench after @project in the same file.
+@testbench Dut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    TEST "mixed file" {
+        @setup {
+            data <= 1'b0;
+        }
+    }
+@endtb

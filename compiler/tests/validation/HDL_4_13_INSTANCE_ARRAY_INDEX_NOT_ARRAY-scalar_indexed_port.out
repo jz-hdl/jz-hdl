@@ -1,0 +1,2 @@
+File: HDL_4_13_INSTANCE_ARRAY_INDEX_NOT_ARRAY-scalar_indexed_port.jz
+      36:16   error INSTANCE_ARRAY_INDEX_NOT_ARRAY S4.13.1 Indexed instance port access requires an instance array

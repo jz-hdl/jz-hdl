@@ -1,3 +1,8 @@
+/**
+ * @file driver_internal.h
+ * @brief Shared semantic-driver types and helper declarations.
+ */
+
 #ifndef JZ_HDL_DRIVER_INTERNAL_H
 #define JZ_HDL_DRIVER_INTERNAL_H
 
@@ -8,159 +13,232 @@
 #include "chip_data.h"
 #include "tristate_types.h"
 
-/* Forward declaration of bit-vector type used in expression inference. */
+/** Forward declaration of the bit-vector type used by expression inference. */
 struct JZBitvecType;
 
-/* Symbol table types shared across driver implementation files. */
+/** @brief Symbol kinds recorded in module and project semantic tables. */
 typedef enum JZSymbolKind {
-    JZ_SYM_MODULE,
-    JZ_SYM_BLACKBOX,
-    JZ_SYM_CONST,
-    JZ_SYM_PORT,
-    JZ_SYM_WIRE,
-    JZ_SYM_REGISTER,
-    JZ_SYM_LATCH,
-    JZ_SYM_MEM,
-    JZ_SYM_MUX,
-    JZ_SYM_INSTANCE,
-    JZ_SYM_CONFIG,
-    JZ_SYM_CLOCK,
-    JZ_SYM_PIN,
-    JZ_SYM_MAP_ENTRY,
-    JZ_SYM_GLOBAL,
-    JZ_SYM_BUS
+    JZ_SYM_MODULE,    /**< Module declaration. */
+    JZ_SYM_BLACKBOX,  /**< Blackbox declaration. */
+    JZ_SYM_CONST,     /**< Module-level constant declaration. */
+    JZ_SYM_PORT,      /**< Port declaration. */
+    JZ_SYM_WIRE,      /**< Wire declaration. */
+    JZ_SYM_REGISTER,  /**< Register declaration. */
+    JZ_SYM_LATCH,     /**< Latch declaration. */
+    JZ_SYM_MEM,       /**< Memory declaration. */
+    JZ_SYM_MUX,       /**< MUX declaration. */
+    JZ_SYM_INSTANCE,  /**< Module instance declaration. */
+    JZ_SYM_CONFIG,    /**< Project-level CONFIG entry. */
+    JZ_SYM_CLOCK,     /**< Project-level CLOCKS entry. */
+    JZ_SYM_PIN,       /**< Project-level pin entry. */
+    JZ_SYM_MAP_ENTRY, /**< Project-level MAP entry. */
+    JZ_SYM_GLOBAL,    /**< GLOBAL block declaration. */
+    JZ_SYM_BUS        /**< Project-level BUS declaration. */
 } JZSymbolKind;
 
+/** @brief Symbol-table entry for semantic name resolution. */
 typedef struct JZSymbol {
-    const char   *name;  /* pointer into AST node->name */
-    JZSymbolKind  kind;
-    JZASTNode    *node;  /* declaration node */
-    int           id;    /* stable integer ID for IR_Signal binding; -1 if not a signal */
-    int           can_be_z; /* non-zero if any driver can assign 'z' to this signal */
-    JZASTNode    *feature_guard;  /* owning @feature guard (NULL if unconditional) */
-    JZASTNode    *feature_branch; /* THEN/ELSE branch node within the guard */
+    const char   *name;           /**< Pointer into the declaration node name. */
+    JZSymbolKind  kind;           /**< Semantic kind of the declaration. */
+    JZASTNode    *node;           /**< AST declaration node. */
+    int           id;             /**< Stable signal ID, or `-1` when not a signal. */
+    int           can_be_z;       /**< Non-zero when a driver may assign `z`. */
+    JZASTNode    *feature_guard;  /**< Owning `@feature` guard, or `NULL`. */
+    JZASTNode    *feature_branch; /**< Active branch node within the guard. */
 } JZSymbol;
 
+/** @brief Per-module symbol table and derived semantic state. */
 typedef struct JZModuleScope {
-    const char *name;     /* module or blackbox name */
-    JZASTNode  *node;     /* JZ_AST_MODULE or JZ_AST_BLACKBOX */
-    JZBuffer    symbols;  /* array of JZSymbol */
-    JZBuffer    bus_signal_decls; /* array of JZASTNode* for BUS member signals */
-    int         next_signal_id; /* monotonically increasing ID for PORT/WIRE/REGISTER symbols */
+    const char *name;          /**< Module or blackbox name. */
+    JZASTNode  *node;          /**< `JZ_AST_MODULE` or `JZ_AST_BLACKBOX` node. */
+    JZBuffer    symbols;       /**< Array of `JZSymbol` entries. */
+    JZBuffer    bus_signal_decls; /**< Array of synthesized BUS member declarations. */
+    int         next_signal_id;/**< Next stable ID for signal-like declarations. */
 } JZModuleScope;
 
-/* Net-graph types shared between flow analysis and alias reporting. */
+/** @brief Alias relationship between two net declarations. */
 typedef struct JZAliasEdge {
-    JZASTNode *lhs_decl;   /* base declaration on LHS of alias */
-    JZASTNode *rhs_decl;   /* base declaration on RHS of alias */
-    JZASTNode *stmt;       /* originating JZ_AST_STMT_ASSIGN node */
+    JZASTNode *lhs_decl; /**< Base declaration on the alias left-hand side. */
+    JZASTNode *rhs_decl; /**< Base declaration on the alias right-hand side. */
+    JZASTNode *stmt;     /**< Originating `JZ_AST_STMT_ASSIGN` node. */
 } JZAliasEdge;
 
+/** @brief Net-graph node used by flow, alias, and tri-state analysis. */
 typedef struct JZNet {
-    JZBuffer atoms;        /* array of JZASTNode* declarations (PORT/WIRE/REGISTER/LATCH) */
-    JZBuffer driver_stmts; /* array of JZASTNode* JZ_AST_STMT_ASSIGN that drive this net */
-    JZBuffer sink_stmts;   /* array of JZASTNode* JZ_AST_STMT_ASSIGN that read from this net */
-    JZBuffer alias_edges;  /* array of JZAliasEdge describing alias relationships */
+    JZBuffer atoms;        /**< Array of declaration nodes in the net. */
+    JZBuffer driver_stmts; /**< Array of assignment statements that drive the net. */
+    JZBuffer sink_stmts;   /**< Array of assignment statements that read the net. */
+    JZBuffer alias_edges;  /**< Array of alias relationships within the net. */
 } JZNet;
 
+/** @brief Maps a declaration node to its containing net index. */
 typedef struct JZNetBinding {
-    JZASTNode *decl;   /* declaration node belonging to a net */
-    size_t     net_ix; /* index into JZNet array */
+    JZASTNode *decl; /**< Declaration node belonging to a net. */
+    size_t     net_ix;/**< Index into the owning `JZNet` array. */
 } JZNetBinding;
 
-/* MEM helper types shared with dead-code analysis. */
+/** @brief Identifies a specific MEM port field use. */
 typedef struct JZMemPortRef {
-    JZASTNode *mem_decl; /* JZ_AST_MEM_DECL */
-    JZASTNode *port;     /* JZ_AST_MEM_PORT (IN/OUT) */
-    int        field;    /* JZMemPortField */
+    JZASTNode *mem_decl; /**< `JZ_AST_MEM_DECL` node. */
+    JZASTNode *port;     /**< `JZ_AST_MEM_PORT` node. */
+    int        field;    /**< `JZMemPortField` selector. */
 } JZMemPortRef;
 
+/** @brief Key used to deduplicate MEM write tracking. */
 typedef struct JZMemWriteKey {
-    JZASTNode *mem_decl;
-    JZASTNode *port; /* OUT port node */
+    JZASTNode *mem_decl; /**< Owning memory declaration. */
+    JZASTNode *port;     /**< OUT port node. */
 } JZMemWriteKey;
 
+/** @brief Key for synchronous MEM read-assignment tracking. */
 typedef struct JZMemSyncReadAssignKey {
-    JZASTNode *mem_decl;
-    JZASTNode *port;      /* OUT SYNC port node */
-    JZASTNode *dest_decl; /* destination declaration (PORT/WIRE/REGISTER) */
-    JZASTNode *addr_expr; /* address expression for mem.port.addr */
+    JZASTNode *mem_decl;  /**< Owning memory declaration. */
+    JZASTNode *port;      /**< OUT SYNC port node. */
+    JZASTNode *dest_decl; /**< Destination declaration node. */
+    JZASTNode *addr_expr; /**< Address expression used for the read. */
 } JZMemSyncReadAssignKey;
 
+/** @brief MEM port fields that can appear in semantic checks. */
 typedef enum JZMemPortField {
-    MEM_PORT_FIELD_NONE = 0,
-    MEM_PORT_FIELD_ADDR,
-    MEM_PORT_FIELD_DATA,
-    MEM_PORT_FIELD_WDATA   /* Write data for INOUT ports */
+    MEM_PORT_FIELD_NONE = 0, /**< No specific field resolved. */
+    MEM_PORT_FIELD_ADDR,     /**< Address field. */
+    MEM_PORT_FIELD_DATA,     /**< Read-data field. */
+    MEM_PORT_FIELD_WDATA     /**< Write-data field for INOUT ports. */
 } JZMemPortField;
 
-/* Exclusive-assignment helper types shared with clock-domain checks. */
+/** @brief Bit-range covered by an assignment target. */
 typedef struct JZAssignRange {
-    int      has_range;
-    unsigned lsb;
-    unsigned msb;
+    int      has_range; /**< Non-zero when `lsb` and `msb` are valid. */
+    unsigned lsb;       /**< Least-significant assigned bit. */
+    unsigned msb;       /**< Most-significant assigned bit. */
 } JZAssignRange;
 
+/** @brief Normalized assignment target used by exclusivity checks. */
 typedef struct JZAssignTargetEntry {
-    JZASTNode    *decl;
-    int           is_register;
-    JZAssignRange range;
-    int           is_nested;
-    int           can_drive_z;
+    JZASTNode    *decl;        /**< Target declaration node. */
+    int           is_register; /**< Non-zero when the target is a register. */
+    JZAssignRange range;       /**< Assigned bit-range within the target. */
+    int           is_nested;   /**< Non-zero when found in nested control flow. */
+    int           can_drive_z; /**< Non-zero when the assignment may drive `z`. */
 } JZAssignTargetEntry;
 
+/** @brief Decoded BUS access information for expression and flow checks. */
 typedef struct JZBusAccessInfo {
-    const JZASTNode *port_decl;
-    const JZASTNode *bus_def;
-    const JZASTNode *signal_decl;
-    int has_index;
-    int is_wildcard;
-    int index_known;
-    unsigned index_value;
-    unsigned count;
-    int is_array;
-    int readable;
-    int writable;
-    char bus_id[128];
-    char role[128];
-    char signal_name[128];
+    const JZASTNode *port_decl;   /**< Referenced BUS port declaration. */
+    const JZASTNode *bus_def;     /**< Referenced project BUS definition. */
+    const JZASTNode *signal_decl; /**< Referenced BUS signal declaration. */
+    int has_index;                /**< Non-zero when an array index is present. */
+    int is_wildcard;              /**< Non-zero when the access uses a wildcard. */
+    int index_known;              /**< Non-zero when `index_value` is known. */
+    unsigned index_value;         /**< Resolved array index value. */
+    unsigned count;               /**< Resolved BUS array element count. */
+    int is_array;                 /**< Non-zero when the BUS port is arrayed. */
+    int readable;                 /**< Non-zero when the access permits reads. */
+    int writable;                 /**< Non-zero when the access permits writes. */
+    char bus_id[128];             /**< BUS identifier text. */
+    char role[128];               /**< SOURCE or TARGET role text. */
+    char signal_name[128];        /**< BUS member signal name. */
 } JZBusAccessInfo;
 
+/** @brief Decoded child-instance port access information. */
 typedef struct JZInstancePortAccessInfo {
-    const JZASTNode *instance_decl;
-    const JZASTNode *binding_decl;
-    const JZASTNode *child_port_decl;
-    int has_index;
-    int index_known;
-    unsigned index_value;
-    unsigned count;
-    int is_array;
-    char instance_name[128];
-    char port_name[128];
+    const JZASTNode *instance_decl;   /**< Referenced module instance declaration. */
+    const JZASTNode *binding_decl;    /**< Port binding declaration within the instance. */
+    const JZASTNode *child_port_decl; /**< Child-module port declaration. */
+    int has_index;                    /**< Non-zero when an array index is present. */
+    int index_known;                  /**< Non-zero when `index_value` is known. */
+    unsigned index_value;             /**< Resolved array index value. */
+    unsigned count;                   /**< Resolved instance array count. */
+    int is_array;                     /**< Non-zero when the instance is arrayed. */
+    char instance_name[128];          /**< Instance identifier text. */
+    char port_name[128];              /**< Child port identifier text. */
 } JZInstancePortAccessInfo;
 
-/* Shared helpers implemented across driver*.c. */
+/**
+ * @brief Report a semantic diagnostic by rule identifier.
+ * @param diagnostics Diagnostic sink to receive the message.
+ * @param loc Source location for the diagnostic.
+ * @param rule_id Rule identifier to report.
+ * @param explanation Optional explanatory text stored with the diagnostic.
+ */
 void sem_report_rule(JZDiagnosticList *diagnostics,
                      JZLocation loc,
                      const char *rule_id,
                      const char *explanation);
 
-/* Simple integer parsing helpers used across driver translation units. */
+/**
+ * @brief Parse a strictly positive decimal integer.
+ * @param s Input string to parse.
+ * @param out Receives the parsed value on success.
+ * @return Non-zero on success, or zero when parsing fails.
+ */
 int parse_simple_positive_int(const char *s, unsigned *out);
+/**
+ * @brief Parse a non-negative decimal integer.
+ * @param s Input string to parse.
+ * @param out Receives the parsed value on success.
+ * @return Non-zero on success, or zero when parsing fails.
+ */
 int parse_simple_nonnegative_int(const char *s, unsigned *out);
+/**
+ * @brief Parse an unsigned literal lexeme.
+ * @param s Literal text to evaluate.
+ * @param out Receives the parsed value on success.
+ * @return Non-zero on success, or zero when the literal is not supported.
+ */
 int parse_literal_unsigned_value(const char *s, unsigned *out);
+/**
+ * @brief Evaluate a simple width or depth expression as a positive integer.
+ * @param s Expression text to evaluate.
+ * @param out Receives the computed value on success.
+ * @return Non-zero on success, or zero when evaluation fails.
+ */
 int eval_simple_positive_decl_int(const char *s, unsigned *out);
+/**
+ * @brief Parse a signed decimal integer.
+ * @param s Input string to parse.
+ * @param out Receives the parsed value on success.
+ * @return Non-zero on success, or zero when parsing fails.
+ */
 int parse_simple_signed_int(const char *s, long long *out);
+/**
+ * @brief Resolve a BUS access expression into semantic metadata.
+ * @param expr BUS access expression to resolve.
+ * @param mod_scope Module scope containing the expression.
+ * @param project_symbols Project-level symbols used to resolve BUS definitions.
+ * @param out Receives the resolved BUS access information.
+ * @param diagnostics Diagnostic sink for access errors.
+ * @return Non-zero on success, or zero when the access cannot be resolved.
+ */
 int sem_resolve_bus_access(const JZASTNode *expr,
                            const JZModuleScope *mod_scope,
                            const JZBuffer *project_symbols,
                            JZBusAccessInfo *out,
                            JZDiagnosticList *diagnostics);
+/**
+ * @brief Resolve an instance-port access expression into semantic metadata.
+ * @param expr Instance-port expression to resolve.
+ * @param mod_scope Module scope containing the expression.
+ * @param project_symbols Project-level symbols used during resolution.
+ * @param out Receives the resolved access information.
+ * @param diagnostics Diagnostic sink for access errors.
+ * @return Non-zero on success, or zero when the access cannot be resolved.
+ */
 int sem_resolve_instance_port_access(const JZASTNode *expr,
                                      const JZModuleScope *mod_scope,
                                      const JZBuffer *project_symbols,
                                      JZInstancePortAccessInfo *out,
                                      JZDiagnosticList *diagnostics);
+/**
+ * @brief Get or synthesize a BUS member signal declaration for a module port.
+ * @param scope Module scope that owns the BUS port.
+ * @param bus_port_name BUS port identifier.
+ * @param has_index Non-zero when the BUS port is indexed.
+ * @param index Array index value when `has_index` is non-zero.
+ * @param signal_name BUS member signal name.
+ * @param signal_decl BUS definition node for the member signal.
+ * @return The existing or synthesized declaration node, or `NULL` on failure.
+ */
 JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
                                              const char *bus_port_name,
                                              int has_index,
@@ -168,20 +246,43 @@ JZASTNode *sem_bus_get_or_create_signal_decl(JZModuleScope *scope,
                                              const char *signal_name,
                                              const JZASTNode *signal_decl);
 
-/* CONFIG usage helpers shared between module and project semantic checks. */
+/**
+ * @brief Report use of undeclared CONFIG values in a width expression.
+ * @param expr Width expression text to inspect.
+ * @param loc Source location of the expression.
+ * @param project_symbols Project-level CONFIG symbols.
+ * @param diagnostics Diagnostic sink for reported issues.
+ * @return Non-zero when a diagnostic was emitted, or zero otherwise.
+ */
 int sem_check_undeclared_config_in_width(const char *expr,
                                          JZLocation loc,
                                          const JZBuffer *project_symbols,
                                          JZDiagnosticList *diagnostics);
 
-/* GLOBAL usage helpers shared between module and project semantic checks. */
+/**
+ * @brief Check whether an expression text references a GLOBAL symbol.
+ * @param expr Expression text to scan.
+ * @param project_symbols Project-level symbol table.
+ * @return Non-zero when a GLOBAL reference is found, or zero otherwise.
+ */
 int sem_expr_has_global_ref(const char *expr,
                             const JZBuffer *project_symbols);
 
-/* Literal analysis helpers shared with flow/dead-code and operator passes. */
+/**
+ * @brief Infer the bit-vector type of a literal expression.
+ * @param node Literal AST node to inspect.
+ * @param diagnostics Diagnostic sink for literal-width errors.
+ * @param out Receives the inferred type.
+ */
 void infer_literal_type(JZASTNode *node,
                         JZDiagnosticList *diagnostics,
                         struct JZBitvecType *out);
+/**
+ * @brief Check whether a literal lexeme is a known constant zero.
+ * @param lex Literal text to inspect.
+ * @param out_known Receives whether the zero/non-zero result is definite.
+ * @return Non-zero when the literal is definitively zero, or zero otherwise.
+ */
 int sem_literal_is_const_zero(const char *lex, int *out_known);
 
 /*
@@ -191,11 +292,29 @@ int sem_literal_is_const_zero(const char *lex, int *out_known);
  * to obtain fully-resolved integer values for width/depth expressions given
  * the current module scope and project-level CONFIG table.
  */
+/**
+ * @brief Evaluate a CONST or CONFIG expression in module scope.
+ * @param expr Expression text to evaluate.
+ * @param scope Module scope used to resolve local constants.
+ * @param project_symbols Project-level symbols used for CONFIG lookup.
+ * @param out_value Receives the evaluated integer value.
+ * @return `0` on success, or non-zero when evaluation fails.
+ */
 int sem_eval_const_expr_in_module(const char *expr,
                                   const JZModuleScope *scope,
                                   const JZBuffer *project_symbols,
                                   long long *out_value);
 
+/**
+ * @brief Resolve a string-valued CONST visible from a module.
+ * @param name Constant name to resolve.
+ * @param scope Module scope used for lookup.
+ * @param project_symbols Project-level symbols used for lookup.
+ * @param out_str Receives the resolved string literal.
+ * @param diagnostics Diagnostic sink for lookup failures.
+ * @param loc Source location used for diagnostics.
+ * @return `0` on success, or non-zero when resolution fails.
+ */
 int sem_resolve_string_const(const char *name,
                              const JZModuleScope *scope,
                              const JZBuffer *project_symbols,
@@ -203,21 +322,55 @@ int sem_resolve_string_const(const char *name,
                              JZDiagnosticList *diagnostics,
                              JZLocation loc);
 
+/**
+ * @brief Evaluate a project-scope CONST or CONFIG expression.
+ * @param expr Expression text to evaluate.
+ * @param project_symbols Project-level symbols used for lookup.
+ * @param out_value Receives the evaluated integer value.
+ * @return `0` on success, or non-zero when evaluation fails.
+ */
 int sem_eval_const_expr_in_project(const char *expr,
                                    const JZBuffer *project_symbols,
                                    long long *out_value);
 
+/**
+ * @brief Evaluate a width expression in module scope.
+ * @param expr Width expression text to evaluate.
+ * @param scope Module scope used to resolve local names.
+ * @param project_symbols Project-level symbols used for CONFIG lookup.
+ * @param out_width Receives the evaluated width.
+ * @return `0` on success, or non-zero when evaluation fails.
+ */
 int sem_eval_width_expr(const char *expr,
                         const JZModuleScope *scope,
                         const JZBuffer *project_symbols,
                         unsigned *out_width);
 
+/**
+ * @brief Evaluate a width expression and report failures at a specific location.
+ * @param expr Width expression text to evaluate.
+ * @param scope Module scope used to resolve local names.
+ * @param project_symbols Project-level symbols used for CONFIG lookup.
+ * @param out_width Receives the evaluated width.
+ * @param loc Source location used for diagnostics.
+ * @return `0` on success, or non-zero when evaluation fails.
+ */
 int sem_eval_width_expr_at_loc(const char *expr,
                                const JZModuleScope *scope,
                                const JZBuffer *project_symbols,
                                unsigned *out_width,
                                JZLocation loc);
 
+/**
+ * @brief Expand `widthof(...)` calls within a width expression.
+ * @param expr Width expression text to expand.
+ * @param scope Module scope used to resolve referenced declarations.
+ * @param project_symbols Project-level symbols used during expansion.
+ * @param out_expanded Receives the expanded expression string.
+ * @param depth Current recursion depth for nested expansion.
+ * @param loc Source location associated with the expression.
+ * @return `0` on success, or non-zero when expansion fails.
+ */
 int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
@@ -225,6 +378,17 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                                      int depth,
                                      JZLocation loc);
 
+/**
+ * @brief Expand `widthof(...)` calls and report failures through diagnostics.
+ * @param expr Width expression text to expand.
+ * @param scope Module scope used to resolve referenced declarations.
+ * @param project_symbols Project-level symbols used during expansion.
+ * @param out_expanded Receives the expanded expression string.
+ * @param depth Current recursion depth for nested expansion.
+ * @param diagnostics Diagnostic sink for expansion failures.
+ * @param loc Source location associated with the expression.
+ * @return `0` on success, or non-zero when expansion fails.
+ */
 int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           const JZModuleScope *scope,
                                           const JZBuffer *project_symbols,
@@ -233,6 +397,11 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           JZDiagnosticList *diagnostics,
                                           JZLocation loc);
 
+/**
+ * @brief Check whether an expression text contains a `lit(...)` call.
+ * @param expr_text Expression text to scan.
+ * @return Non-zero when a `lit(...)` call is present, or zero otherwise.
+ */
 int sem_expr_has_lit_call(const char *expr_text);
 
 /* Core expression type/width inference helper implemented in driver_operators.c
@@ -244,17 +413,42 @@ void infer_expr_type(JZASTNode *expr,
                      JZDiagnosticList *diagnostics,
                      struct JZBitvecType *out);
 
-/* Module-level literal width validation implemented in driver_literal.c. */
+/**
+ * @brief Validate explicit literal widths within a module.
+ * @param scope Module scope to scan.
+ * @param project_symbols Project-level symbols used for CONFIG lookup.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
 void sem_check_module_literal_widths(const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
                                      JZDiagnosticList *diagnostics);
 
+/**
+ * @brief Add a symbol to a module scope.
+ * @param scope Module scope receiving the symbol.
+ * @param kind Symbol kind to add.
+ * @param name Identifier text for the symbol.
+ * @param decl Declaration node for the symbol.
+ * @param diagnostics Diagnostic sink for duplicate-name errors.
+ * @return `0` on success, negative on allocation failure, or zero on rejection.
+ */
 int module_scope_add_symbol(JZModuleScope *scope,
                             JZSymbolKind kind,
                             const char *name,
                             JZASTNode *decl,
                             JZDiagnosticList *diagnostics);
 
+/**
+ * @brief Add a symbol to a module scope with feature-guard ownership metadata.
+ * @param scope Module scope receiving the symbol.
+ * @param kind Symbol kind to add.
+ * @param name Identifier text for the symbol.
+ * @param decl Declaration node for the symbol.
+ * @param feature_guard Owning `@feature` guard, or `NULL`.
+ * @param feature_branch Branch node within the feature guard, or `NULL`.
+ * @param diagnostics Diagnostic sink for duplicate-name errors.
+ * @return `0` on success, negative on allocation failure, or zero on rejection.
+ */
 int module_scope_add_symbol_featured(JZModuleScope *scope,
                                      JZSymbolKind kind,
                                      const char *name,
@@ -263,18 +457,46 @@ int module_scope_add_symbol_featured(JZModuleScope *scope,
                                      JZASTNode *feature_branch,
                                      JZDiagnosticList *diagnostics);
 
+/**
+ * @brief Look up a symbol by name within a module scope.
+ * @param scope Module scope to search.
+ * @param name Identifier text to resolve.
+ * @return The matching symbol, or `NULL` when none exists.
+ */
 const JZSymbol *module_scope_lookup(const JZModuleScope *scope,
                                     const char *name);
 
+/**
+ * @brief Look up the first symbol visible at a specific source location.
+ * @param scope Module scope to search.
+ * @param name Identifier text to resolve.
+ * @param use_loc Source location of the use site.
+ * @return The matching visible symbol, or `NULL` when none exists.
+ */
 const JZSymbol *module_scope_lookup_visible(const JZModuleScope *scope,
                                             const char *name,
                                             JZLocation use_loc);
 
+/**
+ * @brief Look up the first symbol of a specific kind visible at a use site.
+ * @param scope Module scope to search.
+ * @param name Identifier text to resolve.
+ * @param kind Required symbol kind.
+ * @param use_loc Source location of the use site.
+ * @return The matching visible symbol, or `NULL` when none exists.
+ */
 const JZSymbol *module_scope_lookup_kind_visible(const JZModuleScope *scope,
                                                  const char *name,
                                                  JZSymbolKind kind,
                                                  JZLocation use_loc);
 
+/**
+ * @brief Look up a symbol by name and kind within a module scope.
+ * @param scope Module scope to search.
+ * @param name Identifier text to resolve.
+ * @param kind Required symbol kind.
+ * @return The matching symbol, or `NULL` when none exists.
+ */
 const JZSymbol *module_scope_lookup_kind(const JZModuleScope *scope,
                                          const char *name,
                                          JZSymbolKind kind);
@@ -289,10 +511,11 @@ int sem_match_mem_port_qualified_ident(JZASTNode *expr,
                                        JZDiagnosticList *diagnostics,
                                        JZMemPortRef *out);
 
+/** @brief Expression read-rule context flags. */
 typedef struct JZExprReadRulesContext {
-    int is_sync_context;
-    int is_instance_binding;
-    int check_bus_rules;
+    int is_sync_context;      /**< Non-zero when checking synchronous context rules. */
+    int is_instance_binding;  /**< Non-zero when checking an instance binding. */
+    int check_bus_rules;      /**< Non-zero when BUS-specific rules should run. */
 } JZExprReadRulesContext;
 
 /* MEM declaration/access/usage helpers implemented in driver_mem.c. */

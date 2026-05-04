@@ -1,4 +1,0 @@
-File: 1_1_ID_SYNTAX_INVALID-mem_name.jz
-      29:9    error ID_SYNTAX_INVALID S1.1 Identifier exceeds 255 characters
-      30:17   warn  MEM_WARN_PORT_NEVER_ACCESSED S7.7.3 MEM IN/OUT/INOUT port declared but never used
-      31:17   warn  MEM_WARN_PORT_NEVER_ACCESSED S7.7.3 MEM IN/OUT/INOUT port declared but never used

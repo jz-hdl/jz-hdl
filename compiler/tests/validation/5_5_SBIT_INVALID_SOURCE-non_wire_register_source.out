@@ -1,5 +1,0 @@
-File: 5_5_SBIT_INVALID_SOURCE-non_wire_register_source.jz
-      43:23   error SBIT_INVALID_SOURCE S5.5.7 sbit() first argument (source) must be a readable WIRE or REGISTER
-      53:23   error SBIT_INVALID_SOURCE S5.5.7 sbit() first argument (source) must be a readable WIRE or REGISTER
-      92:23   error SBIT_INVALID_SOURCE S5.5.7 sbit() first argument (source) must be a readable WIRE or REGISTER
-     102:23   error SBIT_INVALID_SOURCE S5.5.7 sbit() first argument (source) must be a readable WIRE or REGISTER

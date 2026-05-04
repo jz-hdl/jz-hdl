@@ -1,0 +1,48 @@
+@global CMD
+    IDLE  = 2'b00;
+    READ  = 2'b01;
+    WRITE = 2'b10;
+@endglob
+
+@module command_passthrough
+    PORT {
+        IN  [2] cmd;
+        OUT [2] seen;
+    }
+
+    ASYNCHRONOUS {
+        seen <= cmd;
+    }
+@endmod
+
+@testbench command_passthrough
+    WIRE {
+        cmd [2];
+        seen [2];
+    }
+
+    TEST "Global constants resolve in update and expect expressions" {
+        @new dut command_passthrough {
+            cmd [2] = cmd;
+            seen [2] = seen;
+        }
+
+        @setup {
+            cmd <= CMD.IDLE;
+        }
+
+        @expect_equal(seen, CMD.IDLE)
+
+        @update {
+            cmd <= CMD.WRITE;
+        }
+
+        @expect_equal(seen, CMD.WRITE)
+
+        @update {
+            cmd <= CMD.READ;
+        }
+
+        @expect_equal(seen, CMD.READ)
+    }
+@endtb

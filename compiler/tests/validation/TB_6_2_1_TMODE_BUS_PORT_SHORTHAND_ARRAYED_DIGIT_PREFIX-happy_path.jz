@@ -1,0 +1,94 @@
+// BUS_PORT_SHORTHAND_ARRAYED_DIGIT_PREFIX: testbench BUS shorthand must bind
+// only documented BUS members for digit-suffix groups like lane0_* and lane1_*.
+
+BUS CTRL_BUS {
+    IN  [8] DATA;
+    IN  [1] VALID;
+    OUT [1] READY;
+}
+
+@module TbBusPortShorthandArrayedDigitPrefixDut
+    PORT {
+        IN  [1] clk;
+        BUS CTRL_BUS SOURCE lane0;
+        BUS CTRL_BUS SOURCE lane1;
+        IN  [1] lane_status;
+        OUT [8] seen0;
+        OUT [8] seen1;
+        OUT [1] seen_status;
+    }
+
+    REGISTER {
+        latched0 [8] = 8'h00;
+        latched1 [8] = 8'h00;
+        latched_status [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        seen0 = latched0;
+        seen1 = latched1;
+        seen_status = latched_status;
+        lane0.READY = latched_status;
+        lane1.READY = lane_status;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (lane0.VALID) {
+            latched0 <= lane0.DATA;
+        } ELSE {
+            latched0 <= 8'h00;
+        }
+        IF (lane1.VALID) {
+            latched1 <= lane1.DATA;
+        } ELSE {
+            latched1 <= 8'h00;
+        }
+        latched_status <= lane_status;
+    }
+@endmod
+
+@testbench TbBusPortShorthandArrayedDigitPrefixDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        seen0 [8];
+        seen1 [8];
+        seen_status [1];
+        status_wire [1];
+        lane_status [1];
+        lane0_DATA [8];
+        lane0_VALID [1];
+        lane0_READY [1];
+        lane1_DATA [8];
+        lane1_VALID [1];
+        lane1_READY [1];
+    }
+
+    TEST "BUS shorthand preserves lane0_/lane1_ binding boundaries" {
+        @new dut TbBusPortShorthandArrayedDigitPrefixDut {
+            clk [1] = clk;
+            lane_status [1] = status_wire;
+            BUS CTRL_BUS lane = lane;
+            seen0 [8] = seen0;
+            seen1 [8] = seen1;
+            seen_status [1] = seen_status;
+        }
+
+        @setup {
+            status_wire <= 1'b0;
+            lane_status <= 1'b1;
+            lane0_DATA <= 8'h12;
+            lane0_VALID <= 1'b1;
+            lane1_DATA <= 8'h34;
+            lane1_VALID <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(seen0, 8'h12)
+        @expect_equal(seen1, 8'h34)
+        @expect_equal(seen_status, 1'b0)
+        @expect_equal(lane1_READY, 1'b0)
+    }
+@endtb

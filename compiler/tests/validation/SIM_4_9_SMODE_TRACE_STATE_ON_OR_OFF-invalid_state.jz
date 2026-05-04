@@ -1,0 +1,40 @@
+// TRACE_STATE_ON_OR_OFF: @trace state must be on or off.
+// Trigger 1: invalid state token emits only the targeted parse error.
+
+@module TraceStateOnOrOffDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation TraceStateOnOrOffDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut TraceStateOnOrOffDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    // Trigger 1: only on/off are valid state values.
+    @trace(state=maybe)
+    @run(ns=10)
+@endsim

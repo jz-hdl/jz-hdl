@@ -1,0 +1,2 @@
+File: TB_6_5_TMODE_UPDATE_CLOCK_ASSIGN-assign_clock.jz
+      41:13   error TB_UPDATE_CLOCK_ASSIGN TB-010 @update may not assign clock signals

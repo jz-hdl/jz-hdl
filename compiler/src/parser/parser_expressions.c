@@ -1,5 +1,5 @@
 /**
- * @file parser_expression.c
+ * @file parser_expressions.c
  * @brief Expression parsing with full operator precedence for the JZ HDL.
  *
  * This file implements the recursive-descent expression parser used throughout
@@ -21,6 +21,113 @@
 #include <string.h>
 
 #include "parser_internal.h"
+
+static unsigned g_parser_expr_depth = 0;
+
+/**
+ * @brief Deep-copy an expression subtree.
+ * @param src Expression node to clone.
+ * @return Cloned tree or NULL on allocation failure.
+ */
+static JZASTNode *clone_expr_tree(const JZASTNode *src);
+
+/**
+ * @brief Parse postfix indexing, slicing, and indexed-member expressions.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_postfix_expr(Parser *p);
+
+/**
+ * @brief Parse a concatenation expression or fall back to postfix parsing.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_concat_or_primary_expr(Parser *p);
+
+/**
+ * @brief Parse unary operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_unary_expr(Parser *p);
+
+/**
+ * @brief Parse multiplicative operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_multiplicative_expr(Parser *p);
+
+/**
+ * @brief Parse additive operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_additive_expr(Parser *p);
+
+/**
+ * @brief Parse shift operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_shift_expr(Parser *p);
+
+/**
+ * @brief Parse relational comparison operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_relational_expr(Parser *p);
+
+/**
+ * @brief Parse equality comparison operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_equality_expr(Parser *p);
+
+/**
+ * @brief Parse bitwise AND operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_bitwise_and_expr(Parser *p);
+
+/**
+ * @brief Parse bitwise XOR operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_bitwise_xor_expr(Parser *p);
+
+/**
+ * @brief Parse bitwise OR operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_bitwise_or_expr(Parser *p);
+
+/**
+ * @brief Parse logical AND operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_logical_and_expr(Parser *p);
+
+/**
+ * @brief Parse logical OR operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_logical_or_expr(Parser *p);
+
+/**
+ * @brief Parse ternary conditional operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_ternary_expr(Parser *p);
 
 /**
  * @brief Parse postfix expressions such as slicing and indexing.
@@ -973,7 +1080,14 @@ JZASTNode *parse_primary_expr(Parser *p) {
                 break;
             }
             size_t len = strlen(id->lexeme);
-            char *new_buf = (char *)realloc(buf, buf_sz + len + 2);
+            size_t new_size = 0;
+            char *new_buf = NULL;
+            if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+                jz_size_add_checked(new_size, 2, &new_size) != 0) {
+                free(buf);
+                return NULL;
+            }
+            new_buf = (char *)realloc(buf, new_size);
             if (!new_buf) {
                 free(buf);
                 return NULL;
@@ -987,7 +1101,11 @@ JZASTNode *parse_primary_expr(Parser *p) {
                 break;
             }
             /* append '.' */
-            new_buf = (char *)realloc(buf, buf_sz + 2);
+            if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+                free(buf);
+                return NULL;
+            }
+            new_buf = (char *)realloc(buf, new_size);
             if (!new_buf) {
                 free(buf);
                 return NULL;
@@ -1087,5 +1205,17 @@ JZASTNode *parse_simple_index_expr(Parser *p) {
  * @return Expression AST node, or NULL on error
  */
 JZASTNode *parse_expression(Parser *p) {
-    return parse_ternary_expr(p);
+    JZASTNode *expr = NULL;
+
+    if (jz_depth_enter_checked(&g_parser_expr_depth, JZ_LIMIT_PARSER_EXPR_DEPTH) != 0) {
+        parser_report_rule(p,
+                           peek(p),
+                           "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",
+                           "expression nesting exceeds the parser safety limit");
+        return NULL;
+    }
+
+    expr = parse_ternary_expr(p);
+    jz_depth_leave(&g_parser_expr_depth);
+    return expr;
 }

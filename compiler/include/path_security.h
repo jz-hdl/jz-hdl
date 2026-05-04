@@ -62,9 +62,9 @@ void jz_path_security_set_allow_traversal(int allow);
  *         Caller must free() the returned string.
  */
 char *jz_path_validate(const char *raw_path,
-                        const char *base_dir,
-                        JZLocation loc,
-                        JZDiagnosticList *diag);
+                       const char *base_dir,
+                       JZLocation loc,
+                       JZDiagnosticList *diag);
 
 /**
  * @brief Release all resources held by the path security subsystem.

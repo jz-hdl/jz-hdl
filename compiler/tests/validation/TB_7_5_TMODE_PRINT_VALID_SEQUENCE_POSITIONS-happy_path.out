@@ -1,0 +1,9 @@
+
+=== @testbench PrintPlacementDut ===
+before clock 21
+after clock 11
+after update 11
+  PASS  "valid @print sequence positions" (2/2 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

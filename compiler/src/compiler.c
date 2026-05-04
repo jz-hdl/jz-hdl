@@ -1,3 +1,8 @@
+/**
+ * @file compiler.c
+ * @brief Compiler context initialization and teardown.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 

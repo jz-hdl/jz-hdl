@@ -1,0 +1,49 @@
+// TB_CLOCK_NOT_DECLARED: @clock must reference a declared CLOCK identifier.
+// Target diagnostic: TB_CLOCK_NOT_DECLARED.
+// Non-target diagnostics: none; the DUT, @new bindings, and setup are valid.
+
+@module ClockDirectiveValidationDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] in_data;
+        OUT [1] out_data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        out_data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= in_data;
+    }
+@endmod
+
+@testbench ClockDirectiveValidationDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        in_data [1];
+        out_data [1];
+    }
+
+    TEST "undeclared @clock identifier" {
+        @new dut ClockDirectiveValidationDut {
+            clk [1] = clk;
+            in_data [1] = in_data;
+            out_data [1] = out_data;
+        }
+
+        @setup {
+            in_data <= 1'b1;
+        }
+
+        // Trigger: `missing_clk` is not declared in the testbench CLOCK block.
+        @clock(missing_clk, cycle=1)
+    }
+@endtb

@@ -1,0 +1,53 @@
+// TB_EXPECT_WIDTH_MISMATCH: @expect value width must match signal width.
+// Target diagnostic: TB_EXPECT_WIDTH_MISMATCH on the mismatched expected literal.
+// Non-target diagnostics: none.
+// Fixture plan: one valid module, one valid TEST, valid @new wiring, and a
+// single @expect_equal with an 8-bit expected value against a 1-bit signal.
+
+@module ExpectWidthMismatchDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] data_in;
+        OUT [1] data_out;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data_out = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= data_in;
+    }
+@endmod
+
+@testbench ExpectWidthMismatchDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [1];
+        data_out [1];
+    }
+
+    TEST "expect width mismatch" {
+        @new dut ExpectWidthMismatchDut {
+            clk [1] = clk;
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+
+        @setup {
+            data_in <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+
+        // Trigger 1: expected literal width does not match data_out width.
+        @expect_equal(data_out, 8'h01)
+    }
+@endtb

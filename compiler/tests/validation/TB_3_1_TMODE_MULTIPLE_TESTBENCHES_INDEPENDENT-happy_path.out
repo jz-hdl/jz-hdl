@@ -1,0 +1,9 @@
+
+=== @testbench MultipleIndependentTestbenchesDut ===
+  PASS  "first testbench drives one" (1/1 assertions)
+
+=== @testbench MultipleIndependentTestbenchesDut ===
+  PASS  "second testbench drives zero" (1/1 assertions)
+
+Results: 2 passed, 0 failed, 2 total
+Seed: 0x00000000

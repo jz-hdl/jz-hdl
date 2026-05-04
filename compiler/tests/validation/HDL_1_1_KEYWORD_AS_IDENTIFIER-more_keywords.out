@@ -1,0 +1,20 @@
+File: HDL_1_1_KEYWORD_AS_IDENTIFIER-more_keywords.jz
+      17:1    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      34:1    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      61:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      63:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      65:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      67:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      88:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      92:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+      96:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     100:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     104:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     108:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     112:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     116:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     120:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     124:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     128:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     132:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier
+     136:9    error KEYWORD_AS_IDENTIFIER S1.1 Reserved keyword used as identifier

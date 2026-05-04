@@ -1,0 +1,67 @@
+// PRINT_VALID_SEQUENCE_POSITIONS: @print is accepted in valid TEST-sequence slots.
+// Exercises @print before a clock step, after a clock step, and after an
+// @update block, mirroring positions where @expect_equal is accepted.
+
+@module PrintPlacementDut
+    PORT {
+        IN  [1] clk;
+        IN  [1] en;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        data_out = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        IF (en) {
+            state <= data_in;
+        } ELSE {
+            state <= state;
+        }
+    }
+@endmod
+
+@testbench PrintPlacementDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        en [1];
+        data_in [8];
+        data_out [8];
+    }
+
+    TEST "valid @print sequence positions" {
+        @new dut PrintPlacementDut {
+            clk [1] = clk;
+            en [1] = en;
+            data_in [8] = data_in;
+            data_out [8] = data_out;
+        }
+
+        @setup {
+            en <= 1'b1;
+            data_in <= 8'h11;
+        }
+
+        @print("before clock %h", data_out)
+        @clock(clk, cycle=1)
+        @print("after clock %h", data_out)
+        @expect_equal(data_out, 8'h11)
+
+        @update {
+            data_in <= 8'h22;
+        }
+
+        @print("after update %h", data_out)
+        @clock(clk, cycle=1)
+        @expect_equal(data_out, 8'h22)
+    }
+@endtb

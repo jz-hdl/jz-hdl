@@ -13,6 +13,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/**
+ * @brief Opaque writer for FST waveform output.
+ */
 typedef struct FSTWriter FSTWriter;
 
 /**

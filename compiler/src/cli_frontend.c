@@ -1,3 +1,8 @@
+/**
+ * @file cli_frontend.c
+ * @brief Front-end pipeline execution for one CLI input file.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,13 +28,28 @@ int jz_cli_run_frontend(JZCompiler *compiler,
                         FILE *ast_out,
                         int test_mode,
                         int simulate_mode,
-                        int verbose)
+                        int verbose,
+                        const JZExpansionLimits *limits)
 {
     clock_t t0, t1;
 
     t0 = clock();
     size_t size = 0;
-    char *source = jz_read_entire_file(filename, &size);
+    char *source = NULL;
+    if (jz_get_file_size(filename, &size) == 0 &&
+        size > jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES)) {
+        JZLocation loc = { filename, 1, 1 };
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "source file is %zu byte(s), exceeding the compiler safety limit of %u byte(s)",
+                 size, (unsigned)jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES));
+        jz_diagnostic_report(&compiler->diagnostics, loc, JZ_SEVERITY_ERROR,
+                             "SOURCE_FILE_TOO_LARGE", msg);
+        return 1;
+    }
+    source = jz_read_entire_file_limit(filename,
+                                       jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                       &size);
     if (!source) {
         JZLocation loc = { filename, 1, 1 };
         jz_diagnostic_report(&compiler->diagnostics, loc, JZ_SEVERITY_ERROR,
@@ -38,7 +58,7 @@ int jz_cli_run_frontend(JZCompiler *compiler,
     }
 
     /* Expand @repeat N ... @end blocks before lexing */
-    char *expanded = jz_repeat_expand(source, filename, &compiler->diagnostics);
+    char *expanded = jz_repeat_expand(source, filename, &compiler->diagnostics, limits);
     if (!expanded) {
         free(source);
         return 1;
@@ -86,7 +106,7 @@ int jz_cli_run_frontend(JZCompiler *compiler,
 
     /* Expand templates before semantic analysis or AST output. */
     t0 = clock();
-    jz_template_expand(compiler->ast_root, &compiler->diagnostics, filename);
+    jz_template_expand(compiler->ast_root, &compiler->diagnostics, filename, limits);
     t1 = clock();
     if (verbose) fprintf(stderr, "[verbose] template_expand: %.1f ms\n", jz_cli_elapsed_ms(t0));
 
@@ -123,7 +143,9 @@ int jz_cli_run_frontend(JZCompiler *compiler,
     if (print_ast_json) {
         /* --ast mode: print JSON AST only; no validation yet. */
         FILE *out = ast_out ? ast_out : stdout;
-        jz_ast_print_json(out, compiler->ast_root);
+        if (jz_ast_print_json(out, compiler->ast_root, &compiler->diagnostics) != 0) {
+            return 1;
+        }
     } else {
         /* Default / --lint mode: run semantic validation (section 5 rules). */
         t0 = clock();

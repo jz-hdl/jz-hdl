@@ -1,0 +1,7 @@
+
+=== @testbench RepeatIgnoredInCommentsAndStringsDut ===
+literal @repeat 99 IDX @end
+  PASS  "@repeat text inside comments and strings stays inert" (1/1 assertions)
+
+Results: 1 passed, 0 failed, 1 total
+Seed: 0x00000000

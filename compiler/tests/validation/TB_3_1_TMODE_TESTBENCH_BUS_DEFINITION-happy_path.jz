@@ -1,0 +1,39 @@
+// TESTBENCH_BUS_DEFINITION: BUS definitions are allowed inside @testbench and
+// are visible to BUS wire declarations in the same testbench.
+
+@testbench TestbenchBusDefinitionDut
+    @import "TB_3_1_TMODE_TESTBENCH_BUS_DEFINITION-happy_path_helper_lib.jz";
+
+    BUS PAYLOAD_BUS {
+        IN  [1] ready;
+        OUT [1] valid;
+    }
+
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        en [1];
+        din [1];
+        q [1];
+        BUS PAYLOAD_BUS probe;
+    }
+
+    TEST "testbench BUS definition is accepted" {
+        @new dut TestbenchBusDefinitionDut {
+            clk [1] = clk;
+            en [1] = en;
+            din [1] = din;
+            q [1] = q;
+        }
+
+        @setup {
+            en <= 1'b1;
+            din <= 1'b1;
+        }
+
+        @clock(clk, cycle=1)
+        @expect_equal(q, 1'b1)
+    }
+@endtb

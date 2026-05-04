@@ -3,30 +3,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "ir_builder.h"
 #include "ir.h"
 #include "diagnostic.h"
 #include "util.h"
 
+/**
+ * @brief Supported on-disk formats for file-backed memory initialization.
+ */
 typedef enum {
-    MEM_FILE_FORMAT_UNKNOWN = 0,
-    MEM_FILE_FORMAT_BIN,
-    MEM_FILE_FORMAT_HEX,
-    MEM_FILE_FORMAT_MEM,
-    MEM_FILE_FORMAT_MIF,
-    MEM_FILE_FORMAT_COE
+    MEM_FILE_FORMAT_UNKNOWN = 0, /**< Unrecognized or unsupported file format. */
+    MEM_FILE_FORMAT_BIN,         /**< Raw binary bytes. */
+    MEM_FILE_FORMAT_HEX,         /**< Plain hexadecimal token stream. */
+    MEM_FILE_FORMAT_MEM,         /**< Verilog-style `.mem` token stream. */
+    MEM_FILE_FORMAT_MIF,         /**< Memory Initialization File format. */
+    MEM_FILE_FORMAT_COE          /**< Xilinx `.coe` initialization file. */
 } MemInitFileFormat;
 
+/**
+ * @brief Numeric radices accepted while parsing text-based memory files.
+ */
 typedef enum {
-    MEM_RADIX_NONE = 0,
-    MEM_RADIX_BIN = 2,
-    MEM_RADIX_OCT = 8,
-    MEM_RADIX_DEC = 10,
-    MEM_RADIX_HEX = 16,
-    MEM_RADIX_UNS = 100
+    MEM_RADIX_NONE = 0,  /**< No radix has been selected yet. */
+    MEM_RADIX_BIN = 2,   /**< Base-2 digits. */
+    MEM_RADIX_OCT = 8,   /**< Base-8 digits. */
+    MEM_RADIX_DEC = 10,  /**< Base-10 digits. */
+    MEM_RADIX_HEX = 16,  /**< Base-16 digits. */
+    MEM_RADIX_UNS = 100  /**< Unsigned decimal values in MIF files. */
 } MemInitRadix;
 
+#define MEM_INIT_BLOB_MAX_BYTES ((size_t)256u * 1024u * 1024u)
+
+/**
+ * @brief Return the filename extension of a path, excluding the dot.
+ *
+ * @param path File path to inspect.
+ * @return Extension substring, or NULL when the path has no usable extension.
+ */
 static const char *mem_init_get_ext(const char *path)
 {
     if (!path) return NULL;
@@ -37,6 +52,13 @@ static const char *mem_init_get_ext(const char *path)
     return dot + 1;
 }
 
+/**
+ * @brief Compare two extensions case-insensitively.
+ *
+ * @param ext  Extension text from an input path.
+ * @param want Expected extension text.
+ * @return 1 when the strings match ignoring case, otherwise 0.
+ */
 static int mem_init_ext_eq(const char *ext, const char *want)
 {
     if (!ext || !want) return 0;
@@ -50,6 +72,12 @@ static int mem_init_ext_eq(const char *ext, const char *want)
     return *ext == '\0' && *want == '\0';
 }
 
+/**
+ * @brief Infer the initializer file format from its path.
+ *
+ * @param file_path Path to the initialization file.
+ * @return Detected file format, or `MEM_FILE_FORMAT_UNKNOWN`.
+ */
 static MemInitFileFormat mem_init_get_format(const char *file_path)
 {
     const char *ext = mem_init_get_ext(file_path);
@@ -79,6 +107,30 @@ static void report_file_error(JZDiagnosticList *diagnostics,
              detail ? detail : "memory initialization error",
              file_path ? file_path : "<null>");
     report_init_lowering_error(diagnostics, msg);
+}
+
+static int check_mem_init_file_size(const char *file_path,
+                                    size_t max_bytes,
+                                    JZDiagnosticList *diagnostics,
+                                    size_t *out_size)
+{
+    size_t file_size = 0;
+
+    if (!file_path) return -1;
+    if (jz_get_file_size(file_path, &file_size) != 0) {
+        report_file_error(diagnostics, file_path,
+                          "failed to stat memory initialization file");
+        return -1;
+    }
+    if (file_size > max_bytes) {
+        report_file_error(diagnostics, file_path,
+                          "memory initialization file exceeds the compiler safety file-size limit");
+        return -1;
+    }
+    if (out_size) {
+        *out_size = file_size;
+    }
+    return 0;
 }
 
 static void set_blob_bit(uint8_t *blob_bytes,
@@ -131,7 +183,7 @@ static int append_bits_from_value(uint8_t *blob_bytes,
         }
         (*bit_index)++;
     }
-    return -1;
+    return 0;
 }
 
 static int mem_init_ci_char_eq(char a, char b)
@@ -607,7 +659,16 @@ static int lower_text_mem_init(const char *file_path,
                                JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
+    char *contents = NULL;
+
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                 diagnostics, &file_size) != 0) {
+        return -1;
+    }
+    contents = jz_read_entire_file_limit(file_path,
+                                         jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                         &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -686,17 +747,28 @@ static int lower_binary_mem_init(const char *file_path,
                                  JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
-    if (!contents) {
-        report_file_error(diagnostics, file_path,
-                          "failed to read memory initialization file");
+    size_t max_bytes = capacity_bytes;
+    char *contents = NULL;
+
+    if (max_bytes > jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES)) {
+        max_bytes = jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES);
+    }
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                 diagnostics, &file_size) != 0) {
         return -1;
     }
 
     if (file_size > capacity_bytes) {
         report_file_error(diagnostics, file_path,
                           "memory initialization file exceeds declared memory size");
-        free(contents);
+        return -1;
+    }
+
+    contents = jz_read_entire_file_limit(file_path, max_bytes, &file_size);
+    if (!contents) {
+        report_file_error(diagnostics, file_path,
+                          "failed to read memory initialization file");
         return -1;
     }
 
@@ -713,7 +785,7 @@ static int lower_coe_mem_init(const char *file_path,
                               JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
+    char *contents = NULL;
     const char *radix_start;
     const char *radix_end;
     const char *vec_start;
@@ -721,6 +793,14 @@ static int lower_coe_mem_init(const char *file_path,
     MemInitRadix radix;
     int addr = 0;
 
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                 diagnostics, &file_size) != 0) {
+        return -1;
+    }
+    contents = jz_read_entire_file_limit(file_path,
+                                         jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                         &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -791,7 +871,7 @@ static int lower_mif_mem_init(const char *file_path,
                               JZDiagnosticList *diagnostics)
 {
     size_t file_size = 0;
-    char *contents = jz_read_entire_file(file_path, &file_size);
+    char *contents = NULL;
     char *stripped = NULL;
     const char *depth_start;
     const char *depth_end;
@@ -809,6 +889,19 @@ static int lower_mif_mem_init(const char *file_path,
     MemInitRadix addr_radix = MEM_RADIX_NONE;
     MemInitRadix data_radix = MEM_RADIX_NONE;
 
+    if ((unsigned)depth > jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH)) {
+        report_file_error(diagnostics, file_path,
+                          "declared MIF depth exceeds the compiler safety limit");
+        return -1;
+    }
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                 diagnostics, &file_size) != 0) {
+        return -1;
+    }
+    contents = jz_read_entire_file_limit(file_path,
+                                         jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                         &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -830,6 +923,12 @@ static int lower_mif_mem_init(const char *file_path,
         free(stripped);
         report_file_error(diagnostics, file_path,
                           "missing or invalid DEPTH in MIF file");
+        return -1;
+    }
+    if (mif_depth > (unsigned long long)jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH)) {
+        free(stripped);
+        report_file_error(diagnostics, file_path,
+                          "MIF DEPTH exceeds the compiler safety limit");
         return -1;
     }
 
@@ -1176,9 +1275,36 @@ int jz_ir_init_lowering(IR_Design *design,
                 return -1;
             }
 
-            int bytes_per_word = (mem->word_width + 7) / 8;
-            size_t capacity_bytes = (size_t)bytes_per_word * (size_t)mem->depth;
-            size_t capacity_bits = (size_t)mem->word_width * (size_t)mem->depth;
+            size_t bytes_per_word_size = ((size_t)mem->word_width + 7u) / 8u;
+            size_t capacity_bytes = 0;
+            size_t capacity_bits = 0;
+            int bytes_per_word;
+
+            if ((size_t)mem->depth > SIZE_MAX / bytes_per_word_size ||
+                (size_t)mem->depth > SIZE_MAX / (size_t)mem->word_width) {
+                char msg[1024];
+                snprintf(msg, sizeof(msg),
+                         "memory init blob too large to lower safely: %s.%s",
+                         mod->name ? mod->name : "jz_module",
+                         mem->name ? mem->name : "jz_mem");
+                report_init_lowering_error(diagnostics, msg);
+                return -1;
+            }
+
+            capacity_bytes = bytes_per_word_size * (size_t)mem->depth;
+            capacity_bits = (size_t)mem->word_width * (size_t)mem->depth;
+            if (capacity_bytes > MEM_INIT_BLOB_MAX_BYTES ||
+                capacity_bytes > (size_t)INT_MAX) {
+                char msg[1024];
+                snprintf(msg, sizeof(msg),
+                         "memory init blob too large (%zu bytes, max %zu): %s.%s",
+                         capacity_bytes, MEM_INIT_BLOB_MAX_BYTES,
+                         mod->name ? mod->name : "jz_module",
+                         mem->name ? mem->name : "jz_mem");
+                report_init_lowering_error(diagnostics, msg);
+                return -1;
+            }
+            bytes_per_word = (int)bytes_per_word_size;
 
             IR_MemoryInitBlob *blob = (IR_MemoryInitBlob *)jz_arena_alloc(
                 arena, sizeof(IR_MemoryInitBlob));
@@ -1244,3 +1370,7 @@ int jz_ir_init_lowering(IR_Design *design,
 
     return 0;
 }
+/**
+ * @file ir_init_lowering.c
+ * @brief Lower file-backed memory initializers into IR memory blobs.
+ */

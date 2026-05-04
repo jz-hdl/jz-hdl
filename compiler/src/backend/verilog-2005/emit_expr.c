@@ -1,14 +1,24 @@
-/*
- * emit_expr.c - Expression emission for the Verilog-2005 backend.
- *
- * This file handles lowering IR expressions to Verilog syntax with proper
- * operator precedence and intrinsic expansion.
+/**
+ * @file emit_expr.c
+ * @brief Expression emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
 #include <string.h>
 
 #include "verilog_internal.h"
 #include "ir.h"
+
+/**
+ * @brief Expand an intrinsic expression into explicit Verilog syntax.
+ * @param out Output stream for Verilog text.
+ * @param mod Module that owns the expression.
+ * @param expr Intrinsic expression to emit.
+ * @param parent_prec Parent precedence used for parenthesization.
+ */
+static void emit_intrinsic_expr(FILE *out,
+                                const IR_Module *mod,
+                                const IR_Expr *expr,
+                                int parent_prec);
 
 /* -------------------------------------------------------------------------
  * Operator precedence

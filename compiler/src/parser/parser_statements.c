@@ -1,5 +1,5 @@
 /**
- * @file parser_statement.c
+ * @file parser_statements.c
  * @brief Parsing of executable statements, lvalues, control flow, and feature guards.
  *
  * This file implements parsing of executable statements inside ASYNCHRONOUS
@@ -16,17 +16,77 @@
 
 #include "parser_internal.h"
 
+static unsigned g_parser_stmt_depth = 0;
 
 /**
- * @brief Parse the primary form of an assignment lvalue.
- *
- * Valid lvalues include identifiers and qualified identifiers. The CONFIG
- * keyword is explicitly allowed so that illegal assignments like CONFIG.X = 1
- * can be diagnosed during semantic analysis instead of failing during parsing.
+ * @brief Parse the primary identifier form of an assignment lvalue.
  *
  * @param p Active parser
  * @return Lvalue AST node, or NULL on error
  */
+static JZASTNode *parse_lvalue_primary(Parser *p);
+
+/**
+ * @brief Parse a full assignment lvalue expression.
+ *
+ * @param p Active parser
+ * @return Lvalue AST node, or NULL on error
+ */
+static JZASTNode *parse_lvalue(Parser *p);
+
+/**
+ * @brief Parse an assignment statement inside an executable block.
+ *
+ * @param p       Active parser
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return Assignment AST node, or NULL on error
+ */
+static JZASTNode *parse_assignment_stmt(Parser *p, int is_sync);
+
+/**
+ * @brief Parse an `IF` / `ELIF` / `ELSE` chain.
+ *
+ * @param p       Active parser
+ * @param parent  Parent AST node receiving parsed branch nodes
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return 0 on success, -1 on error
+ */
+static int parse_if_chain(Parser *p, JZASTNode *parent, int is_sync);
+
+/**
+ * @brief Parse a `SELECT` statement and its `CASE` branches.
+ *
+ * @param p       Active parser
+ * @param parent  Parent AST node receiving the parsed SELECT node
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return 0 on success, -1 on error
+ */
+static int parse_select_stmt(Parser *p, JZASTNode *parent, int is_sync);
+
+/**
+ * @brief Parse the statements inside a feature-guard branch.
+ *
+ * @param p            Active parser
+ * @param parent       Branch AST node receiving parsed statements
+ * @param is_sync      Nonzero when parsing a SYNCHRONOUS block
+ * @param out_saw_else Output flag set when `@feature_else` is encountered
+ * @return 0 on success, -1 on error
+ */
+static int parse_feature_guard_body(Parser *p,
+                                    JZASTNode *parent,
+                                    int is_sync,
+                                    int *out_saw_else);
+
+/**
+ * @brief Parse an executable `@feature` guard statement.
+ *
+ * @param p       Active parser
+ * @param parent  Parent AST node receiving the parsed feature guard
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return 0 on success, -1 on error
+ */
+static int parse_feature_guard_stmt(Parser *p, JZASTNode *parent, int is_sync);
+
 static JZASTNode *parse_lvalue_primary(Parser *p) {
     const JZToken *t = peek(p);
     if (!is_decl_identifier_token(t) && t->type != JZ_TOK_KW_CONFIG) {
@@ -49,7 +109,14 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
             break;
         }
         size_t len = strlen(id->lexeme);
-        char *new_buf = (char *)realloc(buf, buf_sz + len + 2);
+        size_t new_size = 0;
+        char *new_buf = NULL;
+        if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+            jz_size_add_checked(new_size, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
         if (!new_buf) {
             free(buf);
             return NULL;
@@ -62,7 +129,11 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
         if (!match(p, JZ_TOK_DOT)) {
             break;
         }
-        char *new_buf2 = (char *)realloc(buf, buf_sz + 2);
+        if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        char *new_buf2 = (char *)realloc(buf, new_size);
         if (!new_buf2) {
             free(buf);
             return NULL;
@@ -89,17 +160,6 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
     return id_node;
 }
 
-/**
- * @brief Parse a full lvalue expression.
- *
- * Supported forms include:
- * - Simple or qualified identifiers
- * - Indexed or sliced identifiers
- * - Concatenations of lvalues: { a, b, c }
- *
- * @param p Active parser
- * @return Lvalue AST node, or NULL on error
- */
 static JZASTNode *parse_lvalue(Parser *p) {
     if (match(p, JZ_TOK_LBRACE)) {
         /* Concatenation lvalue: { lhs1, lhs2, ... } */
@@ -252,17 +312,6 @@ static JZASTNode *parse_lvalue(Parser *p) {
     return base;
 }
 
-/**
- * @brief Parse an assignment statement.
- *
- * Supports aliasing, driving, receiving, and guarded latch assignments.
- * Guarded latch syntax is represented explicitly in the AST so semantic
- * analysis can enforce context-specific rules.
- *
- * @param p       Active parser
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return Assignment statement AST node, or NULL on error
- */
 static JZASTNode *parse_assignment_stmt(Parser *p, int is_sync) {
     JZLocation loc = peek(p)->loc;
     (void)is_sync;
@@ -363,17 +412,6 @@ static JZASTNode *parse_assignment_stmt(Parser *p, int is_sync) {
     return stmt;
 }
 
-/**
- * @brief Parse an IF / ELIF* / ELSE? statement chain.
- *
- * Conditions must be enclosed in parentheses. Each body is parsed as a
- * statement list enclosed in braces.
- *
- * @param p       Active parser
- * @param parent  Parent AST node
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 static int parse_if_chain(Parser *p, JZASTNode *parent, int is_sync) {
     (void)is_sync;
 
@@ -498,17 +536,6 @@ static int parse_if_chain(Parser *p, JZASTNode *parent, int is_sync) {
     return 0;
 }
 
-/**
- * @brief Parse a SELECT / CASE / DEFAULT statement.
- *
- * CASE labels may optionally include a braced statement body. DEFAULT may
- * appear at most once.
- *
- * @param p       Active parser
- * @param parent  Parent AST node
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 static int parse_select_stmt(Parser *p, JZASTNode *parent, int is_sync) {
     (void)is_sync;
 
@@ -642,18 +669,6 @@ static int parse_select_stmt(Parser *p, JZASTNode *parent, int is_sync) {
     return 0;
 }
 
-/**
- * @brief Parse the body of a @feature guarded block.
- *
- * Parsing stops at @else or @endfeat, which are consumed by the caller.
- * Nested @feature blocks are not allowed.
- *
- * @param p            Active parser
- * @param parent       Parent AST node
- * @param is_sync      Nonzero if parsing a SYNCHRONOUS context
- * @param out_saw_else Optional output flag indicating presence of @else
- * @return 0 on success, -1 on error
- */
 static int parse_feature_guard_body(Parser *p,
                                       JZASTNode *parent,
                                       int is_sync,
@@ -751,17 +766,6 @@ static int parse_feature_guard_body(Parser *p,
     }
 }
 
-/**
- * @brief Parse a @feature guarded statement.
- *
- * A feature guard consists of a condition expression, a THEN body, an
- * optional ELSE body, and a required @endfeat terminator.
- *
- * @param p       Active parser
- * @param parent  Parent AST node
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 static int parse_feature_guard_stmt(Parser *p, JZASTNode *parent, int is_sync)
 {
     const JZToken *feat_tok = peek(p);
@@ -846,19 +850,6 @@ static int parse_feature_guard_stmt(Parser *p, JZASTNode *parent, int is_sync)
     return 0;
 }
 
-/**
- * @brief Parse a @feature guard inside a declaration block.
- *
- * This is used by WIRE, REGISTER, LATCH, CONST, PORT, MEM, MUX blocks
- * and module scope to support @feature guards around declarations.
- * The body_fn callback parses declarations until it sees @else/@endfeat
- * (at which point it returns 0 to signal the sentinel was hit).
- *
- * @param p       Active parser
- * @param parent  Parent AST node to attach the FEATURE_GUARD to
- * @param body_fn Callback that parses the body declarations
- * @return 0 on success, -1 on error
- */
 int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
                                   int (*body_fn)(Parser *p, JZASTNode *parent))
 {
@@ -942,29 +933,24 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
     return 0;
 }
 
-/**
- * @brief Parse a list of executable statements.
- *
- * Statements are parsed until the specified terminator token is encountered.
- * This function handles assignments, control-flow constructs, feature guards,
- * and empty statements.
- *
- * @param p          Active parser
- * @param parent     Parent AST node
- * @param terminator Token that ends the statement list
- * @param is_sync    Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, int is_sync) {
+    if (jz_depth_enter_checked(&g_parser_stmt_depth, JZ_LIMIT_PARSER_STATEMENT_DEPTH) != 0) {
+        parser_report_rule(p,
+                           peek(p),
+                           "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",
+                           "statement nesting exceeds the parser safety limit");
+        return -1;
+    }
+
     for (;;) {
         const JZToken *t = peek(p);
         if (t->type == terminator) {
             advance(p); /* consume terminator */
-            return 0;
+            break;
         }
         if (t->type == JZ_TOK_EOF) {
             parser_error(p, "unterminated block (missing closing terminator)");
-            return -1;
+            goto fail;
         }
         if (t->type == JZ_TOK_SEMICOLON) {
             advance(p);
@@ -973,13 +959,13 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
 
         if (t->type == JZ_TOK_KW_IF) {
             if (parse_if_chain(p, parent, is_sync) != 0) {
-                return -1;
+                goto fail;
             }
             continue;
         }
         if (t->type == JZ_TOK_KW_SELECT) {
             if (parse_select_stmt(p, parent, is_sync) != 0) {
-                return -1;
+                goto fail;
             }
             continue;
         }
@@ -993,15 +979,15 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
                                "CASE/DEFAULT must appear inside a SELECT (...) { ... } block;\n"
                                "they cannot be used outside of a SELECT statement");
             advance(p);
-            return -1;
+            goto fail;
         }
         if (t->type == JZ_TOK_KW_APPLY) {
             advance(p);
             JZASTNode *apply = parse_apply_stmt(p);
-            if (!apply) return -1;
+            if (!apply) goto fail;
             if (jz_ast_add_child(parent, apply) != 0) {
                 jz_ast_free(apply);
-                return -1;
+                goto fail;
             }
             continue;
         }
@@ -1022,7 +1008,7 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
         }
         if (t->type == JZ_TOK_KW_FEATURE) {
             if (parse_feature_guard_stmt(p, parent, is_sync) != 0) {
-                return -1;
+                goto fail;
             }
             continue;
         }
@@ -1030,7 +1016,7 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
             /* @else or @endfeat without matching @feature in this block. */
             parser_error(p, "unexpected feature directive without matching @feature");
             advance(p);
-            return -1;
+            goto fail;
         }
         if (t->type == JZ_TOK_KW_CHECK) {
             /* @check is not allowed inside ASYNCHRONOUS/SYNCHRONOUS blocks. */
@@ -1092,10 +1078,17 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
 
         /* Fallback: assignment statement. */
         JZASTNode *stmt = parse_assignment_stmt(p, is_sync);
-        if (!stmt) return -1;
+        if (!stmt) goto fail;
         if (jz_ast_add_child(parent, stmt) != 0) {
             jz_ast_free(stmt);
-            return -1;
+            goto fail;
         }
     }
+
+    jz_depth_leave(&g_parser_stmt_depth);
+    return 0;
+
+fail:
+    jz_depth_leave(&g_parser_stmt_depth);
+    return -1;
 }

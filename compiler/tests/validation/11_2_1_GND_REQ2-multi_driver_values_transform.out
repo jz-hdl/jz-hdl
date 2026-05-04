@@ -1,9 +1,0 @@
-File: 11_2_1_GND_REQ2-multi_driver_values_transform.jz
-      18:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      29:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      40:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      51:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      63:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      87:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      88:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      89:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default

@@ -1,7 +1,13 @@
+/**
+ * @file driver.c
+ * @brief Core semantic-driver entry points and shared module-scope helpers.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <time.h>
@@ -53,19 +59,63 @@ void sem_report_rule(JZDiagnosticList *diagnostics,
     jz_diagnostic_report(diagnostics, loc, sev, rule_id, msg);
 }
 
+static int sem_report_prefixed_chip_data_rule(JZDiagnosticList *diagnostics,
+                                              JZLocation loc,
+                                              const char *detail,
+                                              const char *prefix,
+                                              const char *rule_id)
+{
+    size_t prefix_len = 0;
+
+    if (!detail || !prefix || !rule_id) return 0;
+    prefix_len = strlen(prefix);
+    if (strncmp(detail, prefix, prefix_len) != 0) {
+        return 0;
+    }
+
+    while (detail[prefix_len] == ' ') {
+        prefix_len++;
+    }
+    if (detail[prefix_len] == ':') {
+        prefix_len++;
+        while (detail[prefix_len] == ' ') {
+            prefix_len++;
+        }
+    }
+
+    sem_report_rule(diagnostics, loc, rule_id, detail + prefix_len);
+    return 1;
+}
+
 /* -------------------------------------------------------------------------
  *  Identifier lexical rules (length, single underscore)
  * -------------------------------------------------------------------------
  */
 
-/* Forward declarations for simple integer parsing helpers defined later in
- * this file (used by project-level semantic checks).
+/**
+ * @brief Parse a non-negative decimal integer.
+ * @param s Input text to parse.
+ * @param out Receives the parsed value on success.
+ * @return Non-zero on success, or zero when parsing fails.
  */
 int parse_simple_nonnegative_int(const char *s, unsigned *out);
+/**
+ * @brief Evaluate a simple positive declaration expression.
+ * @param s Expression text to evaluate.
+ * @param out Receives the evaluated value on success.
+ * @return Non-zero on success, or zero when evaluation fails.
+ */
 int eval_simple_positive_decl_int(const char *s, unsigned *out);
 
-/* Forward declaration for widthof()-expansion helper used by CONST/width
- * evaluation routines later in this file.
+/**
+ * @brief Expand `widthof(...)` calls within a width expression.
+ * @param expr Width expression text to expand.
+ * @param scope Module scope used during expansion.
+ * @param project_symbols Project-level symbols used during expansion.
+ * @param out_expanded Receives the expanded expression string.
+ * @param depth Current recursion depth.
+ * @param loc Source location associated with the expression.
+ * @return `0` on success, or non-zero when expansion fails.
  */
 int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
@@ -73,6 +123,17 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                                      char **out_expanded,
                                      int depth,
                                      JZLocation loc);
+/**
+ * @brief Expand `widthof(...)` calls and report failures through diagnostics.
+ * @param expr Width expression text to expand.
+ * @param scope Module scope used during expansion.
+ * @param project_symbols Project-level symbols used during expansion.
+ * @param out_expanded Receives the expanded expression string.
+ * @param depth Current recursion depth.
+ * @param diagnostics Diagnostic sink for reported issues.
+ * @param loc Source location associated with the expression.
+ * @return `0` on success, or non-zero when expansion fails.
+ */
 int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           const JZModuleScope *scope,
                                           const JZBuffer *project_symbols,
@@ -1338,6 +1399,89 @@ int sem_extract_identifier_like(const char *s,
     return 1;
 }
 
+static int sem_is_identifier_char(unsigned char c)
+{
+    return ((c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') ||
+            c == '_');
+}
+
+static int sem_const_decl_is_string(const JZASTNode *decl)
+{
+    return (decl && decl->block_kind && strcmp(decl->block_kind, "STRING") == 0);
+}
+
+static int sem_previous_nonspace_is_dot(const char *expr, const char *pos)
+{
+    while (pos > expr) {
+        --pos;
+        if (!isspace((unsigned char)*pos)) {
+            return *pos == '.';
+        }
+    }
+    return 0;
+}
+
+static void sem_collect_const_decl_edges(JZASTNode **decls,
+                                         size_t decl_count,
+                                         size_t src_index,
+                                         unsigned char *seen,
+                                         size_t *out_count)
+{
+    if (!decls || !seen || src_index >= decl_count) return;
+
+    memset(seen, 0, decl_count);
+    if (out_count) {
+        *out_count = 0;
+    }
+
+    JZASTNode *src = decls[src_index];
+    if (!src || sem_const_decl_is_string(src)) {
+        return;
+    }
+
+    const char *expr = src->text ? src->text : "0";
+    const char *p = expr;
+    while (*p) {
+        if (!((*p >= 'A' && *p <= 'Z') ||
+              (*p >= 'a' && *p <= 'z') ||
+              *p == '_')) {
+            ++p;
+            continue;
+        }
+
+        const char *start = p;
+        ++p;
+        while (sem_is_identifier_char((unsigned char)*p)) {
+            ++p;
+        }
+
+        if (sem_previous_nonspace_is_dot(expr, start)) {
+            continue;
+        }
+
+        size_t tok_len = (size_t)(p - start);
+        for (size_t dst = 0; dst < decl_count; ++dst) {
+            if (!decls[dst] || sem_const_decl_is_string(decls[dst]) || !decls[dst]->name) {
+                continue;
+            }
+            if (strlen(decls[dst]->name) != tok_len) {
+                continue;
+            }
+            if (memcmp(start, decls[dst]->name, tok_len) == 0) {
+                if (!seen[dst]) {
+                    seen[dst] = 1;
+                    if (out_count) {
+                        ++(*out_count);
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
 /*
  * Lightweight validation of width expressions used in module instantiations.
  *
@@ -1470,49 +1614,102 @@ void sem_check_module_const_blocks(const JZModuleScope *scope,
                 memset(&batch_opts, 0, sizeof(batch_opts));
                 int batch_rc = jz_const_eval_all(batch_defs, bc, &batch_opts, batch_vals);
                 if (batch_rc == -2) {
-                    /* Circular dependency detected.  Identify all CONSTs
-                     * that participate in cycles (including transitive chains
-                     * like A→B→C→A) using Floyd-Warshall reachability.
-                     *
-                     * 1. Build adjacency matrix: adj[i][j] = 1 when expr
-                     *    of decl[i] textually references name of decl[j].
-                     * 2. Compute transitive closure (Floyd-Warshall).
-                     * 3. Any CONST reachable from itself (adj[i][i]) is in
-                     *    a cycle — mark ok[i] = -1.
-                     */
-                    int *adj = (int *)calloc(decl_count * decl_count, sizeof(int));
-                    if (adj) {
-                        /* Build adjacency matrix. */
+                    unsigned char *seen = (unsigned char *)calloc(decl_count, sizeof(unsigned char));
+                    size_t *edge_counts = (size_t *)calloc(decl_count, sizeof(size_t));
+                    size_t *offsets = (size_t *)calloc(decl_count + 1, sizeof(size_t));
+                    size_t *fill = NULL;
+                    size_t *edges = NULL;
+                    size_t *queue = NULL;
+                    size_t *indegree = (size_t *)calloc(decl_count, sizeof(size_t));
+                    size_t total_edges = 0;
+                    int graph_failed = (!seen || !edge_counts || !offsets || !indegree);
+
+                    if (!graph_failed) {
                         for (size_t di2 = 0; di2 < decl_count; ++di2) {
-                            if (!decls[di2]) continue;
-                            if (decls[di2]->block_kind && strcmp(decls[di2]->block_kind, "STRING") == 0) continue;
-                            const char *dexpr = decls[di2]->text ? decls[di2]->text : "0";
-                            for (size_t di3 = 0; di3 < decl_count; ++di3) {
-                                if (di3 == di2 || !decls[di3]) continue;
-                                if (decls[di3]->block_kind && strcmp(decls[di3]->block_kind, "STRING") == 0) continue;
-                                if (strstr(dexpr, decls[di3]->name)) {
-                                    adj[di2 * decl_count + di3] = 1;
-                                }
+                            size_t edge_count = 0;
+                            sem_collect_const_decl_edges(decls, decl_count, di2, seen, &edge_count);
+                            edge_counts[di2] = edge_count;
+                            if (jz_size_add_checked(total_edges, edge_count, &total_edges) != 0) {
+                                graph_failed = 1;
+                                break;
                             }
                         }
-                        /* Floyd-Warshall transitive closure. */
-                        for (size_t k = 0; k < decl_count; ++k) {
-                            for (size_t i = 0; i < decl_count; ++i) {
-                                for (size_t j = 0; j < decl_count; ++j) {
-                                    if (adj[i * decl_count + k] && adj[k * decl_count + j]) {
-                                        adj[i * decl_count + j] = 1;
-                                    }
-                                }
-                            }
-                        }
-                        /* Mark diagonal entries (self-reachable = in a cycle). */
-                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
-                            if (adj[di2 * decl_count + di2]) {
-                                ok[di2] = -1; /* circular dep */
-                            }
-                        }
-                        free(adj);
                     }
+
+                    if (!graph_failed) {
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            if (jz_size_add_checked(offsets[di2], edge_counts[di2], &offsets[di2 + 1]) != 0) {
+                                graph_failed = 1;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!graph_failed) {
+                        edges = (size_t *)calloc(total_edges ? total_edges : 1, sizeof(size_t));
+                        fill = (size_t *)calloc(decl_count, sizeof(size_t));
+                        queue = (size_t *)calloc(decl_count ? decl_count : 1, sizeof(size_t));
+                        if (!edges || !fill || !queue) {
+                            graph_failed = 1;
+                        }
+                    }
+
+                    if (graph_failed) {
+                        if (diagnostics) {
+                            sem_report_rule(
+                                diagnostics,
+                                blk->loc,
+                                "CONST_CYCLE_ANALYSIS_OVERFLOW",
+                                "too many CONST definitions to build the cycle-detection graph safely");
+                        }
+                    } else {
+                        memcpy(fill, offsets, decl_count * sizeof(size_t));
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            size_t edge_count = 0;
+                            sem_collect_const_decl_edges(decls, decl_count, di2, seen, &edge_count);
+                            (void)edge_count;
+                            for (size_t di3 = 0; di3 < decl_count; ++di3) {
+                                if (!seen[di3]) continue;
+                                size_t pos = fill[di2]++;
+                                edges[pos] = di3;
+                                indegree[di3]++;
+                            }
+                        }
+
+                        size_t q_head = 0;
+                        size_t q_tail = 0;
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            if (indegree[di2] == 0) {
+                                queue[q_tail++] = di2;
+                            }
+                        }
+
+                        while (q_head < q_tail) {
+                            size_t node = queue[q_head++];
+                            for (size_t ei = offsets[node]; ei < offsets[node + 1]; ++ei) {
+                                size_t dst = edges[ei];
+                                if (indegree[dst] == 0) continue;
+                                indegree[dst]--;
+                                if (indegree[dst] == 0) {
+                                    queue[q_tail++] = dst;
+                                }
+                            }
+                        }
+
+                        for (size_t di2 = 0; di2 < decl_count; ++di2) {
+                            if (indegree[di2] > 0) {
+                                ok[di2] = -1;
+                            }
+                        }
+                    }
+
+                    free(queue);
+                    free(edges);
+                    free(fill);
+                    free(offsets);
+                    free(edge_counts);
+                    free(indegree);
+                    free(seen);
                 }
             }
             free(batch_defs);
@@ -2922,17 +3119,41 @@ void sem_check_mux_selectors_recursive(JZASTNode *node,
                                        JZDiagnosticList *diagnostics)
 {
     if (!node) return;
-    sem_check_mux_selector_expr(node, mod_scope, project_symbols, diagnostics);
-    for (size_t i = 0; i < node->child_count; ++i) {
-        sem_check_mux_selectors_recursive(node->children[i], mod_scope, project_symbols, diagnostics);
+
+    JZBuffer stack = (JZBuffer){0};
+    if (jz_buf_append(&stack, &node, sizeof(node)) != 0) {
+        return;
     }
+
+    while (stack.len >= sizeof(JZASTNode *)) {
+        JZASTNode *cur = NULL;
+        stack.len -= sizeof(cur);
+        memcpy(&cur, stack.data + stack.len, sizeof(cur));
+        if (!cur) {
+            continue;
+        }
+
+        sem_check_mux_selector_expr(cur, mod_scope, project_symbols, diagnostics);
+        for (size_t i = cur->child_count; i > 0; --i) {
+            JZASTNode *child = cur->children[i - 1];
+            if (!child) continue;
+            if (jz_buf_append(&stack, &child, sizeof(child)) != 0) {
+                jz_buf_free(&stack);
+                return;
+            }
+        }
+    }
+
+    jz_buf_free(&stack);
 }
 
 /* Check that a concatenation LHS in a SYNCHRONOUS block does not include the
  * same register more than once.
  */
 /* Forward declaration for testbench semantic validation. */
-extern int jz_sem_run_testbench(JZASTNode *root, JZDiagnosticList *diagnostics);
+extern int jz_sem_run_testbench(JZASTNode *root,
+                                const JZBuffer *project_symbols,
+                                JZDiagnosticList *diagnostics);
 
 /**
  * @brief Check if the root AST contains testbench nodes.
@@ -2957,11 +3178,6 @@ int jz_sem_run(JZASTNode *root,
 {
     if (!root) {
         return 0;
-    }
-
-    /* Testbench/simulation files get their own validation path. */
-    if (is_testbench_file(root)) {
-        return jz_sem_run_testbench(root, diagnostics);
     }
 
     clock_t st0;
@@ -2999,6 +3215,27 @@ int jz_sem_run(JZASTNode *root,
     if (verbose) fprintf(stderr, "[verbose]   sem: build_symbol_tables: %.1f ms\n",
                          (double)(clock() - st0) / CLOCKS_PER_SEC * 1000.0);
 
+    /* Testbench/simulation files get their own validation path. */
+    if (is_testbench_file(root)) {
+        int rc = jz_sem_run_testbench(root, &project_symbols, diagnostics);
+        size_t scope_count = module_scopes.len / sizeof(JZModuleScope);
+        JZModuleScope *scopes = (JZModuleScope *)module_scopes.data;
+        for (size_t i = 0; i < scope_count; ++i) {
+            jz_buf_free(&scopes[i].symbols);
+            if (scopes[i].bus_signal_decls.len > 0) {
+                size_t bcount = scopes[i].bus_signal_decls.len / sizeof(JZASTNode *);
+                JZASTNode **barr = (JZASTNode **)scopes[i].bus_signal_decls.data;
+                for (size_t bi = 0; bi < bcount; ++bi) {
+                    jz_ast_free(barr[bi]);
+                }
+                jz_buf_free(&scopes[i].bus_signal_decls);
+            }
+        }
+        jz_buf_free(&module_scopes);
+        jz_buf_free(&project_symbols);
+        return rc;
+    }
+
     JZChipData chip = (JZChipData){0};
     const JZChipData *chip_ptr = NULL;
     JZChipLoadStatus chip_status = JZ_CHIP_LOAD_GENERIC;
@@ -3007,11 +3244,19 @@ int jz_sem_run(JZASTNode *root,
         if (chip_status == JZ_CHIP_LOAD_OK) {
             chip_ptr = &chip;
         } else if (chip_status == JZ_CHIP_LOAD_NOT_FOUND) {
-            char msg[512];
-            snprintf(msg, sizeof(msg),
-                     "no chip data found for '%s'\n"
-                     "provide a local .json file or use a supported built-in chip name",
-                     root->text);
+            const char *detail = jz_chip_data_last_error();
+            char msg[768];
+            if (detail && detail[0] != '\0') {
+                snprintf(msg, sizeof(msg),
+                         "no chip data found for '%s'\n"
+                         "%s",
+                         root->text, detail);
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "no chip data found for '%s'\n"
+                         "provide a local .json file or use a supported built-in chip name",
+                         root->text);
+            }
             sem_report_rule(diagnostics,
                             root->loc,
                             "PROJECT_CHIP_DATA_NOT_FOUND",
@@ -3019,15 +3264,31 @@ int jz_sem_run(JZASTNode *root,
         } else if (chip_status == JZ_CHIP_LOAD_JSON_ERROR) {
             const char *detail = jz_chip_data_last_error();
             if (detail && detail[0] != '\0') {
-                char msg[768];
-                snprintf(msg, sizeof(msg),
-                         "chip data for '%s' has invalid clock_gen variants\n"
-                         "%s",
-                         root->text, detail);
-                sem_report_rule(diagnostics,
-                                root->loc,
-                                "PROJECT_CHIP_DATA_VARIANT_INVALID",
-                                msg);
+                if (!sem_report_prefixed_chip_data_rule(diagnostics,
+                                                        root->loc,
+                                                        detail,
+                                                        "CHIP_JSON_TOO_LARGE",
+                                                        "CHIP_JSON_TOO_LARGE") &&
+                    !sem_report_prefixed_chip_data_rule(diagnostics,
+                                                        root->loc,
+                                                        detail,
+                                                        "CHIP_JSON_TOKEN_LIMIT_EXCEEDED",
+                                                        "CHIP_JSON_TOKEN_LIMIT_EXCEEDED") &&
+                    !sem_report_prefixed_chip_data_rule(diagnostics,
+                                                        root->loc,
+                                                        detail,
+                                                        "CHIP_JSON_NESTING_LIMIT_EXCEEDED",
+                                                        "CHIP_JSON_NESTING_LIMIT_EXCEEDED")) {
+                    char msg[768];
+                    snprintf(msg, sizeof(msg),
+                             "chip data for '%s' has invalid clock_gen variants\n"
+                             "%s",
+                             root->text, detail);
+                    sem_report_rule(diagnostics,
+                                    root->loc,
+                                    "PROJECT_CHIP_DATA_VARIANT_INVALID",
+                                    msg);
+                }
             } else {
                 char msg[512];
                 snprintf(msg, sizeof(msg),

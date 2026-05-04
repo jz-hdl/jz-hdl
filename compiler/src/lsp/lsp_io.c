@@ -9,7 +9,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
 
+#define LSP_MAX_CONTENT_LENGTH (16u * 1024u * 1024u)
+
+/**
+ * @brief Convert a hexadecimal digit character into its numeric value.
+ * @param c ASCII digit to decode.
+ * @return Hex digit value in the range 0-15, or -1 if invalid.
+ */
+static int hex_digit(char c);
+
+/**
+ * @brief Write a formatted debug log line for the LSP server.
+ * @param fmt `printf`-style format string.
+ * @param ... Format arguments.
+ */
 void lsp_log(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -22,7 +37,8 @@ void lsp_log(const char *fmt, ...) {
 
 char *lsp_io_read_message(size_t *out_len) {
     /* Read headers until we find Content-Length and a blank line. */
-    int content_length = -1;
+    size_t content_length = 0;
+    int have_content_length = 0;
 
     for (;;) {
         char header[256];
@@ -36,21 +52,40 @@ char *lsp_io_read_message(size_t *out_len) {
         }
 
         if (strncmp(header, "Content-Length:", 15) == 0) {
-            content_length = atoi(header + 15);
+            const char *value = header + 15;
+            while (*value == ' ' || *value == '\t') ++value;
+
+            errno = 0;
+            char *end = NULL;
+            unsigned long parsed = strtoul(value, &end, 10);
+            while (end && (*end == ' ' || *end == '\t' ||
+                           *end == '\r' || *end == '\n')) {
+                ++end;
+            }
+
+            if (value == end || errno == ERANGE ||
+                parsed > LSP_MAX_CONTENT_LENGTH ||
+                (end && *end != '\0')) {
+                lsp_log("invalid Content-Length header");
+                return NULL;
+            }
+
+            content_length = (size_t)parsed;
+            have_content_length = 1;
         }
         /* Ignore other headers (e.g., Content-Type). */
     }
 
-    if (content_length < 0) {
+    if (!have_content_length) {
         return NULL;
     }
 
-    char *body = malloc((size_t)content_length + 1);
+    char *body = malloc(content_length + 1);
     if (!body) return NULL;
 
     size_t total = 0;
-    while (total < (size_t)content_length) {
-        size_t n = fread(body + total, 1, (size_t)content_length - total, stdin);
+    while (total < content_length) {
+        size_t n = fread(body + total, 1, content_length - total, stdin);
         if (n == 0) {
             free(body);
             return NULL; /* EOF or error */
@@ -125,9 +160,16 @@ void lsp_docstore_free(LspDocStore *store) {
 LspDocument *lsp_docstore_open(LspDocStore *store, const char *uri,
                                const char *content, int version) {
     if (store->count >= LSP_MAX_DOCUMENTS) return NULL;
+    char *uri_dup = strdup(uri);
+    char *content_dup = strdup(content);
+    if (!uri_dup || !content_dup) {
+        free(uri_dup);
+        free(content_dup);
+        return NULL;
+    }
     LspDocument *doc = &store->docs[store->count++];
-    doc->uri = strdup(uri);
-    doc->content = strdup(content);
+    doc->uri = uri_dup;
+    doc->content = content_dup;
     doc->version = version;
     return doc;
 }
@@ -141,10 +183,13 @@ LspDocument *lsp_docstore_find(LspDocStore *store, const char *uri) {
     return NULL;
 }
 
-void lsp_docstore_update(LspDocument *doc, const char *content, int version) {
+int lsp_docstore_update(LspDocument *doc, const char *content, int version) {
+    char *dup = strdup(content);
+    if (!dup) return -1;
     free(doc->content);
-    doc->content = strdup(content);
+    doc->content = dup;
     doc->version = version;
+    return 0;
 }
 
 void lsp_docstore_close(LspDocStore *store, const char *uri) {

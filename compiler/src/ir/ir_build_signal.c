@@ -20,16 +20,13 @@
  */
 
 /**
- * @brief Parse BUS port metadata from the text field.
+ * @brief Parse the BUS identifier and role encoded on a BUS port declaration.
  *
- * BUS ports encode "bus_id ROLE" in their text field. This helper extracts
- * both components.
- *
- * @param port_decl      BUS port declaration AST node.
- * @param out_bus_id     Output buffer for BUS identifier.
- * @param bus_id_size    Size of bus_id buffer.
- * @param out_role       Output buffer for role (SOURCE/TARGET).
- * @param role_size      Size of role buffer.
+ * @param port_decl   BUS port declaration AST node.
+ * @param out_bus_id  Output buffer for the BUS identifier.
+ * @param bus_id_size Capacity of @p out_bus_id in bytes.
+ * @param out_role    Output buffer for the BUS role.
+ * @param role_size   Capacity of @p out_role in bytes.
  * @return 1 on success, 0 on failure.
  */
 static int ir_parse_bus_port_meta(const JZASTNode *port_decl,
@@ -87,16 +84,11 @@ static int ir_parse_bus_port_meta(const JZASTNode *port_decl,
 }
 
 /**
- * @brief Compute IR port direction from BUS signal direction and role.
+ * @brief Translate BUS member direction and endpoint role into an IR port direction.
  *
- * The direction mapping follows the BUS semantics:
- * - INOUT remains INOUT regardless of role.
- * - For SOURCE role: OUT -> OUTPUT, IN -> INPUT
- * - For TARGET role: OUT -> INPUT, IN -> OUTPUT (reversed)
- *
- * @param signal_dir  Signal direction from BUS definition ("IN", "OUT", "INOUT").
- * @param role        Port role ("SOURCE" or "TARGET").
- * @return Computed IR_PortDirection.
+ * @param signal_dir Member direction from the BUS definition.
+ * @param role       BUS endpoint role for the parent port.
+ * @return Computed IR port direction.
  */
 static IR_PortDirection ir_compute_bus_signal_direction(const char *signal_dir,
                                                          const char *role)
@@ -122,11 +114,11 @@ static IR_PortDirection ir_compute_bus_signal_direction(const char *signal_dir,
 }
 
 /**
- * @brief Look up a BUS definition in the project symbols.
+ * @brief Find a BUS definition AST node in the project symbol table.
  *
- * @param project_symbols  Project symbol table.
- * @param bus_id           BUS identifier name.
- * @return Pointer to BUS block AST node, or NULL if not found.
+ * @param project_symbols Project symbol table.
+ * @param bus_id          BUS identifier name.
+ * @return Matching BUS AST node, or NULL if not found.
  */
 static const JZASTNode *ir_lookup_bus_def(const JZBuffer *project_symbols,
                                            const char *bus_id)
@@ -151,10 +143,10 @@ static const JZASTNode *ir_lookup_bus_def(const JZBuffer *project_symbols,
 }
 
 /**
- * @brief Count the number of signals in a BUS definition.
+ * @brief Count the declared member signals in a BUS definition.
  *
- * @param bus_def  BUS block AST node.
- * @return Number of signal declarations in the BUS.
+ * @param bus_def BUS block AST node.
+ * @return Number of BUS member declarations.
  */
 static int ir_count_bus_signals(const JZASTNode *bus_def)
 {

@@ -17,18 +17,150 @@
 /* Forward declarations for TB helpers we reuse */
 extern int parse_tb_wire_block_body_impl(Parser *p, JZASTNode *parent);
 
-/* ---------- helpers ---------- */
+/**
+ * @brief Append text into a fixed-size buffer while preserving termination.
+ *
+ * @param buf      Destination buffer
+ * @param buf_size Size of the destination buffer in bytes
+ * @param len      Current string length in the buffer, updated on success
+ * @param text     Text fragment to append
+ * @return 0 on success, -1 if the append would overflow or input is invalid
+ */
+static int append_bounded_text(char *buf,
+                               size_t buf_size,
+                               size_t *len,
+                               const char *text);
 
 /**
- * @brief Parse a simulation CLOCK block body.
+ * @brief Parse the body of a simulation `CLOCK` block.
  *
- * CLOCK {
- *     <id> = { period=<float> };
- *     ...
- * }
- *
- * Each child is a SIM_CLOCK_DECL node with name=clock_id, text=period string.
+ * @param p      Active parser
+ * @param parent Simulation clock block AST node receiving parsed clocks
+ * @return 0 on success, -1 on error
  */
+static int parse_sim_clock_block_body(Parser *p, JZASTNode *parent);
+
+/**
+ * @brief Parse the body of a simulation `TAP` block.
+ *
+ * @param p      Active parser
+ * @param parent Simulation TAP block AST node receiving parsed signal paths
+ * @return 0 on success, -1 on error
+ */
+static int parse_sim_tap_block_body(Parser *p, JZASTNode *parent);
+
+/**
+ * @brief Parse a simulation `@run(unit=value)` directive.
+ *
+ * @param p Active parser
+ * @return Simulation run AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_run(Parser *p);
+
+/**
+ * @brief Parse a simulation `@mark` directive.
+ *
+ * @param p Active parser
+ * @return Simulation mark AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_mark(Parser *p);
+
+/**
+ * @brief Parse a simulation `@alert` directive.
+ *
+ * @param p Active parser
+ * @return Simulation alert AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_alert(Parser *p);
+
+/**
+ * @brief Parse a simulation `@mark_if` directive.
+ *
+ * @param p Active parser
+ * @return Simulation conditional mark AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_mark_if(Parser *p);
+
+/**
+ * @brief Parse a simulation `@alert_if` directive.
+ *
+ * @param p Active parser
+ * @return Simulation conditional alert AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_alert_if(Parser *p);
+
+/**
+ * @brief Parse a simulation `@trace` directive.
+ *
+ * @param p Active parser
+ * @return Simulation trace AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_trace(Parser *p);
+
+/**
+ * @brief Parse a conditional simulation run directive.
+ *
+ * @param p         Active parser
+ * @param node_type AST node type to create for the parsed directive
+ * @return Simulation conditional run AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_run_cond(Parser *p, JZASTNodeType node_type);
+
+/**
+ * @brief Parse a simulation instance binding list.
+ *
+ * @param p    Active parser
+ * @param inst Simulation instance AST node receiving parsed bindings
+ * @return 0 on success, -1 on error
+ */
+static int parse_sim_binding_list(Parser *p, JZASTNode *inst);
+
+/**
+ * @brief Parse a simulation-only module instantiation.
+ *
+ * @param p Active parser
+ * @return Simulation instance AST node, or NULL on error
+ */
+static JZASTNode *parse_sim_instantiation(Parser *p);
+
+/**
+ * @brief Parse the body of a simulation `STIMULUS` block.
+ *
+ * @param p      Active parser
+ * @param parent Stimulus block AST node receiving parsed directives
+ * @return 0 on success, -1 on error
+ */
+static int parse_sim_stimulus_body(Parser *p, JZASTNode *parent);
+
+static int append_bounded_text(char *buf,
+                               size_t buf_size,
+                               size_t *len,
+                               const char *text) {
+    if (!buf || buf_size == 0 || !len || !text) {
+        return -1;
+    }
+    if (*len >= buf_size) {
+        buf[buf_size - 1] = '\0';
+        return -1;
+    }
+
+    int written = snprintf(buf + *len, buf_size - *len, "%s", text);
+    if (written < 0) {
+        buf[*len] = '\0';
+        return -1;
+    }
+    if ((size_t)written >= buf_size - *len) {
+        *len = buf_size - 1;
+        buf[*len] = '\0';
+        return -1;
+    }
+
+    *len += (size_t)written;
+    return 0;
+}
+
+/* ---------- helpers ---------- */
+
 static int parse_sim_clock_block_body(Parser *p, JZASTNode *parent)
 {
     for (;;) {
@@ -94,16 +226,31 @@ static int parse_sim_clock_block_body(Parser *p, JZASTNode *parent)
 
             /* Build value string */
             char val_buf[64];
+            size_t val_len = 0;
             val_buf[0] = '\0';
             for (size_t i = val_start; i < val_end; ++i) {
                 const JZToken *vt = &p->tokens[i];
-                if (vt->lexeme) strcat(val_buf, vt->lexeme);
+                if (vt->lexeme &&
+                    append_bounded_text(val_buf, sizeof(val_buf),
+                                        &val_len, vt->lexeme) != 0) {
+                    parser_error(p, "simulation CLOCK parameter value is too long");
+                    return -1;
+                }
             }
 
             /* Append "key=value " to attrs_buf */
             size_t cur_len = strlen(attrs_buf);
-            snprintf(attrs_buf + cur_len, sizeof(attrs_buf) - cur_len,
-                     "%s%s=%s", cur_len > 0 ? " " : "", param_name, val_buf);
+            int written = snprintf(attrs_buf + cur_len,
+                                   sizeof(attrs_buf) - cur_len,
+                                   "%s%s=%s",
+                                   cur_len > 0 ? " " : "",
+                                   param_name,
+                                   val_buf);
+            if (written < 0 ||
+                (size_t)written >= sizeof(attrs_buf) - cur_len) {
+                parser_error(p, "simulation CLOCK attributes are too long");
+                return -1;
+            }
 
             if (strcmp(param_name, "period") == 0) have_period = 1;
 
@@ -148,15 +295,6 @@ static int parse_sim_clock_block_body(Parser *p, JZASTNode *parent)
     }
 }
 
-/**
- * @brief Parse a TAP block body.
- *
- * TAP {
- *     <instance>.<signal>;
- *     <instance>.<sub>.<signal>;
- *     ...
- * }
- */
 static int parse_sim_tap_block_body(Parser *p, JZASTNode *parent)
 {
     for (;;) {
@@ -224,16 +362,6 @@ static int parse_sim_tap_block_body(Parser *p, JZASTNode *parent)
     }
 }
 
-/**
- * @brief Parse @run(unit=value) directive.
- *
- * Supports:
- *   @run(ticks=N)
- *   @run(ns=N)
- *   @run(ms=N)
- *
- * Returns a SIM_RUN node with text=unit, name=value.
- */
 static JZASTNode *parse_sim_run(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* @run already consumed */
@@ -307,12 +435,6 @@ static JZASTNode *parse_sim_run(Parser *p)
     return node;
 }
 
-/**
- * @brief Parse @print or @print_if directive.
- *
- * @print("format", arg1, arg2, ...)
- * @print_if(condition, "format", arg1, arg2, ...)
- */
 JZASTNode *parse_print_directive(Parser *p, int is_print_if)
 {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* keyword already consumed */
@@ -374,11 +496,6 @@ JZASTNode *parse_print_directive(Parser *p, int is_print_if)
     return node;
 }
 
-/**
- * @brief Parse @mark(color) or @mark(color, "message") directive.
- *
- * The @mark keyword has already been consumed.
- */
 static JZASTNode *parse_sim_mark(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1];
@@ -421,13 +538,6 @@ static JZASTNode *parse_sim_mark(Parser *p)
     return node;
 }
 
-/**
- * @brief Parse @alert(color) or @alert(color, "message") directive.
- *
- * The @alert keyword has already been consumed.
- * One-shot unconditional alert annotation at the current simulation time.
- * Same syntax as @mark.
- */
 static JZASTNode *parse_sim_alert(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1];
@@ -470,12 +580,6 @@ static JZASTNode *parse_sim_alert(Parser *p)
     return node;
 }
 
-/**
- * @brief Parse @mark_if(condition, color) or @mark_if(condition, color, "message").
- *
- * The @mark_if keyword has already been consumed.
- * Same syntax as @alert but produces a SIM_MARK_IF node.
- */
 static JZASTNode *parse_sim_mark_if(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1];
@@ -532,12 +636,6 @@ static JZASTNode *parse_sim_mark_if(Parser *p)
     return node;
 }
 
-/**
- * @brief Parse @alert_if(condition, color) or @alert_if(condition, color, "message").
- *
- * The @alert_if keyword has already been consumed.
- * Same syntax as @alert but produces a SIM_ALERT_IF node.
- */
 static JZASTNode *parse_sim_alert_if(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1];
@@ -594,12 +692,6 @@ static JZASTNode *parse_sim_alert_if(Parser *p)
     return node;
 }
 
-/**
- * @brief Parse @trace(state=on/off) directive.
- *
- * Syntax: @trace(state=on) or @trace(state=off)
- * The @trace keyword has already been consumed.
- */
 static JZASTNode *parse_sim_trace(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1];
@@ -644,22 +736,6 @@ static JZASTNode *parse_sim_trace(Parser *p)
     return node;
 }
 
-/**
- * @brief Parse @run_until / @run_while directive.
- *
- * Syntax:
- *   @run_until(<signal> == <value>, timeout=<unit>=<amount>)
- *   @run_until(<signal> != <value>, timeout=<unit>=<amount>)
- *   @run_while(<signal> == <value>, timeout=<unit>=<amount>)
- *   @run_while(<signal> != <value>, timeout=<unit>=<amount>)
- *
- * Returns a SIM_RUN_UNTIL or SIM_RUN_WHILE node with:
- *   children[0] = signal identifier
- *   children[1] = expected value (literal)
- *   block_kind  = "==" or "!="
- *   text        = timeout unit ("ns", "ms", "ticks")
- *   name        = timeout value
- */
 static JZASTNode *parse_sim_run_cond(Parser *p, JZASTNodeType node_type)
 {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* keyword already consumed */
@@ -802,12 +878,6 @@ static JZASTNode *parse_sim_run_cond(Parser *p, JZASTNodeType node_type)
     return node;
 }
 
-/**
- * @brief Parse the binding list inside a simulation @new block.
- *
- * Same as testbench @new — direction-less bindings.
- * Reuses parse_tb_binding_list logic inline.
- */
 static int parse_sim_binding_list(Parser *p, JZASTNode *inst)
 {
     for (;;) {
@@ -951,9 +1021,6 @@ static int parse_sim_binding_list(Parser *p, JZASTNode *inst)
     }
 }
 
-/**
- * @brief Parse a simulation @new instantiation.
- */
 static JZASTNode *parse_sim_instantiation(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* @new already consumed */
@@ -991,11 +1058,6 @@ static JZASTNode *parse_sim_instantiation(Parser *p)
     return inst;
 }
 
-/**
- * @brief Parse a @setup or @update block body for simulation.
- *
- * Same as testbench: wire <= expr;
- */
 static int parse_sim_stimulus_body(Parser *p, JZASTNode *parent)
 {
     for (;;) {

@@ -14,6 +14,7 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -32,28 +33,248 @@ char  **g_imported_resolved_paths      = NULL;
 size_t  g_imported_resolved_paths_len  = 0;
 size_t  g_imported_resolved_paths_cap  = 0;
 
+static size_t g_import_active_depth = 0;
+static size_t g_import_active_source_bytes = 0;
+static size_t g_import_active_token_bytes = 0;
+
 /**
- * @brief Record an imported filename for lifetime management.
+ * @struct ImportBudgetGuard
+ * @brief Tracks retained import resources for one active nested import.
+ */
+typedef struct ImportBudgetGuard {
+    int    entered;      /**< Nonzero after the guard has been activated. */
+    size_t source_bytes; /**< Retained source bytes charged to this import. */
+    size_t token_bytes;  /**< Retained token bytes charged to this import. */
+} ImportBudgetGuard;
+
+/**
+ * @brief Report an import limit failure.
  *
- * Imported files allocate their filename strings dynamically. These pointers
- * are copied into token locations and AST nodes, so they must remain valid
- * until parsing and diagnostics are complete.
+ * @param parent       Parser that initiated the import
+ * @param import_token Token for the triggering @import directive, if available
+ * @param rule_id      Diagnostic rule identifier to report
+ * @param message      Human-readable failure description
+ * @param path_hint    Fallback path string used when no token location is available
+ */
+static void report_import_limit(const Parser *parent,
+                                const JZToken *import_token,
+                                const char *rule_id,
+                                const char *message,
+                                const char *path_hint);
+
+/**
+ * @brief Enter the nested import budget for a single imported file.
  *
- * This function appends the filename pointer to a global list that is later
- * released by jz_parser_free_imported_filenames().
+ * @param guard        Budget guard to initialize
+ * @param parent       Parser that initiated the import
+ * @param import_token Token for the triggering @import directive, if available
+ * @param path_hint    Fallback path string used in diagnostics
+ * @return 0 on success, -1 if a safety limit is exceeded or input is invalid
+ */
+static int import_budget_enter(ImportBudgetGuard *guard,
+                               const Parser *parent,
+                               const JZToken *import_token,
+                               const char *path_hint);
+
+/**
+ * @brief Charge retained bytes to the global and per-import budgets.
  *
- * @param path Allocated filename string to retain
+ * @param global_total  Running global retained-byte total to update
+ * @param guard_total   Per-import retained-byte total to update
+ * @param add_bytes     Number of bytes to add
+ * @param limit_bytes   Maximum allowed retained bytes for this resource
+ * @param parent        Parser that initiated the import
+ * @param import_token  Token for the triggering @import directive, if available
+ * @param path_hint     Fallback path string used in diagnostics
+ * @param resource_name Resource description used in diagnostics
+ * @return 0 on success, -1 if the addition would exceed a safety limit
+ */
+static int import_budget_add_bytes(size_t *global_total,
+                                   size_t *guard_total,
+                                   size_t add_bytes,
+                                   size_t limit_bytes,
+                                   const Parser *parent,
+                                   const JZToken *import_token,
+                                   const char *path_hint,
+                                   const char *resource_name);
+
+/**
+ * @brief Leave the nested import budget and release its retained-byte charges.
+ *
+ * @param guard Budget guard to close
+ */
+static void import_budget_leave(ImportBudgetGuard *guard);
+
+/**
+ * @brief Append an owned path string to a retained-path list.
+ *
+ * @param paths Storage array of retained path pointers
+ * @param len   Number of retained paths in the array
+ * @param cap   Allocated capacity of the array
+ * @param path  Owned path string to retain
  * @return 0 on success, -1 on allocation failure
  */
 static int remember_imported_path(char ***paths,
                                   size_t *len,
                                   size_t *cap,
-                                  char *path)
-{
+                                  char *path);
+
+/**
+ * @brief Retain an import path using its source-level spelling.
+ *
+ * @param path Owned source-level import path string
+ * @return 0 on success, -1 on allocation failure
+ */
+static int remember_imported_filename(char *path);
+
+/**
+ * @brief Retain a resolved import path for duplicate detection.
+ *
+ * @param path Owned resolved filesystem path string
+ * @return 0 on success, -1 on allocation failure
+ */
+static int remember_imported_resolved_path(char *path);
+
+/**
+ * @brief Check whether an imported module or blackbox name already exists.
+ *
+ * @param proj Project AST node receiving imported declarations
+ * @param name Candidate module or blackbox name
+ * @return 1 if the name already exists, otherwise 0
+ */
+static int imported_name_collides(const JZASTNode *proj, const char *name);
+
+/**
+ * @brief Emit a diagnostic for an imported module or blackbox name collision.
+ *
+ * @param parent Parser that initiated the import
+ * @param decl   Imported declaration that collided with an existing name
+ */
+static void report_imported_name_collision(const Parser *parent,
+                                           const JZASTNode *decl);
+
+/**
+ * @brief Attach an imported module or blackbox to the target project AST.
+ *
+ * @param parent Parser that initiated the import
+ * @param proj   Project AST node receiving the declaration
+ * @param decl   Imported module or blackbox declaration to attach
+ * @return 0 on success, -1 on allocation failure
+ */
+static int add_imported_module_like(const Parser *parent,
+                                    JZASTNode *proj,
+                                    JZASTNode *decl);
+
+static void report_import_limit(const Parser *parent,
+                                const JZToken *import_token,
+                                const char *rule_id,
+                                const char *message,
+                                const char *path_hint) {
+    if (parent && parent->diagnostics && import_token) {
+        parser_report_rule(parent, import_token, rule_id, message);
+        return;
+    }
+    if (import_token) {
+        fprintf(stderr,
+                "%s:%d:%d: import error: %s\n",
+                import_token->loc.filename ? import_token->loc.filename : "<input>",
+                import_token->loc.line,
+                import_token->loc.column,
+                message);
+        return;
+    }
+    fprintf(stderr, "%s:1:1: import error: %s\n",
+            path_hint ? path_hint : "<input>",
+            message);
+}
+
+static int import_budget_enter(ImportBudgetGuard *guard,
+                               const Parser *parent,
+                               const JZToken *import_token,
+                               const char *path_hint) {
+    size_t next_depth = 0;
+
+    if (!guard) {
+        return -1;
+    }
+    if (jz_size_add_checked(g_import_active_depth, 1, &next_depth) != 0 ||
+        next_depth > jz_input_limit_value(JZ_LIMIT_IMPORT_DEPTH)) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "nested @import depth exceeds the compiler safety limit of %u file(s)",
+                 (unsigned)jz_input_limit_value(JZ_LIMIT_IMPORT_DEPTH));
+        report_import_limit(parent, import_token, "IMPORT_DEPTH_LIMIT_EXCEEDED", msg, path_hint);
+        return -1;
+    }
+    memset(guard, 0, sizeof(*guard));
+    guard->entered = 1;
+    g_import_active_depth = next_depth;
+    return 0;
+}
+
+static int import_budget_add_bytes(size_t *global_total,
+                                   size_t *guard_total,
+                                   size_t add_bytes,
+                                   size_t limit_bytes,
+                                   const Parser *parent,
+                                   const JZToken *import_token,
+                                   const char *path_hint,
+                                   const char *resource_name) {
+    size_t new_total = 0;
+    size_t new_guard_total = 0;
+
+    if (jz_size_add_checked(*global_total, add_bytes, &new_total) != 0 ||
+        new_total > limit_bytes ||
+        jz_size_add_checked(*guard_total, add_bytes, &new_guard_total) != 0) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "nested @import retained %s exceeds the compiler safety limit of %zu byte(s)",
+                 resource_name, limit_bytes);
+        report_import_limit(parent, import_token, "IMPORT_MEMORY_LIMIT_EXCEEDED", msg, path_hint);
+        return -1;
+    }
+
+    *global_total = new_total;
+    *guard_total = new_guard_total;
+    return 0;
+}
+
+static void import_budget_leave(ImportBudgetGuard *guard) {
+    if (!guard || !guard->entered) {
+        return;
+    }
+    if (g_import_active_depth > 0) {
+        g_import_active_depth--;
+    }
+    g_import_active_source_bytes =
+        (g_import_active_source_bytes >= guard->source_bytes)
+            ? (g_import_active_source_bytes - guard->source_bytes)
+            : 0;
+    g_import_active_token_bytes =
+        (g_import_active_token_bytes >= guard->token_bytes)
+            ? (g_import_active_token_bytes - guard->token_bytes)
+            : 0;
+    guard->entered = 0;
+    guard->source_bytes = 0;
+    guard->token_bytes = 0;
+}
+
+static int remember_imported_path(char ***paths,
+                                  size_t *len,
+                                  size_t *cap,
+                                  char *path) {
     if (!path) return 0;
     if (*len == *cap) {
-        size_t new_cap = *cap ? *cap * 2 : 8;
-        char **new_arr = (char **)realloc(*paths, new_cap * sizeof(char *));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        char **new_arr = NULL;
+        if (jz_size_grow_doubling_checked(*cap, *len + 1, 8, &new_cap) != 0) {
+            return -1;
+        }
+        if (jz_size_mul_checked(new_cap, sizeof(char *), &new_bytes) != 0) {
+            return -1;
+        }
+        new_arr = (char **)realloc(*paths, new_bytes);
         if (!new_arr) {
             /* If we fail here, we must not drop the pointer, otherwise it would
              * leak without being tracked. Just fall back to leaking this one
@@ -67,24 +288,21 @@ static int remember_imported_path(char ***paths,
     return 0;
 }
 
-static int remember_imported_filename(char *path)
-{
+static int remember_imported_filename(char *path) {
     return remember_imported_path(&g_imported_filenames,
                                   &g_imported_filenames_len,
                                   &g_imported_filenames_cap,
                                   path);
 }
 
-static int remember_imported_resolved_path(char *path)
-{
+static int remember_imported_resolved_path(char *path) {
     return remember_imported_path(&g_imported_resolved_paths,
                                   &g_imported_resolved_paths_len,
                                   &g_imported_resolved_paths_cap,
                                   path);
 }
 
-static int imported_name_collides(const JZASTNode *proj, const char *name)
-{
+static int imported_name_collides(const JZASTNode *proj, const char *name) {
     if (!proj || !name) return 0;
 
     for (size_t i = 0; i < proj->child_count; ++i) {
@@ -103,8 +321,7 @@ static int imported_name_collides(const JZASTNode *proj, const char *name)
 }
 
 static void report_imported_name_collision(const Parser *parent,
-                                           const JZASTNode *decl)
-{
+                                           const JZASTNode *decl) {
     if (!parent || !parent->diagnostics || !decl) return;
 
     JZToken fake;
@@ -124,8 +341,7 @@ static void report_imported_name_collision(const Parser *parent,
 
 static int add_imported_module_like(const Parser *parent,
                                     JZASTNode *proj,
-                                    JZASTNode *decl)
-{
+                                    JZASTNode *decl) {
     if (!proj || !decl) return -1;
 
     decl->is_imported = 1;
@@ -144,32 +360,25 @@ static int add_imported_module_like(const Parser *parent,
     return 0;
 }
 
-/**
- * @brief Import modules and globals from an external source file.
- *
- * This function resolves a relative or absolute path, loads the source file,
- * lexes it, and parses its top-level constructs. Imported modules, blackboxes,
- * and global blocks are attached directly to the target project AST.
- *
- * Rules enforced:
- * - Each resolved file path may only be imported once per project
- * - Imported files must not contain their own @project blocks
- * - Imported module/blackbox names must not collide with existing ones
- *
- * @param parent       Parser performing the import
- * @param proj         Target project AST node
- * @param rel_path     Path string from the @import directive
- * @param import_token Token corresponding to the @import keyword
- * @return 0 on success, -1 on error
- */
 int import_modules_from_path(const Parser *parent,
                                     JZASTNode *proj,
                                     const char *rel_path,
                                     const JZToken *import_token) {
+    ImportBudgetGuard budget = {0};
+    char base_dir[512];
+    char *full_path = NULL;
+    char *display_path = NULL;
+    char *source = NULL;
+    JZTokenStream tokens = {0};
+    int result = -1;
+    size_t size = 0;
+
     if (!proj || !rel_path) return -1;
+    if (import_budget_enter(&budget, parent, import_token, rel_path) != 0) {
+        return -1;
+    }
 
     /* Validate the import path against security policy. */
-    char base_dir[512];
     base_dir[0] = '\0';
     const char *base_filename =
         (parent && parent->resolved_filename) ? parent->resolved_filename :
@@ -187,51 +396,42 @@ int import_modules_from_path(const Parser *parent,
     JZLocation import_loc = import_token ? import_token->loc :
         (JZLocation){ parent->filename, 1, 1 };
 
-    /* Validate and canonicalize the import path.  When the parent parser
-     * carries a diagnostic list the full security policy (sandbox, absolute,
-     * traversal) is enforced.  Otherwise we still canonicalize with
-     * realpath() so that the dedup comparison in the IMPORT_FILE_MULTIPLE_TIMES
-     * check below uses a consistent canonical representation regardless of
-     * how the path was spelled (symlinks, extra slashes, case on
-     * case-insensitive filesystems, etc.).
-     */
-    char *full_path = NULL;
+    /* Validate and canonicalize the import path. */
     if (parent->diagnostics) {
         full_path = jz_path_validate(rel_path, base_dir[0] ? base_dir : NULL,
-                                      import_loc, parent->diagnostics);
-        if (!full_path) return -1;
+                                     import_loc, parent->diagnostics);
+        if (!full_path) goto cleanup;
     } else {
-        /* Build a joined path, then canonicalize it. */
         char *joined = NULL;
         if (rel_path[0] == '/') {
             joined = jz_strdup(rel_path);
         } else if (base_dir[0]) {
             size_t dir_len = strlen(base_dir);
             size_t path_len = strlen(rel_path);
-            joined = (char *)malloc(dir_len + 1 + path_len + 1);
-            if (!joined) return -1;
+            size_t joined_len = 0;
+            if (jz_size_add_checked(dir_len, 1, &joined_len) != 0 ||
+                jz_size_add_checked(joined_len, path_len, &joined_len) != 0 ||
+                jz_size_add_checked(joined_len, 1, &joined_len) != 0) {
+                goto cleanup;
+            }
+            joined = (char *)malloc(joined_len);
+            if (!joined) goto cleanup;
             memcpy(joined, base_dir, dir_len);
             joined[dir_len] = '/';
             memcpy(joined + dir_len + 1, rel_path, path_len + 1);
         } else {
             joined = jz_strdup(rel_path);
         }
-        if (!joined) return -1;
+        if (!joined) goto cleanup;
 
-        /* Canonicalize via realpath so dedup is symlink- and case-aware. */
         full_path = realpath(joined, NULL);
         if (!full_path) {
-            /* File may not exist yet; keep the joined path as-is. */
             full_path = joined;
         } else {
             free(joined);
         }
     }
 
-    /* IMPORT_FILE_MULTIPLE_TIMES: disallow importing the same resolved path more
-     * than once into a single project (duplicate @import or nested re-import).
-     * We compare against the global list of previously imported resolved paths.
-     */
     for (size_t i = 0; i < g_imported_resolved_paths_len; ++i) {
         const char *seen = g_imported_resolved_paths[i];
         if (seen && strcmp(seen, full_path) == 0) {
@@ -252,55 +452,79 @@ int import_modules_from_path(const Parser *parent,
                         "%s:1:1: import error: same source file imported more than once into a single project\n",
                         full_path);
             }
-            free(full_path);
-            return -1;
+            goto cleanup;
         }
     }
 
-    char *display_path = jz_strdup(rel_path);
-    if (!display_path) {
-        free(full_path);
-        return -1;
+    display_path = jz_strdup(rel_path);
+    if (!display_path) goto cleanup;
+
+    if (remember_imported_filename(display_path) != 0) goto cleanup;
+    display_path = NULL;
+    if (remember_imported_resolved_path(full_path) != 0) goto cleanup;
+    full_path = NULL;
+
+    if (jz_get_file_size(g_imported_resolved_paths[g_imported_resolved_paths_len - 1], &size) == 0 &&
+        size > jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES)) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "imported source file exceeds the compiler safety limit of %u byte(s)",
+                 (unsigned)jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES));
+        report_import_limit(parent, import_token, "SOURCE_FILE_TOO_LARGE", msg, rel_path);
+        goto cleanup;
     }
 
-    if (remember_imported_filename(display_path) != 0) {
-        free(display_path);
-        free(full_path);
-        return -1;
-    }
-    if (remember_imported_resolved_path(full_path) != 0) {
-        free(full_path);
-        return -1;
-    }
-
-    size_t size = 0;
-    char *source = jz_read_entire_file(full_path, &size);
+    source = jz_read_entire_file_limit(g_imported_resolved_paths[g_imported_resolved_paths_len - 1],
+                                       jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                       &size);
     if (!source) {
-        /* Failed to read imported file; surface as a generic parse error on
-         * the parent stream rather than through a dedicated rule for now.
-         */
         fprintf(stderr, "%s:1:1: import error: failed to read imported file '%s'\n",
-                full_path, rel_path);
-        return -1;
+                g_imported_resolved_paths[g_imported_resolved_paths_len - 1], rel_path);
+        goto cleanup;
+    }
+    {
+        size_t retained_source_bytes = 0;
+        if (jz_size_add_checked(size, 1, &retained_source_bytes) != 0 ||
+            import_budget_add_bytes(&g_import_active_source_bytes,
+                                    &budget.source_bytes,
+                                    retained_source_bytes,
+                                    jz_input_limit_value(JZ_LIMIT_IMPORT_RETAINED_SOURCE_BYTES),
+                                    parent,
+                                    import_token,
+                                    rel_path,
+                                    "source buffers") != 0) {
+            goto cleanup;
+        }
     }
 
-    JZTokenStream tokens;
-    if (jz_lex_source(display_path, source, &tokens, NULL) != 0) {
-        fprintf(stderr, "%s:1:1: import error: lexing failed for imported file\n", display_path);
-        free(source);
-        return -1;
+    if (jz_lex_source(g_imported_filenames[g_imported_filenames_len - 1], source, &tokens, NULL) != 0) {
+        fprintf(stderr, "%s:1:1: import error: lexing failed for imported file\n",
+                g_imported_filenames[g_imported_filenames_len - 1]);
+        goto cleanup;
+    }
+    {
+        size_t retained_token_bytes = 0;
+        if (jz_size_mul_checked(tokens.count, sizeof(JZToken), &retained_token_bytes) != 0 ||
+            import_budget_add_bytes(&g_import_active_token_bytes,
+                                    &budget.token_bytes,
+                                    retained_token_bytes,
+                                    jz_input_limit_value(JZ_LIMIT_IMPORT_RETAINED_TOKEN_BYTES),
+                                    parent,
+                                    import_token,
+                                    rel_path,
+                                    "token streams") != 0) {
+            goto cleanup;
+        }
     }
 
     Parser ip;
-    ip.filename = display_path;
-    ip.resolved_filename = full_path;
+    ip.filename = g_imported_filenames[g_imported_filenames_len - 1];
+    ip.resolved_filename = g_imported_resolved_paths[g_imported_resolved_paths_len - 1];
     ip.tokens = tokens.tokens;
     ip.count = tokens.count;
     ip.pos = 0;
-    /* Propagate the parent's diagnostic list so that nested imports from
-     * this file go through jz_path_validate() with full security policy
-     * and produce consistent canonical paths for dedup.
-     */
+    ip.expr_depth = 0;
+    ip.stmt_depth = 0;
     ip.diagnostics = parent->diagnostics;
 
     int saw_project = 0;
@@ -310,92 +534,53 @@ int import_modules_from_path(const Parser *parent,
         if (t->type == JZ_TOK_KW_MODULE) {
             advance(&ip);
             JZASTNode *mod = parse_module(&ip);
-            if (!mod) {
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
-            }
+            if (!mod) goto cleanup;
 
-            if (add_imported_module_like(parent, proj, mod) != 0) {
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
-            }
+            if (add_imported_module_like(parent, proj, mod) != 0) goto cleanup;
         } else if (t->type == JZ_TOK_KW_BLACKBOX) {
             advance(&ip);
             const JZToken *name = peek(&ip);
             if (!is_decl_identifier_token(name)) {
                 parser_error(&ip, "expected identifier after @blackbox");
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
+                goto cleanup;
             }
             advance(&ip);
 
             JZASTNode *bb = jz_ast_new(JZ_AST_BLACKBOX, t->loc);
-            if (!bb) {
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
-            }
+            if (!bb) goto cleanup;
             jz_ast_set_name(bb, name->lexeme);
             if (!match(&ip, JZ_TOK_LBRACE)) {
                 parser_error(&ip, "expected '{' after @blackbox name");
                 jz_ast_free(bb);
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
+                goto cleanup;
             }
 
             if (parse_blackbox_body(&ip, bb) != 0) {
                 jz_ast_free(bb);
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
+                goto cleanup;
             }
 
-            if (add_imported_module_like(parent, proj, bb) != 0) {
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
-            }
+            if (add_imported_module_like(parent, proj, bb) != 0) goto cleanup;
         } else if (t->type == JZ_TOK_KW_GLOBAL) {
-            /* Imported @global blocks contribute GLOBAL namespaces just like
-             * top-level globals in the primary compilation unit. They are
-             * attached directly to the host project so that build_symbol_tables
-             * and sem_check_globals can discover them.
-             */
             advance(&ip);
             JZASTNode *glob = parse_global(&ip);
-            if (!glob) {
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
-            }
+            if (!glob) goto cleanup;
 
             if (jz_ast_add_child(proj, glob) != 0) {
                 jz_ast_free(glob);
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
+                goto cleanup;
             }
         } else if (t->type == JZ_TOK_KW_IMPORT) {
             advance(&ip);
             const JZToken *path_tok = peek(&ip);
             if (path_tok->type != JZ_TOK_STRING || !path_tok->lexeme) {
                 parser_error(&ip, "expected string after @import");
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
+                goto cleanup;
             }
             const char *path = path_tok->lexeme;
             advance(&ip);
-            if (import_modules_from_path(&ip, proj, path, t) != 0) {
-                jz_token_stream_free(&tokens);
-                free(source);
-                return -1;
-            }
-            match(&ip, JZ_TOK_SEMICOLON); /* optional */
+            if (import_modules_from_path(&ip, proj, path, t) != 0) goto cleanup;
+            match(&ip, JZ_TOK_SEMICOLON);
         } else if (t->type == JZ_TOK_KW_PROJECT) {
             if (!saw_project) {
                 saw_project = 1;
@@ -408,35 +593,30 @@ int import_modules_from_path(const Parser *parent,
                 } else {
                     fprintf(stderr,
                             "%s:%d:%d: import error: imported files may not contain @project\n",
-                            t->loc.filename ? t->loc.filename : full_path,
+                            t->loc.filename ? t->loc.filename : ip.resolved_filename,
                             t->loc.line, t->loc.column);
                 }
             }
-            /* Consume the project to keep parsing position consistent, then fail. */
-            advance(&ip); /* consume @project */
+            advance(&ip);
             JZASTNode *bad_proj = parse_project(&ip);
             if (bad_proj) jz_ast_free(bad_proj);
-            jz_token_stream_free(&tokens);
-            free(source);
-            return -1;
+            goto cleanup;
         } else {
-            /* Skip other top-level constructs in imported files for now. */
             advance(&ip);
         }
     }
 
+    result = 0;
+
+cleanup:
     jz_token_stream_free(&tokens);
     free(source);
-
-    return 0;
+    free(display_path);
+    free(full_path);
+    import_budget_leave(&budget);
+    return result;
 }
 
-/**
- * @brief Free all retained imported filename strings.
- *
- * This function must be called once parsing and all diagnostics are complete.
- * It releases all filename strings retained for imported source files.
- */
 void jz_parser_free_imported_filenames(void)
 {
     for (size_t i = 0; i < g_imported_filenames_len; ++i) {
@@ -454,4 +634,7 @@ void jz_parser_free_imported_filenames(void)
     g_imported_resolved_paths = NULL;
     g_imported_resolved_paths_len = 0;
     g_imported_resolved_paths_cap = 0;
+    g_import_active_depth = 0;
+    g_import_active_source_bytes = 0;
+    g_import_active_token_bytes = 0;
 }

@@ -1,3 +1,8 @@
+/**
+ * @file main.cpp
+ * @brief SDL and ImGui waveform viewer for JZW trace files.
+ */
+
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
@@ -6,82 +11,556 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <cstdarg>
+#include <cerrno>
 #include <string>
 #include <vector>
 #include <map>
 #include <algorithm>
 #include <cmath>
 
-/* ---- JZW data model ---- */
+static constexpr size_t JZW_MAX_META_TEXT_BYTES = 64 * 1024;
+static constexpr size_t JZW_MAX_SIGNAL_TEXT_BYTES = 64 * 1024;
+static constexpr size_t JZW_MAX_CHANGE_VALUE_BYTES = 1 * 1024 * 1024;
+static constexpr size_t JZW_MAX_ANNOTATION_TEXT_BYTES = 64 * 1024;
+static constexpr size_t JZW_MAX_CLOCK_NAME_BYTES = 64 * 1024;
+static constexpr size_t JZW_MAX_SIGNALS = 200000;
+static constexpr size_t JZW_MAX_CHANGES = 4000000;
+static constexpr size_t JZW_MAX_ANNOTATIONS = 200000;
+static constexpr size_t JZW_MAX_CLOCKS = 4096;
+static constexpr size_t JZW_MAX_RESIDENT_TEXT_BYTES = 256 * 1024 * 1024;
 
+/**
+ * @struct Signal
+ * @brief One waveform signal displayed by the viewer.
+ */
 struct Signal {
-    int         id;
-    std::string name;
-    std::string scope;
-    int         width;
-    std::string type;
-    std::string display_name; /* scope.name */
-    bool        visible;      /* shown in waveform area */
-    bool        expanded;     /* show individual bits (width > 1 only) */
+    int         id;           /**< Signal identifier from the trace database. */
+    std::string name;         /**< Leaf signal name. */
+    std::string scope;        /**< Hierarchical scope path. */
+    int         width;        /**< Signal width in bits. */
+    std::string type;         /**< Signal classification such as `clock` or `tap`. */
+    std::string display_name; /**< Cached `scope.name` string for the UI. */
+    bool        visible;      /**< True when the signal is rendered in the waveform pane. */
+    bool        expanded;     /**< True when a multi-bit signal shows per-bit rows. */
 };
 
+/**
+ * @struct ValueChange
+ * @brief One timestamped signal value sample.
+ */
 struct ValueChange {
-    int64_t     time;
-    std::string value;
+    int64_t     time;  /**< Sample timestamp in picoseconds. */
+    std::string value; /**< Binary value string at @ref time. */
 };
 
+/**
+ * @struct Annotation
+ * @brief One annotation event loaded from a JZW trace.
+ */
 struct Annotation {
-    int64_t     time;
-    std::string type;       /* "mark", "alert", "trace" */
-    int         signal_id;  /* -1 for global */
-    std::string message;
-    std::string color;
-    int64_t     end_time;   /* 0 if not a range */
+    int64_t     time;      /**< Annotation start time in picoseconds. */
+    std::string type;      /**< Annotation type such as `mark`, `alert`, or `trace`. */
+    int         signal_id; /**< Related signal identifier, or `-1` for a global annotation. */
+    std::string message;   /**< Annotation message payload. */
+    std::string color;     /**< Named annotation color. */
+    int64_t     end_time;  /**< Annotation end time, or `0` when it is instantaneous. */
 };
 
+/**
+ * @struct ClockInfo
+ * @brief Clock metadata loaded from a JZW trace.
+ */
 struct ClockInfo {
-    std::string name;
-    int64_t     period_ps;
-    int64_t     phase_ps;
-    int64_t     jitter_pp_ps;
-    double      jitter_sigma_ps;
-    double      drift_max_ppm;
-    double      drift_actual_ppm;
-    double      drifted_period_ps;
+    std::string name;              /**< Clock name. */
+    int64_t     period_ps;         /**< Nominal period in picoseconds. */
+    int64_t     phase_ps;          /**< Phase offset in picoseconds. */
+    int64_t     jitter_pp_ps;      /**< Peak-to-peak jitter in picoseconds. */
+    double      jitter_sigma_ps;   /**< Jitter sigma in picoseconds. */
+    double      drift_max_ppm;     /**< Maximum drift in parts per million. */
+    double      drift_actual_ppm;  /**< Applied drift in parts per million. */
+    double      drifted_period_ps; /**< Effective drifted period in picoseconds. */
 };
 
+/**
+ * @struct JZWFile
+ * @brief In-memory representation and live-reload state for one JZW trace.
+ */
 struct JZWFile {
-    std::string                          filename;
-    std::string                          module_name;
-    int64_t                              sim_end_time = 0;
-    int64_t                              display_start_time = 0; /* first trace=on time */
-    int64_t                              tick_ps = 1;
-    std::vector<Signal>                  signals;
-    std::map<int, std::vector<ValueChange>> changes; /* signal_id -> changes */
-    std::vector<Annotation>              annotations;
-    std::vector<ClockInfo>               clocks;
+    std::string                          filename;            /**< Trace file path. */
+    std::string                          module_name;         /**< Module name stored in trace metadata. */
+    int64_t                              sim_end_time = 0;    /**< Declared simulation end time, if present. */
+    int64_t                              display_start_time = 0; /**< First user-visible trace time. */
+    int64_t                              tick_ps = 1;         /**< Tick size from metadata. */
+    std::vector<Signal>                  signals;             /**< Loaded signal table. */
+    std::map<int, std::vector<ValueChange>> changes;         /**< Value changes keyed by signal ID. */
+    std::vector<Annotation>              annotations;         /**< Loaded annotation events. */
+    std::vector<ClockInfo>               clocks;              /**< Loaded clock metadata. */
+    sqlite3     *db = nullptr;                               /**< Open SQLite handle for live reload. */
+    bool         watching = false;                           /**< True when the trace is open for polling. */
+    bool         sim_running = false;                        /**< True while the producer still appends data. */
+    int64_t      max_loaded_time = 0;                        /**< Latest loaded change timestamp. */
+    int          max_annotation_id = 0;                      /**< Highest loaded annotation row ID. */
+    int          loaded_signal_count = 0;                    /**< Number of signals already loaded. */
+    size_t       resident_text_bytes = 0;                    /**< Estimated resident text footprint. */
+    size_t       loaded_change_count = 0;                    /**< Total loaded value change count. */
+    std::string  error_message;                              /**< Last load or poll error message. */
 
-    /* Live-reload state */
-    sqlite3     *db = nullptr;
-    bool         watching = false;
-    bool         sim_running = false;
-    int64_t      max_loaded_time = 0;
-    int          max_annotation_id = 0;
-    int          loaded_signal_count = 0;
-
+    /**
+     * @brief Load a JZW trace from disk and initialize live-reload state.
+     * @param path Trace file path.
+     * @return `true` on success, or `false` when loading fails.
+     */
     bool load(const char *path);
+    /**
+     * @brief Poll the open trace database for incremental updates.
+     * @return `true` on success, or `false` when polling fails.
+     */
     bool poll();
+    /**
+     * @brief Close the active SQLite handle, if any.
+     */
     void close_db();
+    /**
+     * @brief Compute the effective visible end time for the trace.
+     * @return Declared end time when available, otherwise the latest loaded timestamp.
+     */
     int64_t effective_end_time() const {
         return sim_end_time > 0 ? sim_end_time : max_loaded_time;
     }
+    /**
+     * @brief Find the value visible for a signal at a given time.
+     * @param signal_id Signal identifier to query.
+     * @param time Trace time in picoseconds.
+     * @return Pointer to a resident value string, or `nullptr` when no value is available.
+     */
     const char *value_at(int signal_id, int64_t time) const;
 };
 
+/**
+ * @brief Record a formatted fatal error message on a trace object.
+ * @param jzw Trace object receiving the error.
+ * @param fmt `printf`-style format string.
+ * @param ... Format arguments for @p fmt.
+ * @return Always returns `false`.
+ */
+static bool jzw_fail(JZWFile *jzw, const char *fmt, ...);
+/**
+ * @brief Account for additional resident text memory.
+ * @param jzw Trace object whose quota is updated.
+ * @param add_bytes Number of bytes to add.
+ * @param what Short label describing the text being loaded.
+ * @return `true` on success, or `false` if the resident-text limit would be exceeded.
+ */
+static bool jzw_add_resident_text(JZWFile *jzw, size_t add_bytes, const char *what);
+/**
+ * @brief Read one SQLite text column into a C++ string with bounds checks.
+ * @param jzw Trace object used for error reporting.
+ * @param stmt SQLite statement positioned on a row.
+ * @param col Zero-based column index.
+ * @param label Human-readable column label for diagnostics.
+ * @param max_bytes Maximum accepted byte length.
+ * @param allow_null True when SQL `NULL` should be accepted as an empty string.
+ * @param out Destination string.
+ * @return `true` on success, or `false` on conversion or bounds failure.
+ */
+static bool jzw_read_text_column(JZWFile *jzw,
+                                 sqlite3_stmt *stmt,
+                                 int col,
+                                 const char *label,
+                                 size_t max_bytes,
+                                 bool allow_null,
+                                 std::string *out);
+/**
+ * @brief Parse a signed 64-bit integer from SQLite text data.
+ * @param jzw Trace object used for error reporting.
+ * @param text Source text.
+ * @param label Human-readable value label for diagnostics.
+ * @param out Destination integer.
+ * @return `true` on success, or `false` when parsing fails.
+ */
+static bool jzw_parse_i64(JZWFile *jzw,
+                          const std::string &text,
+                          const char *label,
+                          int64_t *out);
+/**
+ * @brief Append a signal definition to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param id Signal identifier.
+ * @param name Signal name.
+ * @param scope Signal scope.
+ * @param width Signal width in bits.
+ * @param type Signal type string.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_signal(JZWFile *jzw,
+                              int id,
+                              const std::string &name,
+                              const std::string &scope,
+                              int width,
+                              const std::string &type);
+/**
+ * @brief Append one value change sample to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param time Sample timestamp in picoseconds.
+ * @param signal_id Related signal identifier.
+ * @param value Binary value string.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_change(JZWFile *jzw, int64_t time, int signal_id, const std::string &value);
+/**
+ * @brief Append one annotation event to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param annotation Annotation to store.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_annotation(JZWFile *jzw, const Annotation &annotation);
+/**
+ * @brief Append one clock metadata record to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param clock Clock metadata record.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_clock(JZWFile *jzw, const ClockInfo &clock);
+/**
+ * @brief Recompute the first time that should be shown in the waveform view.
+ * @param jzw Trace object to update.
+ */
+static void jzw_recompute_display_start_time(JZWFile *jzw);
+/**
+ * @brief Show a fatal error using stderr and an SDL message box when possible.
+ * @param title Dialog title.
+ * @param message Error text to display.
+ * @param window Parent window for the dialog, or `nullptr`.
+ */
+static void show_fatal_error(const char *title, const std::string &message, SDL_Window *window);
+/**
+ * @brief Convert a binary text string to a 64-bit integer.
+ * @param s Null-terminated binary string.
+ * @return Parsed integer value.
+ */
+static uint64_t binstr_to_u64(const char *s);
+/**
+ * @brief Format a picosecond timestamp into a short human-readable string.
+ * @param buf Destination buffer.
+ * @param bufsz Size of @p buf in bytes.
+ * @param ps Timestamp in picoseconds.
+ */
+static void format_time(char *buf, size_t bufsz, int64_t ps);
+/**
+ * @brief Format a binary value string into a compact display label.
+ * @param buf Destination buffer.
+ * @param bufsz Size of @p buf in bytes.
+ * @param binval Binary value string.
+ * @param width Signal width in bits.
+ */
+static void format_value(char *buf, size_t bufsz, const char *binval, int width);
+/**
+ * @brief Draw the fit-to-window toolbar icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ */
+static void draw_fit_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col);
+/**
+ * @brief Draw the zoom-in or zoom-out toolbar icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ * @param plus True for zoom-in, false for zoom-out.
+ */
+static void draw_zoom_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col, bool plus);
+/**
+ * @brief Draw the clock toolbar icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ */
+static void draw_clock_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col);
+/**
+ * @brief Draw a numbered cursor tag icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ * @param label Short cursor label text.
+ * @param font Font used to render the label.
+ */
+static void draw_cursor_tag_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col,
+                                 const char *label, ImFont *font);
+/**
+ * @brief Map an annotation color name to an ImGui color value.
+ * @param name Annotation color name.
+ * @return Packed ImGui color.
+ */
+static ImU32 annotation_color(const std::string &name);
+/**
+ * @brief Choose a display color for a signal row.
+ * @param sig Signal metadata.
+ * @return Packed ImGui color.
+ */
+static ImU32 signal_color(const Signal &sig);
+/**
+ * @brief Draw one signal waveform row inside the current viewport.
+ * @param dl ImGui draw list.
+ * @param sig Signal metadata.
+ * @param vc Ordered value changes for the signal.
+ * @param x0 Left edge of the waveform area.
+ * @param y0 Top edge of the waveform row.
+ * @param w Row width in pixels.
+ * @param h Row height in pixels.
+ * @param ps_per_px Horizontal time scale in picoseconds per pixel.
+ * @param scroll_ps Left-edge timestamp in picoseconds.
+ */
+static void draw_waveform(ImDrawList *dl, const Signal &sig,
+                          const std::vector<ValueChange> &vc,
+                          float x0, float y0, float w, float h,
+                          double ps_per_px, int64_t scroll_ps);
+/**
+ * @brief Launch the waveform viewer application.
+ * @param argc Process argument count.
+ * @param argv Process argument vector.
+ * @return Process exit status.
+ */
+int main(int argc, char **argv);
+
+static bool jzw_fail(JZWFile *jzw, const char *fmt, ...)
+{
+    char buf[1024];
+    va_list ap;
+
+    if (!jzw) return false;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    jzw->error_message = buf;
+    jzw->watching = false;
+    return false;
+}
+
+static bool jzw_add_resident_text(JZWFile *jzw, size_t add_bytes, const char *what)
+{
+    if (!jzw) return false;
+    if (add_bytes > JZW_MAX_RESIDENT_TEXT_BYTES - jzw->resident_text_bytes) {
+        return jzw_fail(jzw,
+                        "Trace load exceeds resident text limit while reading %s",
+                        what ? what : "data");
+    }
+    jzw->resident_text_bytes += add_bytes;
+    return true;
+}
+
+static bool jzw_read_text_column(JZWFile *jzw,
+                                 sqlite3_stmt *stmt,
+                                 int col,
+                                 const char *label,
+                                 size_t max_bytes,
+                                 bool allow_null,
+                                 std::string *out)
+{
+    const unsigned char *text = nullptr;
+    int len = 0;
+
+    if (!jzw || !stmt || !out) return false;
+
+    if (sqlite3_column_type(stmt, col) == SQLITE_NULL) {
+        if (allow_null) {
+            out->clear();
+            return true;
+        }
+        return jzw_fail(jzw, "SQLite column '%s' is NULL", label ? label : "?");
+    }
+
+    text = sqlite3_column_text(stmt, col);
+    if (!text) {
+        return jzw_fail(jzw, "SQLite column '%s' could not be converted to text",
+                        label ? label : "?");
+    }
+
+    len = sqlite3_column_bytes(stmt, col);
+    if (len < 0) {
+        return jzw_fail(jzw, "SQLite column '%s' reported a negative text size",
+                        label ? label : "?");
+    }
+    if ((size_t)len > max_bytes) {
+        return jzw_fail(jzw, "SQLite column '%s' exceeds the %zu-byte limit",
+                        label ? label : "?", max_bytes);
+    }
+
+    out->assign(reinterpret_cast<const char *>(text), (size_t)len);
+    return true;
+}
+
+static bool jzw_parse_i64(JZWFile *jzw,
+                          const std::string &text,
+                          const char *label,
+                          int64_t *out)
+{
+    char *end = nullptr;
+    long long value = 0;
+
+    if (!jzw || !out) return false;
+
+    errno = 0;
+    value = strtoll(text.c_str(), &end, 10);
+    if (errno != 0 || end == text.c_str() || (end && *end != '\0')) {
+        return jzw_fail(jzw, "SQLite value '%s' is not a valid integer: '%s'",
+                        label ? label : "?", text.c_str());
+    }
+
+    *out = (int64_t)value;
+    return true;
+}
+
+static bool jzw_append_signal(JZWFile *jzw,
+                              int id,
+                              const std::string &name,
+                              const std::string &scope,
+                              int width,
+                              const std::string &type)
+{
+    Signal s;
+    size_t text_bytes = 0;
+
+    if (!jzw) return false;
+    if (jzw->signals.size() >= JZW_MAX_SIGNALS) {
+        return jzw_fail(jzw, "Trace load exceeds the %zu-signal limit", JZW_MAX_SIGNALS);
+    }
+    if (width <= 0) {
+        return jzw_fail(jzw, "Signal %d has invalid width %d", id, width);
+    }
+
+    text_bytes = name.size() + scope.size() + type.size() + name.size() + scope.size() + 1;
+    if (!jzw_add_resident_text(jzw, text_bytes, "signal metadata")) {
+        return false;
+    }
+
+    s.id = id;
+    s.name = name;
+    s.scope = scope;
+    s.width = width;
+    s.type = type;
+    s.display_name = s.scope + "." + s.name;
+    s.visible = true;
+    s.expanded = false;
+    jzw->signals.push_back(std::move(s));
+    return true;
+}
+
+static bool jzw_append_change(JZWFile *jzw, int64_t time, int signal_id, const std::string &value)
+{
+    if (!jzw) return false;
+    if (signal_id < 0) {
+        return jzw_fail(jzw, "Value change references invalid signal id %d", signal_id);
+    }
+    if (jzw->loaded_change_count >= JZW_MAX_CHANGES) {
+        return jzw_fail(jzw, "Trace load exceeds the %zu-value-change limit", JZW_MAX_CHANGES);
+    }
+    if (!jzw_add_resident_text(jzw, value.size(), "value changes")) {
+        return false;
+    }
+
+    jzw->changes[signal_id].push_back({time, value});
+    jzw->loaded_change_count++;
+    if (time > jzw->max_loaded_time) jzw->max_loaded_time = time;
+    return true;
+}
+
+static bool jzw_append_annotation(JZWFile *jzw, const Annotation &annotation)
+{
+    size_t text_bytes = 0;
+
+    if (!jzw) return false;
+    if (jzw->annotations.size() >= JZW_MAX_ANNOTATIONS) {
+        return jzw_fail(jzw, "Trace load exceeds the %zu-annotation limit", JZW_MAX_ANNOTATIONS);
+    }
+
+    text_bytes = annotation.type.size() + annotation.message.size() + annotation.color.size();
+    if (!jzw_add_resident_text(jzw, text_bytes, "annotations")) {
+        return false;
+    }
+
+    jzw->annotations.push_back(annotation);
+    return true;
+}
+
+static bool jzw_append_clock(JZWFile *jzw, const ClockInfo &clock)
+{
+    if (!jzw) return false;
+    if (jzw->clocks.size() >= JZW_MAX_CLOCKS) {
+        return jzw_fail(jzw, "Trace load exceeds the %zu-clock limit", JZW_MAX_CLOCKS);
+    }
+    if (!jzw_add_resident_text(jzw, clock.name.size(), "clock metadata")) {
+        return false;
+    }
+
+    jzw->clocks.push_back(clock);
+    return true;
+}
+
+static void jzw_recompute_display_start_time(JZWFile *jzw)
+{
+    bool trace_off_at_start = false;
+
+    if (!jzw) return;
+    jzw->display_start_time = 0;
+
+    for (const auto &a : jzw->annotations) {
+        if (a.type != "trace") continue;
+        if (a.time == 0 && a.message == "off") {
+            trace_off_at_start = true;
+        } else if (trace_off_at_start && a.message == "on") {
+            jzw->display_start_time = a.time;
+            break;
+        }
+    }
+}
+
+static void show_fatal_error(const char *title, const std::string &message, SDL_Window *window)
+{
+    if (message.empty()) return;
+
+    fprintf(stderr, "%s\n", message.c_str());
+    if (!SDL_WasInit(SDL_INIT_VIDEO)) {
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
+            fprintf(stderr, "SDL_Init failed while showing error: %s\n", SDL_GetError());
+            return;
+        }
+    }
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                             title ? title : "JZ Viewer Error",
+                             message.c_str(),
+                             window);
+}
+
 bool JZWFile::load(const char *path)
 {
+    close_db();
+    filename.clear();
+    module_name.clear();
+    sim_end_time = 0;
+    display_start_time = 0;
+    tick_ps = 1;
+    signals.clear();
+    changes.clear();
+    annotations.clear();
+    clocks.clear();
+    watching = false;
+    sim_running = false;
+    max_loaded_time = 0;
+    max_annotation_id = 0;
+    loaded_signal_count = 0;
+    resident_text_bytes = 0;
+    loaded_change_count = 0;
+    error_message.clear();
+
     if (sqlite3_open_v2(path, &db, SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK) {
-        fprintf(stderr, "Failed to open %s: %s\n", path, sqlite3_errmsg(db));
+        jzw_fail(this, "Failed to open %s: %s", path, sqlite3_errmsg(db));
         sqlite3_close(db);
         db = nullptr;
         return false;
@@ -94,35 +573,76 @@ bool JZWFile::load(const char *path)
 
     /* Read meta */
     {
-        sqlite3_stmt *stmt;
-        sqlite3_prepare_v2(db, "SELECT key, value FROM meta", -1, &stmt, nullptr);
+        sqlite3_stmt *stmt = nullptr;
+        int rc = sqlite3_prepare_v2(db, "SELECT key, value FROM meta", -1, &stmt, nullptr);
+        if (rc != SQLITE_OK) {
+            return jzw_fail(this, "Failed to prepare meta query: %s", sqlite3_errmsg(db));
+        }
         while (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char *k = (const char *)sqlite3_column_text(stmt, 0);
-            const char *v = (const char *)sqlite3_column_text(stmt, 1);
-            if (strcmp(k, "sim_end_time") == 0) sim_end_time = atoll(v);
-            else if (strcmp(k, "tick_ps") == 0) tick_ps = atoll(v);
-            else if (strcmp(k, "module_name") == 0) module_name = v;
+            std::string key;
+            std::string value;
+
+            if (!jzw_read_text_column(this, stmt, 0, "meta.key",
+                                      JZW_MAX_META_TEXT_BYTES, false, &key) ||
+                !jzw_read_text_column(this, stmt, 1, "meta.value",
+                                      JZW_MAX_META_TEXT_BYTES, false, &value)) {
+                sqlite3_finalize(stmt);
+                close_db();
+                return false;
+            }
+
+            if (key == "sim_end_time") {
+                if (!jzw_parse_i64(this, value, "meta.sim_end_time", &sim_end_time)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
+            } else if (key == "tick_ps") {
+                if (!jzw_parse_i64(this, value, "meta.tick_ps", &tick_ps) || tick_ps <= 0) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return jzw_fail(this, "meta.tick_ps must be a positive integer");
+                }
+            } else if (key == "module_name") {
+                if (!jzw_add_resident_text(this, value.size(), "meta values")) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
+                module_name = value;
+            }
         }
         sqlite3_finalize(stmt);
     }
 
     /* Read signals */
     {
-        sqlite3_stmt *stmt;
-        sqlite3_prepare_v2(db,
+        sqlite3_stmt *stmt = nullptr;
+        int rc = sqlite3_prepare_v2(db,
             "SELECT id, name, scope, width, type FROM signals ORDER BY id",
             -1, &stmt, nullptr);
+        if (rc != SQLITE_OK) {
+            close_db();
+            return jzw_fail(this, "Failed to prepare signals query: %s", sqlite3_errmsg(db));
+        }
         while (sqlite3_step(stmt) == SQLITE_ROW) {
-            Signal s;
-            s.id    = sqlite3_column_int(stmt, 0);
-            s.name  = (const char *)sqlite3_column_text(stmt, 1);
-            s.scope = (const char *)sqlite3_column_text(stmt, 2);
-            s.width = sqlite3_column_int(stmt, 3);
-            s.type  = (const char *)sqlite3_column_text(stmt, 4);
-            s.display_name = s.scope + "." + s.name;
-            s.visible = true;
-            s.expanded = false;
-            signals.push_back(s);
+            std::string name;
+            std::string scope;
+            std::string type;
+            int id = sqlite3_column_int(stmt, 0);
+            int width = sqlite3_column_int(stmt, 3);
+
+            if (!jzw_read_text_column(this, stmt, 1, "signals.name",
+                                      JZW_MAX_SIGNAL_TEXT_BYTES, false, &name) ||
+                !jzw_read_text_column(this, stmt, 2, "signals.scope",
+                                      JZW_MAX_SIGNAL_TEXT_BYTES, false, &scope) ||
+                !jzw_read_text_column(this, stmt, 4, "signals.type",
+                                      JZW_MAX_SIGNAL_TEXT_BYTES, false, &type) ||
+                !jzw_append_signal(this, id, name, scope, width, type)) {
+                sqlite3_finalize(stmt);
+                close_db();
+                return false;
+            }
         }
         sqlite3_finalize(stmt);
         loaded_signal_count = (int)signals.size();
@@ -130,23 +650,33 @@ bool JZWFile::load(const char *path)
 
     /* Read all value changes */
     {
-        sqlite3_stmt *stmt;
-        sqlite3_prepare_v2(db,
+        sqlite3_stmt *stmt = nullptr;
+        int rc = sqlite3_prepare_v2(db,
             "SELECT time, signal_id, value FROM changes ORDER BY signal_id, time",
             -1, &stmt, nullptr);
+        if (rc != SQLITE_OK) {
+            close_db();
+            return jzw_fail(this, "Failed to prepare changes query: %s", sqlite3_errmsg(db));
+        }
         while (sqlite3_step(stmt) == SQLITE_ROW) {
-            int64_t t  = sqlite3_column_int64(stmt, 0);
-            int     id = sqlite3_column_int(stmt, 1);
-            const char *v = (const char *)sqlite3_column_text(stmt, 2);
-            changes[id].push_back({t, v});
-            if (t > max_loaded_time) max_loaded_time = t;
+            std::string value;
+            int64_t t = sqlite3_column_int64(stmt, 0);
+            int id = sqlite3_column_int(stmt, 1);
+
+            if (!jzw_read_text_column(this, stmt, 2, "changes.value",
+                                      JZW_MAX_CHANGE_VALUE_BYTES, false, &value) ||
+                !jzw_append_change(this, t, id, value)) {
+                sqlite3_finalize(stmt);
+                close_db();
+                return false;
+            }
         }
         sqlite3_finalize(stmt);
     }
 
     /* Read annotations */
     {
-        sqlite3_stmt *stmt;
+        sqlite3_stmt *stmt = nullptr;
         int rc = sqlite3_prepare_v2(db,
             "SELECT rowid, time, type, signal_id, message, color, end_time "
             "FROM annotations ORDER BY rowid",
@@ -155,17 +685,32 @@ bool JZWFile::load(const char *path)
             while (sqlite3_step(stmt) == SQLITE_ROW) {
                 int rowid = sqlite3_column_int(stmt, 0);
                 Annotation a;
+                std::string type;
+                std::string message;
+                std::string color;
                 a.time      = sqlite3_column_int64(stmt, 1);
-                a.type      = (const char *)sqlite3_column_text(stmt, 2);
+                if (!jzw_read_text_column(this, stmt, 2, "annotations.type",
+                                          JZW_MAX_ANNOTATION_TEXT_BYTES, false, &type) ||
+                    !jzw_read_text_column(this, stmt, 4, "annotations.message",
+                                          JZW_MAX_ANNOTATION_TEXT_BYTES, true, &message) ||
+                    !jzw_read_text_column(this, stmt, 5, "annotations.color",
+                                          JZW_MAX_ANNOTATION_TEXT_BYTES, true, &color)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
+                a.type = type;
                 a.signal_id = sqlite3_column_type(stmt, 3) == SQLITE_NULL
                               ? -1 : sqlite3_column_int(stmt, 3);
-                const char *msg = (const char *)sqlite3_column_text(stmt, 4);
-                a.message   = msg ? msg : "";
-                const char *col = (const char *)sqlite3_column_text(stmt, 5);
-                a.color     = col ? col : "";
+                a.message   = message;
+                a.color     = color;
                 a.end_time  = sqlite3_column_type(stmt, 6) == SQLITE_NULL
                               ? 0 : sqlite3_column_int64(stmt, 6);
-                annotations.push_back(a);
+                if (!jzw_append_annotation(this, a)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
                 if (rowid > max_annotation_id) max_annotation_id = rowid;
             }
             sqlite3_finalize(stmt);
@@ -174,7 +719,7 @@ bool JZWFile::load(const char *path)
 
     /* Read clocks table (may not exist in older JZW files) */
     {
-        sqlite3_stmt *stmt;
+        sqlite3_stmt *stmt = nullptr;
         int rc = sqlite3_prepare_v2(db,
             "SELECT name, period_ps, phase_ps, jitter_pp_ps, "
             "jitter_sigma_ps, drift_max_ppm, drift_actual_ppm, drifted_period_ps "
@@ -183,8 +728,12 @@ bool JZWFile::load(const char *path)
         if (rc == SQLITE_OK) {
             while (sqlite3_step(stmt) == SQLITE_ROW) {
                 ClockInfo c;
-                const char *n = (const char *)sqlite3_column_text(stmt, 0);
-                c.name             = n ? n : "";
+                if (!jzw_read_text_column(this, stmt, 0, "clocks.name",
+                                          JZW_MAX_CLOCK_NAME_BYTES, false, &c.name)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
                 c.period_ps        = sqlite3_column_int64(stmt, 1);
                 c.phase_ps         = sqlite3_column_int64(stmt, 2);
                 c.jitter_pp_ps     = sqlite3_column_int64(stmt, 3);
@@ -192,7 +741,11 @@ bool JZWFile::load(const char *path)
                 c.drift_max_ppm    = sqlite3_column_double(stmt, 5);
                 c.drift_actual_ppm = sqlite3_column_double(stmt, 6);
                 c.drifted_period_ps = sqlite3_column_double(stmt, 7);
-                clocks.push_back(c);
+                if (!jzw_append_clock(this, c)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
             }
             sqlite3_finalize(stmt);
         }
@@ -202,20 +755,7 @@ bool JZWFile::load(const char *path)
     sim_running = (sim_end_time == 0);
     watching = sim_running;
 
-    /* Compute display_start_time: if trace starts off, skip to first trace=on */
-    {
-        bool trace_off_at_start = false;
-        for (const auto &a : annotations) {
-            if (a.type == "trace") {
-                if (a.time == 0 && a.message == "off") {
-                    trace_off_at_start = true;
-                } else if (trace_off_at_start && a.message == "on") {
-                    display_start_time = a.time;
-                    break;
-                }
-            }
-        }
-    }
+    jzw_recompute_display_start_time(this);
 
     return true;
 }
@@ -234,7 +774,8 @@ bool JZWFile::poll()
         db = nullptr;
     }
     if (sqlite3_open_v2(filename.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
-        fprintf(stderr, "poll: failed to reopen %s\n", filename.c_str());
+        jzw_fail(this, "poll: failed to reopen %s: %s",
+                 filename.c_str(), sqlite3_errmsg(db));
         db = nullptr;
         return false;
     }
@@ -242,12 +783,20 @@ bool JZWFile::poll()
 
     /* Check sim_end_time */
     if (sim_running) {
-        sqlite3_stmt *stmt;
+        sqlite3_stmt *stmt = nullptr;
         if (sqlite3_prepare_v2(db,
                 "SELECT value FROM meta WHERE key='sim_end_time'",
                 -1, &stmt, nullptr) == SQLITE_OK) {
             if (sqlite3_step(stmt) == SQLITE_ROW) {
-                int64_t et = atoll((const char *)sqlite3_column_text(stmt, 0));
+                std::string value;
+                int64_t et = 0;
+                if (!jzw_read_text_column(this, stmt, 0, "meta.sim_end_time",
+                                          JZW_MAX_META_TEXT_BYTES, false, &value) ||
+                    !jzw_parse_i64(this, value, "meta.sim_end_time", &et)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
                 if (et > 0) {
                     sim_end_time = et;
                     sim_running = false;
@@ -260,7 +809,7 @@ bool JZWFile::poll()
         /* Also reload clocks (written before simulation starts, but may not
            have been present when the viewer first opened the file) */
         if (clocks.empty()) {
-            sqlite3_stmt *cstmt;
+            sqlite3_stmt *cstmt = nullptr;
             if (sqlite3_prepare_v2(db,
                     "SELECT name, period_ps, phase_ps, jitter_pp_ps, "
                     "jitter_sigma_ps, drift_max_ppm, drift_actual_ppm, drifted_period_ps "
@@ -268,8 +817,12 @@ bool JZWFile::poll()
                     -1, &cstmt, nullptr) == SQLITE_OK) {
                 while (sqlite3_step(cstmt) == SQLITE_ROW) {
                     ClockInfo c;
-                    const char *n = (const char *)sqlite3_column_text(cstmt, 0);
-                    c.name             = n ? n : "";
+                    if (!jzw_read_text_column(this, cstmt, 0, "clocks.name",
+                                              JZW_MAX_CLOCK_NAME_BYTES, false, &c.name)) {
+                        sqlite3_finalize(cstmt);
+                        close_db();
+                        return false;
+                    }
                     c.period_ps        = sqlite3_column_int64(cstmt, 1);
                     c.phase_ps         = sqlite3_column_int64(cstmt, 2);
                     c.jitter_pp_ps     = sqlite3_column_int64(cstmt, 3);
@@ -277,7 +830,11 @@ bool JZWFile::poll()
                     c.drift_max_ppm    = sqlite3_column_double(cstmt, 5);
                     c.drift_actual_ppm = sqlite3_column_double(cstmt, 6);
                     c.drifted_period_ps = sqlite3_column_double(cstmt, 7);
-                    clocks.push_back(c);
+                    if (!jzw_append_clock(this, c)) {
+                        sqlite3_finalize(cstmt);
+                        close_db();
+                        return false;
+                    }
                     changed = true;
                 }
                 sqlite3_finalize(cstmt);
@@ -287,22 +844,29 @@ bool JZWFile::poll()
 
     /* Check for new signals */
     {
-        sqlite3_stmt *stmt;
+        sqlite3_stmt *stmt = nullptr;
         if (sqlite3_prepare_v2(db,
                 "SELECT id, name, scope, width, type FROM signals WHERE id > ? ORDER BY id",
                 -1, &stmt, nullptr) == SQLITE_OK) {
             sqlite3_bind_int(stmt, 1, loaded_signal_count);
             while (sqlite3_step(stmt) == SQLITE_ROW) {
-                Signal s;
-                s.id    = sqlite3_column_int(stmt, 0);
-                s.name  = (const char *)sqlite3_column_text(stmt, 1);
-                s.scope = (const char *)sqlite3_column_text(stmt, 2);
-                s.width = sqlite3_column_int(stmt, 3);
-                s.type  = (const char *)sqlite3_column_text(stmt, 4);
-                s.display_name = s.scope + "." + s.name;
-                s.visible = true;
-                s.expanded = false;
-                signals.push_back(s);
+                std::string name;
+                std::string scope;
+                std::string type;
+                int id = sqlite3_column_int(stmt, 0);
+                int width = sqlite3_column_int(stmt, 3);
+
+                if (!jzw_read_text_column(this, stmt, 1, "signals.name",
+                                          JZW_MAX_SIGNAL_TEXT_BYTES, false, &name) ||
+                    !jzw_read_text_column(this, stmt, 2, "signals.scope",
+                                          JZW_MAX_SIGNAL_TEXT_BYTES, false, &scope) ||
+                    !jzw_read_text_column(this, stmt, 4, "signals.type",
+                                          JZW_MAX_SIGNAL_TEXT_BYTES, false, &type) ||
+                    !jzw_append_signal(this, id, name, scope, width, type)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
                 changed = true;
             }
             sqlite3_finalize(stmt);
@@ -312,17 +876,23 @@ bool JZWFile::poll()
 
     /* Fetch new changes */
     {
-        sqlite3_stmt *stmt;
+        sqlite3_stmt *stmt = nullptr;
         if (sqlite3_prepare_v2(db,
                 "SELECT time, signal_id, value FROM changes WHERE time > ? ORDER BY signal_id, time",
                 -1, &stmt, nullptr) == SQLITE_OK) {
             sqlite3_bind_int64(stmt, 1, (sqlite3_int64)max_loaded_time);
             while (sqlite3_step(stmt) == SQLITE_ROW) {
-                int64_t t  = sqlite3_column_int64(stmt, 0);
-                int     id = sqlite3_column_int(stmt, 1);
-                const char *v = (const char *)sqlite3_column_text(stmt, 2);
-                changes[id].push_back({t, v});
-                if (t > max_loaded_time) max_loaded_time = t;
+                std::string value;
+                int64_t t = sqlite3_column_int64(stmt, 0);
+                int id = sqlite3_column_int(stmt, 1);
+
+                if (!jzw_read_text_column(this, stmt, 2, "changes.value",
+                                          JZW_MAX_CHANGE_VALUE_BYTES, false, &value) ||
+                    !jzw_append_change(this, t, id, value)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
                 changed = true;
             }
             sqlite3_finalize(stmt);
@@ -331,7 +901,7 @@ bool JZWFile::poll()
 
     /* Fetch new annotations */
     {
-        sqlite3_stmt *stmt;
+        sqlite3_stmt *stmt = nullptr;
         if (sqlite3_prepare_v2(db,
                 "SELECT rowid, time, type, signal_id, message, color, end_time "
                 "FROM annotations WHERE rowid > ? ORDER BY rowid",
@@ -340,17 +910,32 @@ bool JZWFile::poll()
             while (sqlite3_step(stmt) == SQLITE_ROW) {
                 int rowid = sqlite3_column_int(stmt, 0);
                 Annotation a;
+                std::string type;
+                std::string message;
+                std::string color;
                 a.time      = sqlite3_column_int64(stmt, 1);
-                a.type      = (const char *)sqlite3_column_text(stmt, 2);
+                if (!jzw_read_text_column(this, stmt, 2, "annotations.type",
+                                          JZW_MAX_ANNOTATION_TEXT_BYTES, false, &type) ||
+                    !jzw_read_text_column(this, stmt, 4, "annotations.message",
+                                          JZW_MAX_ANNOTATION_TEXT_BYTES, true, &message) ||
+                    !jzw_read_text_column(this, stmt, 5, "annotations.color",
+                                          JZW_MAX_ANNOTATION_TEXT_BYTES, true, &color)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
+                a.type = type;
                 a.signal_id = sqlite3_column_type(stmt, 3) == SQLITE_NULL
                               ? -1 : sqlite3_column_int(stmt, 3);
-                const char *msg = (const char *)sqlite3_column_text(stmt, 4);
-                a.message   = msg ? msg : "";
-                const char *col = (const char *)sqlite3_column_text(stmt, 5);
-                a.color     = col ? col : "";
+                a.message   = message;
+                a.color     = color;
                 a.end_time  = sqlite3_column_type(stmt, 6) == SQLITE_NULL
                               ? 0 : sqlite3_column_int64(stmt, 6);
-                annotations.push_back(a);
+                if (!jzw_append_annotation(this, a)) {
+                    sqlite3_finalize(stmt);
+                    close_db();
+                    return false;
+                }
                 if (rowid > max_annotation_id) max_annotation_id = rowid;
                 changed = true;
             }
@@ -359,17 +944,7 @@ bool JZWFile::poll()
 
         /* Recompute display_start_time if annotations changed */
         if (changed && display_start_time == 0) {
-            bool trace_off_at_start = false;
-            for (const auto &a : annotations) {
-                if (a.type == "trace") {
-                    if (a.time == 0 && a.message == "off") {
-                        trace_off_at_start = true;
-                    } else if (trace_off_at_start && a.message == "on") {
-                        display_start_time = a.time;
-                        break;
-                    }
-                }
-            }
+            jzw_recompute_display_start_time(this);
         }
     }
 
@@ -408,9 +983,13 @@ const char *JZWFile::value_at(int signal_id, int64_t time) const
 
 /* ---- Zoom levels ---- */
 
+/**
+ * @struct ZoomLevel
+ * @brief One predefined horizontal zoom preset for the waveform viewer.
+ */
 struct ZoomLevel {
-    const char *label;
-    double      ps_per_pixel; /* picoseconds per pixel */
+    const char *label;       /**< Human-readable toolbar label. */
+    double      ps_per_pixel; /**< Horizontal scale in picoseconds per pixel. */
 };
 
 static const ZoomLevel zoom_levels[] = {
@@ -834,6 +1413,7 @@ int main(int argc, char **argv)
 
     JZWFile jzw;
     if (!jzw.load(argv[1])) {
+        show_fatal_error("Failed to load trace", jzw.error_message, nullptr);
         return 1;
     }
 
@@ -953,6 +1533,10 @@ int main(int argc, char **argv)
             if (now - last_poll_ticks >= 250) {
                 last_poll_ticks = now;
                 poll_got_data = jzw.poll();
+                if (!jzw.error_message.empty()) {
+                    show_fatal_error("Trace load failed", jzw.error_message, window);
+                    running = false;
+                }
             }
         }
 

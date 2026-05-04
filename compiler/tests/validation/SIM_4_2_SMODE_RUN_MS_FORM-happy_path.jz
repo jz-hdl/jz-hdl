@@ -1,0 +1,37 @@
+// RUN_MS_FORM: valid simulation @run(ms=<number>) syntax advances time.
+
+@module RunMsFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation RunMsFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut RunMsFormDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @run(ms=0.00001)
+@endsim

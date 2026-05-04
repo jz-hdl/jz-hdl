@@ -1,0 +1,4 @@
+File: HDL_1_3_CONST_UNDEFINED_IN_WIDTH_OR_SLICE-truly_undefined.jz
+      25:21   error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly
+      27:21   error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly
+      27:30   error CONST_UNDEFINED_IN_WIDTH_OR_SLICE S1.3/S2.1/S7.10 CONST used in width/slice not declared or evaluates invalidly

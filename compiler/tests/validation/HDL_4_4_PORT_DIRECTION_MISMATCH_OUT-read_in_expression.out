@@ -1,0 +1,4 @@
+File: HDL_4_4_PORT_DIRECTION_MISMATCH_OUT-read_in_expression.jz
+      29:21   error PORT_DIRECTION_MISMATCH_OUT S4.4/S5.1/S5.2/S8.1 Reading from OUT port inside module (outputs are write-only)
+      41:17   error NET_MULTIPLE_ACTIVE_DRIVERS S1.2/S1.5/S4.10 Multiple active drivers on same signal; for tri-state, all but one must assign `z`
+      42:17   error NET_MULTIPLE_ACTIVE_DRIVERS S1.2/S1.5/S4.10 Multiple active drivers on same signal; for tri-state, all but one must assign `z`

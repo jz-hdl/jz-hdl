@@ -23,10 +23,12 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <stdint.h>
 
 #include "template_expand.h"
 #include "rules.h"
 #include "sem.h"
+#include "util.h"
 
 /* ── Random suffix for scratch wire names ────────────────────────── */
 
@@ -44,30 +46,38 @@ static void generate_random_suffix(char out[7])
 /* ── Template registry ───────────────────────────────────────────── */
 
 typedef struct TemplateEntry {
-    const char  *name;          /* template identifier */
-    JZASTNode   *def_node;      /* pointer into AST (JZ_AST_TEMPLATE_DEF) */
-    JZASTNode   *scope_module;  /* owning module, or NULL for file-scoped */
+    const char  *name;         /**< Template identifier. */
+    JZASTNode   *def_node;     /**< Template definition node in the AST. */
+    JZASTNode   *scope_module; /**< Owning module, or `NULL` for a file-scoped template. */
 } TemplateEntry;
 
+/** Working state for one template expansion pass. */
 typedef struct ExpandContext {
-    TemplateEntry  *templates;
-    size_t          template_count;
-    size_t          template_cap;
-    JZDiagnosticList *diagnostics;
-    const char      *filename;
+    TemplateEntry  *templates;     /**< Registered template definitions. */
+    size_t          template_count; /**< Number of registered templates. */
+    size_t          template_cap;   /**< Allocated capacity of @p templates. */
+    JZDiagnosticList *diagnostics;  /**< Diagnostic sink for expansion errors. */
+    const char      *filename;      /**< Source filename used in diagnostics. */
+    JZExpansionLimits limits;       /**< Active expansion safety limits. */
 
     /* Lightweight CONST/CONFIG table for count evaluation */
-    struct { const char *name; long value; } *consts;
-    size_t const_count;
-    size_t const_cap;
+    struct { const char *name; long value; } *consts; /**< Count-expression constant table. */
+    size_t const_count; /**< Number of constant table entries. */
+    size_t const_cap;   /**< Allocated capacity of @p consts. */
 
     /* Per-module scratch wire collection */
-    JZASTNode **scratch_wires;
-    size_t      scratch_wire_count;
-    size_t      scratch_wire_cap;
+    JZASTNode **scratch_wires;   /**< Scratch wire declarations collected for the current module. */
+    size_t      scratch_wire_count; /**< Number of collected scratch wires. */
+    size_t      scratch_wire_cap;   /**< Allocated capacity of @p scratch_wires. */
 
-    int apply_counter;  /* unique callsite id */
+    int apply_counter;  /**< Unique callsite id used for scratch naming. */
+    size_t total_growth; /**< Total node growth accumulated during expansion. */
 } ExpandContext;
+
+static unsigned s_template_expand_depth = 0;
+static int s_template_depth_reported = 0;
+static int s_template_depth_failed = 0;
+static ExpandContext *s_template_depth_ctx = NULL;
 
 static void validate_template_reset_logic(ExpandContext *ctx,
                                           JZASTNode *node,
@@ -98,13 +108,41 @@ static void report_rule(ExpandContext *ctx, JZLocation loc,
     jz_diagnostic_report(ctx->diagnostics, loc, sev, rule_id, msg);
 }
 
+static int template_enter_depth(JZLocation loc)
+{
+    if (jz_depth_enter_checked(&s_template_expand_depth,
+                               JZ_LIMIT_TEMPLATE_EXPAND_DEPTH) != 0) {
+        s_template_depth_failed = 1;
+        if (!s_template_depth_reported && s_template_depth_ctx) {
+            report_rule(s_template_depth_ctx,
+                        loc,
+                        "TEMPLATE_EXPANSION_DEPTH_LIMIT_EXCEEDED",
+                        "template expansion nesting exceeds the compiler safety limit");
+            s_template_depth_reported = 1;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+static void template_leave_depth(void)
+{
+    jz_depth_leave(&s_template_expand_depth);
+}
+
 /* ── CONST/CONFIG table for count evaluation ─────────────────────── */
 
 static void collect_const_value(ExpandContext *ctx, const char *name, long value)
 {
     if (ctx->const_count == ctx->const_cap) {
-        size_t new_cap = ctx->const_cap ? ctx->const_cap * 2 : 64;
-        void *p = realloc(ctx->consts, new_cap * sizeof(ctx->consts[0]));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        void *p = NULL;
+        if (jz_size_grow_doubling_checked(ctx->const_cap, ctx->const_count + 1, 64, &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(ctx->consts[0]), &new_bytes) != 0) {
+            return;
+        }
+        p = realloc(ctx->consts, new_bytes);
         if (!p) return;
         ctx->consts = p;
         ctx->const_cap = new_cap;
@@ -187,16 +225,31 @@ static void add_const_def(JZASTNode *decl,
 {
     if (!decl || !decl->name || !decl->text) return;
     if (*count == *cap) {
-        size_t new_cap = *cap ? *cap * 2 : 64;
-        void *pd = realloc(*defs, new_cap * sizeof(JZConstDef));
-        void *ps = realloc(*stripped_exprs, new_cap * sizeof(char *));
-        if (!pd || !ps) {
-            if (pd) *defs = (JZConstDef *)pd;
-            if (ps) *stripped_exprs = (char **)ps;
+        size_t new_cap = 0;
+        size_t defs_bytes = 0;
+        size_t strs_bytes = 0;
+        JZConstDef *new_defs = NULL;
+        char **new_stripped = NULL;
+        if (jz_size_grow_doubling_checked(*cap, *count + 1, 64, &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(JZConstDef), &defs_bytes) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(char *), &strs_bytes) != 0) {
             return;
         }
-        *defs = (JZConstDef *)pd;
-        *stripped_exprs = (char **)ps;
+        new_defs = (JZConstDef *)malloc(defs_bytes);
+        new_stripped = (char **)malloc(strs_bytes);
+        if (!new_defs || !new_stripped) {
+            free(new_defs);
+            free(new_stripped);
+            return;
+        }
+        if (*count > 0) {
+            memcpy(new_defs, *defs, (*count) * sizeof(JZConstDef));
+            memcpy(new_stripped, *stripped_exprs, (*count) * sizeof(char *));
+        }
+        free(*defs);
+        free(*stripped_exprs);
+        *defs = new_defs;
+        *stripped_exprs = new_stripped;
         *cap = new_cap;
     }
     char *stripped = strip_config_prefix(decl->text);
@@ -210,9 +263,23 @@ static void add_const_def(JZASTNode *decl,
  * Recursively gather CONST_DECL nodes from CONFIG_BLOCK and CONST_BLOCK
  * parents only (not from MAP, CLOCKS, PIN blocks, etc.).
  */
+static void gather_const_defs_impl(JZASTNode *node,
+                                   JZConstDef **defs, char ***stripped_exprs,
+                                   size_t *count, size_t *cap);
+
 static void gather_const_defs(JZASTNode *node,
-                               JZConstDef **defs, char ***stripped_exprs,
-                               size_t *count, size_t *cap)
+                              JZConstDef **defs, char ***stripped_exprs,
+                              size_t *count, size_t *cap)
+{
+    if (!node) return;
+    if (!template_enter_depth(node->loc)) return;
+    gather_const_defs_impl(node, defs, stripped_exprs, count, cap);
+    template_leave_depth();
+}
+
+static void gather_const_defs_impl(JZASTNode *node,
+                                   JZConstDef **defs, char ***stripped_exprs,
+                                   size_t *count, size_t *cap)
 {
     if (!node) return;
 
@@ -505,17 +572,57 @@ static char *string_replace_whole_word(const char *src, const char *old,
  * - Scratch wire names with mangled unique names
  * - Width strings with param/IDX substitution
  */
+static void substitute_in_node_impl(JZASTNode *node,
+                                    const char **param_names,
+                                    JZASTNode **arg_exprs,
+                                    size_t param_count,
+                                    int idx_value,
+                                    int has_idx,
+                                    const char *tmpl_name,
+                                    int callsite_id,
+                                    const char **scratch_names,
+                                    size_t scratch_count,
+                                    const char (*scratch_suffixes)[7]);
+
 static void substitute_in_node(JZASTNode *node,
-                                const char **param_names,
-                                JZASTNode **arg_exprs,
-                                size_t param_count,
-                                int idx_value,
-                                int has_idx,
-                                const char *tmpl_name,
-                                int callsite_id,
-                                const char **scratch_names,
-                                size_t scratch_count,
-                                const char (*scratch_suffixes)[7])
+                               const char **param_names,
+                               JZASTNode **arg_exprs,
+                               size_t param_count,
+                               int idx_value,
+                               int has_idx,
+                               const char *tmpl_name,
+                               int callsite_id,
+                               const char **scratch_names,
+                               size_t scratch_count,
+                               const char (*scratch_suffixes)[7])
+{
+    if (!node) return;
+    if (!template_enter_depth(node->loc)) return;
+    substitute_in_node_impl(node,
+                            param_names,
+                            arg_exprs,
+                            param_count,
+                            idx_value,
+                            has_idx,
+                            tmpl_name,
+                            callsite_id,
+                            scratch_names,
+                            scratch_count,
+                            scratch_suffixes);
+    template_leave_depth();
+}
+
+static void substitute_in_node_impl(JZASTNode *node,
+                                    const char **param_names,
+                                    JZASTNode **arg_exprs,
+                                    size_t param_count,
+                                    int idx_value,
+                                    int has_idx,
+                                    const char *tmpl_name,
+                                    int callsite_id,
+                                    const char **scratch_names,
+                                    size_t scratch_count,
+                                    const char (*scratch_suffixes)[7])
 {
     if (!node) return;
 
@@ -774,8 +881,17 @@ static void substitute_in_node(JZASTNode *node,
 static void register_template(ExpandContext *ctx, JZASTNode *def, JZASTNode *scope_module)
 {
     if (ctx->template_count == ctx->template_cap) {
-        size_t new_cap = ctx->template_cap ? ctx->template_cap * 2 : 16;
-        void *p = realloc(ctx->templates, new_cap * sizeof(TemplateEntry));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        void *p = NULL;
+        if (jz_size_grow_doubling_checked(ctx->template_cap,
+                                          ctx->template_count + 1,
+                                          16,
+                                          &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(TemplateEntry), &new_bytes) != 0) {
+            return;
+        }
+        p = realloc(ctx->templates, new_bytes);
         if (!p) return;
         ctx->templates = p;
         ctx->template_cap = new_cap;
@@ -919,7 +1035,17 @@ static void register_template(ExpandContext *ctx, JZASTNode *def, JZASTNode *sco
     ctx->template_count++;
 }
 
+static void collect_templates_impl(ExpandContext *ctx, JZASTNode *node, JZASTNode *current_module);
+
 static void collect_templates(ExpandContext *ctx, JZASTNode *node, JZASTNode *current_module)
+{
+    if (!node) return;
+    if (!template_enter_depth(node->loc)) return;
+    collect_templates_impl(ctx, node, current_module);
+    template_leave_depth();
+}
+
+static void collect_templates_impl(ExpandContext *ctx, JZASTNode *node, JZASTNode *current_module)
 {
     if (!node) return;
 
@@ -960,8 +1086,17 @@ static TemplateEntry *find_template(ExpandContext *ctx, const char *name, JZASTN
 static void add_scratch_wire(ExpandContext *ctx, JZASTNode *wire_decl)
 {
     if (ctx->scratch_wire_count == ctx->scratch_wire_cap) {
-        size_t new_cap = ctx->scratch_wire_cap ? ctx->scratch_wire_cap * 2 : 16;
-        void *p = realloc(ctx->scratch_wires, new_cap * sizeof(JZASTNode *));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        void *p = NULL;
+        if (jz_size_grow_doubling_checked(ctx->scratch_wire_cap,
+                                          ctx->scratch_wire_count + 1,
+                                          16,
+                                          &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(JZASTNode *), &new_bytes) != 0) {
+            return;
+        }
+        p = realloc(ctx->scratch_wires, new_bytes);
         if (!p) return;
         ctx->scratch_wires = p;
         ctx->scratch_wire_cap = new_cap;
@@ -1347,6 +1482,7 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
     size_t param_count = 0;
     const char *param_names[64]; /* reasonable limit */
     size_t body_start = 0;
+    size_t body_stmt_count = 0;
 
     for (size_t i = 0; i < def->child_count; i++) {
         if (def->children[i]->type == JZ_AST_TEMPLATE_PARAM) {
@@ -1366,6 +1502,8 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
             if (scratch_count < 64) {
                 scratch_names[scratch_count++] = def->children[i]->name;
             }
+        } else if (def->children[i]->type != JZ_AST_TEMPLATE_PARAM) {
+            body_stmt_count++;
         }
     }
 
@@ -1427,6 +1565,43 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
             }
             goto remove_apply;
         }
+    }
+
+    if (count > 0 &&
+        (unsigned long long)count > (unsigned long long)ctx->limits.apply_max_count) {
+        char cnt_msg[512];
+        snprintf(cnt_msg, sizeof(cnt_msg),
+                 "@apply count %ld exceeds the configured limit of %zu iteration(s)",
+                 count, ctx->limits.apply_max_count);
+        report_rule(ctx, apply->loc, "TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED", cnt_msg);
+        goto remove_apply;
+    }
+
+    if (count > 0) {
+        size_t per_iter_growth = scratch_count + body_stmt_count;
+        size_t apply_growth = 0;
+
+        if (per_iter_growth > 0) {
+            if ((size_t)count > SIZE_MAX / per_iter_growth) {
+                apply_growth = SIZE_MAX;
+            } else {
+                apply_growth = (size_t)count * per_iter_growth;
+            }
+        }
+
+        if (apply_growth > ctx->limits.apply_max_growth ||
+            ctx->total_growth > ctx->limits.apply_max_growth - apply_growth) {
+            char growth_msg[512];
+            snprintf(growth_msg, sizeof(growth_msg),
+                     "@apply `%s` would grow template expansion by %zu node(s), exceeding the configured total growth limit of %zu",
+                     apply->name ? apply->name : "?",
+                     apply_growth,
+                     ctx->limits.apply_max_growth);
+            report_rule(ctx, apply->loc, "TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED", growth_msg);
+            goto remove_apply;
+        }
+
+        ctx->total_growth += apply_growth;
     }
 
     /* Validate template body: all identifiers must be params, scratch, or IDX */
@@ -1527,10 +1702,29 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
                                param_count, (int)idx, has_idx, def->name,
                                callsite_id, scratch_names, scratch_count,
                                (const char (*)[7])suffixes);
+            if (s_template_depth_failed) {
+                jz_ast_free(clone);
+                free(suffixes);
+                for (size_t j = 0; j < expanded_count; ++j) {
+                    jz_ast_free(expanded[j]);
+                }
+                free(expanded);
+                return -1;
+            }
 
             if (expanded_count == expanded_cap) {
-                size_t new_cap = expanded_cap ? expanded_cap * 2 : 16;
-                void *p = realloc(expanded, new_cap * sizeof(JZASTNode *));
+                size_t new_cap = 0;
+                size_t new_bytes = 0;
+                void *p = NULL;
+                if (jz_size_grow_doubling_checked(expanded_cap,
+                                                  expanded_count + 1,
+                                                  16,
+                                                  &new_cap) != 0 ||
+                    jz_size_mul_checked(new_cap, sizeof(JZASTNode *), &new_bytes) != 0) {
+                    jz_ast_free(clone);
+                    continue;
+                }
+                p = realloc(expanded, new_bytes);
                 if (!p) { jz_ast_free(clone); continue; }
                 expanded = p;
                 expanded_cap = new_cap;
@@ -1594,7 +1788,18 @@ remove_apply:
 
 /* ── Expand all @apply nodes in a subtree ────────────────────────── */
 
+static int expand_applies_in_node_impl(ExpandContext *ctx, JZASTNode *node, JZASTNode *scope_module);
+
 static int expand_applies_in_node(ExpandContext *ctx, JZASTNode *node, JZASTNode *scope_module)
+{
+    if (!node) return 0;
+    if (!template_enter_depth(node->loc)) return -1;
+    int rc = expand_applies_in_node_impl(ctx, node, scope_module);
+    template_leave_depth();
+    return rc;
+}
+
+static int expand_applies_in_node_impl(ExpandContext *ctx, JZASTNode *node, JZASTNode *scope_module)
 {
     if (!node) return 0;
 
@@ -1634,7 +1839,17 @@ static int expand_applies_in_node(ExpandContext *ctx, JZASTNode *node, JZASTNode
 
 /* ── Remove template defs from AST ───────────────────────────────── */
 
+static void remove_template_defs_impl(JZASTNode *node);
+
 static void remove_template_defs(JZASTNode *node)
+{
+    if (!node) return;
+    if (!template_enter_depth(node->loc)) return;
+    remove_template_defs_impl(node);
+    template_leave_depth();
+}
+
+static void remove_template_defs_impl(JZASTNode *node)
 {
     if (!node) return;
 
@@ -1685,7 +1900,8 @@ static void insert_scratch_wires(JZASTNode *module, JZASTNode **wires, size_t co
 
 int jz_template_expand(JZASTNode *root,
                         JZDiagnosticList *diagnostics,
-                        const char *filename)
+                        const char *filename,
+                        const JZExpansionLimits *limits)
 {
     if (!root) return 0;
 
@@ -1699,6 +1915,11 @@ int jz_template_expand(JZASTNode *root,
     ctx.diagnostics = diagnostics;
     ctx.filename = filename;
     ctx.apply_counter = 0;
+    ctx.limits = limits ? *limits : (JZExpansionLimits)JZ_EXPANSION_LIMITS_DEFAULT_INIT;
+    s_template_expand_depth = 0;
+    s_template_depth_reported = 0;
+    s_template_depth_failed = 0;
+    s_template_depth_ctx = &ctx;
 
     /* Collect CONST/CONFIG values for count evaluation */
     collect_consts_from_ast(&ctx, root);
@@ -1734,6 +1955,7 @@ int jz_template_expand(JZASTNode *root,
     free(ctx.templates);
     free(ctx.consts);
     free(ctx.scratch_wires);
+    s_template_depth_ctx = NULL;
 
     return 0;
 }

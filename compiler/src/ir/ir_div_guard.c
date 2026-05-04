@@ -15,23 +15,80 @@
 #include "ir_builder.h"
 #include "diagnostic.h"
 #include "rules.h"
+#include "../../include/util.h"
 
 /* -----------------------------------------------------------------------
  * Guard stack: tracks known-nonzero signal IDs from enclosing IF branches.
  * ----------------------------------------------------------------------- */
 
+/**
+ * @brief One proof fact captured from an enclosing conditional branch.
+ */
 typedef struct {
-    int  signal_id;   /* Signal proven nonzero in this scope. */
-    bool is_nonzero;  /* true = signal != 0 (THEN), false = signal == 0 (ELSE). */
+    int  signal_id;   /**< Signal proven to satisfy the recorded predicate. */
+    bool is_nonzero;  /**< `true` for nonzero proofs, `false` for zero-only proofs. */
 } GuardEntry;
 
 #define MAX_GUARD_DEPTH 64
 
+/**
+ * @brief Stack of branch-local divisor guard facts.
+ */
 typedef struct {
-    GuardEntry entries[MAX_GUARD_DEPTH];
-    int        count;
+    GuardEntry entries[MAX_GUARD_DEPTH]; /**< Active proof facts from outermost to innermost scope. */
+    int        count;                    /**< Number of valid entries currently stored. */
 } GuardStack;
 
+/**
+ * @brief Comparison operators normalized to `signal <op> literal` form.
+ */
+typedef enum {
+    CMP_EQ,   /**< Equality comparison. */
+    CMP_NEQ,  /**< Inequality comparison. */
+    CMP_GT,   /**< Strict greater-than comparison. */
+    CMP_GTE,  /**< Greater-than-or-equal comparison. */
+    CMP_LT,   /**< Strict less-than comparison. */
+    CMP_LTE   /**< Less-than-or-equal comparison. */
+} NormCmpOp;
+
+static unsigned s_div_guard_depth = 0;
+static int s_div_guard_depth_reported = 0;
+
+/**
+ * @brief Report that recursive division-guard analysis exceeded its depth limit.
+ *
+ * @param diagnostics Diagnostic sink.
+ * @param design      IR design that owns the current module.
+ * @param mod         Module being analyzed.
+ * @param source_line Source line associated with the current traversal node.
+ */
+static void report_div_guard_depth(JZDiagnosticList *diagnostics,
+                                   const IR_Design *design,
+                                   const IR_Module *mod,
+                                   int source_line)
+{
+    const char *filename = "";
+    if (design && mod &&
+        mod->source_file_id >= 0 &&
+        mod->source_file_id < design->num_source_files) {
+        filename = design->source_files[mod->source_file_id].path;
+    }
+
+    JZLocation loc = { filename, source_line, 0 };
+    (void)jz_diagnostic_report_rule_once(&s_div_guard_depth_reported,
+                                         diagnostics,
+                                         loc,
+                                         "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED",
+                                         "IR division-guard analysis exceeds the compiler safety limit");
+}
+
+/**
+ * @brief Push a guard fact onto the active proof stack.
+ *
+ * @param gs         Guard stack to update.
+ * @param signal_id  Signal proven by the enclosing branch.
+ * @param is_nonzero Whether the proof is for nonzero or zero.
+ */
 static void guard_push(GuardStack *gs, int signal_id, bool is_nonzero)
 {
     if (gs->count < MAX_GUARD_DEPTH) {
@@ -41,6 +98,11 @@ static void guard_push(GuardStack *gs, int signal_id, bool is_nonzero)
     }
 }
 
+/**
+ * @brief Pop the innermost guard fact from the active proof stack.
+ *
+ * @param gs Guard stack to update.
+ */
 static void guard_pop(GuardStack *gs)
 {
     if (gs->count > 0) {
@@ -48,6 +110,13 @@ static void guard_pop(GuardStack *gs)
     }
 }
 
+/**
+ * @brief Check whether the stack proves a signal is nonzero in the current scope.
+ *
+ * @param gs        Guard stack to inspect.
+ * @param signal_id Signal being queried.
+ * @return `true` when a still-active branch proves the signal nonzero, otherwise `false`.
+ */
 static bool guard_is_nonzero(const GuardStack *gs, int signal_id)
 {
     for (int i = gs->count - 1; i >= 0; i--) {
@@ -62,7 +131,12 @@ static bool guard_is_nonzero(const GuardStack *gs, int signal_id)
  * Expression helpers.
  * ----------------------------------------------------------------------- */
 
-/** Return true if expr is a literal with value 0. */
+/**
+ * @brief Check whether an IR expression is the literal value zero.
+ *
+ * @param expr Expression to inspect.
+ * @return `true` when @p expr is a non-`z` literal whose value is zero, otherwise `false`.
+ */
 static bool expr_is_zero_literal(const IR_Expr *expr)
 {
     if (!expr) return false;
@@ -74,7 +148,12 @@ static bool expr_is_zero_literal(const IR_Expr *expr)
     return true;
 }
 
-/** Return true if expr is a literal with a nonzero value. */
+/**
+ * @brief Check whether an IR expression is a nonzero literal.
+ *
+ * @param expr Expression to inspect.
+ * @return `true` when @p expr is a non-`z` literal with any nonzero bit set, otherwise `false`.
+ */
 static bool expr_is_nonzero_literal(const IR_Expr *expr)
 {
     if (!expr) return false;
@@ -86,7 +165,12 @@ static bool expr_is_nonzero_literal(const IR_Expr *expr)
     return false;
 }
 
-/** Return the signal_id if expr is a plain signal ref, -1 otherwise. */
+/**
+ * @brief Extract a signal ID from a plain signal-reference expression.
+ *
+ * @param expr Expression to inspect.
+ * @return Referenced signal ID, or -1 when the expression is not a signal reference.
+ */
 static int expr_signal_id(const IR_Expr *expr)
 {
     if (!expr) return -1;
@@ -113,7 +197,13 @@ static int expr_signal_id(const IR_Expr *expr)
  * Returns true if a guard pattern was matched.
  * ----------------------------------------------------------------------- */
 
-/** Return the literal value if expr is a non-z literal, or -1. */
+/**
+ * @brief Read the integer value from a non-`z` IR literal.
+ *
+ * @param expr Literal expression to inspect.
+ * @param ok   Receives whether the conversion succeeded.
+ * @return Literal value when successful, or -1 when the expression is unsupported.
+ */
 static int64_t expr_literal_value(const IR_Expr *expr, bool *ok)
 {
     *ok = false;
@@ -125,18 +215,11 @@ static int64_t expr_literal_value(const IR_Expr *expr, bool *ok)
 }
 
 /**
- * Normalized comparison: signal <op> literal.
- * We canonicalize so the signal is always on the left.
+ * @brief Flip a normalized comparison when swapping literal and signal operands.
+ *
+ * @param op Comparison operator in `signal <op> literal` form.
+ * @return Operator that preserves semantics after operand reversal.
  */
-typedef enum {
-    CMP_EQ,   /* == */
-    CMP_NEQ,  /* != */
-    CMP_GT,   /* >  */
-    CMP_GTE,  /* >= */
-    CMP_LT,   /* <  */
-    CMP_LTE   /* <= */
-} NormCmpOp;
-
 static NormCmpOp flip_cmp(NormCmpOp op)
 {
     switch (op) {
@@ -150,6 +233,15 @@ static NormCmpOp flip_cmp(NormCmpOp op)
     return op;
 }
 
+/**
+ * @brief Normalize a comparison into `signal <op> literal` form.
+ *
+ * @param cond          Comparison expression to inspect.
+ * @param out_signal_id Receives the normalized signal ID.
+ * @param out_op        Receives the normalized comparison operator.
+ * @param out_value     Receives the normalized literal value.
+ * @return `true` when normalization succeeds, otherwise `false`.
+ */
 static bool normalize_cmp(const IR_Expr *cond,
                            int *out_signal_id,
                            NormCmpOp *out_op,
@@ -192,6 +284,15 @@ static bool normalize_cmp(const IR_Expr *cond,
     return false;
 }
 
+/**
+ * @brief Derive branch-local nonzero proofs from a comparison guard.
+ *
+ * @param cond             Branch condition expression.
+ * @param out_signal_id    Receives the guarded signal ID.
+ * @param out_then_nonzero Receives whether the THEN branch proves nonzero.
+ * @param out_else_nonzero Receives whether the ELSE branch proves nonzero.
+ * @return `true` when the condition matches a supported guard pattern, otherwise `false`.
+ */
 static bool extract_nonzero_guard(const IR_Expr *cond,
                                   int *out_signal_id,
                                   bool *out_then_nonzero,
@@ -303,11 +404,32 @@ static void report_unguarded_div(JZDiagnosticList *diagnostics,
  * Expression walker: find DIV/MOD and check divisor.
  * ----------------------------------------------------------------------- */
 
+static void check_expr_for_div_impl(const IR_Expr *expr,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    const GuardStack *guards,
+                                    JZDiagnosticList *diagnostics);
+
 static void check_expr_for_div(const IR_Expr *expr,
                                const IR_Design *design,
                                const IR_Module *mod,
                                const GuardStack *guards,
                                JZDiagnosticList *diagnostics)
+{
+    if (!expr) return;
+    if (jz_depth_enter_checked(&s_div_guard_depth, JZ_LIMIT_IR_STATEMENT_DEPTH) != 0) {
+        report_div_guard_depth(diagnostics, design, mod, expr->source_line);
+        return;
+    }
+    check_expr_for_div_impl(expr, design, mod, guards, diagnostics);
+    jz_depth_leave(&s_div_guard_depth);
+}
+
+static void check_expr_for_div_impl(const IR_Expr *expr,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    const GuardStack *guards,
+                                    JZDiagnosticList *diagnostics)
 {
     if (!expr) return;
 
@@ -452,11 +574,32 @@ static void check_stmts_for_div(const IR_Stmt *stmts, int count,
     }
 }
 
+static void check_stmt_for_div_impl(const IR_Stmt *stmt,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    GuardStack *guards,
+                                    JZDiagnosticList *diagnostics);
+
 static void check_stmt_for_div(const IR_Stmt *stmt,
                                const IR_Design *design,
                                const IR_Module *mod,
                                GuardStack *guards,
                                JZDiagnosticList *diagnostics)
+{
+    if (!stmt) return;
+    if (jz_depth_enter_checked(&s_div_guard_depth, JZ_LIMIT_IR_STATEMENT_DEPTH) != 0) {
+        report_div_guard_depth(diagnostics, design, mod, stmt->source_line);
+        return;
+    }
+    check_stmt_for_div_impl(stmt, design, mod, guards, diagnostics);
+    jz_depth_leave(&s_div_guard_depth);
+}
+
+static void check_stmt_for_div_impl(const IR_Stmt *stmt,
+                                    const IR_Design *design,
+                                    const IR_Module *mod,
+                                    GuardStack *guards,
+                                    JZDiagnosticList *diagnostics)
 {
     if (!stmt) return;
 
@@ -544,6 +687,8 @@ int jz_ir_div_guard_check(IR_Design *design, JZDiagnosticList *diagnostics)
     if (!design || !diagnostics) return 0;
 
     for (int m = 0; m < design->num_modules; m++) {
+        s_div_guard_depth = 0;
+        s_div_guard_depth_reported = 0;
         IR_Module *mod = &design->modules[m];
         if (mod->eliminated) continue;
 

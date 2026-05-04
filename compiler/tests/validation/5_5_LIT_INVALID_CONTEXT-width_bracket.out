@@ -1,2 +1,0 @@
-File: 5_5_LIT_INVALID_CONTEXT-width_bracket.jz
-      23:9    error LIT_INVALID_CONTEXT S5.5.11 lit() used where a compile-time integer constant is required
