@@ -1,0 +1,50 @@
+// SINGLE_MONITOR_BLOCK: only one MONITOR block is permitted per @simulation.
+// Target diagnostic: parser rejection on the second MONITOR block.
+// Non-target diagnostics: none.
+// Fixture plan: keep the simulation structure valid, then introduce a second
+// MONITOR block after a valid first one.
+
+@module SingleMonitorBlockDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] flag;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        flag = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= state;
+    }
+@endmod
+
+@simulation SingleMonitorBlockDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        flag [1];
+    }
+
+    @new dut SingleMonitorBlockDut {
+        clk [1] = clk;
+        flag [1] = flag;
+    }
+
+    MONITOR {
+        @print_if(1'b0, "flag=%b", flag)
+    }
+
+    // Trigger 1: a second MONITOR block in the same @simulation is forbidden.
+    MONITOR {
+        @mark_if(1'b0, GREEN)
+    }
+
+    @run(ns=10)
+@endsim

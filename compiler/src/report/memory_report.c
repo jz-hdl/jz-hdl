@@ -1,3 +1,8 @@
+/**
+ * @file memory_report.c
+ * @brief Human-readable memory resource reporting for semantic analysis.
+ */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,28 +18,40 @@
 #include "../sem/driver_internal.h"
 #include "../chip_data_internal.h"
 
+/**
+ * @struct JZChipMemConfigEntry
+ * @brief One width/depth operating point for a memory resource.
+ */
 typedef struct JZChipMemConfigEntry {
-    unsigned width;
-    unsigned depth;
+    unsigned width; /**< Supported data width in bits. */
+    unsigned depth; /**< Supported storage depth in words. */
 } JZChipMemConfigEntry;
 
+/**
+ * @struct JZChipMemModeInfo
+ * @brief One named mode for a chip memory resource.
+ */
 typedef struct JZChipMemModeInfo {
-    char    *name;
-    unsigned r_ports;
-    unsigned w_ports;
-    unsigned port_count; /* Number of physical ports (1=shared, 2=separate) */
-    JZBuffer configs; /* JZChipMemConfigEntry[] */
+    char    *name;       /**< Heap-allocated mode name. */
+    unsigned r_ports;    /**< Number of logical read ports. */
+    unsigned w_ports;    /**< Number of logical write ports. */
+    unsigned port_count; /**< Number of physical ports, such as 1 shared or 2 separate. */
+    JZBuffer configs;    /**< Array of `JZChipMemConfigEntry` values for the mode. */
 } JZChipMemModeInfo;
 
+/**
+ * @struct JZChipMemInfo
+ * @brief Aggregated chip-memory capabilities for one memory class.
+ */
 typedef struct JZChipMemInfo {
-    JZChipMemType type;
-    unsigned total_bits;
-    unsigned quantity;
-    unsigned bits_per_block;
-    unsigned r_ports;
-    unsigned w_ports;
-    JZBuffer configs; /* JZChipMemConfigEntry[] */
-    JZBuffer modes;   /* JZChipMemModeInfo[] */
+    JZChipMemType type;      /**< Memory class, such as block RAM or distributed RAM. */
+    unsigned total_bits;     /**< Total available bits across all blocks of this class. */
+    unsigned quantity;       /**< Number of blocks or resources of this class. */
+    unsigned bits_per_block; /**< Capacity of one block in bits when known. */
+    unsigned r_ports;        /**< Aggregate read-port capability. */
+    unsigned w_ports;        /**< Aggregate write-port capability. */
+    JZBuffer configs;        /**< Array of `JZChipMemConfigEntry` values for generic configs. */
+    JZBuffer modes;          /**< Array of `JZChipMemModeInfo` values for named modes. */
 } JZChipMemInfo;
 
 static int g_mem_report_enabled = 0;

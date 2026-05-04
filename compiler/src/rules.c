@@ -1,3 +1,8 @@
+/**
+ * @file rules.c
+ * @brief Static validation rule table and formatted rule listing helpers.
+ */
+
 #include <string.h>
 
 #include "rules.h"

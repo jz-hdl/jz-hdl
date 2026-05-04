@@ -1,14 +1,27 @@
-/*
- * emit_stmt.c - Statement emission for the Verilog-2005 backend.
- *
- * This file handles lowering IR statements (assignments, if/else, select/case)
- * to Verilog procedural statements.
+/**
+ * @file emit_stmt.c
+ * @brief Procedural statement emission for the Verilog-2005 backend.
  */
+
 #include <stdio.h>
 #include <string.h>
 
 #include "verilog_internal.h"
 #include "ir.h"
+
+/**
+ * @brief Return whether an assignment kind requires zero extension.
+ * @param kind Assignment kind to classify.
+ * @return Non-zero when the RHS must be zero-extended before emission.
+ */
+int assignment_kind_is_zext(IR_AssignmentKind kind);
+
+/**
+ * @brief Return whether an assignment kind requires sign extension.
+ * @param kind Assignment kind to classify.
+ * @return Non-zero when the RHS must be sign-extended before emission.
+ */
+int assignment_kind_is_sext(IR_AssignmentKind kind);
 
 /* -------------------------------------------------------------------------
  * Assignment kind helpers

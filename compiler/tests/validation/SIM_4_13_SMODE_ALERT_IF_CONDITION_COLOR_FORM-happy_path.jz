@@ -1,0 +1,39 @@
+// ALERT_IF_CONDITION_COLOR_FORM: valid @alert_if(<condition>, <color>) syntax in @simulation.
+
+@module AlertIfConditionColorFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [2] flag;
+    }
+
+    REGISTER {
+        state [2] = 2'b01;
+    }
+
+    ASYNCHRONOUS {
+        flag = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= {state[0], state[1]};
+    }
+@endmod
+
+@simulation AlertIfConditionColorFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        flag [2];
+    }
+
+    @new dut AlertIfConditionColorFormDut {
+        clk [1] = clk;
+        flag [2] = flag;
+    }
+
+    @run(ns=10)
+    @alert_if(flag, ORANGE)
+    @run(ns=10)
+@endsim

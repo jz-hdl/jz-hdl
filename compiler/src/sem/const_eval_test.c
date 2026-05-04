@@ -1,8 +1,20 @@
+/**
+ * @file const_eval_test.c
+ * @brief Regression tests for constant-expression evaluation helpers.
+ */
+
 #include <stdio.h>
 #include <string.h>
 
 #include "sem.h"
 
+/**
+ * @brief Evaluate one expression and compare it with an expected result.
+ *
+ * @param expr Expression text to evaluate.
+ * @param expected Expected non-negative result.
+ * @return 0 on success, 1 on mismatch or evaluation failure.
+ */
 static int test_single_expr(const char *expr, long long expected)
 {
     long long value = 0;
@@ -20,6 +32,12 @@ static int test_single_expr(const char *expr, long long expected)
     return 0;
 }
 
+/**
+ * @brief Verify that one expression is rejected by the evaluator.
+ *
+ * @param expr Expression text that should fail.
+ * @return 0 when evaluation fails as expected, 1 otherwise.
+ */
 static int test_single_expr_fail(const char *expr)
 {
     long long value = 0;
@@ -33,6 +51,11 @@ static int test_single_expr_fail(const char *expr)
     return 0;
 }
 
+/**
+ * @brief Exercise multi-definition constant evaluation scenarios.
+ *
+ * @return 0 on success, 1 when any subtest fails.
+ */
 static int test_all_defs(void)
 {
     JZConstDef defs[] = {
@@ -88,6 +111,11 @@ static int test_all_defs(void)
     return 0;
 }
 
+/**
+ * @brief Run the constant-expression regression test suite.
+ *
+ * @return 0 on success, 1 when any test fails.
+ */
 int main(void)
 {
     int failures = 0;

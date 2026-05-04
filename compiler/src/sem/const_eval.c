@@ -1,3 +1,8 @@
+/**
+ * @file const_eval.c
+ * @brief Integer constant-expression evaluation for semantic analysis.
+ */
+
 #include <ctype.h>
 #include <limits.h>
 #include <math.h>
@@ -26,38 +31,50 @@
  *                | "(" expr ")"
  */
 
+/**
+ * @enum TokenKind
+ * @brief Lexer token kinds for the standalone constant-expression parser.
+ */
 typedef enum TokenKind {
-    TK_EOF = 0,
-    TK_INT,
-    TK_IDENT,
-    TK_PLUS,
-    TK_MINUS,
-    TK_STAR,
-    TK_SLASH,
-    TK_PERCENT,
-    TK_LPAREN,
-    TK_RPAREN,
-    TK_EQEQ,
-    TK_NEQ,
-    TK_LT,
-    TK_LE,
-    TK_GT,
-    TK_GE,
-    TK_SHL,
-    TK_SHR,
-    TK_ASHR,
-    TK_AND_AND,
-    TK_OR_OR
+    TK_EOF = 0, /**< End of input. */
+    TK_INT,     /**< Decimal integer literal. */
+    TK_IDENT,   /**< Identifier or builtin name. */
+    TK_PLUS,    /**< `+`. */
+    TK_MINUS,   /**< `-`. */
+    TK_STAR,    /**< `*`. */
+    TK_SLASH,   /**< `/`. */
+    TK_PERCENT, /**< `%`. */
+    TK_LPAREN,  /**< `(`. */
+    TK_RPAREN,  /**< `)`. */
+    TK_EQEQ,    /**< `==`. */
+    TK_NEQ,     /**< `!=`. */
+    TK_LT,      /**< `<`. */
+    TK_LE,      /**< `<=`. */
+    TK_GT,      /**< `>`. */
+    TK_GE,      /**< `>=`. */
+    TK_SHL,     /**< `<<`. */
+    TK_SHR,     /**< `>>`. */
+    TK_ASHR,    /**< `>>>`. */
+    TK_AND_AND, /**< `&&`. */
+    TK_OR_OR    /**< `||`. */
 } TokenKind;
 
+/**
+ * @struct Token
+ * @brief One token emitted by the constant-expression lexer.
+ */
 typedef struct Token {
-    TokenKind kind;
-    long long int_val; /* valid when kind == TK_INT */
-    char      ident[64]; /* small, fixed-size identifier buffer */
+    TokenKind kind;      /**< Token category. */
+    long long int_val;   /**< Integer literal value when `kind == TK_INT`. */
+    char      ident[64]; /**< Small fixed-size identifier buffer. */
 } Token;
 
+/**
+ * @struct Lexer
+ * @brief Cursor state for the standalone constant-expression lexer.
+ */
 typedef struct Lexer {
-    const char *p;
+    const char *p; /**< Current source pointer. */
 } Lexer;
 
 static void lex_init(Lexer *lx, const char *src)

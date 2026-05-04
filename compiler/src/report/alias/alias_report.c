@@ -1,3 +1,8 @@
+/**
+ * @file alias_report.c
+ * @brief Human-readable alias-resolution reporting for semantic analysis.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -24,14 +29,17 @@ static JZDiagnosticList *g_alias_report_diagnostics = NULL;
 static unsigned g_alias_report_depth = 0;
 static int g_alias_report_depth_reported = 0;
 
-/* Cross-module summary accumulator for finalize. */
+/**
+ * @struct JZAliasSummaryEntry
+ * @brief Cross-module summary row emitted by alias-report finalization.
+ */
 typedef struct {
-    char   module_name[128];
-    unsigned net_count;
-    unsigned clock_domains;
-    unsigned register_count;
-    unsigned tri_state_nets;
-    unsigned alias_stmts;
+    char   module_name[128]; /**< Module name shown in the summary table. */
+    unsigned net_count;      /**< Number of nets summarized for the module. */
+    unsigned clock_domains;  /**< Number of distinct clock domains seen in the module. */
+    unsigned register_count; /**< Number of registers counted in the module. */
+    unsigned tri_state_nets; /**< Number of nets with tri-state-capable drivers. */
+    unsigned alias_stmts;    /**< Number of alias statements attributed to the module. */
 } JZAliasSummaryEntry;
 
 static JZBuffer g_alias_summary = {0}; /* Array of JZAliasSummaryEntry */

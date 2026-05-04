@@ -21,6 +21,165 @@
 static unsigned s_ir_expr_depth = 0;
 static int s_ir_expr_depth_reported = 0;
 
+/**
+ * @brief Report the IR-expression depth-limit diagnostic once.
+ *
+ * @param diagnostics Diagnostic sink.
+ * @param loc         Source location to attribute the diagnostic to.
+ */
+static void ir_report_expr_depth_limit(JZDiagnosticList *diagnostics, JZLocation loc);
+
+/**
+ * @brief Evaluate a `lit(width, value)` call in project-level constant context.
+ *
+ * @param expr            Full expression text.
+ * @param project_symbols Project-level symbol table.
+ * @param out_width       Receives the evaluated width on success.
+ * @param out_value       Receives the evaluated value on success.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_eval_lit_call_in_project(const char *expr,
+                                       const JZBuffer *project_symbols,
+                                       int *out_width,
+                                       uint64_t *out_value);
+
+/**
+ * @brief Map an AST binary operator name to an IR expression kind.
+ *
+ * @param kind AST binary operator name.
+ * @param out  Receives the IR expression kind on success.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_map_binary_kind(const char *kind, IR_ExprKind *out);
+
+/**
+ * @brief Map an AST unary operator name to an IR expression kind.
+ *
+ * @param kind AST unary operator name.
+ * @param out  Receives the IR expression kind on success.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_map_unary_kind(const char *kind, IR_ExprKind *out);
+
+/**
+ * @brief Serialize a restricted AST expression to a constant-expression buffer.
+ *
+ * @param expr AST expression node.
+ * @param buf  Output buffer.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_expr_to_const_expr_string_rec(const JZASTNode *expr, JZBuffer *buf);
+
+/**
+ * @brief Implementation detail for recursive constant-expression serialization.
+ *
+ * @param expr AST expression node.
+ * @param buf  Output buffer.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_expr_to_const_expr_string_rec_impl(const JZASTNode *expr, JZBuffer *buf);
+
+/**
+ * @brief Serialize a literal-only AST expression for constant evaluation.
+ *
+ * @param expr            AST expression node.
+ * @param mod_scope       Module scope for CONST lookup.
+ * @param project_symbols Project-level symbols for CONFIG lookup.
+ * @param buf             Output buffer.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_lit_expr_to_const_string_rec(const JZASTNode *expr,
+                                           const JZModuleScope *mod_scope,
+                                           const JZBuffer *project_symbols,
+                                           JZBuffer *buf);
+
+/**
+ * @brief Implementation detail for literal-expression serialization.
+ *
+ * @param expr            AST expression node.
+ * @param mod_scope       Module scope for CONST lookup.
+ * @param project_symbols Project-level symbols for CONFIG lookup.
+ * @param buf             Output buffer.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_lit_expr_to_const_string_rec_impl(const JZASTNode *expr,
+                                                const JZModuleScope *mod_scope,
+                                                const JZBuffer *project_symbols,
+                                                JZBuffer *buf);
+
+/**
+ * @brief Convert a literal-only AST expression into heap-allocated text.
+ *
+ * @param expr            AST expression node.
+ * @param mod_scope       Module scope for CONST lookup.
+ * @param project_symbols Project-level symbols for CONFIG lookup.
+ * @param out_str         Receives a heap-allocated NUL-terminated string.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_lit_expr_to_const_string(const JZASTNode *expr,
+                                       const JZModuleScope *mod_scope,
+                                       const JZBuffer *project_symbols,
+                                       char **out_str);
+
+/**
+ * @brief Evaluate a literal-only AST expression to an integer constant.
+ *
+ * @param expr            AST expression node.
+ * @param mod_scope       Module scope for CONST lookup.
+ * @param project_symbols Project-level symbols for CONFIG lookup.
+ * @param out_value       Receives the evaluated value on success.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ir_eval_lit_const_expr(const JZASTNode *expr,
+                                  const JZModuleScope *mod_scope,
+                                  const JZBuffer *project_symbols,
+                                  long long *out_value);
+
+/**
+ * @brief Fast-path evaluation for pure literal arithmetic trees.
+ *
+ * @param node AST expression node to evaluate.
+ * @param out  Receives the evaluated value on success.
+ * @return 1 on success, otherwise 0.
+ */
+static int try_fast_const_eval(const JZASTNode *node, long long *out);
+
+/**
+ * @brief Find a BUS or instance-port signal mapping entry.
+ *
+ * @param map         Mapping array to search.
+ * @param map_count   Number of entries in `map`.
+ * @param port_name   Bus or instance-port name to match.
+ * @param signal_name Expanded signal name to match.
+ * @param array_index Array index to match, or -1.
+ * @return Matching mapping entry, or NULL when not found.
+ */
+static const IR_BusSignalMapping *ir_find_signal_mapping(const IR_BusSignalMapping *map,
+                                                         int map_count,
+                                                         const char *port_name,
+                                                         const char *signal_name,
+                                                         int array_index);
+
+/**
+ * @brief Lower one AST expression node into an IR expression tree.
+ *
+ * @param arena           Arena for IR allocation.
+ * @param expr            AST expression node to lower.
+ * @param mod_scope       Module scope for symbol resolution.
+ * @param project_symbols Project-level symbols.
+ * @param bus_map         BUS signal mapping array, or NULL.
+ * @param bus_map_count   Number of BUS signal mappings.
+ * @param diagnostics     Diagnostic sink.
+ * @return Lowered IR expression, or NULL on failure.
+ */
+static IR_Expr *ir_build_expr_impl(JZArena *arena,
+                                   JZASTNode *expr,
+                                   const JZModuleScope *mod_scope,
+                                   const JZBuffer *project_symbols,
+                                   const IR_BusSignalMapping *bus_map,
+                                   int bus_map_count,
+                                   JZDiagnosticList *diagnostics);
+
 static void ir_report_expr_depth_limit(JZDiagnosticList *diagnostics, JZLocation loc)
 {
     (void)jz_diagnostic_report_rule_once(&s_ir_expr_depth_reported,
@@ -230,13 +389,6 @@ int ir_eval_global_const_qualified(const char *qname,
     return -1;
 }
 
-/**
- * @brief Map an AST binary operator kind to an IR expression kind.
- *
- * @param kind AST block_kind string.
- * @param out  Output IR expression kind.
- * @return 0 on success, non-zero on failure.
- */
 static int ir_map_binary_kind(const char *kind, IR_ExprKind *out)
 {
     if (!kind || !out) return -1;
@@ -268,13 +420,6 @@ static int ir_map_binary_kind(const char *kind, IR_ExprKind *out)
     return -1;
 }
 
-/**
- * @brief Map an AST unary operator kind to an IR expression kind.
- *
- * @param kind AST block_kind string.
- * @param out  Output IR expression kind.
- * @return 0 on success, non-zero on failure.
- */
 static int ir_map_unary_kind(const char *kind, IR_ExprKind *out)
 {
     if (!kind || !out) return -1;
@@ -293,18 +438,6 @@ static int ir_map_unary_kind(const char *kind, IR_ExprKind *out)
     /* POS is treated as a no-op; caller can just return operand directly. */
     return -1;
 }
-
-/**
- * @brief Recursively serialize a restricted AST expression into a const-expr string.
- *
- * This is used exclusively for @feature guard evaluation and supports only
- * a limited subset of expression forms.
- *
- * @param expr AST expression node.
- * @param buf  Output buffer.
- * @return 0 on success, non-zero on failure.
- */
-static int ir_expr_to_const_expr_string_rec_impl(const JZASTNode *expr, JZBuffer *buf);
 
 static int ir_expr_to_const_expr_string_rec(const JZASTNode *expr, JZBuffer *buf)
 {
@@ -385,11 +518,6 @@ static int ir_expr_to_const_expr_string_rec_impl(const JZASTNode *expr, JZBuffer
         return -1;
     }
 }
-
-static int ir_lit_expr_to_const_string_rec_impl(const JZASTNode *expr,
-                                                const JZModuleScope *mod_scope,
-                                                const JZBuffer *project_symbols,
-                                                JZBuffer *buf);
 
 static int ir_lit_expr_to_const_string_rec(const JZASTNode *expr,
                                            const JZModuleScope *mod_scope,
@@ -612,15 +740,6 @@ static int ir_eval_lit_const_expr(const JZASTNode *expr,
     if (expanded) free(expanded);
     return rc;
 }
-
-
-/**
- * Fast recursive evaluator for pure-literal expression trees.
- * Handles the common template-expansion case where IDX is substituted into
- * arithmetic (e.g., 0*11+10) producing EXPR_BINARY trees of EXPR_LITERAL
- * leaves.  Avoids the expensive sem_eval_const_expr_in_module path.
- * Returns 1 on success with *out set, 0 if any node is not a literal/binary.
- */
 static int try_fast_const_eval(const JZASTNode *node, long long *out)
 {
     if (!node || !out) return 0;
@@ -708,30 +827,6 @@ static const IR_BusSignalMapping *ir_find_signal_mapping(const IR_BusSignalMappi
     }
     return NULL;
 }
-
-/**
- * @brief Build an IR expression tree from an AST expression node.
- *
- * Supports literals, identifiers, unary/binary operators, ternary
- * expressions, concatenation, slices, memory reads, MUX selectors,
- * intrinsic calls, and BUS member access.
- *
- * @param arena           Arena for IR allocation.
- * @param expr            AST expression node.
- * @param mod_scope       Module scope.
- * @param project_symbols Project-level symbols.
- * @param bus_map         BUS signal mapping array (may be NULL).
- * @param bus_map_count   Number of bus mapping entries.
- * @param diagnostics     Diagnostic sink.
- * @return Pointer to IR_Expr, or NULL if lowering fails.
- */
-static IR_Expr *ir_build_expr_impl(JZArena *arena,
-                                   JZASTNode *expr,
-                                   const JZModuleScope *mod_scope,
-                                   const JZBuffer *project_symbols,
-                                   const IR_BusSignalMapping *bus_map,
-                                   int bus_map_count,
-                                   JZDiagnosticList *diagnostics);
 
 IR_Expr *ir_build_expr(JZArena *arena,
                        JZASTNode *expr,

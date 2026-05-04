@@ -1,11 +1,6 @@
-/*
- * emit_module.c - Module, wire, and memory declaration emission for RTLIL.
- *
- * RTLIL modules contain:
- *   - attribute declarations (e.g., \top 1)
- *   - wire declarations (ports, nets, registers - all are "wire" in RTLIL)
- *   - memory declarations
- *   - connect statements for aliases
+/**
+ * @file emit_module.c
+ * @brief Emits RTLIL module headers, declarations, and alias connects.
  */
 #include <stdio.h>
 #include <string.h>
@@ -17,10 +12,23 @@
 /* Reuse alias helpers from Verilog backend. */
 #include "backend/verilog-2005/verilog_internal.h"
 
-/* -------------------------------------------------------------------------
- * Module header emission
- * -------------------------------------------------------------------------
+/**
+ * @brief Emit one alias assignment as an RTLIL `connect`.
+ * @param out Destination RTLIL stream.
+ * @param mod Module that owns the assignment.
+ * @param a Alias assignment to emit.
  */
+static void emit_alias_connect(FILE *out, const IR_Module *mod,
+                               const IR_Assignment *a);
+
+/**
+ * @brief Walk a statement tree and emit nested alias assignments.
+ * @param out Destination RTLIL stream.
+ * @param mod Module that owns the statements.
+ * @param stmt Statement subtree to inspect.
+ */
+static void emit_alias_connects_from_stmt(FILE *out, const IR_Module *mod,
+                                          const IR_Stmt *stmt);
 
 void rtlil_emit_module_header(FILE *out, const IR_Module *mod, int is_top)
 {

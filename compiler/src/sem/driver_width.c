@@ -1,3 +1,8 @@
+/**
+ * @file driver_width.c
+ * @brief Width-expression validation and evaluation helpers.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -10,7 +15,16 @@
 #include "rules.h"
 #include "driver_internal.h"
 
-/* Forward declaration for internal recursive helper. */
+/**
+ * @brief Recursively evaluate a width expression.
+ * @param expr Width expression text.
+ * @param scope Module scope used to resolve constants.
+ * @param project_symbols Project symbols used to resolve `CONFIG` references.
+ * @param out_width Output location for the resolved width.
+ * @param depth Current recursion depth.
+ * @param loc Source location used for diagnostics.
+ * @return `0` on success, or non-zero on failure.
+ */
 static int sem_eval_width_expr_internal(const char *expr,
                                         const JZModuleScope *scope,
                                         const JZBuffer *project_symbols,
@@ -18,6 +32,12 @@ static int sem_eval_width_expr_internal(const char *expr,
                                         int depth,
                                         JZLocation loc);
 
+/**
+ * @brief Look up a project symbol by name without filtering on symbol kind.
+ * @param symbols Project symbol buffer.
+ * @param name Symbol name to look up.
+ * @return Matching symbol, or `NULL` when none exists.
+ */
 static const JZSymbol *project_lookup_any(const JZBuffer *symbols,
                                           const char *name)
 {
@@ -32,6 +52,11 @@ static const JZSymbol *project_lookup_any(const JZBuffer *symbols,
     return NULL;
 }
 
+/**
+ * @brief Check whether a register initializer literal overflows its declared width.
+ * @param lit Sized literal text.
+ * @return Non-zero when the literal overflows.
+ */
 static int sem_register_init_literal_overflows(const char *lit)
 {
     if (!lit) return 0;

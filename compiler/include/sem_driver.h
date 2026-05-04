@@ -24,6 +24,7 @@
  * @param root        Root AST node (typically JZ_AST_PROJECT or JZ_AST_MODULE).
  * @param diagnostics Diagnostic list for error/warning collection. Must not be NULL.
  * @param filename    Primary source filename for diagnostics.
+ * @param verbose     Non-zero to print per-pass timing to stderr.
  * @return 0 on success (no errors), non-zero if errors were found.
  */
 int jz_sem_run(JZASTNode *root,
@@ -40,6 +41,7 @@ int jz_sem_run(JZASTNode *root,
  * @param out            Output stream for the report.
  * @param tool_version   Tool version string for the report header (may be NULL).
  * @param input_filename Source filename for the report header (may be NULL).
+ * @param diagnostics    Diagnostic list used for report-side warnings and limit errors.
  */
 void jz_sem_enable_alias_report(FILE *out,
                                 const char *tool_version,
@@ -55,6 +57,7 @@ void jz_sem_enable_alias_report(FILE *out,
  * @param out            Output stream for the report.
  * @param tool_version   Tool version string for the report header (may be NULL).
  * @param input_filename Source filename for the report header (may be NULL).
+ * @param diagnostics    Reserved for report diagnostics; may be NULL.
  */
 void jz_sem_enable_memory_report(FILE *out,
                                  const char *tool_version,
@@ -72,6 +75,7 @@ void jz_sem_enable_memory_report(FILE *out,
  * @param out            Output stream for the report.
  * @param tool_version   Tool version string for the report header (may be NULL).
  * @param input_filename Source filename for the report header (may be NULL).
+ * @param diagnostics    Reserved for report diagnostics; may be NULL.
  */
 void jz_sem_enable_tristate_report(FILE *out,
                                    const char *tool_version,

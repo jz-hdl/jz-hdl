@@ -1,7 +1,6 @@
-/*
- * common.c - Shared utilities for the Verilog-2005 backend.
- *
- * This file contains helper functions and globals used across the backend.
+/**
+ * @file common.c
+ * @brief Shared helpers for Verilog-2005 backend emission.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +9,14 @@
 #include "verilog_internal.h"
 #include "ir.h"
 #include "diagnostic.h"
+
+/**
+ * @brief Compare two keyword strings for binary search.
+ * @param a Pointer to the left keyword pointer.
+ * @param b Pointer to the right keyword pointer.
+ * @return Negative, zero, or positive according to `strcmp`.
+ */
+static int kw_compare(const void *a, const void *b);
 
 /* -------------------------------------------------------------------------
  * Global state
@@ -76,6 +83,7 @@ static const char *verilog_keywords[] = {
     "vectored", "wait", "wand", "weak0", "weak1", "while", "wire",
     "wor", "xnor", "xor",
 };
+
 
 static int kw_compare(const void *a, const void *b)
 {

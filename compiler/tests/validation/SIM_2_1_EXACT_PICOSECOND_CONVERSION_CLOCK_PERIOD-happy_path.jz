@@ -1,0 +1,40 @@
+// EXACT_PICOSECOND_CONVERSION_CLOCK_PERIOD: valid clock-period conversion
+// accepts values that map exactly to integer picoseconds.
+
+@project EXACT_PICOSECOND_CONVERSION_CLOCK_PERIOD_happy_path
+    CLOCKS {
+        clk = { period=3.333 };
+    }
+
+    IN_PINS {
+        clk = { standard=LVCMOS33 };
+    }
+
+    MAP {
+        clk = 1;
+    }
+
+    @top ExactPsClockPeriodTop {
+        IN  [1] clk = clk;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module ExactPsClockPeriodTop
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod

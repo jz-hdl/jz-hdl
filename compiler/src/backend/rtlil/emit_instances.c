@@ -1,14 +1,6 @@
-/*
- * emit_instances.c - Module instance emission for the RTLIL backend.
- *
- * User module instances are emitted as RTLIL cells with the module name
- * as the cell type. Port connections use `connect` statements within
- * the cell body.
- *
- * RTLIL format:
- *   cell \ChildModule \instance_name
- *     connect \port_name \parent_signal
- *   end
+/**
+ * @file emit_instances.c
+ * @brief Emits RTLIL cells for user-defined module instances.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,11 +13,26 @@
 /* Reuse alias helpers from Verilog backend. */
 #include "backend/verilog-2005/verilog_internal.h"
 
-/* -------------------------------------------------------------------------
- * Parse a single Verilog literal token (e.g., "8'h0F", "2'b10") and emit
- * as RTLIL binary constant. Returns 1 on success, 0 on failure.
- * -------------------------------------------------------------------------
+/**
+ * @brief Parse one literal token and emit it as an RTLIL constant.
+ * @param out Destination RTLIL stream.
+ * @param tok Pointer to the token text.
+ * @param tok_len Length of `tok` in bytes.
+ * @return `1` when the token was parsed and emitted, or `0` if it is not a
+ * supported literal form.
  */
+static int emit_single_literal(FILE *out, const char *tok, int tok_len);
+
+/**
+ * @brief Emit a constant-expression string as an RTLIL sigspec.
+ * @param out Destination RTLIL stream.
+ * @param mod Module used to resolve signal references in the expression.
+ * @param ce Constant-expression text from the IR.
+ * @param fallback_width Width of the zero constant to emit when parsing fails.
+ */
+static void rtlil_emit_const_expr(FILE *out, const IR_Module *mod,
+                                  const char *ce, int fallback_width);
+
 static int emit_single_literal(FILE *out, const char *tok, int tok_len)
 {
     char buf[256];

@@ -17,6 +17,8 @@
  * @brief Print an AST as pretty-printed JSON.
  * @param out  Output stream (e.g., stdout).
  * @param root Root AST node to serialize. Must not be NULL.
+ * @param diagnostics Optional diagnostic list for serialization limit failures.
+ * @return 0 on success, or -1 if serialization aborted after reporting a diagnostic.
  */
 int jz_ast_print_json(FILE *out, const JZASTNode *root, JZDiagnosticList *diagnostics);
 

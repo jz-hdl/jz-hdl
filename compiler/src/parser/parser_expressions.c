@@ -1,5 +1,5 @@
 /**
- * @file parser_expression.c
+ * @file parser_expressions.c
  * @brief Expression parsing with full operator precedence for the JZ HDL.
  *
  * This file implements the recursive-descent expression parser used throughout
@@ -23,6 +23,111 @@
 #include "parser_internal.h"
 
 static unsigned g_parser_expr_depth = 0;
+
+/**
+ * @brief Deep-copy an expression subtree.
+ * @param src Expression node to clone.
+ * @return Cloned tree or NULL on allocation failure.
+ */
+static JZASTNode *clone_expr_tree(const JZASTNode *src);
+
+/**
+ * @brief Parse postfix indexing, slicing, and indexed-member expressions.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_postfix_expr(Parser *p);
+
+/**
+ * @brief Parse a concatenation expression or fall back to postfix parsing.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_concat_or_primary_expr(Parser *p);
+
+/**
+ * @brief Parse unary operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_unary_expr(Parser *p);
+
+/**
+ * @brief Parse multiplicative operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_multiplicative_expr(Parser *p);
+
+/**
+ * @brief Parse additive operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_additive_expr(Parser *p);
+
+/**
+ * @brief Parse shift operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_shift_expr(Parser *p);
+
+/**
+ * @brief Parse relational comparison operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_relational_expr(Parser *p);
+
+/**
+ * @brief Parse equality comparison operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_equality_expr(Parser *p);
+
+/**
+ * @brief Parse bitwise AND operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_bitwise_and_expr(Parser *p);
+
+/**
+ * @brief Parse bitwise XOR operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_bitwise_xor_expr(Parser *p);
+
+/**
+ * @brief Parse bitwise OR operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_bitwise_or_expr(Parser *p);
+
+/**
+ * @brief Parse logical AND operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_logical_and_expr(Parser *p);
+
+/**
+ * @brief Parse logical OR operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_logical_or_expr(Parser *p);
+
+/**
+ * @brief Parse ternary conditional operators.
+ * @param p Active parser.
+ * @return Parsed expression node or NULL on failure.
+ */
+static JZASTNode *parse_ternary_expr(Parser *p);
 
 /**
  * @brief Parse postfix expressions such as slicing and indexing.

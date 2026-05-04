@@ -1,0 +1,43 @@
+// ALERT_IF_CONDITION_COLOR_MESSAGE_FORM: valid @alert_if(<condition>, <color>, "<message>") syntax in @simulation.
+
+@module AlertIfConditionColorMessageFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] flag;
+    }
+
+    REGISTER {
+        state [1] = 1'b1;
+    }
+
+    ASYNCHRONOUS {
+        flag = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation AlertIfConditionColorMessageFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        clk_shadow [1];
+    }
+
+    TAP {
+        dut.flag;
+    }
+
+    @new dut AlertIfConditionColorMessageFormDut {
+        clk [1] = clk;
+        flag [1] = clk_shadow;
+    }
+
+    @run(ns=10)
+    @alert_if(dut.flag, CYAN, "capture point")
+    @run(ns=10)
+@endsim

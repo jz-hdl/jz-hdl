@@ -1,6 +1,6 @@
 /**
  * @file sim_vcd.c
- * @brief VCD (Value Change Dump) waveform writer for simulation.
+ * @brief Emits Value Change Dump waveform traces.
  *
  * Implements the IEEE 1364 VCD format for waveform output.
  */
@@ -14,31 +14,40 @@
 
 #define VCD_MAX_SIGNALS 4096
 
+/**
+ * @struct VCDSignal
+ * @brief Metadata for one VCD-tracked signal.
+ */
 typedef struct VCDSignal {
-    char *scope;
-    char *name;
-    int   width;
-    char  ident[8]; /* VCD identifier character(s) */
+    char *scope;    /**< Scope name emitted in the VCD hierarchy. */
+    char *name;     /**< Leaf signal name. */
+    int   width;    /**< Declared signal width in bits. */
+    char  ident[8]; /**< Encoded VCD identifier string. */
 } VCDSignal;
 
+/**
+ * @struct VCDWriter
+ * @brief Mutable VCD output state.
+ */
 struct VCDWriter {
-    FILE       *fp;
-    uint64_t    timescale_ps;
-    uint64_t    current_time;
-    int         time_written;  /* has the current time marker been emitted? */
-    VCDSignal   signals[VCD_MAX_SIGNALS];
-    int         num_signals;
-    int         defs_ended;
+    FILE      *fp;           /**< Destination stream. */
+    uint64_t   timescale_ps; /**< Timescale in picoseconds per VCD unit. */
+    uint64_t   current_time; /**< Last emitted timestamp in VCD units. */
+    int        time_written; /**< Non-zero after the first timestamp is emitted. */
+    VCDSignal  signals[VCD_MAX_SIGNALS]; /**< Registered signal metadata. */
+    int        num_signals;  /**< Number of active entries in @ref signals. */
+    int        defs_ended;   /**< Non-zero after `$enddefinitions`. */
 };
 
 /**
- * @brief Generate a VCD identifier from a signal index.
- *
- * VCD identifiers are printable ASCII characters starting at '!'.
- * For indices > 93, we use multi-character identifiers.
+ * @brief Generate a printable VCD identifier string for a signal index.
+ * @param idx Zero-based signal index.
+ * @param out Destination character buffer.
+ * @param out_sz Size of @p out in bytes.
  */
-static void make_vcd_ident(int idx, char *out, size_t out_sz)
-{
+static void make_vcd_ident(int idx, char *out, size_t out_sz);
+
+static void make_vcd_ident(int idx, char *out, size_t out_sz) {
     if (idx < 94 && out_sz >= 2) {
         out[0] = (char)('!' + idx);
         out[1] = '\0';

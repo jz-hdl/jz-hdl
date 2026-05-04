@@ -41,14 +41,11 @@ static const JZSymbol *ir_lookup_bus_def(const JZBuffer *project_symbols,
 }
 
 /**
- * @brief qsort comparator for module-spec override entries.
- *
- * Sorts IR_ModuleSpecOverride entries lexicographically by CONST name in
- * order to canonicalize OVERRIDE sets.
+ * @brief Compare two module-specialization overrides by name for sorting.
  *
  * @param a First override.
  * @param b Second override.
- * @return Negative, zero, or positive as per strcmp semantics.
+ * @return Negative, zero, or positive according to `strcmp` ordering.
  */
 static int ir_override_name_cmp(const void *a, const void *b)
 {

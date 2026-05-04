@@ -12,7 +12,84 @@
 #include <string.h>
 #include <stdio.h>
 
-/* Apply an assignment to a signal entry */
+/* ---- Private declarations ---- */
+
+/**
+ * @brief Apply one IR assignment to the target simulation signal.
+ *
+ * @param ctx Simulation context that owns the destination signal.
+ * @param asgn Assignment description to execute.
+ * @param is_nba Non-zero to stage the write in `next`, zero for immediate update.
+ */
+static void apply_assign(SimContext *ctx, const IR_Assignment *asgn, int is_nba);
+
+/**
+ * @brief Resolve an IR signal identifier to its module-level descriptor.
+ *
+ * @param ctx Simulation context that owns the signal table.
+ * @param signal_id IR signal identifier to resolve.
+ * @return Pointer to the matching IR signal, or `NULL` when not found.
+ */
+static const IR_Signal *find_signal_in_ctx(SimContext *ctx, int signal_id);
+
+/**
+ * @brief Compare two simulation values for exact word-level equality.
+ *
+ * @param a First value.
+ * @param b Second value.
+ * @param nw Number of 64-bit words to compare.
+ * @return Non-zero when the compared words match exactly, or zero otherwise.
+ */
+static inline int sim_val_same(SimValue a, SimValue b, int nw);
+
+/**
+ * @brief Propagate parent-driven inputs into one child instance.
+ *
+ * @param parent Parent simulation context.
+ * @param ci Child instance mapping and context.
+ * @return `1` if any child input changed, or `0` otherwise.
+ */
+static int propagate_to_child(SimContext *parent, SimChildInstance *ci);
+
+/**
+ * @brief Copy child outputs back into the parent simulation context.
+ *
+ * @param parent Parent simulation context.
+ * @param ci Child instance mapping and context.
+ */
+static void propagate_from_child(SimContext *parent, SimChildInstance *ci);
+
+/**
+ * @brief Propagate current parent inputs throughout the full child hierarchy.
+ *
+ * @param ctx Root context whose descendants should receive refreshed inputs.
+ */
+static void propagate_to_all_children(SimContext *ctx);
+
+/**
+ * @brief Execute one asynchronous settle pass across a context hierarchy.
+ *
+ * @param ctx Root context for the settle pass.
+ */
+static void settle_hierarchy_once(SimContext *ctx);
+
+/**
+ * @brief Clear per-signal dirty flags for a context and all descendants.
+ *
+ * @param ctx Root context whose dirty flags should be cleared.
+ */
+static void clear_sig_dirty(SimContext *ctx);
+
+/**
+ * @brief Execute child clock domains driven by a parent clock signal.
+ *
+ * @param parent Parent simulation context.
+ * @param parent_clock_sig_id Parent clock signal identifier.
+ * @param reset_active Non-zero when the parent domain reset is active.
+ */
+static void exec_children_sync_for_clock(SimContext *parent, int parent_clock_sig_id,
+                                         int reset_active);
+
 static void apply_assign(SimContext *ctx, const IR_Assignment *asgn, int is_nba) {
     SimSignalEntry *entry = sim_ctx_lookup(ctx, asgn->lhs_signal_id);
     if (!entry) return;
@@ -241,9 +318,6 @@ void sim_exec_stmt(SimContext *ctx, const IR_Stmt *stmt, int is_nba) {
 
 /* ---- Instance port propagation ---- */
 
-/**
- * O(1) signal lookup using the SimContext's prebuilt index map.
- */
 static const IR_Signal *find_signal_in_ctx(SimContext *ctx, int signal_id) {
     if (signal_id >= 0 && signal_id <= ctx->max_sig_id) {
         int idx = ctx->sig_id_map[signal_id];
@@ -253,10 +327,6 @@ static const IR_Signal *find_signal_in_ctx(SimContext *ctx, int signal_id) {
     return NULL;
 }
 
-/**
- * Compare two SimValues for exact equality (fast, no masking).
- * Assumes unused bits above width are already zeroed.
- */
 static inline int sim_val_same(SimValue a, SimValue b, int nw) {
     for (int i = 0; i < nw; i++) {
         if (a.val[i] != b.val[i] || a.xmask[i] != b.xmask[i] ||
@@ -266,11 +336,6 @@ static inline int sim_val_same(SimValue a, SimValue b, int nw) {
     return 1;
 }
 
-/**
- * Propagate values from parent context to child instance inputs.
- * Uses precomputed port mappings for zero-lookup propagation.
- * Returns 1 if any child input actually changed, 0 otherwise.
- */
 static int propagate_to_child(SimContext *parent, SimChildInstance *ci) {
     (void)parent;
     int changed = 0;
@@ -304,11 +369,6 @@ static int propagate_to_child(SimContext *parent, SimChildInstance *ci) {
     return changed;
 }
 
-/**
- * Propagate values from child instance outputs back to parent context.
- * Uses precomputed port mappings for zero-lookup propagation.
- * Sets parent settle_dirty if any parent signal changes.
- */
 static void propagate_from_child(SimContext *parent, SimChildInstance *ci) {
     for (int i = 0; i < ci->num_output_maps; i++) {
         SimPortMapping *m = &ci->output_maps[i];
@@ -356,9 +416,6 @@ static void propagate_from_child(SimContext *parent, SimChildInstance *ci) {
     }
 }
 
-/**
- * Propagate inputs to all children, recursively.
- */
 static void propagate_to_all_children(SimContext *ctx) {
     for (int c = 0; c < ctx->num_children; c++) {
         if (!ctx->children[c].ctx) continue;
@@ -369,15 +426,6 @@ static void propagate_to_all_children(SimContext *ctx) {
 
 /* ---- Combinational settling (hierarchical) ---- */
 
-/**
- * Execute one round of async settling across the entire hierarchy:
- * 1. Run parent async block
- * 2. Propagate parent → children (skip if inputs unchanged)
- * 3. Run children async blocks (recursively)
- * 4. Propagate children → parent
- *
- * Uses dirty tracking to skip unchanged subtrees.
- */
 static void settle_hierarchy_once(SimContext *ctx) {
     PERF_TIMER_START(PERF_SETTLE_HIERARCHY_ONCE);
     /* Execute this context's async block (chunk-based if available) */
@@ -427,9 +475,6 @@ static void settle_hierarchy_once(SimContext *ctx) {
     PERF_TIMER_STOP(PERF_SETTLE_HIERARCHY_ONCE);
 }
 
-/**
- * Clear per-signal dirty flags for this context and all children.
- */
 static void clear_sig_dirty(SimContext *ctx) {
     if (ctx->sig_dirty)
         memset(ctx->sig_dirty, 0, (size_t)ctx->num_signals * sizeof(uint8_t));
@@ -491,11 +536,6 @@ int sim_settle_combinational(SimContext *ctx, int max_iters) {
 
 /* ---- Synchronous domain execution (hierarchical) ---- */
 
-/**
- * Execute sync domains in child instances that match the parent's clock.
- * The parent clock signal is connected to child clock ports via instance
- * connections. We find matching child clock domains and execute them.
- */
 static void exec_children_sync_for_clock(SimContext *parent, int parent_clock_sig_id,
                                           int reset_active) {
     (void)reset_active;

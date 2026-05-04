@@ -1,6 +1,6 @@
 /**
  * @file sim_waveform.c
- * @brief Generic waveform writer wrapping VCD, FST, and JZW backends.
+ * @brief Dispatches waveform operations to the selected backend.
  */
 
 #include <stdlib.h>
@@ -9,13 +9,17 @@
 #include "sim_fst.h"
 #include "sim_jzw.h"
 
+/**
+ * @struct SimWaveWriter
+ * @brief Wrapper that stores the active waveform backend instance.
+ */
 struct SimWaveWriter {
-    SimWaveFormat format;
+    SimWaveFormat format; /**< Selected waveform backend format. */
     union {
-        VCDWriter *vcd;
-        FSTWriter *fst;
-        JZWWriter *jzw;
-    } backend;
+        VCDWriter *vcd; /**< Active VCD backend when format is @ref SIM_WAVE_VCD. */
+        FSTWriter *fst; /**< Active FST backend when format is @ref SIM_WAVE_FST. */
+        JZWWriter *jzw; /**< Active JZW backend when format is @ref SIM_WAVE_JZW. */
+    } backend; /**< Concrete backend instance storage. */
 };
 
 SimWaveWriter *sim_wave_open(const char *filename, uint64_t timescale_ps,

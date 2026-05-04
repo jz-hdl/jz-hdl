@@ -1,10 +1,6 @@
-/*
- * emit_cells.c - Expression-to-cell decomposition for the RTLIL backend.
- *
- * In RTLIL, expressions are not written inline. Instead, each operation
- * becomes a cell ($add, $sub, $mux, etc.) with intermediate wires carrying
- * results. This file recursively walks the IR expression tree, emits cells
- * bottom-up, and returns the sigspec of the result wire.
+/**
+ * @file emit_cells.c
+ * @brief Lowers IR expressions into RTLIL cells and temporary wires.
  */
 #include <stdio.h>
 #include <string.h>
@@ -16,10 +12,103 @@
 /* Reuse alias helpers. */
 #include "backend/verilog-2005/verilog_internal.h"
 
-/* -------------------------------------------------------------------------
- * Helper: look up an IR signal width from a const module pointer.
- * -------------------------------------------------------------------------
+/**
+ * @brief Look up the width of a signal in a module.
+ * @param mod Module that owns the signal table.
+ * @param signal_id IR signal identifier to search for.
+ * @return Signal width in bits, or `0` if the signal cannot be found.
  */
+static int signal_width_from_mod(const IR_Module *mod, int signal_id);
+
+/**
+ * @brief Append text to a sigspec buffer.
+ * @param buf Destination buffer.
+ * @param buf_size Size of `buf` in bytes.
+ * @param pos In-out write position within `buf`.
+ * @param text Text to append.
+ * @return `0` on success, or `-1` if the append would overflow.
+ */
+static int append_sigspec_text(char *buf, size_t buf_size, size_t *pos,
+                               const char *text);
+
+/**
+ * @brief Declare a temporary RTLIL wire and return its sigspec name.
+ * @param out Destination RTLIL stream.
+ * @param width Width of the temporary wire in bits.
+ * @param out_sigspec Buffer that receives the generated wire name.
+ * @param sigspec_size Size of `out_sigspec` in bytes.
+ */
+static void make_temp_wire(FILE *out, int width, char *out_sigspec,
+                           int sigspec_size);
+
+/**
+ * @brief Format an IR literal as an RTLIL sigspec string.
+ * @param out_sigspec Destination buffer.
+ * @param sigspec_size Size of `out_sigspec` in bytes.
+ * @param lit Literal value to encode.
+ */
+static void literal_sigspec(char *out_sigspec, int sigspec_size,
+                            const IR_Literal *lit);
+
+/**
+ * @brief Format an integer value as an RTLIL constant sigspec.
+ * @param out_sigspec Destination buffer.
+ * @param sigspec_size Size of `out_sigspec` in bytes.
+ * @param width Bit width to emit.
+ * @param value Unsigned value to encode.
+ */
+static void const_val_sigspec(char *out_sigspec, int sigspec_size, int width,
+                              uint64_t value);
+
+/**
+ * @brief Emit a binary RTLIL cell and return the result wire sigspec.
+ * @param out Destination RTLIL stream.
+ * @param cell_type RTLIL cell type such as `$add` or `$and`.
+ * @param a_sigspec First operand sigspec.
+ * @param a_width Width of the first operand in bits.
+ * @param a_signed Nonzero when the first operand is signed.
+ * @param b_sigspec Second operand sigspec.
+ * @param b_width Width of the second operand in bits.
+ * @param b_signed Nonzero when the second operand is signed.
+ * @param y_width Width of the cell output in bits.
+ * @param out_sigspec Buffer that receives the generated result wire name.
+ * @param sigspec_size Size of `out_sigspec` in bytes.
+ */
+static void emit_binary_cell(FILE *out, const char *cell_type,
+                             const char *a_sigspec, int a_width, int a_signed,
+                             const char *b_sigspec, int b_width, int b_signed,
+                             int y_width, char *out_sigspec,
+                             int sigspec_size);
+
+/**
+ * @brief Emit a unary RTLIL cell and return the result wire sigspec.
+ * @param out Destination RTLIL stream.
+ * @param cell_type RTLIL cell type such as `$not` or `$neg`.
+ * @param a_sigspec Operand sigspec.
+ * @param a_width Operand width in bits.
+ * @param a_signed Nonzero when the operand is signed.
+ * @param y_width Width of the cell output in bits.
+ * @param out_sigspec Buffer that receives the generated result wire name.
+ * @param sigspec_size Size of `out_sigspec` in bytes.
+ */
+static void emit_unary_cell(FILE *out, const char *cell_type,
+                            const char *a_sigspec, int a_width, int a_signed,
+                            int y_width, char *out_sigspec, int sigspec_size);
+
+/**
+ * @brief Emit an RTLIL `$mux` cell and return the result wire sigspec.
+ * @param out Destination RTLIL stream.
+ * @param s_sigspec Select sigspec.
+ * @param a_sigspec False-branch sigspec.
+ * @param b_sigspec True-branch sigspec.
+ * @param width Output width in bits.
+ * @param out_sigspec Buffer that receives the generated result wire name.
+ * @param sigspec_size Size of `out_sigspec` in bytes.
+ */
+static void emit_mux_cell(FILE *out, const char *s_sigspec,
+                          const char *a_sigspec, const char *b_sigspec,
+                          int width, char *out_sigspec, int sigspec_size);
+
 static int signal_width_from_mod(const IR_Module *mod, int signal_id)
 {
     if (!mod || !mod->signals || signal_id < 0) return 0;

@@ -1,16 +1,6 @@
-/*
- * emit_blocks.c - Always block emission for the Verilog-2005 backend.
- *
- * This file handles emitting ASYNCHRONOUS (always @*) and SYNCHRONOUS
- * (always @posedge/negedge) blocks.
- *
- * For BLOCK-type memories (BSRAM), both writes AND reads are emitted
- * in separate always blocks to enable proper inference by synthesis tools.
- * BSRAM reads use an intermediate signal (e.g., rom_bsram_out) that is
- * read unconditionally using the bus address. The main always block then
- * references this intermediate instead of the memory array directly.
- * This avoids placing reset logic in the read always block, which would
- * prevent yosys/Gowin from inferring BSRAM.
+/**
+ * @file emit_blocks.c
+ * @brief Always-block emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
 #include <string.h>
@@ -30,6 +20,74 @@ int g_skip_inout_port_assigns = 0;
 static unsigned s_emit_blocks_expr_depth = 0;
 static unsigned s_emit_blocks_stmt_depth = 0;
 static int s_emit_blocks_depth_hit = 0;
+
+/**
+ * @brief Check whether an expression tree references a block-memory read.
+ * @param mod Module that owns the expression.
+ * @param expr Expression tree to inspect.
+ * @return Non-zero when a block-memory read is present.
+ */
+static int expr_has_block_mem_read(const IR_Module *mod, const IR_Expr *expr);
+
+/**
+ * @brief Implementation helper for block-memory read detection.
+ * @param mod Module that owns the expression.
+ * @param expr Expression tree to inspect.
+ * @return Non-zero when a block-memory read is present.
+ */
+static int expr_has_block_mem_read_impl(const IR_Module *mod, const IR_Expr *expr);
+
+/**
+ * @brief Record a memory name that uses a BSRAM read intermediate.
+ * @param mem_name Emitted Verilog memory name.
+ */
+static void bsram_mappings_add(const char *mem_name);
+
+/**
+ * @struct BlockMemAccess
+ * @brief Describes one extracted block-memory access in a statement tree.
+ */
+typedef struct {
+    const IR_Stmt *stmt;            /**< Source statement that performs the access. */
+    const IR_Expr *condition;       /**< Effective guard condition, or `NULL` if unconditional. */
+    int is_write;                   /**< Non-zero for writes, zero for reads. */
+    const char *mem_name;           /**< IR memory name being accessed. */
+    const char *port_name;          /**< IR memory-port name, or `NULL` when absent. */
+    const IR_Expr *select_selector; /**< Active select selector for nested case extraction. */
+    const IR_Expr *case_value;      /**< Active case value for nested case extraction. */
+    int lhs_signal_id;              /**< LHS signal identifier for read assignments. */
+    int lhs_width;                  /**< LHS signal width for read assignments. */
+    int emitted;                    /**< Non-zero once the access has already been emitted. */
+} BlockMemAccess;
+
+/**
+ * @struct BlockMemAccessList
+ * @brief Dynamic list of extracted block-memory accesses.
+ */
+typedef struct {
+    BlockMemAccess *items; /**< Stored access records. */
+    int count;             /**< Number of valid entries in `items`. */
+    int capacity;          /**< Allocated entry capacity of `items`. */
+} BlockMemAccessList;
+
+/**
+ * @brief Initialize an empty block-memory access list.
+ * @param list List storage to initialize.
+ */
+static void access_list_init(BlockMemAccessList *list);
+
+/**
+ * @brief Release storage held by a block-memory access list.
+ * @param list List storage to release.
+ */
+static void access_list_free(BlockMemAccessList *list);
+
+/**
+ * @brief Append one access record to a block-memory access list.
+ * @param list Destination list.
+ * @param access Access record to append.
+ */
+static void access_list_add(BlockMemAccessList *list, BlockMemAccess access);
 
 /* -------------------------------------------------------------------------
  * BLOCK memory helpers for BSRAM inference
@@ -191,27 +249,6 @@ int has_bsram_read_intermediate(const char *mem_name)
  * BLOCK memory access collection structures
  * -------------------------------------------------------------------------
  */
-
-typedef struct {
-    const IR_Stmt *stmt;           /* The memory access statement or assignment. */
-    const IR_Expr *condition;      /* Guarding condition (NULL if unconditional). */
-    int is_write;                  /* 1 for write, 0 for read. */
-    const char *mem_name;          /* Memory name. */
-    const char *port_name;         /* Port name. */
-    /* SELECT/CASE context (for memory accesses inside case branches). */
-    const IR_Expr *select_selector; /* Selector expression (NULL if not in SELECT). */
-    const IR_Expr *case_value;      /* Case value expression (NULL for default). */
-    int lhs_signal_id;             /* LHS signal ID for read assignments (-1 for writes). */
-    int lhs_width;                 /* Width of LHS signal for read assignments. */
-    int emitted;                   /* 1 if already emitted (combined with read block). */
-} BlockMemAccess;
-
-
-typedef struct {
-    BlockMemAccess *items;
-    int count;
-    int capacity;
-} BlockMemAccessList;
 
 static void access_list_init(BlockMemAccessList *list)
 {

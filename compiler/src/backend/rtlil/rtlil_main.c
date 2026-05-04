@@ -1,9 +1,6 @@
-/*
- * rtlil_main.c - Main entry point for the RTLIL backend.
- *
- * This file contains the main jz_emit_rtlil function and module ordering
- * logic. The RTLIL output is intended for direct consumption by yosys,
- * bypassing the Verilog parsing step.
+/**
+ * @file rtlil_main.c
+ * @brief Implements top-level RTLIL emission orchestration.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,10 +15,15 @@
 /* Reuse alias context from Verilog backend. */
 #include "backend/verilog-2005/verilog_internal.h"
 
-/* -------------------------------------------------------------------------
- * Design query helpers
- * -------------------------------------------------------------------------
+/**
+ * @brief Emit one module and its subordinate RTLIL sections.
+ * @param out Destination RTLIL stream.
+ * @param design Design that owns the module.
+ * @param mod Module to emit.
+ * @param is_top Nonzero when the module should receive the `\\top` attribute.
  */
+static void emit_single_module(FILE *out, const IR_Design *design,
+                               const IR_Module *mod, int is_top);
 
 int rtlil_design_has_module_named(const IR_Design *design, const char *name)
 {

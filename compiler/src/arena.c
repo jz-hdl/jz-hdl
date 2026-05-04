@@ -1,3 +1,8 @@
+/**
+ * @file arena.c
+ * @brief Implements the region allocator declared in arena.h.
+ */
+
 #include <stdlib.h>
 #include <string.h>
 

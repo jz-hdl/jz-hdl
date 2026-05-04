@@ -1,7 +1,20 @@
+/**
+ * @file type_test.c
+ * @brief Unit tests for bit-vector type inference helpers.
+ */
+
 #include <stdio.h>
 
 #include "sem.h"
 
+/**
+ * @brief Check one unary type inference case.
+ * @param op Unary operator under test.
+ * @param in_width Operand width passed to `jz_type_unary`.
+ * @param out_width Expected result width when the call succeeds.
+ * @param should_fail Non-zero when the call is expected to fail.
+ * @return `0` on success, or `1` when the observed result differs from the expectation.
+ */
 static int expect_unary(JZUnaryOp op, unsigned in_width, unsigned out_width, int should_fail)
 {
     JZBitvecType in, out;
@@ -25,6 +38,15 @@ static int expect_unary(JZUnaryOp op, unsigned in_width, unsigned out_width, int
     return 0;
 }
 
+/**
+ * @brief Check one binary type inference case.
+ * @param op Binary operator under test.
+ * @param lhs_width Left operand width.
+ * @param rhs_width Right operand width.
+ * @param expected_width Expected result width when the call succeeds.
+ * @param should_fail Non-zero when the call is expected to fail.
+ * @return `0` on success, or `1` when the observed result differs from the expectation.
+ */
 static int expect_binary(JZBinaryOp op,
                          unsigned lhs_width,
                          unsigned rhs_width,
@@ -56,6 +78,15 @@ static int expect_binary(JZBinaryOp op,
     return 0;
 }
 
+/**
+ * @brief Check one ternary type inference case.
+ * @param cond_width Condition width.
+ * @param t_width True-branch width.
+ * @param f_width False-branch width.
+ * @param expected_width Expected result width when the call succeeds.
+ * @param should_fail Non-zero when the call is expected to fail.
+ * @return `0` on success, or `1` when the observed result differs from the expectation.
+ */
 static int expect_ternary(unsigned cond_width,
                           unsigned t_width,
                           unsigned f_width,
@@ -88,6 +119,14 @@ static int expect_ternary(unsigned cond_width,
     return 0;
 }
 
+/**
+ * @brief Check one concatenation type inference case.
+ * @param widths Element widths to concatenate.
+ * @param count Number of entries in @p widths.
+ * @param expected_width Expected result width when the call succeeds.
+ * @param should_fail Non-zero when the call is expected to fail.
+ * @return `0` on success, or `1` when the observed result differs from the expectation.
+ */
 static int expect_concat(const unsigned *widths,
                          size_t count,
                          unsigned expected_width,
@@ -119,6 +158,15 @@ static int expect_concat(const unsigned *widths,
     return 0;
 }
 
+/**
+ * @brief Check one slice type inference case.
+ * @param base_width Width of the source bit-vector.
+ * @param msb Most-significant slice index.
+ * @param lsb Least-significant slice index.
+ * @param expected_width Expected result width when the call succeeds.
+ * @param should_fail Non-zero when the call is expected to fail.
+ * @return `0` on success, or `1` when the observed result differs from the expectation.
+ */
 static int expect_slice(unsigned base_width,
                         unsigned msb,
                         unsigned lsb,
@@ -149,6 +197,10 @@ static int expect_slice(unsigned base_width,
     return 0;
 }
 
+/**
+ * @brief Run the type inference unit tests.
+ * @return Exit status for the test executable.
+ */
 int main(void)
 {
     int failures = 0;

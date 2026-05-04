@@ -1,6 +1,6 @@
 /**
  * @file sim_state.c
- * @brief Simulation state creation, initialization, lookup, and NBA apply.
+ * @brief Builds and manages simulator state for module instances.
  */
 
 #include "sim_state.h"
@@ -30,6 +30,39 @@ typedef struct {
     int  count;
     int  cap;
 } SigIdSet;
+
+/**
+ * @brief Append a signal ID to a set when it is not already present.
+ * @param s Mutable set being extended.
+ * @param id Signal ID to add.
+ */
+static void sigset_add(SigIdSet *s, int id);
+/**
+ * @brief Collect all signal reads reachable from an expression tree.
+ * @param expr Expression to scan.
+ * @param reads Set that receives referenced signal IDs.
+ */
+static void collect_expr_reads(const IR_Expr *expr, SigIdSet *reads);
+/**
+ * @brief Collect read and write signal dependencies for a statement tree.
+ * @param stmt Statement to scan.
+ * @param reads Set that receives read signal IDs.
+ * @param writes Set that receives written signal IDs.
+ */
+static void collect_stmt_deps(const IR_Stmt *stmt, SigIdSet *reads, SigIdSet *writes);
+/**
+ * @brief Convert a set of signal IDs into deduplicated signal-table indices.
+ * @param ctx Simulation context that owns the signal table.
+ * @param ids Signal ID set to resolve.
+ * @param out_count Receives the number of returned indices.
+ * @return Newly allocated index array, or `NULL` when the set resolves to no indices or allocation fails.
+ */
+static int *sigids_to_indices(SimContext *ctx, const SigIdSet *ids, int *out_count);
+/**
+ * @brief Split the async block into dependency-tracked execution chunks.
+ * @param ctx Simulation context whose module async block is analyzed.
+ */
+static void build_async_chunks(SimContext *ctx);
 
 static void sigset_add(SigIdSet *s, int id) {
     for (int i = 0; i < s->count; i++)
@@ -151,10 +184,6 @@ static void collect_stmt_deps(const IR_Stmt *stmt, SigIdSet *reads, SigIdSet *wr
     }
 }
 
-/**
- * Convert signal IDs to ctx->signals[] indices, deduplicating.
- * Returns allocated array and sets *out_count. Caller frees.
- */
 static int *sigids_to_indices(SimContext *ctx, const SigIdSet *ids, int *out_count) {
     if (ids->count == 0) { *out_count = 0; return NULL; }
     int *indices = malloc((size_t)ids->count * sizeof(int));
@@ -182,10 +211,6 @@ static int *sigids_to_indices(SimContext *ctx, const SigIdSet *ids, int *out_cou
     return indices;
 }
 
-/**
- * Build async chunks from the module's async_block.
- * Splits top-level STMT_BLOCK into individual chunks with dependency sets.
- */
 static void build_async_chunks(SimContext *ctx) {
     const IR_Stmt *async = ctx->module->async_block;
     if (!async) {

@@ -13,16 +13,6 @@
 
 #include "parser_internal.h"
 
-/**
- * @brief Parse the body of a REGISTER block.
- *
- * Each register declaration specifies a width and a required literal
- * initialization value.
- *
- * @param p      Active parser
- * @param parent REGISTER block AST node
- * @return 0 on success, -1 on error
- */
 int parse_register_block_body(Parser *p, JZASTNode *parent) {
     for (;;) {
         const JZToken *t = peek(p);
@@ -158,15 +148,6 @@ int parse_register_block_body(Parser *p, JZASTNode *parent) {
     }
 }
 
-/**
- * @brief Parse the body of a LATCH block.
- *
- * Latches require an explicit width and a latch type (D or SR).
- *
- * @param p      Active parser
- * @param parent LATCH block AST node
- * @return 0 on success, -1 on error
- */
 int parse_latch_block_body(Parser *p, JZASTNode *parent) {
     for (;;) {
         const JZToken *t = peek(p);

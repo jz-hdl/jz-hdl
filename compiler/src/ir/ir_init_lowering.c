@@ -10,26 +10,38 @@
 #include "diagnostic.h"
 #include "util.h"
 
+/**
+ * @brief Supported on-disk formats for file-backed memory initialization.
+ */
 typedef enum {
-    MEM_FILE_FORMAT_UNKNOWN = 0,
-    MEM_FILE_FORMAT_BIN,
-    MEM_FILE_FORMAT_HEX,
-    MEM_FILE_FORMAT_MEM,
-    MEM_FILE_FORMAT_MIF,
-    MEM_FILE_FORMAT_COE
+    MEM_FILE_FORMAT_UNKNOWN = 0, /**< Unrecognized or unsupported file format. */
+    MEM_FILE_FORMAT_BIN,         /**< Raw binary bytes. */
+    MEM_FILE_FORMAT_HEX,         /**< Plain hexadecimal token stream. */
+    MEM_FILE_FORMAT_MEM,         /**< Verilog-style `.mem` token stream. */
+    MEM_FILE_FORMAT_MIF,         /**< Memory Initialization File format. */
+    MEM_FILE_FORMAT_COE          /**< Xilinx `.coe` initialization file. */
 } MemInitFileFormat;
 
+/**
+ * @brief Numeric radices accepted while parsing text-based memory files.
+ */
 typedef enum {
-    MEM_RADIX_NONE = 0,
-    MEM_RADIX_BIN = 2,
-    MEM_RADIX_OCT = 8,
-    MEM_RADIX_DEC = 10,
-    MEM_RADIX_HEX = 16,
-    MEM_RADIX_UNS = 100
+    MEM_RADIX_NONE = 0,  /**< No radix has been selected yet. */
+    MEM_RADIX_BIN = 2,   /**< Base-2 digits. */
+    MEM_RADIX_OCT = 8,   /**< Base-8 digits. */
+    MEM_RADIX_DEC = 10,  /**< Base-10 digits. */
+    MEM_RADIX_HEX = 16,  /**< Base-16 digits. */
+    MEM_RADIX_UNS = 100  /**< Unsigned decimal values in MIF files. */
 } MemInitRadix;
 
 #define MEM_INIT_BLOB_MAX_BYTES ((size_t)256u * 1024u * 1024u)
 
+/**
+ * @brief Return the filename extension of a path, excluding the dot.
+ *
+ * @param path File path to inspect.
+ * @return Extension substring, or NULL when the path has no usable extension.
+ */
 static const char *mem_init_get_ext(const char *path)
 {
     if (!path) return NULL;
@@ -40,6 +52,13 @@ static const char *mem_init_get_ext(const char *path)
     return dot + 1;
 }
 
+/**
+ * @brief Compare two extensions case-insensitively.
+ *
+ * @param ext  Extension text from an input path.
+ * @param want Expected extension text.
+ * @return 1 when the strings match ignoring case, otherwise 0.
+ */
 static int mem_init_ext_eq(const char *ext, const char *want)
 {
     if (!ext || !want) return 0;
@@ -53,6 +72,12 @@ static int mem_init_ext_eq(const char *ext, const char *want)
     return *ext == '\0' && *want == '\0';
 }
 
+/**
+ * @brief Infer the initializer file format from its path.
+ *
+ * @param file_path Path to the initialization file.
+ * @return Detected file format, or `MEM_FILE_FORMAT_UNKNOWN`.
+ */
 static MemInitFileFormat mem_init_get_format(const char *file_path)
 {
     const char *ext = mem_init_get_ext(file_path);
@@ -1345,3 +1370,7 @@ int jz_ir_init_lowering(IR_Design *design,
 
     return 0;
 }
+/**
+ * @file ir_init_lowering.c
+ * @brief Lower file-backed memory initializers into IR memory blobs.
+ */

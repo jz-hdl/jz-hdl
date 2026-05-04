@@ -1,3 +1,8 @@
+/**
+ * @file driver_instance.c
+ * @brief Semantic checks for module instantiation and instance bindings.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -9,13 +14,27 @@
 #include "rules.h"
 #include "driver_internal.h"
 
-/* Note: full MEM declaration checks are implemented in driver_mem.c via
- * sem_check_module_mem_and_mux_decls().
+/**
+ * @brief Check whether an expression subtree references `IDX`.
+ * @param expr Expression subtree to inspect.
+ * @return Non-zero when `IDX` appears, or zero otherwise.
  */
+static int sem_expr_contains_idx(JZASTNode *expr);
+/**
+ * @brief Determine the alias operator implied by an instance binding.
+ * @param bind Port-binding declaration to inspect.
+ * @return Operator text such as `ALIAS`, `ALIAS_Z`, or `ALIAS_S`.
+ */
+static const char *sem_instance_binding_op_kind(const JZASTNode *bind);
+/**
+ * @brief Evaluate an AST expression using a concrete `IDX` value.
+ * @param expr Expression node to evaluate.
+ * @param idx_value Value substituted for `IDX`.
+ * @param out Receives the evaluated unsigned result.
+ * @return `0` on success, or `-1` when evaluation fails.
+ */
+static int sem_eval_idx_expr(JZASTNode *expr, unsigned idx_value, unsigned *out);
 
-/*
- * MODULE_AND_INSTANTIATION checks for module-level @new instances.
- */
 static int sem_expr_contains_idx(JZASTNode *expr)
 {
     if (!expr) return 0;
@@ -116,10 +135,6 @@ int sem_eval_simple_index_literal(JZASTNode *idx, unsigned *out)
     return 0;
 }
 
-/* Recursively evaluate an AST expression node with a given IDX value.
- * Returns 0 on success (result stored in *out), -1 if the expression
- * cannot be statically evaluated (unknown node type, non-IDX identifier, etc.).
- */
 static int sem_eval_idx_expr(JZASTNode *expr, unsigned idx_value, unsigned *out)
 {
     if (!expr || !out) return -1;

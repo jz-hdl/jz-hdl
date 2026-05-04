@@ -1,3 +1,8 @@
+/**
+ * @file lexer.c
+ * @brief Tokenizer for JZ-HDL source text.
+ */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,26 +13,42 @@
 #include "util.h"
 #include "rules.h"
 
+/**
+ * @struct LexerState
+ * @brief Mutable state for a single lexer pass over one source buffer.
+ */
 typedef struct LexerState {
-    const char      *filename;
-    const char      *src;
-    size_t           len;
-    size_t           pos;
-    int              line;
-    int              column;
-    JZTokenStream   *out;
-    JZDiagnosticList *diagnostics;
-    int              had_error;
-    int              stop_lexing;
-    size_t           last_token_end;
-    int              last_token_valid;
+    const char       *filename;         /**< Diagnostic filename for emitted tokens. */
+    const char       *src;              /**< Source buffer being tokenized. */
+    size_t            len;              /**< Length of @p src in bytes. */
+    size_t            pos;              /**< Current byte offset within @p src. */
+    int               line;             /**< Current 1-based source line. */
+    int               column;           /**< Current 1-based source column. */
+    JZTokenStream    *out;              /**< Output token stream under construction. */
+    JZDiagnosticList *diagnostics;      /**< Optional sink for lexer diagnostics. */
+    int               had_error;        /**< Non-zero after any lexical error is reported. */
+    int               stop_lexing;      /**< Non-zero when tokenization should terminate early. */
+    size_t            last_token_end;   /**< End offset of the most recent non-EOF token. */
+    int               last_token_valid; /**< Non-zero when @p last_token_end is initialized. */
 } LexerState;
 
+/**
+ * @brief Report a rule-based lexer diagnostic.
+ * @param st Active lexer state.
+ * @param loc Source location for the diagnostic.
+ * @param rule_id Rule identifier to report.
+ * @param fallback_message Message used when the rule database has no text.
+ */
 static void lexer_report_rule(LexerState *st,
                               JZLocation loc,
                               const char *rule_id,
                               const char *fallback_message);
 
+/**
+ * @brief Grow a token stream when another token needs to be appended.
+ * @param s Token stream to resize.
+ * @return 0 on success or -1 on allocation failure.
+ */
 static int lexer_ensure_capacity(JZTokenStream *s) {
     if (s->count == s->capacity) {
         size_t new_cap = 0;
@@ -42,6 +63,13 @@ static int lexer_ensure_capacity(JZTokenStream *s) {
     return 0;
 }
 
+/**
+ * @brief Report a direct lexer parse error.
+ * @param st Active lexer state.
+ * @param loc Source location for the diagnostic.
+ * @param code Diagnostic code to emit.
+ * @param message Human-readable error message.
+ */
 static void lexer_report_parse_error(LexerState *st,
                                      JZLocation loc,
                                      const char *code,
@@ -57,6 +85,14 @@ static void lexer_report_parse_error(LexerState *st,
     jz_diagnostic_report(st->diagnostics, loc, JZ_SEVERITY_ERROR, code, message);
 }
 
+/**
+ * @brief Append one token to the output stream.
+ * @param st Active lexer state.
+ * @param type Token kind to emit.
+ * @param start Pointer to the token text to copy, or NULL for token kinds without lexemes.
+ * @param length Length of the token text in bytes.
+ * @param loc Source location to record on the token.
+ */
 static void emit_token(LexerState *st, JZTokenType type, const char *start, size_t length, JZLocation loc) {
     if (st->out->count >= JZ_MAX_SOURCE_TOKENS) {
         lexer_report_rule(st,
@@ -97,10 +133,20 @@ static void emit_token(LexerState *st, JZTokenType type, const char *start, size
     }
 }
 
+/**
+ * @brief Test whether a character can start an identifier.
+ * @param c Character code to test.
+ * @return Non-zero when the character may begin an identifier.
+ */
 static int is_identifier_start(int c) {
     return isalpha(c) || c == '_';
 }
 
+/**
+ * @brief Test whether a character can appear after the first identifier byte.
+ * @param c Character code to test.
+ * @return Non-zero when the character may continue an identifier.
+ */
 static int is_identifier_char(int c) {
     return isalnum(c) || c == '_';
 }
@@ -143,12 +189,16 @@ static void lexer_report_rule(LexerState *st,
 }
 
 /* Fine-grained error causes for sized numeric literal lexing. */
+/**
+ * @enum JZNumericErrorCause
+ * @brief Specific lexical failure modes for sized numeric literals.
+ */
 typedef enum JZNumericErrorCause {
-    JZ_NUM_ERR_NONE = 0,
-    JZ_NUM_ERR_UNDERSCORE_EDGES,
-    JZ_NUM_ERR_INVALID_DIGIT,
-    JZ_NUM_ERR_DECIMAL_HAS_XZ,
-    JZ_NUM_ERR_OTHER
+    JZ_NUM_ERR_NONE = 0,         /**< No numeric-literal error was detected. */
+    JZ_NUM_ERR_UNDERSCORE_EDGES, /**< The value starts or ends with an underscore. */
+    JZ_NUM_ERR_INVALID_DIGIT,    /**< The value contains a digit invalid for its base. */
+    JZ_NUM_ERR_DECIMAL_HAS_XZ,   /**< A decimal literal contains `x` or `z`. */
+    JZ_NUM_ERR_OTHER             /**< Any other malformed numeric-literal form. */
 } JZNumericErrorCause;
 
 static int parse_numeric_literal(const char *lexeme,

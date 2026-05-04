@@ -1,5 +1,5 @@
 /**
- * @file parser_utils.c
+ * @file parser_core.c
  * @brief Core parser utility functions for token navigation and diagnostics.
  *
  * This file provides low-level helper routines used throughout the
@@ -90,6 +90,11 @@ void parser_error(const Parser *p, const char *msg) {
     }
 }
 
+/**
+ * @brief Emit a rule-based parser error at the current token location.
+ * @param p Active parser.
+ * @param rule_id Rule identifier to report.
+ */
 void parser_error_rule(const Parser *p, const char *rule_id) {
     const JZToken *t = peek(p);
     const JZRuleInfo *rule = jz_rule_lookup(rule_id);

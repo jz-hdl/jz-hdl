@@ -29,8 +29,8 @@
  * @return 0 on success, non-zero if errors were found.
  */
 int jz_template_expand(JZASTNode *root,
-                        JZDiagnosticList *diagnostics,
-                        const char *filename,
-                        const JZExpansionLimits *limits);
+                       JZDiagnosticList *diagnostics,
+                       const char *filename,
+                       const JZExpansionLimits *limits);
 
 #endif /* JZ_HDL_TEMPLATE_EXPAND_H */

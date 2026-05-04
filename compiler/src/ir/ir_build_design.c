@@ -19,16 +19,87 @@
 #include "../parser/parser_internal.h"
 
 /**
+ * @brief Sort module-specialization overrides by name for deterministic matching.
+ *
+ * @param a Pointer to the first override record.
+ * @param b Pointer to the second override record.
+ * @return Negative, zero, or positive following `qsort` comparator rules.
+ */
+static int ir_override_name_cmp(const void *a, const void *b);
+
+/**
+ * @brief Resolve an imported filename to its canonical path when available.
+ *
+ * @param filename Source filename to resolve.
+ * @return Canonical imported path when known, otherwise `filename`.
+ */
+static const char *ir_resolve_imported_filename(const char *filename);
+
+/**
  * @brief Copy a string while trimming leading and trailing whitespace.
  *
- * Used during project-level parsing to normalize identifiers and attribute
- * values.
- *
- * @param src      Source string (may be NULL).
+ * @param src      Source string, or NULL.
  * @param dst      Destination buffer.
- * @param dst_size Size of destination buffer in bytes.
+ * @param dst_size Size of `dst` in bytes.
  */
-/** Sort comparator for IR_ModuleSpecOverride by name (for qsort). */
+static void ir_trim_copy(const char *src, char *dst, size_t dst_size);
+
+/**
+ * @brief Build the lowered asynchronous statement block for one module.
+ *
+ * @param arena           Arena for IR allocation.
+ * @param mod_scope       Module scope whose async block is being lowered.
+ * @param project_symbols Project-level symbols used during expression lowering.
+ * @param bus_map         BUS signal mapping array, or NULL.
+ * @param bus_map_count   Number of BUS signal mappings.
+ * @param diagnostics     Diagnostic sink.
+ * @return Lowered async block, or NULL when the module has no async block.
+ */
+static IR_Stmt *ir_build_async_block(JZArena *arena,
+                                     const JZModuleScope *mod_scope,
+                                     const JZBuffer *project_symbols,
+                                     const IR_BusSignalMapping *bus_map,
+                                     int bus_map_count,
+                                     JZDiagnosticList *diagnostics);
+
+/**
+ * @brief Count source lines in a file for IR source-file metadata.
+ *
+ * @param path Path to the file to count.
+ * @return Number of lines, or 0 when the file cannot be opened.
+ */
+static int ir_count_file_lines(const char *path);
+
+/**
+ * @brief Parse a pin slice expression of the form `pin[msb:lsb]`.
+ *
+ * @param expr          Input expression text.
+ * @param out_pin_name  Receives the parsed pin name.
+ * @param out_name_size Size of `out_pin_name` in bytes.
+ * @param out_msb       Receives the parsed MSB index.
+ * @param out_lsb       Receives the parsed LSB index.
+ * @return 1 on success, otherwise 0.
+ */
+static int ir_parse_pin_slice(const char *expr,
+                              char *out_pin_name,
+                              size_t out_name_size,
+                              int *out_msb,
+                              int *out_lsb);
+
+/**
+ * @brief Parse a MAP left-hand side of the form `pin` or `pin[bit]`.
+ *
+ * @param lhs            Input left-hand side text.
+ * @param out_pin_name   Receives the parsed pin name.
+ * @param out_name_size  Size of `out_pin_name` in bytes.
+ * @param out_bit_index  Receives the parsed bit index, or -1 when absent.
+ * @return 1 on success, otherwise 0.
+ */
+static int ir_parse_map_lhs(const char *lhs,
+                            char *out_pin_name,
+                            size_t out_name_size,
+                            int *out_bit_index);
+
 static int ir_override_name_cmp(const void *a, const void *b)
 {
     const IR_ModuleSpecOverride *oa = (const IR_ModuleSpecOverride *)a;
@@ -82,21 +153,6 @@ static void ir_trim_copy(const char *src, char *dst, size_t dst_size)
     dst[len] = '\0';
 }
 
-/**
- * @brief Build the ASYNCHRONOUS statement block for a module.
- *
- * Locates the ASYNCHRONOUS block in the module AST and lowers its contents
- * into a single IR STMT_BLOCK, including assignments, IF/ELIF/ELSE chains,
- * SELECT statements, and nested blocks.
- *
- * @param arena           Arena for IR allocation.
- * @param mod_scope       Module scope.
- * @param project_symbols Project-level symbols.
- * @param bus_map         BUS signal mapping array (may be NULL).
- * @param bus_map_count   Number of bus mapping entries.
- * @param diagnostics     Diagnostic sink.
- * @return Pointer to IR_Stmt block, or NULL if none exists.
- */
 static IR_Stmt *ir_build_async_block(JZArena *arena,
                                      const JZModuleScope *mod_scope,
                                      const JZBuffer *project_symbols,
@@ -129,15 +185,6 @@ static IR_Stmt *ir_build_async_block(JZArena *arena,
                                     &next_assign_id);
 }
 
-/**
- * @brief Count the number of lines in a source file.
- *
- * An empty file reports 0 lines. A non-empty file without a trailing newline
- * still counts as one line.
- *
- * @param path Path to the source file.
- * @return Number of lines, or 0 if the file cannot be opened.
- */
 static int ir_count_file_lines(const char *path)
 {
     if (!path || !*path) {
@@ -165,18 +212,6 @@ static int ir_count_file_lines(const char *path)
     return lines;
 }
 
-/**
- * @brief Parse a pin slice of the form "pin[msb:lsb]".
- *
- * Extracts the logical pin name, MSB, and LSB indices.
- *
- * @param expr           Input expression text.
- * @param out_pin_name   Output buffer for pin name.
- * @param out_name_size  Size of pin-name buffer.
- * @param out_msb        Output MSB index.
- * @param out_lsb        Output LSB index.
- * @return 1 on success, 0 on failure or if no colon is present.
- */
 static int ir_parse_pin_slice(const char *expr,
                               char *out_pin_name,
                               size_t out_name_size,
@@ -235,17 +270,6 @@ static int ir_parse_pin_slice(const char *expr,
     return 1;
 }
 
-/**
- * @brief Parse a MAP left-hand side of the form "pin" or "pin[bit]".
- *
- * Extracts the logical pin name and optional bit index.
- *
- * @param lhs             Left-hand side text.
- * @param out_pin_name    Output buffer for pin name.
- * @param out_name_size   Size of pin-name buffer.
- * @param out_bit_index   Output bit index, or -1 when not present.
- * @return 1 on success, 0 on failure.
- */
 static int ir_parse_map_lhs(const char *lhs,
                             char *out_pin_name,
                             size_t out_name_size,
@@ -302,23 +326,124 @@ static int ir_parse_map_lhs(const char *lhs,
     return 1;
 }
 
-/* -------------------------------------------------------------------------
- * Small expression evaluator for chip-data clock-gen output frequency
- * expressions.  Works with IR_ClockGenUnit (CONFIG values) + chip data
- * (defaults, derived expressions).  Mirrors the AST-level evaluator in
- * driver_project_hw.c but operates on IR data structures.
- * -------------------------------------------------------------------------
+/**
+ * @struct IRCGenEvalCtx
+ * @brief Evaluation context for chip-data clock-generator expressions.
  */
 typedef struct IRCGenEvalCtx {
-    const IR_ClockGenUnit *unit;
-    const JZChipData      *chip;
-    const char            *unit_type;   /* e.g., "pll" */
-    double                 refclk_period_ns;
-    int                    depth;       /* recursion guard */
-    int                    ok;
+    const IR_ClockGenUnit *unit;   /**< Clock-generator unit providing CONFIG overrides. */
+    const JZChipData *chip;        /**< Chip-data table supplying defaults and derived formulas. */
+    const char *unit_type;         /**< Clock-generator type name, such as `pll`. */
+    double refclk_period_ns;       /**< Reference clock period in nanoseconds. */
+    int depth;                     /**< Recursion depth used to guard derived-expression evaluation. */
+    int ok;                        /**< Non-zero while expression evaluation remains valid. */
 } IRCGenEvalCtx;
 
+/**
+ * @brief Skip ASCII whitespace in a clock-generator expression string.
+ *
+ * @param pp Pointer to the current expression cursor.
+ */
+static void ir_cgen_skip_ws(const char **pp);
+
+/**
+ * @brief Resolve an identifier in a clock-generator expression.
+ *
+ * @param name Identifier start pointer.
+ * @param len  Identifier length in bytes.
+ * @param ctx  Evaluation context with CONFIG and chip-data state.
+ * @return Resolved numeric value, or 0.0 after marking the context invalid.
+ */
+static double ir_cgen_resolve_ident(const char *name, size_t len, IRCGenEvalCtx *ctx);
+
+/**
+ * @brief Parse a primary clock-generator expression term.
+ *
+ * @param pp  Pointer to the current expression cursor.
+ * @param ctx Evaluation context.
+ * @return Parsed numeric value.
+ */
+static double ir_cgen_eval_primary(const char **pp, IRCGenEvalCtx *ctx);
+
+/**
+ * @brief Parse unary operators in a clock-generator expression.
+ *
+ * @param pp  Pointer to the current expression cursor.
+ * @param ctx Evaluation context.
+ * @return Parsed numeric value.
+ */
+static double ir_cgen_eval_unary(const char **pp, IRCGenEvalCtx *ctx);
+
+/**
+ * @brief Parse multiplicative operators in a clock-generator expression.
+ *
+ * @param pp  Pointer to the current expression cursor.
+ * @param ctx Evaluation context.
+ * @return Parsed numeric value.
+ */
+static double ir_cgen_eval_mul(const char **pp, IRCGenEvalCtx *ctx);
+
+/**
+ * @brief Parse additive operators in a clock-generator expression.
+ *
+ * @param pp  Pointer to the current expression cursor.
+ * @param ctx Evaluation context.
+ * @return Parsed numeric value.
+ */
+static double ir_cgen_eval_add(const char **pp, IRCGenEvalCtx *ctx);
+
+/**
+ * @brief Parse shift operators in a clock-generator expression.
+ *
+ * @param pp  Pointer to the current expression cursor.
+ * @param ctx Evaluation context.
+ * @return Parsed numeric value.
+ */
+static double ir_cgen_eval_shift(const char **pp, IRCGenEvalCtx *ctx);
+
+/**
+ * @brief Parse a full clock-generator expression.
+ *
+ * @param pp  Pointer to the current expression cursor.
+ * @param ctx Evaluation context.
+ * @return Parsed numeric value.
+ */
 static double ir_cgen_eval_expr(const char **pp, IRCGenEvalCtx *ctx);
+
+/**
+ * @brief Evaluate a chip-data clock-generator expression to a double.
+ *
+ * @param expr             Expression text to evaluate.
+ * @param unit             Clock-generator unit providing CONFIG overrides.
+ * @param refclk_period_ns Reference clock period in nanoseconds.
+ * @param chip             Chip-data source for defaults and derived expressions.
+ * @param unit_type        Clock-generator type name.
+ * @return Evaluated value, or 0.0 on failure.
+ */
+static double ir_eval_cgen_expr(const char *expr,
+                                const IR_ClockGenUnit *unit,
+                                double refclk_period_ns,
+                                const JZChipData *chip,
+                                const char *unit_type);
+
+/**
+ * @brief Mark any latch directly driving an output pin as an IOB latch.
+ *
+ * @param stmt Statement tree to scan.
+ * @param mod  Owning module whose signals may be updated.
+ * @param proj Project metadata used to resolve top-level pin bindings.
+ */
+static void ir_mark_iob_latch_stmt(const IR_Stmt *stmt,
+                                   IR_Module *mod,
+                                   const IR_Project *proj);
+
+/**
+ * @brief Start IOB-latch marking from the top module's async block.
+ *
+ * @param top_mod Top module to inspect.
+ * @param proj    Project metadata used to resolve top-level pin bindings.
+ */
+static void ir_mark_iob_latches(IR_Module *top_mod, const IR_Project *proj);
 
 static void ir_cgen_skip_ws(const char **pp) {
     while (**pp && isspace((unsigned char)**pp)) ++(*pp);
@@ -461,10 +586,6 @@ static double ir_cgen_eval_expr(const char **pp, IRCGenEvalCtx *ctx)
     return ir_cgen_eval_shift(pp, ctx);
 }
 
-/**
- * @brief Evaluate a chip-data clock-gen expression to a double.
- * @return The result in MHz, or 0.0 on failure.
- */
 static double ir_eval_cgen_expr(const char *expr,
                                 const IR_ClockGenUnit *unit,
                                 double refclk_period_ns,

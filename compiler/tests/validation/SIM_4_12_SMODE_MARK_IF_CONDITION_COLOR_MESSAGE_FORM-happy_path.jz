@@ -1,0 +1,39 @@
+// MARK_IF_CONDITION_COLOR_MESSAGE_FORM: valid @mark_if(<condition>, <color>, "<message>") syntax in @simulation.
+
+@module MarkIfConditionColorMessageFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] flag;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        flag = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation MarkIfConditionColorMessageFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        flag [1];
+    }
+
+    @new dut MarkIfConditionColorMessageFormDut {
+        clk [1] = clk;
+        flag [1] = flag;
+    }
+
+    @run(ns=10)
+    @mark_if(flag, CYAN, "capture point")
+    @run(ns=10)
+@endsim

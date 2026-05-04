@@ -1,5 +1,5 @@
 /**
- * @file parser_statement.c
+ * @file parser_statements.c
  * @brief Parsing of executable statements, lvalues, control flow, and feature guards.
  *
  * This file implements parsing of executable statements inside ASYNCHRONOUS
@@ -18,17 +18,75 @@
 
 static unsigned g_parser_stmt_depth = 0;
 
-
 /**
- * @brief Parse the primary form of an assignment lvalue.
- *
- * Valid lvalues include identifiers and qualified identifiers. The CONFIG
- * keyword is explicitly allowed so that illegal assignments like CONFIG.X = 1
- * can be diagnosed during semantic analysis instead of failing during parsing.
+ * @brief Parse the primary identifier form of an assignment lvalue.
  *
  * @param p Active parser
  * @return Lvalue AST node, or NULL on error
  */
+static JZASTNode *parse_lvalue_primary(Parser *p);
+
+/**
+ * @brief Parse a full assignment lvalue expression.
+ *
+ * @param p Active parser
+ * @return Lvalue AST node, or NULL on error
+ */
+static JZASTNode *parse_lvalue(Parser *p);
+
+/**
+ * @brief Parse an assignment statement inside an executable block.
+ *
+ * @param p       Active parser
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return Assignment AST node, or NULL on error
+ */
+static JZASTNode *parse_assignment_stmt(Parser *p, int is_sync);
+
+/**
+ * @brief Parse an `IF` / `ELIF` / `ELSE` chain.
+ *
+ * @param p       Active parser
+ * @param parent  Parent AST node receiving parsed branch nodes
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return 0 on success, -1 on error
+ */
+static int parse_if_chain(Parser *p, JZASTNode *parent, int is_sync);
+
+/**
+ * @brief Parse a `SELECT` statement and its `CASE` branches.
+ *
+ * @param p       Active parser
+ * @param parent  Parent AST node receiving the parsed SELECT node
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return 0 on success, -1 on error
+ */
+static int parse_select_stmt(Parser *p, JZASTNode *parent, int is_sync);
+
+/**
+ * @brief Parse the statements inside a feature-guard branch.
+ *
+ * @param p            Active parser
+ * @param parent       Branch AST node receiving parsed statements
+ * @param is_sync      Nonzero when parsing a SYNCHRONOUS block
+ * @param out_saw_else Output flag set when `@feature_else` is encountered
+ * @return 0 on success, -1 on error
+ */
+static int parse_feature_guard_body(Parser *p,
+                                    JZASTNode *parent,
+                                    int is_sync,
+                                    int *out_saw_else);
+
+/**
+ * @brief Parse an executable `@feature` guard statement.
+ *
+ * @param p       Active parser
+ * @param parent  Parent AST node receiving the parsed feature guard
+ * @param is_sync Nonzero when parsing a SYNCHRONOUS block
+ * @return 0 on success, -1 on error
+ */
+static int parse_feature_guard_stmt(Parser *p, JZASTNode *parent, int is_sync);
+
 static JZASTNode *parse_lvalue_primary(Parser *p) {
     const JZToken *t = peek(p);
     if (!is_decl_identifier_token(t) && t->type != JZ_TOK_KW_CONFIG) {
@@ -102,17 +160,6 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
     return id_node;
 }
 
-/**
- * @brief Parse a full lvalue expression.
- *
- * Supported forms include:
- * - Simple or qualified identifiers
- * - Indexed or sliced identifiers
- * - Concatenations of lvalues: { a, b, c }
- *
- * @param p Active parser
- * @return Lvalue AST node, or NULL on error
- */
 static JZASTNode *parse_lvalue(Parser *p) {
     if (match(p, JZ_TOK_LBRACE)) {
         /* Concatenation lvalue: { lhs1, lhs2, ... } */
@@ -265,17 +312,6 @@ static JZASTNode *parse_lvalue(Parser *p) {
     return base;
 }
 
-/**
- * @brief Parse an assignment statement.
- *
- * Supports aliasing, driving, receiving, and guarded latch assignments.
- * Guarded latch syntax is represented explicitly in the AST so semantic
- * analysis can enforce context-specific rules.
- *
- * @param p       Active parser
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return Assignment statement AST node, or NULL on error
- */
 static JZASTNode *parse_assignment_stmt(Parser *p, int is_sync) {
     JZLocation loc = peek(p)->loc;
     (void)is_sync;
@@ -376,17 +412,6 @@ static JZASTNode *parse_assignment_stmt(Parser *p, int is_sync) {
     return stmt;
 }
 
-/**
- * @brief Parse an IF / ELIF* / ELSE? statement chain.
- *
- * Conditions must be enclosed in parentheses. Each body is parsed as a
- * statement list enclosed in braces.
- *
- * @param p       Active parser
- * @param parent  Parent AST node
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 static int parse_if_chain(Parser *p, JZASTNode *parent, int is_sync) {
     (void)is_sync;
 
@@ -511,17 +536,6 @@ static int parse_if_chain(Parser *p, JZASTNode *parent, int is_sync) {
     return 0;
 }
 
-/**
- * @brief Parse a SELECT / CASE / DEFAULT statement.
- *
- * CASE labels may optionally include a braced statement body. DEFAULT may
- * appear at most once.
- *
- * @param p       Active parser
- * @param parent  Parent AST node
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 static int parse_select_stmt(Parser *p, JZASTNode *parent, int is_sync) {
     (void)is_sync;
 
@@ -655,18 +669,6 @@ static int parse_select_stmt(Parser *p, JZASTNode *parent, int is_sync) {
     return 0;
 }
 
-/**
- * @brief Parse the body of a @feature guarded block.
- *
- * Parsing stops at @else or @endfeat, which are consumed by the caller.
- * Nested @feature blocks are not allowed.
- *
- * @param p            Active parser
- * @param parent       Parent AST node
- * @param is_sync      Nonzero if parsing a SYNCHRONOUS context
- * @param out_saw_else Optional output flag indicating presence of @else
- * @return 0 on success, -1 on error
- */
 static int parse_feature_guard_body(Parser *p,
                                       JZASTNode *parent,
                                       int is_sync,
@@ -764,17 +766,6 @@ static int parse_feature_guard_body(Parser *p,
     }
 }
 
-/**
- * @brief Parse a @feature guarded statement.
- *
- * A feature guard consists of a condition expression, a THEN body, an
- * optional ELSE body, and a required @endfeat terminator.
- *
- * @param p       Active parser
- * @param parent  Parent AST node
- * @param is_sync Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 static int parse_feature_guard_stmt(Parser *p, JZASTNode *parent, int is_sync)
 {
     const JZToken *feat_tok = peek(p);
@@ -859,19 +850,6 @@ static int parse_feature_guard_stmt(Parser *p, JZASTNode *parent, int is_sync)
     return 0;
 }
 
-/**
- * @brief Parse a @feature guard inside a declaration block.
- *
- * This is used by WIRE, REGISTER, LATCH, CONST, PORT, MEM, MUX blocks
- * and module scope to support @feature guards around declarations.
- * The body_fn callback parses declarations until it sees @else/@endfeat
- * (at which point it returns 0 to signal the sentinel was hit).
- *
- * @param p       Active parser
- * @param parent  Parent AST node to attach the FEATURE_GUARD to
- * @param body_fn Callback that parses the body declarations
- * @return 0 on success, -1 on error
- */
 int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
                                   int (*body_fn)(Parser *p, JZASTNode *parent))
 {
@@ -955,19 +933,6 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
     return 0;
 }
 
-/**
- * @brief Parse a list of executable statements.
- *
- * Statements are parsed until the specified terminator token is encountered.
- * This function handles assignments, control-flow constructs, feature guards,
- * and empty statements.
- *
- * @param p          Active parser
- * @param parent     Parent AST node
- * @param terminator Token that ends the statement list
- * @param is_sync    Nonzero if parsing a SYNCHRONOUS context
- * @return 0 on success, -1 on error
- */
 int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, int is_sync) {
     if (jz_depth_enter_checked(&g_parser_stmt_depth, JZ_LIMIT_PARSER_STATEMENT_DEPTH) != 0) {
         parser_report_rule(p,

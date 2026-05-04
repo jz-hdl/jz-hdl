@@ -1,24 +1,6 @@
-/*
- * emit_process.c - Process emission for the RTLIL backend.
- *
- * RTLIL processes represent combinational (async) and sequential (sync)
- * logic. Each process contains:
- *   - A tree of `switch`/`case` nodes for control flow (IF/SELECT)
- *   - `assign` statements for default values
- *   - `sync` blocks for clock/reset triggers with `update` statements
- *
- * Async blocks become processes with `sync always`.
- * Clock domains become processes with `sync posedge|negedge` for the clock
- * and optionally `sync high|low` for async reset.
- *
- * Process assignments use intermediate wires ($0\signal[W-1:0]) to separate
- * the process-internal computation from the actual signal driving. The
- * `update` statements in sync blocks copy intermediate values to real signals.
- *
- * Cell/wire declarations from expression decomposition MUST appear at module
- * scope, NOT inside the process. We achieve this by using two output streams:
- *   - cell_out: module-level output (cells, wires from rtlil_emit_expr)
- *   - proc_out: process body output (assign, switch/case), buffered via tmpfile
+/**
+ * @file emit_process.c
+ * @brief Emits RTLIL processes for asynchronous and clocked logic.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,16 +24,52 @@
  * -------------------------------------------------------------------------
  */
 
+/**
+ * @struct ProcessIntermediate
+ * @brief Maps one assigned signal to its process-local temporary wire.
+ */
 typedef struct {
-    int signal_id;
-    char name[128];
+    int signal_id;      /**< IR signal identifier for the assigned signal. */
+    char name[128];     /**< Generated RTLIL sigspec for the temporary wire. */
 } ProcessIntermediate;
 
+/**
+ * @struct ProcessContext
+ * @brief Tracks process-local temporary wires by signal ID.
+ */
 typedef struct {
-    ProcessIntermediate *entries;
-    int count;
-    int capacity;
+    ProcessIntermediate *entries;  /**< Dynamic array of intermediate mappings. */
+    int count;                     /**< Number of initialized mappings. */
+    int capacity;                  /**< Allocated entry capacity. */
 } ProcessContext;
+
+/**
+ * @brief Initialize an empty process context.
+ * @param ctx Context to initialize.
+ */
+static void pctx_init(ProcessContext *ctx);
+
+/**
+ * @brief Release storage held by a process context.
+ * @param ctx Context to clear.
+ */
+static void pctx_free(ProcessContext *ctx);
+
+/**
+ * @brief Look up the temporary-wire sigspec for an assigned signal.
+ * @param ctx Context to query.
+ * @param signal_id IR signal identifier to look up.
+ * @return Temporary sigspec string, or `NULL` if the signal is not tracked.
+ */
+static const char *pctx_find(const ProcessContext *ctx, int signal_id);
+
+/**
+ * @brief Record a new temporary-wire mapping for a signal.
+ * @param ctx Context to extend.
+ * @param signal_id IR signal identifier to map.
+ * @param name Generated temporary sigspec to store.
+ */
+static void pctx_add(ProcessContext *ctx, int signal_id, const char *name);
 
 static void pctx_init(ProcessContext *ctx) {
     ctx->entries = NULL;
@@ -101,30 +119,227 @@ static void pctx_add(ProcessContext *ctx, int signal_id, const char *name) {
     ctx->count++;
 }
 
-/* -------------------------------------------------------------------------
- * Forward declarations
- * -------------------------------------------------------------------------
+/**
+ * @brief Emit one statement subtree inside a process.
+ * @param cell_out Stream for module-scope helper wires and cells.
+ * @param proc_out Stream for process-body statements.
+ * @param mod Module that owns the statement.
+ * @param stmt Statement subtree to emit.
+ * @param indent Indentation depth for process-body output.
+ * @param pctx Process context for temporary assignment wires.
  */
-
 static void emit_process_stmt(FILE *cell_out, FILE *proc_out,
-                               const IR_Module *mod,
-                               const IR_Stmt *stmt, int indent,
-                               const ProcessContext *pctx);
-static void emit_process_block(FILE *cell_out, FILE *proc_out,
-                                const IR_Module *mod,
-                                const IR_Stmt *block, int indent,
-                                const ProcessContext *pctx);
+                              const IR_Module *mod, const IR_Stmt *stmt,
+                              int indent, const ProcessContext *pctx);
 
-/* -------------------------------------------------------------------------
- * Signal collection: walk statement tree to find all assigned signal IDs
- * -------------------------------------------------------------------------
+/**
+ * @brief Emit a block statement inside a process.
+ * @param cell_out Stream for module-scope helper wires and cells.
+ * @param proc_out Stream for process-body statements.
+ * @param mod Module that owns the block.
+ * @param block Block statement to emit.
+ * @param indent Indentation depth for process-body output.
+ * @param pctx Process context for temporary assignment wires.
  */
+static void emit_process_block(FILE *cell_out, FILE *proc_out,
+                               const IR_Module *mod, const IR_Stmt *block,
+                               int indent, const ProcessContext *pctx);
 
+/**
+ * @struct SignalIdList
+ * @brief Stores the set of signal IDs assigned within a process.
+ */
 typedef struct {
-    int *ids;
-    int  count;
-    int  capacity;
+    int *ids;         /**< Dynamic array of collected signal IDs. */
+    int count;        /**< Number of collected IDs. */
+    int capacity;     /**< Allocated entry capacity. */
 } SignalIdList;
+
+/**
+ * @brief Initialize an empty signal-ID list.
+ * @param list List to initialize.
+ */
+static void siglist_init(SignalIdList *list);
+
+/**
+ * @brief Release storage held by a signal-ID list.
+ * @param list List to clear.
+ */
+static void siglist_free(SignalIdList *list);
+
+/**
+ * @brief Add a signal ID to a set-like list if it is not already present.
+ * @param list List to extend.
+ * @param id IR signal identifier to record.
+ */
+static void siglist_add(SignalIdList *list, int id);
+
+/**
+ * @brief Collect assigned signal IDs from a statement subtree.
+ * @param stmt Statement subtree to inspect.
+ * @param list Destination set of assigned signal IDs.
+ */
+static void collect_assigned_signals(const IR_Stmt *stmt, SignalIdList *list);
+
+/**
+ * @brief Emit default assignments for tracked process temporaries.
+ * @param proc_out Destination stream for process-body statements.
+ * @param mod Module that owns the assigned signals.
+ * @param assigned Set of assigned signal IDs.
+ * @param pctx Process context that maps signals to temporaries.
+ * @param indent Indentation depth for emitted statements.
+ */
+static void emit_process_defaults(FILE *proc_out, const IR_Module *mod,
+                                  const SignalIdList *assigned,
+                                  const ProcessContext *pctx, int indent);
+
+/**
+ * @brief Build process temporaries and emit their module-scope wires.
+ * @param out Destination RTLIL stream for wire declarations.
+ * @param mod Module that owns the signals.
+ * @param assigned Set of assigned signal IDs.
+ * @param pctx Context to populate with generated temporaries.
+ */
+static void build_process_context(FILE *out, const IR_Module *mod,
+                                  const SignalIdList *assigned,
+                                  ProcessContext *pctx);
+
+/**
+ * @brief Copy a temporary file stream into the final RTLIL output.
+ * @param tmp Temporary stream to rewind and drain.
+ * @param out Destination stream that receives the copied bytes.
+ */
+static void flush_tmpfile_to(FILE *tmp, FILE *out);
+
+/**
+ * @brief Emit the left-hand-side sigspec for a process assignment.
+ * @param proc_out Destination process-body stream.
+ * @param mod Module that owns the assignment.
+ * @param a Assignment being emitted.
+ * @param sig Resolved left-hand-side signal.
+ * @param pctx Process context for temporary assignment wires.
+ */
+static void emit_lhs_sigspec(FILE *proc_out, const IR_Module *mod,
+                             const IR_Assignment *a, const IR_Signal *sig,
+                             const ProcessContext *pctx);
+
+/**
+ * @brief Build the right-hand-side sigspec for a process assignment.
+ * @param cell_out Stream for helper cells and wires.
+ * @param rhs_buf Destination buffer.
+ * @param rhs_buf_size Size of `rhs_buf` in bytes.
+ * @param mod Module that owns the assignment.
+ * @param a Assignment being emitted.
+ * @param lhs_sig Resolved left-hand-side signal used for width decisions.
+ */
+static void emit_rhs_sigspec(FILE *cell_out, char *rhs_buf, int rhs_buf_size,
+                             const IR_Module *mod, const IR_Assignment *a,
+                             const IR_Signal *lhs_sig);
+
+/**
+ * @brief Estimate the effective emitted width of an expression sigspec.
+ * @param expr Expression to inspect.
+ * @param mod Module used to resolve signal references.
+ * @return Emitted width in bits, or `0` when no width is known.
+ */
+static int rhs_actual_width(const IR_Expr *expr, const IR_Module *mod);
+
+/**
+ * @brief Emit one non-alias assignment inside a process.
+ * @param cell_out Stream for helper cells and wires.
+ * @param proc_out Stream for process-body statements.
+ * @param mod Module that owns the assignment.
+ * @param a Assignment to emit.
+ * @param indent Indentation depth for process-body output.
+ * @param pctx Process context for temporary assignment wires.
+ */
+static void emit_process_assignment(FILE *cell_out, FILE *proc_out,
+                                    const IR_Module *mod,
+                                    const IR_Assignment *a, int indent,
+                                    const ProcessContext *pctx);
+
+/**
+ * @brief Emit a placeholder process comment for a memory write statement.
+ * @param proc_out Destination process-body stream.
+ * @param mod Module that owns the statement.
+ * @param stmt Memory write statement being described.
+ * @param indent Indentation depth for emitted output.
+ */
+static void emit_process_mem_write(FILE *proc_out, const IR_Module *mod,
+                                   const IR_Stmt *stmt, int indent);
+
+/**
+ * @brief Emit an IF or ELIF subtree as RTLIL `switch` and `case` nodes.
+ * @param cell_out Stream for helper cells and wires.
+ * @param proc_out Stream for process-body statements.
+ * @param mod Module that owns the control-flow subtree.
+ * @param stmt IF statement subtree to emit.
+ * @param indent Indentation depth for process-body output.
+ * @param pctx Process context for temporary assignment wires.
+ */
+static void emit_process_if(FILE *cell_out, FILE *proc_out,
+                            const IR_Module *mod, const IR_Stmt *stmt,
+                            int indent, const ProcessContext *pctx);
+
+/**
+ * @brief Check whether a SELECT case body is empty.
+ * @param sc Select-case descriptor to inspect.
+ * @return Nonzero when the case body is absent or contains no statements.
+ */
+static int select_case_is_empty(const IR_SelectCase *sc);
+
+/**
+ * @brief Emit a SELECT subtree as RTLIL `switch` and `case` nodes.
+ * @param cell_out Stream for helper cells and wires.
+ * @param proc_out Stream for process-body statements.
+ * @param mod Module that owns the control-flow subtree.
+ * @param stmt SELECT statement subtree to emit.
+ * @param indent Indentation depth for process-body output.
+ * @param pctx Process context for temporary assignment wires.
+ */
+static void emit_process_select(FILE *cell_out, FILE *proc_out,
+                                const IR_Module *mod, const IR_Stmt *stmt,
+                                int indent, const ProcessContext *pctx);
+
+/**
+ * @brief Check whether an asynchronous block contains non-alias logic.
+ * @param async_block Asynchronous statement subtree to inspect.
+ * @return Nonzero when the block contains executable async logic.
+ */
+static int async_has_non_alias_logic(const IR_Stmt *async_block);
+
+/**
+ * @brief Emit `update` statements that copy temporaries back to signals.
+ * @param out Destination stream.
+ * @param mod Module that owns the updated signals.
+ * @param assigned Set of assigned signal IDs.
+ * @param pctx Process context that maps signals to temporaries.
+ * @param indent Indentation depth for emitted statements.
+ */
+static void emit_updates(FILE *out, const IR_Module *mod,
+                         const SignalIdList *assigned,
+                         const ProcessContext *pctx, int indent);
+
+/**
+ * @brief Emit latch-retention defaults for asynchronous latch inference.
+ * @param proc_out Destination process-body stream.
+ * @param mod Module that owns the latch signals.
+ * @param assigned Set of assigned signal IDs.
+ * @param pctx Process context that maps signals to temporaries.
+ * @param indent Indentation depth for emitted statements.
+ */
+static void emit_latch_defaults(FILE *proc_out, const IR_Module *mod,
+                                const SignalIdList *assigned,
+                                const ProcessContext *pctx, int indent);
+
+/**
+ * @brief Emit one clock-domain process.
+ * @param out Destination RTLIL stream.
+ * @param mod Module that owns the clock domain.
+ * @param cd Clock domain to emit.
+ */
+static void emit_clock_domain_process(FILE *out, const IR_Module *mod,
+                                      const IR_ClockDomain *cd);
 
 static void siglist_init(SignalIdList *list) {
     list->ids = NULL;

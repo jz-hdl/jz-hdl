@@ -1,0 +1,47 @@
+// MONITOR_ALLOWED_DIRECTIVES_ONLY: only @print_if, @mark_if, and @alert_if
+// are permitted inside MONITOR.
+// Target diagnostic: parser rejection on a disallowed directive inside MONITOR.
+// Non-target diagnostics: none.
+// Fixture plan: keep the simulation structure valid, then place @run inside a
+// MONITOR block.
+
+@module MonitorAllowedDirectivesOnlyDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] flag;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        flag = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= state;
+    }
+@endmod
+
+@simulation MonitorAllowedDirectivesOnlyDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        flag [1];
+    }
+
+    @new dut MonitorAllowedDirectivesOnlyDut {
+        clk [1] = clk;
+        flag [1] = flag;
+    }
+
+    MONITOR {
+        // Trigger 1: @run is not permitted inside MONITOR.
+        @run(ns=10)
+    }
+
+    @run(ns=10)
+@endsim

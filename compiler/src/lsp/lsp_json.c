@@ -12,6 +12,36 @@
 #include <string.h>
 #include <stdio.h>
 
+/**
+ * @brief Ensure a JSON builder has room for an additional payload.
+ * @param j Builder state to grow.
+ * @param need Additional bytes required, including any terminator space.
+ * @return 0 on success or -1 on allocation failure.
+ */
+static int lsp_json_grow(LspJson *j, size_t need);
+
+/**
+ * @brief Skip leading JSON whitespace.
+ * @param p Input cursor.
+ * @return Pointer to the first non-whitespace byte.
+ */
+static const char *skip_ws(const char *p);
+
+/**
+ * @brief Advance past a JSON value without decoding it.
+ * @param p Input cursor at the start of a JSON value.
+ * @return Pointer just past the value, or NULL on malformed input.
+ */
+static const char *skip_value(const char *p);
+
+/**
+ * @brief Find the value associated with a top-level JSON object key.
+ * @param json JSON object text to scan.
+ * @param key Key name to locate.
+ * @return Pointer to the value text or NULL when not found.
+ */
+static const char *find_key(const char *json, const char *key);
+
 /* ------------------------------------------------------------------ */
 /*  JSON builder                                                      */
 /* ------------------------------------------------------------------ */

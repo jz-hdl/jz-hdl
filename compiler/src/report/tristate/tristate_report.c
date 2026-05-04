@@ -1,3 +1,8 @@
+/**
+ * @file tristate_report.c
+ * @brief Human-readable tri-state resolution reporting for semantic analysis.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -22,11 +27,14 @@ static char g_tristate_report_generated[64];
 static const char *g_tristate_report_version = NULL;
 static const char *g_tristate_report_input = NULL;
 
-/* Overall summary accumulator: one entry per net name across all modules. */
+/**
+ * @struct JZTristateSummaryEntry
+ * @brief Cross-module summary entry for one reported tri-state net.
+ */
 typedef struct {
-    char   name[128];       /* Net name (e.g., "pbus.DATA") */
-    size_t total_drivers;   /* Sum of drivers across all modules */
-    int    worst_result;    /* Worst result seen (PROVEN < UNKNOWN < DISPROVEN) */
+    char   name[128];     /**< Report display name, such as `pbus.DATA`. */
+    size_t total_drivers; /**< Sum of drivers observed across all modules. */
+    int    worst_result;  /**< Worst proof result seen for the net. */
 } JZTristateSummaryEntry;
 
 static JZBuffer g_tristate_summary = {0};  /* Array of JZTristateSummaryEntry */

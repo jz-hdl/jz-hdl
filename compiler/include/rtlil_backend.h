@@ -23,8 +23,8 @@
  * @return 0 on success, non-zero on failure (with BACKEND* diagnostic recorded).
  */
 int jz_emit_rtlil(const IR_Design *design,
-                   const char *filename,
-                   JZDiagnosticList *diagnostics,
-                   const char *input_filename);
+                  const char *filename,
+                  JZDiagnosticList *diagnostics,
+                  const char *input_filename);
 
 #endif /* JZ_HDL_RTLIL_BACKEND_H */

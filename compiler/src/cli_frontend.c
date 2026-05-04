@@ -1,3 +1,8 @@
+/**
+ * @file cli_frontend.c
+ * @brief Front-end pipeline execution for one CLI input file.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

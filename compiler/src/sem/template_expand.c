@@ -46,31 +46,32 @@ static void generate_random_suffix(char out[7])
 /* ── Template registry ───────────────────────────────────────────── */
 
 typedef struct TemplateEntry {
-    const char  *name;          /* template identifier */
-    JZASTNode   *def_node;      /* pointer into AST (JZ_AST_TEMPLATE_DEF) */
-    JZASTNode   *scope_module;  /* owning module, or NULL for file-scoped */
+    const char  *name;         /**< Template identifier. */
+    JZASTNode   *def_node;     /**< Template definition node in the AST. */
+    JZASTNode   *scope_module; /**< Owning module, or `NULL` for a file-scoped template. */
 } TemplateEntry;
 
+/** Working state for one template expansion pass. */
 typedef struct ExpandContext {
-    TemplateEntry  *templates;
-    size_t          template_count;
-    size_t          template_cap;
-    JZDiagnosticList *diagnostics;
-    const char      *filename;
-    JZExpansionLimits limits;
+    TemplateEntry  *templates;     /**< Registered template definitions. */
+    size_t          template_count; /**< Number of registered templates. */
+    size_t          template_cap;   /**< Allocated capacity of @p templates. */
+    JZDiagnosticList *diagnostics;  /**< Diagnostic sink for expansion errors. */
+    const char      *filename;      /**< Source filename used in diagnostics. */
+    JZExpansionLimits limits;       /**< Active expansion safety limits. */
 
     /* Lightweight CONST/CONFIG table for count evaluation */
-    struct { const char *name; long value; } *consts;
-    size_t const_count;
-    size_t const_cap;
+    struct { const char *name; long value; } *consts; /**< Count-expression constant table. */
+    size_t const_count; /**< Number of constant table entries. */
+    size_t const_cap;   /**< Allocated capacity of @p consts. */
 
     /* Per-module scratch wire collection */
-    JZASTNode **scratch_wires;
-    size_t      scratch_wire_count;
-    size_t      scratch_wire_cap;
+    JZASTNode **scratch_wires;   /**< Scratch wire declarations collected for the current module. */
+    size_t      scratch_wire_count; /**< Number of collected scratch wires. */
+    size_t      scratch_wire_cap;   /**< Allocated capacity of @p scratch_wires. */
 
-    int apply_counter;  /* unique callsite id */
-    size_t total_growth;
+    int apply_counter;  /**< Unique callsite id used for scratch naming. */
+    size_t total_growth; /**< Total node growth accumulated during expansion. */
 } ExpandContext;
 
 static unsigned s_template_expand_depth = 0;

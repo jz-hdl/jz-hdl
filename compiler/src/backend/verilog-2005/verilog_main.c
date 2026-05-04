@@ -1,8 +1,6 @@
-/*
- * verilog_main.c - Main entry point for the Verilog-2005 backend.
- *
- * This file contains the main jz_emit_verilog function and module ordering
- * logic.
+/**
+ * @file verilog_main.c
+ * @brief Top-level Verilog-2005 backend entry points.
  */
 #include <stdio.h>
 #include <stdlib.h>

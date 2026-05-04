@@ -1,3 +1,8 @@
+/**
+ * @file ast.c
+ * @brief Implements AST node allocation, mutation, and teardown helpers.
+ */
+
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -8,12 +13,20 @@
 
 #define INITIAL_CHILD_CAPACITY 4
 
-/*
- * Helper to duplicate a string while trimming leading and trailing
- * whitespace. Used for AST identifier names and free-form text so
- * that parser-constructed lexemes like "foo " or "expr ... " do not
- * carry trailing spaces into later phases (JSON, diagnostics, IR).
+/**
+ * @brief Duplicate a string after trimming leading and trailing whitespace.
+ * @param s Source string to trim and copy.
+ * @return Newly allocated trimmed string, or `NULL` for a null input or on
+ * allocation failure.
  */
+static char *jz_strdup_trim(const char *s);
+
+/**
+ * @brief Free an AST subtree using recursive descent.
+ * @param node Root node of the subtree to release.
+ */
+static void jz_ast_free_recursive_unbounded(JZASTNode *node);
+
 static char *jz_strdup_trim(const char *s)
 {
     if (!s) return NULL;

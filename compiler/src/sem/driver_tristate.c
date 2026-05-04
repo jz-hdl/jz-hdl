@@ -1,3 +1,8 @@
+/**
+ * @file driver_tristate.c
+ * @brief Tri-state proof and multi-driver net analysis.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -29,6 +34,10 @@ static const JZBuffer *g_tristate_project_symbols = NULL;
 static const JZModuleScope *g_tristate_parent_scope = NULL;
 static unsigned g_tristate_depth = 0;
 
+/**
+ * @brief Enter one level of tri-state analysis recursion.
+ * @return Non-zero when the recursion limit has not been exceeded.
+ */
 static int tristate_enter_depth(void)
 {
     if (jz_depth_enter_checked(&g_tristate_depth, JZ_LIMIT_TRISTATE_DEPTH) != 0) {
@@ -37,6 +46,9 @@ static int tristate_enter_depth(void)
     return 1;
 }
 
+/**
+ * @brief Leave one level of tri-state analysis recursion.
+ */
 static void tristate_leave_depth(void)
 {
     jz_depth_leave(&g_tristate_depth);
@@ -556,9 +568,10 @@ static int tristate_extract_guard_from_cond(const JZASTNode *cond,
  * -------------------------------------------------------------------------
  */
 
+/** One guard term collected while reconstructing an `if`/`else` chain. */
 typedef struct {
-    const JZASTNode *expr;
-    int              neg;
+    const JZASTNode *expr; /**< Guard expression node. */
+    int              neg;  /**< Non-zero when the term is logically negated. */
 } JZGuardTerm;
 
 static int tristate_find_if_guards_recurse_impl(const JZASTNode *node,
@@ -1029,9 +1042,10 @@ static const char *alias_pool_store(const char *s)
     return g_alias_pool[slot];
 }
 
+/** One alias mapping collected for a bus-connected driver. */
 typedef struct {
-    const char *from;
-    const char *to;
+    const char *from; /**< Source alias name. */
+    const char *to;   /**< Resolved destination name. */
 } JZAliasEntry;
 
 #define JZ_MAX_ALIASES 32

@@ -1,3 +1,8 @@
+/**
+ * @file driver_mem.c
+ * @brief Semantic checks for MEM declarations, initializers, and access rules.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -20,26 +25,31 @@ int sem_literal_has_z_bits(const char *lex);
 #include "rules.h"
 #include "driver_internal.h"
 
-/* -------------------------------------------------------------------------
- *  MEM helpers (declaration/introspection) used by MEM_* rules
- * -------------------------------------------------------------------------
+/**
+ * @brief Validate an aggregate-style MUX declaration.
+ * @param mux_decl MUX declaration to validate.
+ * @param scope Module scope containing the declaration.
+ * @param diagnostics Diagnostic sink for reported issues.
  */
-
-/* Forward declarations for local MUX helper functions defined later. */
 static void sem_check_mux_aggregate_decl(JZASTNode *mux_decl,
                                          const JZModuleScope *scope,
                                          JZDiagnosticList *diagnostics);
+/**
+ * @brief Validate a slice-style MUX declaration.
+ * @param mux_decl MUX declaration to validate.
+ * @param scope Module scope containing the declaration.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
 static void sem_check_mux_slice_decl(JZASTNode *mux_decl,
                                      const JZModuleScope *scope,
                                      JZDiagnosticList *diagnostics);
 
 /* sem_extract_identifier_like: now shared from driver.c via driver_internal.h */
 
-/* Heuristic to decide whether a MEM initializer literal node is actually
- * the payload of an @file("...") initializer. The parser represents
- * @file paths as Literal nodes whose text is the decoded string contents,
- * while numeric literals contain only digits/underscores and optional
- * sized-literal syntax.
+/**
+ * @brief Heuristically distinguish MEM file-path initializers from numeric literals.
+ * @param s Literal text to inspect.
+ * @return Non-zero when the text looks like a file path, or zero otherwise.
  */
 static int sem_mem_init_looks_like_file_path(const char *s)
 {
@@ -168,13 +178,14 @@ static unsigned long long sem_mem_count_bits_mem_file(FILE *fp)
     return bits;
 }
 
+/** @brief Radix modes recognized while parsing MEM initialization files. */
 typedef enum {
-    SEM_MEM_RADIX_NONE = 0,
-    SEM_MEM_RADIX_BIN = 2,
-    SEM_MEM_RADIX_OCT = 8,
-    SEM_MEM_RADIX_DEC = 10,
-    SEM_MEM_RADIX_HEX = 16,
-    SEM_MEM_RADIX_UNS = 100
+    SEM_MEM_RADIX_NONE = 0, /**< No radix specified. */
+    SEM_MEM_RADIX_BIN = 2,  /**< Binary radix. */
+    SEM_MEM_RADIX_OCT = 8,  /**< Octal radix. */
+    SEM_MEM_RADIX_DEC = 10, /**< Decimal radix. */
+    SEM_MEM_RADIX_HEX = 16, /**< Hexadecimal radix. */
+    SEM_MEM_RADIX_UNS = 100 /**< Unspecified radix marker. */
 } SemMemRadix;
 
 static int sem_mem_ci_char_eq(char a, char b)
@@ -2434,9 +2445,10 @@ void sem_check_module_mem_port_usage(const JZModuleScope *scope,
  * -------------------------------------------------------------------------
  */
 
+/** @brief Accumulates the number of times each module is instantiated. */
 typedef struct JZModuleInstanceCount {
-    const char *module_name;
-    unsigned    count;
+    const char *module_name; /**< Module identifier text. */
+    unsigned    count;       /**< Total number of instances in the project graph. */
 } JZModuleInstanceCount;
 
 /* Recursively accumulate instance counts starting from a given module.

@@ -1,3 +1,7 @@
+/**
+ * @file chip_data.c
+ * @brief Chip-data loading, parsing, and query helpers.
+ */
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -12,6 +16,77 @@
 
 #define JSMN_IMPLEMENTATION
 #include "third_party/jsmn.h"
+
+/**
+ * @brief Clear the last chip-data error string.
+ */
+static void jz_chip_clear_error(void);
+
+/**
+ * @brief Format the last chip-data error string.
+ * @param fmt `printf`-style format string.
+ * @param ... Format arguments written into the static error buffer.
+ */
+static void jz_chip_set_error(const char *fmt, ...);
+
+/**
+ * @brief Compare two strings case-insensitively.
+ * @param a Left string.
+ * @param b Right string.
+ * @return Negative, zero, or positive comparison result.
+ */
+static int jz_strcasecmp(const char *a, const char *b);
+
+/**
+ * @brief Duplicate a string while converting it to lowercase.
+ * @param s Source string to duplicate.
+ * @return Newly allocated lowercase copy, or `NULL` on failure.
+ */
+static char *jz_strdup_lower(const char *s);
+
+/**
+ * @brief Duplicate a string while converting it to uppercase.
+ * @param s Source string to duplicate.
+ * @return Newly allocated uppercase copy, or `NULL` on failure.
+ */
+static char *jz_strdup_upper(const char *s);
+
+/**
+ * @brief Build a validated path to an external chip-data JSON file.
+ * @param project_filename Project file path used as the resolution base.
+ * @param chip_id Chip identifier whose JSON file should be located.
+ * @return Newly allocated validated path, or `NULL` on failure.
+ */
+static char *jz_build_chip_json_path(const char *project_filename,
+                                     const char *chip_id);
+
+/**
+ * @brief Return whether one chip identifier is a case-insensitive prefix of another.
+ * @param chip_id Prefix candidate.
+ * @param target Full chip identifier to test.
+ * @return Non-zero when `chip_id` matches a full prefix boundary in `target`.
+ */
+static int jz_chip_id_is_prefix(const char *chip_id, const char *target);
+
+/**
+ * @brief Enforce the maximum supported JSON nesting depth.
+ * @param toks Parsed JSMN token array.
+ * @param count Number of tokens in `toks`.
+ * @param max_depth Maximum allowed nesting depth.
+ * @return `0` when the nesting depth is acceptable, `-1` otherwise.
+ */
+static int jz_json_check_nesting_limit(const jsmntok_t *toks,
+                                       int count,
+                                       unsigned max_depth);
+
+/**
+ * @brief Convert a JSON token to a chip-memory type.
+ * @param json Backing JSON text.
+ * @param tok Token that names a memory type.
+ * @return Parsed memory type, or `JZ_CHIP_MEM_UNKNOWN` when unsupported.
+ */
+static JZChipMemType jz_chip_mem_type_from_token(const char *json,
+                                                 const jsmntok_t *tok);
 
 /* Last chip-data load error, for detailed diagnostics via
  * jz_chip_data_last_error(). Reset at the start of each load attempt. */
@@ -35,10 +110,15 @@ static void jz_chip_set_error(const char *fmt, ...)
     va_end(ap);
 }
 
+/**
+ * @struct JZChipBuiltin
+ * @brief One built-in chip-data payload compiled into the binary.
+ */
 typedef struct JZChipBuiltin {
-    const char *chip_id;
-    const char *json;
+    const char *chip_id; /**< Canonical chip identifier. */
+    const char *json;    /**< Embedded JSON payload for the chip. */
 } JZChipBuiltin;
+
 
 /* Built-in chip data generated at build time. */
 #include "data/gw1nr-9-qn88-c6-i5.h"
@@ -1227,15 +1307,16 @@ static int jz_chip_parse_clock_gen_variants(const char *json,
 
 /* ---- Variant fact matching and exhaustive/disjoint validation ---- */
 
-/* Axis used to enumerate the cartesian product at load time.
- * kind == JZ_CG_FACT_INPUT_SOURCE: name[] of fact; values are strings.
- * kind == JZ_CG_FACT_OUTPUT_COUNT: values are ints. */
+/**
+ * @struct VariantAxis
+ * @brief One fact axis used to validate clock-generator variant coverage.
+ */
 typedef struct VariantAxis {
-    JZChipVariantFactKind kind;
-    char *name;          /* input name for INPUT_SOURCE, NULL for OUTPUT_COUNT */
-    char **svals;        /* distinct string values for INPUT_SOURCE */
-    int   *ivals;        /* distinct int values for OUTPUT_COUNT */
-    size_t val_count;
+    JZChipVariantFactKind kind; /**< Fact kind represented by the axis. */
+    char *name;                 /**< Input name for input-source facts, or `NULL` otherwise. */
+    char **svals;               /**< Distinct string values for input-source facts. */
+    int *ivals;                 /**< Distinct integer values for output-count facts. */
+    size_t val_count;           /**< Number of values stored in `svals` or `ivals`. */
 } VariantAxis;
 
 static void variant_axes_free(VariantAxis *axes, size_t count)

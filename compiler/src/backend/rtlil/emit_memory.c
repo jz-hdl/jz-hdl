@@ -1,12 +1,6 @@
-/*
- * emit_memory.c - Memory cell emission for the RTLIL backend.
- *
- * Memory accesses in RTLIL are represented by $memrd_v2 and $memwr_v2
- * cells. These cells reference a named memory declared in the module.
- *
- * Note: Memory reads that appear inline in expressions are handled by
- * emit_cells.c (EXPR_MEM_READ). This file handles the standalone
- * memory write cells that correspond to STMT_MEM_WRITE in the IR.
+/**
+ * @file emit_memory.c
+ * @brief Emits RTLIL memory initialization and write-port support cells.
  */
 #include <stdio.h>
 #include <string.h>
@@ -17,9 +11,63 @@
 /* Reuse alias helpers from Verilog backend. */
 #include "backend/verilog-2005/verilog_internal.h"
 
-/* Forward declaration. */
+/**
+ * @brief Build an all-zero constant sigspec string.
+ * @param buf Destination buffer.
+ * @param buf_size Size of `buf` in bytes.
+ * @param width Bit width to emit.
+ */
 static void const_val_sigspec_zero(char *buf, int buf_size, int width);
 static int s_mem_emit_errors = 0;
+
+/**
+ * @brief Append text to a sigspec buffer.
+ * @param buf Destination buffer.
+ * @param buf_size Size of `buf` in bytes.
+ * @param pos In-out write position within `buf`.
+ * @param text Text to append.
+ * @return `0` on success, or `-1` if the append would overflow.
+ */
+static int append_sigspec_text(char *buf, size_t buf_size, size_t *pos,
+                               const char *text);
+
+/**
+ * @brief Check whether a memory-init blob matches the declared memory size.
+ * @param mem Memory declaration to validate.
+ * @return Nonzero when the blob size matches the declared depth and width.
+ */
+static int mem_init_blob_has_expected_size(const IR_Memory *mem);
+
+/**
+ * @brief Read one bit from a packed memory-init word.
+ * @param word_bytes Packed bytes for a single memory word.
+ * @param bytes_per_word Size of `word_bytes` in bytes.
+ * @param word_width Declared word width in bits.
+ * @param bit_from_msb Zero-based bit index counted from the most-significant
+ * output bit.
+ * @return Selected bit value as `0` or `1`.
+ */
+static unsigned mem_init_word_bit(const uint8_t *word_bytes,
+                                  int bytes_per_word, int word_width,
+                                  int bit_from_msb);
+
+/**
+ * @brief Emit one initialized memory word as an RTLIL constant.
+ * @param out Destination RTLIL stream.
+ * @param word_bytes Packed bytes for a single memory word.
+ * @param bytes_per_word Size of `word_bytes` in bytes.
+ * @param word_width Declared word width in bits.
+ */
+static void rtlil_emit_blob_word_const(FILE *out, const uint8_t *word_bytes,
+                                       int bytes_per_word, int word_width);
+
+/**
+ * @brief Emit one `$meminit_v2` cell for a memory address.
+ * @param out Destination RTLIL stream.
+ * @param mem Memory being initialized.
+ * @param addr Address index to initialize.
+ */
+static void emit_meminit_cell(FILE *out, const IR_Memory *mem, int addr);
 
 static int append_sigspec_text(char *buf,
                                size_t buf_size,
@@ -129,15 +177,14 @@ static void emit_meminit_cell(FILE *out,
     fprintf(out, "end\n");
 }
 
-/* -------------------------------------------------------------------------
- * Collect memory write statements from the statement tree
- * -------------------------------------------------------------------------
+/**
+ * @struct MemWriteInfo
+ * @brief Captures one memory write discovered in a statement tree.
  */
-
 typedef struct {
-    const IR_MemWriteStmt *write;
-    const IR_Expr *guard_condition;  /* NULL if unconditional. */
-    int clock_domain_id;
+    const IR_MemWriteStmt *write;     /**< Memory write statement to emit. */
+    const IR_Expr *guard_condition;   /**< Guard condition, or `NULL` if unconditional. */
+    int clock_domain_id;              /**< Source clock-domain ID, or `-1` for async logic. */
 } MemWriteInfo;
 
 #define MAX_MEM_WRITES 64
@@ -145,6 +192,13 @@ typedef struct {
 static int s_mem_writes_count = 0;
 static MemWriteInfo s_mem_writes[MAX_MEM_WRITES];
 
+/**
+ * @brief Collect memory writes reachable from a statement subtree.
+ * @param stmt Statement subtree to walk.
+ * @param guard Guard condition inherited from enclosing control flow.
+ * @param cd_id Clock-domain identifier for the enclosing process, or `-1` for
+ * async logic.
+ */
 static void collect_mem_writes_from_stmt(const IR_Stmt *stmt,
                                           const IR_Expr *guard,
                                           int cd_id)
@@ -194,11 +248,12 @@ static void collect_mem_writes_from_stmt(const IR_Stmt *stmt,
     }
 }
 
-/* -------------------------------------------------------------------------
- * Emit $memwr_v2 cells for collected writes
- * -------------------------------------------------------------------------
+/**
+ * @brief Emit one `$memwr_v2` cell for a collected memory write.
+ * @param out Destination RTLIL stream.
+ * @param mod Module that owns the target memory.
+ * @param info Collected write information to emit.
  */
-
 static void emit_memwr_cell(FILE *out, const IR_Module *mod,
                               const MemWriteInfo *info)
 {

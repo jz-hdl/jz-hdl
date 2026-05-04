@@ -33,16 +33,16 @@ int jz_sim_run_testbenches(const JZASTNode *root,
  * @brief Per-clock jitter configuration (from --jitter CLI flag).
  */
 typedef struct SimJitterConfig {
-    const char *clock_name;   /* clock identifier from CLOCK block */
-    uint64_t    pp_ps;        /* peak-to-peak jitter in picoseconds */
+    const char *clock_name; /**< Clock identifier from the simulation CLOCK block. */
+    uint64_t pp_ps;         /**< Peak-to-peak jitter in picoseconds. */
 } SimJitterConfig;
 
 /**
  * @brief Per-clock drift configuration (from --drift CLI flag).
  */
 typedef struct SimDriftConfig {
-    const char *clock_name;   /* clock identifier from CLOCK block */
-    double      max_ppm;      /* maximum drift in parts per million */
+    const char *clock_name; /**< Clock identifier from the simulation CLOCK block. */
+    double max_ppm;         /**< Maximum drift magnitude in parts per million. */
 } SimDriftConfig;
 
 /**
@@ -57,7 +57,7 @@ typedef struct SimDriftConfig {
  * @param diagnostics Diagnostic list for errors.
  * @param filename    Source filename for error messages.
  * @param output_path Output waveform file path.
- * @param format      Waveform format (SIM_WAVE_VCD or SIM_WAVE_FST).
+ * @param format      Waveform format to emit.
  * @param jitter_configs Array of per-clock jitter configs (may be NULL).
  * @param num_jitter   Number of entries in jitter_configs.
  * @param drift_configs Array of per-clock drift configs (may be NULL).

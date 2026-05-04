@@ -15,6 +15,14 @@ static int s_ir_json_depth_failed = 0;
 static JZDiagnosticList *s_ir_json_diagnostics = NULL;
 static const char *s_ir_json_input_filename = NULL;
 
+/**
+ * @brief Report an IR JSON serialization depth-limit diagnostic once.
+ *
+ * @param reported    Flag used to suppress duplicate reports for the same limit.
+ * @param code        Diagnostic rule code to emit.
+ * @param fallback    Human-readable fallback message.
+ * @param source_line Source line associated with the current IR node.
+ */
 static void ir_json_report_depth_limit_once(int *reported,
                                             const char *code,
                                             const char *fallback,
@@ -34,6 +42,12 @@ static void ir_json_report_depth_limit_once(int *reported,
 }
 
 /* Simple JSON string escaper for names and paths. */
+/**
+ * @brief Write a JSON-escaped string value.
+ *
+ * @param out Destination output stream.
+ * @param s   String value to emit, or NULL for an empty string.
+ */
 static void json_write_string(FILE *out, const char *s)
 {
     fputc('"', out);
@@ -59,6 +73,12 @@ static void json_write_string(FILE *out, const char *s)
     fputc('"', out);
 }
 
+/**
+ * @brief Convert an IR signal kind to its JSON tag.
+ *
+ * @param kind IR signal kind.
+ * @return Stable JSON string for the kind.
+ */
 static const char *ir_signal_kind_string(IR_SignalKind kind)
 {
     switch (kind) {
@@ -70,6 +90,12 @@ static const char *ir_signal_kind_string(IR_SignalKind kind)
     }
 }
 
+/**
+ * @brief Convert an IR port direction to its JSON tag.
+ *
+ * @param dir IR port direction.
+ * @return Stable JSON string for the direction.
+ */
 static const char *ir_port_direction_string(IR_PortDirection dir)
 {
     switch (dir) {
@@ -80,6 +106,12 @@ static const char *ir_port_direction_string(IR_PortDirection dir)
     }
 }
 
+/**
+ * @brief Convert an IR assignment kind to its JSON tag.
+ *
+ * @param kind IR assignment kind.
+ * @return Stable JSON string for the kind.
+ */
 static const char *ir_assignment_kind_string(IR_AssignmentKind kind)
 {
     switch (kind) {
@@ -96,6 +128,12 @@ static const char *ir_assignment_kind_string(IR_AssignmentKind kind)
     }
 }
 
+/**
+ * @brief Convert an IR expression kind to its JSON tag.
+ *
+ * @param kind IR expression kind.
+ * @return Stable JSON string for the kind.
+ */
 static const char *ir_expr_kind_string(IR_ExprKind kind)
 {
     switch (kind) {
@@ -165,8 +203,20 @@ static const char *ir_expr_kind_string(IR_ExprKind kind)
     }
 }
 
+/**
+ * @brief Serialize an expression node without performing depth checks.
+ *
+ * @param out  Destination output stream.
+ * @param expr Expression to serialize.
+ */
 static void json_write_expr_impl(FILE *out, const IR_Expr *expr);
 
+/**
+ * @brief Serialize an IR expression as JSON with depth protection.
+ *
+ * @param out  Destination output stream.
+ * @param expr Expression to serialize.
+ */
 static void json_write_expr(FILE *out, const IR_Expr *expr)
 {
     if (jz_depth_enter_checked(&s_ir_json_expr_depth, JZ_LIMIT_IR_EXPR_DEPTH) != 0) {
@@ -319,6 +369,12 @@ static void json_write_expr_impl(FILE *out, const IR_Expr *expr)
 
 static void json_write_stmt_impl(FILE *out, const IR_Stmt *stmt);
 
+/**
+ * @brief Serialize an IR statement as JSON with depth protection.
+ *
+ * @param out  Destination output stream.
+ * @param stmt Statement to serialize.
+ */
 static void json_write_stmt(FILE *out, const IR_Stmt *stmt)
 {
     if (jz_depth_enter_checked(&s_ir_json_stmt_depth, JZ_LIMIT_IR_STATEMENT_DEPTH) != 0) {
@@ -1248,3 +1304,7 @@ int jz_ir_write_json(const IR_Design *design,
     s_ir_json_input_filename = NULL;
     return s_ir_json_depth_failed ? -1 : 0;
 }
+/**
+ * @file ir_serialize.c
+ * @brief JSON serialization for IR designs and nested IR nodes.
+ */

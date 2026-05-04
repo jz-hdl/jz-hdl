@@ -18,9 +18,9 @@
  *
  * CDC entries describe clock-domain crossings with optional stage counts.
  *
- * @param p      Active parser
- * @param parent CDC block AST node
- * @return 0 on success, -1 on error
+ * @param p Active parser.
+ * @param parent CDC block AST node that receives parsed declarations.
+ * @return 0 on success or -1 on parse failure.
  */
 int parse_cdc_block_body(Parser *p, JZASTNode *parent) {
     /* Parse structured CDC entries:

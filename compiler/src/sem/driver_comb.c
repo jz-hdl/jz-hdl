@@ -1,3 +1,8 @@
+/**
+ * @file driver_comb.c
+ * @brief Combinational net-graph analysis and loop detection helpers.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -9,20 +14,21 @@
 #include "rules.h"
 #include "driver_internal.h"
 
-/* -------------------------------------------------------------------------
- *  Combinational loop detection (COMB_LOOP_*)
- * -------------------------------------------------------------------------
- */
-
+/** @brief Directed combinational dependency between two net indices. */
 typedef struct JZCombEdge {
-    size_t src_net_ix;
-    size_t dst_net_ix;
+    size_t src_net_ix; /**< Source net index. */
+    size_t dst_net_ix; /**< Destination net index. */
 } JZCombEdge;
 
+/** @brief One candidate combinational path represented as a set of edges. */
 typedef struct JZCombPathState {
-    JZBuffer edges; /* array of JZCombEdge */
+    JZBuffer edges; /**< Array of `JZCombEdge` entries. */
 } JZCombPathState;
 
+/**
+ * @brief Release every temporary combinational path state in a buffer.
+ * @param paths Buffer of `JZCombPathState` entries to free.
+ */
 static void sem_comb_free_paths(JZBuffer *paths)
 {
     if (!paths) return;
@@ -34,6 +40,12 @@ static void sem_comb_free_paths(JZBuffer *paths)
     jz_buf_free(paths);
 }
 
+/**
+ * @brief Clone one combinational path state.
+ * @param src Source path state to copy.
+ * @param dst Receives the cloned path state.
+ * @return `0` on success, or `-1` when allocation fails.
+ */
 static int sem_comb_clone_path_state(const JZCombPathState *src,
                                      JZCombPathState *dst)
 {
@@ -153,6 +165,16 @@ void sem_comb_collect_sources_from_expr(JZASTNode *expr,
     }
 }
 
+/**
+ * @brief Record combinational graph edges implied by one assignment statement.
+ * @param stmt Assignment statement to inspect.
+ * @param scope Module scope containing the statement.
+ * @param nets Net graph under construction.
+ * @param bindings Declaration-to-net bindings.
+ * @param paths Active combinational path set.
+ * @param had_unconditional_cycle Receives whether an unconditional cycle was seen.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
 static void sem_comb_record_edges_for_assign(JZASTNode *stmt,
                                              const JZModuleScope *scope,
                                              JZBuffer *nets,
@@ -662,10 +684,11 @@ static int sem_comb_any_path_has_cycle(const JZBuffer *paths,
  * -------------------------------------------------------------------------
  */
 
+/** @brief Summarized combinational dependency from one child input port to one child output port. */
 typedef struct JZCombPortEdge {
-    JZASTNode *in_port_decl;   /* IN or INOUT port decl in target module */
-    JZASTNode *out_port_decl;  /* OUT or INOUT port decl in target module */
-    int        conditional;    /* 1 if path exists on only some IF/SELECT paths */
+    JZASTNode *in_port_decl;  /**< IN or INOUT port declaration in the child module. */
+    JZASTNode *out_port_decl; /**< OUT or INOUT port declaration in the child module. */
+    int        conditional;   /**< Non-zero when the path exists on only some paths. */
 } JZCombPortEdge;
 
 /* Cache states for JZModuleCombCache. */
@@ -674,10 +697,11 @@ typedef struct JZCombPortEdge {
 #define COMB_CACHE_IN_PROGRESS 2   /* guard against instantiation cycles */
 #define COMB_CACHE_OPAQUE      3   /* blackbox or cycle-guard hit */
 
+/** @brief Cached combinational summary for one module or blackbox. */
 typedef struct JZModuleCombCache {
-    JZASTNode *module_node;
-    JZBuffer   edges;   /* array of JZCombPortEdge (deduped) */
-    int        state;
+    JZASTNode *module_node; /**< Module or blackbox AST node used as the cache key. */
+    JZBuffer   edges;       /**< Deduplicated array of `JZCombPortEdge` entries. */
+    int        state;       /**< Cache state marker. */
 } JZModuleCombCache;
 
 void sem_comb_free_module_comb_cache(JZBuffer *cache)
@@ -1241,5 +1265,3 @@ void sem_check_combinational_loops_for_module(const JZModuleScope *scope,
         sem_comb_free_paths(&paths);
     }
 }
-
-

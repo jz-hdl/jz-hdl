@@ -1,8 +1,6 @@
-/*
- * emit_wrapper.c - Project wrapper emission for the Verilog-2005 backend.
- *
- * This file handles emitting the project-level wrapper module that exposes
- * board pins and instantiates the top module.
+/**
+ * @file emit_wrapper.c
+ * @brief Project-wrapper emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +11,99 @@
 #include "chip_data.h"
 #include "ir.h"
 
-/* Forward declaration for differential pin check (defined later in this file). */
+/**
+ * @brief Return the configured value for a clock-generator parameter.
+ * @param unit Clock-generator instance to inspect.
+ * @param param_name Parameter name to look up.
+ * @return Matching parameter value, or `NULL` if not configured.
+ */
+static const char *find_clock_gen_config(const IR_ClockGenUnit *unit,
+                                         const char *param_name);
+
+/**
+ * @brief Return the named output clock bound to a selector.
+ * @param unit Clock-generator instance to inspect.
+ * @param selector Output selector name.
+ * @return Output clock name, or `NULL` if no match exists.
+ */
+static const char *find_clock_gen_output(const IR_ClockGenUnit *unit,
+                                         const char *selector);
+
+/**
+ * @brief Return the named input signal bound to a selector.
+ * @param unit Clock-generator instance to inspect.
+ * @param selector Input selector name.
+ * @return Input signal name, or `NULL` if no match exists.
+ */
+static const char *find_clock_gen_input(const IR_ClockGenUnit *unit,
+                                        const char *selector);
+
+/**
+ * @brief Look up the declared period of a project clock.
+ * @param proj Project that owns the clock definitions.
+ * @param clock_name Clock name to search for.
+ * @return Clock period in nanoseconds, or `0.0` when not found.
+ */
+static double find_clock_period_ns(const IR_Project *proj, const char *clock_name);
+
+/**
+ * @brief Evaluate a simple arithmetic expression used in clock-gen templates.
+ * @param unit Clock-generator instance that provides config values.
+ * @param expr Expression text to evaluate.
+ * @param result Output location for the evaluated integer result.
+ * @param chip_data Chip-data defaults used for missing parameters.
+ * @param clock_gen_type Clock-generator type used for default lookup.
+ * @return Non-zero on success.
+ */
+static int eval_arith_expr(const IR_ClockGenUnit *unit,
+                           const char *expr,
+                           long *result,
+                           const JZChipData *chip_data,
+                           const char *clock_gen_type);
+
+/**
+ * @brief Evaluate a `toString(...)` derived-expression template.
+ * @param unit Clock-generator instance that provides config values.
+ * @param expr Derived-expression text to evaluate.
+ * @param out_buf Destination buffer for the formatted result.
+ * @param buf_size Size of `out_buf` in bytes.
+ * @param chip_data Chip-data defaults used for missing parameters.
+ * @param clock_gen_type Clock-generator type used for default lookup.
+ * @return Non-zero on success.
+ */
+static int eval_derived_expr(const IR_ClockGenUnit *unit,
+                             const char *expr,
+                             char *out_buf, size_t buf_size,
+                             const JZChipData *chip_data,
+                             const char *clock_gen_type);
+
+/**
+ * @brief Expand one chip-data wrapper template for a clock generator.
+ * @param out Output stream for Verilog text.
+ * @param proj Project that owns the clock-generator instance.
+ * @param unit Clock-generator instance that provides substitutions.
+ * @param template_text Template text to expand.
+ * @param unit Clock-generator instance that provides substitutions.
+ * @param chip_data Chip-data database used for defaults and derived values.
+ * @param clock_gen_type Clock-generator type for chip-data queries.
+ * @param cg_idx Clock-generator declaration index within the project.
+ * @param unit_idx Clock-generator unit index for unique naming.
+ */
+static void emit_clock_gen_from_template(FILE *out,
+                                         const IR_Project *proj,
+                                         const IR_ClockGenUnit *unit,
+                                         const char *template_text,
+                                         const JZChipData *chip_data,
+                                         const char *clock_gen_type,
+                                         int cg_idx,
+                                         int unit_idx);
+
+/**
+ * @brief Return whether a logical pin has differential board mappings.
+ * @param proj Project that owns the pin mappings.
+ * @param pin Pin description to inspect.
+ * @return Non-zero when the pin has both P and N board assignments.
+ */
 static int pin_has_diff_mapping(const IR_Project *proj, const IR_Pin *pin);
 
 /* -------------------------------------------------------------------------
@@ -877,31 +967,36 @@ static int pin_has_diff_mapping(const IR_Project *proj, const IR_Pin *pin)
 }
 
 /**
- * Expand a differential I/O template from chip data.
- * Placeholders: %%instance%%, %%input%%, %%output%%, %%pin_p%%, %%pin_n%%,
- *               %%D0%%..%%D9%%, %%Q0%%..%%Q9%%, %%fclk%%, %%pclk%%, %%reset%%
+ * @struct DiffTemplateCtx
+ * @brief Substitution context for differential-I/O template expansion.
  */
 typedef struct DiffTemplateCtx {
-    const char *instance;  /* Instance name suffix (e.g., "obuf_TMDS_CLK") */
-    const char *input;     /* Input signal name */
-    const char *output;    /* Output signal name */
-    const char *pin_p;     /* P pin port name */
-    const char *pin_n;     /* N pin port name */
-    const char *diff_wire; /* Diff wire base name (for D0..D9 indexing) */
-    int         ser_ratio; /* Serializer data width (for D0..D13 bounds check) */
-    const char *fclk;      /* Fast clock name */
-    const char *pclk;      /* Parallel clock name */
-    const char *reset;     /* Reset signal */
-    const char *shiftin1;  /* Cascade: shift wire 1 from slave */
-    const char *shiftin2;  /* Cascade: shift wire 2 from slave */
-    const char *shiftout1; /* Cascade: shift wire 1 to master */
-    const char *shiftout2; /* Cascade: shift wire 2 to master */
-    int         data_width; /* Cascade: actual serialization width (e.g., 10) */
+    const char *instance;  /**< Instance name suffix. */
+    const char *input;     /**< Input signal name. */
+    const char *output;    /**< Output signal name. */
+    const char *pin_p;     /**< Positive-side board pin port name. */
+    const char *pin_n;     /**< Negative-side board pin port name. */
+    const char *diff_wire; /**< Differential data bus base name. */
+    int ser_ratio;         /**< Serializer ratio used for D/Q placeholder bounds. */
+    const char *fclk;      /**< Fast clock name. */
+    const char *pclk;      /**< Parallel clock name. */
+    const char *reset;     /**< Reset signal name. */
+    const char *shiftin1;  /**< Cascade input wire 1 from the slave. */
+    const char *shiftin2;  /**< Cascade input wire 2 from the slave. */
+    const char *shiftout1; /**< Cascade output wire 1 to the master. */
+    const char *shiftout2; /**< Cascade output wire 2 to the master. */
+    int data_width;        /**< Effective serialization width. */
 } DiffTemplateCtx;
 
+/**
+ * @brief Emit a differential-I/O template with placeholder substitution.
+ * @param out Output stream for Verilog text.
+ * @param template_text Template body from chip data.
+ * @param ctx Placeholder substitution context.
+ */
 static void emit_diff_from_template(FILE *out,
-                                     const char *template_text,
-                                     const DiffTemplateCtx *ctx)
+                                    const char *template_text,
+                                    const DiffTemplateCtx *ctx)
 {
     if (!out || !template_text || !ctx) return;
 

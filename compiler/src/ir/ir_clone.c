@@ -1,13 +1,34 @@
+/**
+ * @file ir_clone.c
+ * @brief Deep-clone helpers for IR designs and nested IR data.
+ */
+
 #include <string.h>
 
 #include "ir_internal.h"
 
+/**
+ * @brief Duplicate a nullable string into the destination arena.
+ *
+ * @param arena Arena that will own the cloned string.
+ * @param src   Source string, or NULL.
+ * @return Arena-owned copy of @p src, or NULL when @p src is NULL or allocation fails.
+ */
 static char *clone_string(JZArena *arena, const char *src)
 {
     if (!src) return NULL;
     return ir_strdup_arena(arena, src);
 }
 
+/**
+ * @brief Copy an integer array into the destination arena.
+ *
+ * @param arena Arena that will own the cloned array.
+ * @param src   Source array, or NULL.
+ * @param count Number of elements in @p src.
+ * @param out   Receives the cloned array, or NULL when there is nothing to copy.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_int_array(JZArena *arena,
                            const int *src,
                            int count,
@@ -26,14 +47,38 @@ static int clone_int_array(JZArena *arena,
     return 0;
 }
 
+/**
+ * @brief Clone an IR expression tree.
+ *
+ * @param src   Source expression tree.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned expression tree.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_expr(const IR_Expr *src,
                       JZArena *arena,
                       IR_Expr **out);
 
+/**
+ * @brief Clone an IR statement tree.
+ *
+ * @param src   Source statement tree.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned statement tree.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_stmt(const IR_Stmt *src,
                       JZArena *arena,
                       IR_Stmt **out);
 
+/**
+ * @brief Clone the operand array of a concatenation expression.
+ *
+ * @param src   Source concatenation expression.
+ * @param dst   Destination expression being populated.
+ * @param arena Arena that will own the cloned operands.
+ * @return 0 on success, non-zero on allocation failure.
+ */
 static int clone_expr_concat_operands(const IR_Expr *src,
                                       IR_Expr *dst,
                                       JZArena *arena)
@@ -178,6 +223,14 @@ static int clone_expr(const IR_Expr *src,
     return 0;
 }
 
+/**
+ * @brief Clone the statements contained in a block statement.
+ *
+ * @param src   Source block statement.
+ * @param dst   Destination statement being populated.
+ * @param arena Arena that will own the cloned children.
+ * @return 0 on success, non-zero on allocation failure.
+ */
 static int clone_stmt_block(const IR_Stmt *src,
                             IR_Stmt *dst,
                             JZArena *arena)
@@ -280,6 +333,15 @@ static int clone_stmt(const IR_Stmt *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR signal array, including per-signal payloads.
+ *
+ * @param src   Source signal array.
+ * @param count Number of signals in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned signal array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_signals(const IR_Signal *src,
                          int count,
                          JZArena *arena,
@@ -310,6 +372,15 @@ static int clone_signals(const IR_Signal *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR clock-domain array.
+ *
+ * @param src   Source clock-domain array.
+ * @param count Number of clock domains in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned clock-domain array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_clock_domains(const IR_ClockDomain *src,
                                int count,
                                JZArena *arena,
@@ -352,6 +423,15 @@ static int clone_clock_domains(const IR_ClockDomain *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR instance array and each connection list.
+ *
+ * @param src   Source instance array.
+ * @param count Number of instances in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned instance array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_instances(const IR_Instance *src,
                            int count,
                            JZArena *arena,
@@ -416,6 +496,15 @@ static int clone_instances(const IR_Instance *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR memory array and each port list.
+ *
+ * @param src   Source memory array.
+ * @param count Number of memories in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned memory array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_memories(const IR_Memory *src,
                           int count,
                           JZArena *arena,
@@ -476,6 +565,15 @@ static int clone_memories(const IR_Memory *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR CDC crossing array.
+ *
+ * @param src   Source CDC array.
+ * @param count Number of CDC entries in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned CDC array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_cdcs(const IR_CDC *src,
                       int count,
                       JZArena *arena,
@@ -501,6 +599,15 @@ static int clone_cdcs(const IR_CDC *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR port-alias group array.
+ *
+ * @param src   Source alias-group array.
+ * @param count Number of alias groups in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned alias-group array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_port_alias_groups(const IR_PortAliasGroup *src,
                                    int count,
                                    JZArena *arena,
@@ -531,6 +638,15 @@ static int clone_port_alias_groups(const IR_PortAliasGroup *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR module array and each module payload.
+ *
+ * @param src   Source module array.
+ * @param count Number of modules in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned module array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_modules(const IR_Module *src,
                          int count,
                          JZArena *arena,
@@ -594,6 +710,15 @@ static int clone_modules(const IR_Module *src,
     return 0;
 }
 
+/**
+ * @brief Clone an IR clock-generator unit array.
+ *
+ * @param src   Source clock-generator array.
+ * @param count Number of units in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned unit array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_clock_gen_units(const IR_ClockGenUnit *src,
                                  int count,
                                  JZArena *arena,
@@ -676,6 +801,14 @@ static int clone_clock_gen_units(const IR_ClockGenUnit *src,
     return 0;
 }
 
+/**
+ * @brief Clone the project-level IR metadata object.
+ *
+ * @param src   Source project metadata.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned project metadata.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_project(const IR_Project *src,
                          JZArena *arena,
                          IR_Project **out)
@@ -791,6 +924,15 @@ static int clone_project(const IR_Project *src,
     return 0;
 }
 
+/**
+ * @brief Clone the source-file table stored on an IR design.
+ *
+ * @param src   Source source-file array.
+ * @param count Number of entries in @p src.
+ * @param arena Arena that will own the clone.
+ * @param out   Receives the cloned source-file array.
+ * @return 0 on success, non-zero on allocation failure or invalid output storage.
+ */
 static int clone_source_files(const IR_SourceFile *src,
                               int count,
                               JZArena *arena,

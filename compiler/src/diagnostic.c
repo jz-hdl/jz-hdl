@@ -1,3 +1,8 @@
+/**
+ * @file diagnostic.c
+ * @brief Diagnostic list storage, filtering, ordering, and rendering helpers.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,6 +10,79 @@
 #include "diagnostic.h"
 #include "util.h"
 #include "rules.h"
+
+/**
+ * @brief Normalize a diagnostic filename relative to the primary input file.
+ *
+ * @param filename         Diagnostic filename to normalize.
+ * @param primary_filename Primary input filename used as the display root.
+ * @param out              Destination buffer for the normalized path.
+ * @param out_size         Size of `out` in bytes.
+ */
+static void normalize_filename(const char *filename,
+                               const char *primary_filename,
+                               char *out,
+                               size_t out_size);
+
+/**
+ * @brief Look up the display priority for a diagnostic's rule code.
+ *
+ * @param d Diagnostic to inspect.
+ * @return Rule priority, or 0 when no rule metadata is available.
+ */
+static int get_rule_priority_for_diag(const JZDiagnostic *d);
+
+/**
+ * @brief Clamp a diagnostic severity to the printable severity range.
+ *
+ * @param d Diagnostic to inspect.
+ * @return Normalized severity rank.
+ */
+static int get_severity_rank_for_diag(const JZDiagnostic *d);
+
+/**
+ * @brief Compare two diagnostics by source filename, line, and column.
+ *
+ * @param a First diagnostic.
+ * @param b Second diagnostic.
+ * @return Negative, zero, or positive following `strcmp`-style ordering.
+ */
+static int compare_diag_location(const JZDiagnostic *a, const JZDiagnostic *b);
+
+/**
+ * @brief Compare diagnostic pointers for deterministic sorted rendering.
+ *
+ * @param a Pointer to the first diagnostic pointer.
+ * @param b Pointer to the second diagnostic pointer.
+ * @return Negative, zero, or positive following `qsort` comparator rules.
+ */
+static int compare_diag_ptrs(const void *a, const void *b);
+
+/**
+ * @brief Print one formatted diagnostic line and optional explanation text.
+ *
+ * @param d            Diagnostic to print.
+ * @param rule         Rule metadata for `d`, or NULL when unavailable.
+ * @param out          Output stream.
+ * @param use_color    Non-zero to emit ANSI color sequences.
+ * @param show_explain Non-zero to print explanation text under the main line.
+ */
+static void print_line(const JZDiagnostic *d,
+                       const JZRuleInfo *rule,
+                       FILE *out,
+                       int use_color,
+                       int show_explain);
+
+/**
+ * @brief Print one diagnostic after resolving any rule-table metadata.
+ *
+ * @param d            Diagnostic to print.
+ * @param out          Output stream.
+ * @param use_color    Non-zero to emit ANSI color sequences.
+ * @param show_explain Non-zero to print explanation text under the main line.
+ */
+static void print_one(const JZDiagnostic *d, FILE *out, int use_color,
+                      int show_explain);
 
 void jz_diagnostic_list_init(JZDiagnosticList *list)
 {

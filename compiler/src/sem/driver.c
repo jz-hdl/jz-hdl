@@ -1,3 +1,8 @@
+/**
+ * @file driver.c
+ * @brief Core semantic-driver entry points and shared module-scope helpers.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <string.h>
@@ -87,14 +92,30 @@ static int sem_report_prefixed_chip_data_rule(JZDiagnosticList *diagnostics,
  * -------------------------------------------------------------------------
  */
 
-/* Forward declarations for simple integer parsing helpers defined later in
- * this file (used by project-level semantic checks).
+/**
+ * @brief Parse a non-negative decimal integer.
+ * @param s Input text to parse.
+ * @param out Receives the parsed value on success.
+ * @return Non-zero on success, or zero when parsing fails.
  */
 int parse_simple_nonnegative_int(const char *s, unsigned *out);
+/**
+ * @brief Evaluate a simple positive declaration expression.
+ * @param s Expression text to evaluate.
+ * @param out Receives the evaluated value on success.
+ * @return Non-zero on success, or zero when evaluation fails.
+ */
 int eval_simple_positive_decl_int(const char *s, unsigned *out);
 
-/* Forward declaration for widthof()-expansion helper used by CONST/width
- * evaluation routines later in this file.
+/**
+ * @brief Expand `widthof(...)` calls within a width expression.
+ * @param expr Width expression text to expand.
+ * @param scope Module scope used during expansion.
+ * @param project_symbols Project-level symbols used during expansion.
+ * @param out_expanded Receives the expanded expression string.
+ * @param depth Current recursion depth.
+ * @param loc Source location associated with the expression.
+ * @return `0` on success, or non-zero when expansion fails.
  */
 int sem_expand_widthof_in_width_expr(const char *expr,
                                      const JZModuleScope *scope,
@@ -102,6 +123,17 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                                      char **out_expanded,
                                      int depth,
                                      JZLocation loc);
+/**
+ * @brief Expand `widthof(...)` calls and report failures through diagnostics.
+ * @param expr Width expression text to expand.
+ * @param scope Module scope used during expansion.
+ * @param project_symbols Project-level symbols used during expansion.
+ * @param out_expanded Receives the expanded expression string.
+ * @param depth Current recursion depth.
+ * @param diagnostics Diagnostic sink for reported issues.
+ * @param loc Source location associated with the expression.
+ * @return `0` on success, or non-zero when expansion fails.
+ */
 int sem_expand_widthof_in_width_expr_diag(const char *expr,
                                           const JZModuleScope *scope,
                                           const JZBuffer *project_symbols,

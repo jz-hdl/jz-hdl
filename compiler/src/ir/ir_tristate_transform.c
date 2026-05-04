@@ -44,6 +44,89 @@
 #include "../../include/util.h"
 #include "ir_internal.h"
 
+/**
+ * @brief Resolve the source filename recorded for a module.
+ * @param design Design that owns the module.
+ * @param mod Module whose source file should be queried.
+ * @return Source path string or NULL when unavailable.
+ */
+static const char *module_source_file(const IR_Design *design, const IR_Module *mod);
+/**
+ * @brief Find a mutable signal by ID within a module.
+ * @param mod Module to search.
+ * @param signal_id Signal identifier to match.
+ * @return Matching signal or NULL when absent.
+ */
+static IR_Signal *find_signal(IR_Module *mod, int signal_id);
+/**
+ * @brief Find an immutable signal by ID within a module.
+ * @param mod Module to search.
+ * @param signal_id Signal identifier to match.
+ * @return Matching signal or NULL when absent.
+ */
+static const IR_Signal *find_signal_const(const IR_Module *mod, int signal_id);
+/**
+ * @brief Check whether a parent signal is a top-level bidirectional pin.
+ * @param design Design being transformed.
+ * @param module_id Parent module identifier.
+ * @param signal_id Signal identifier to inspect.
+ * @return True when the signal maps to a top-level `INOUT_PINS` binding.
+ */
+static bool is_top_inout_pin(const IR_Design *design, int module_id, int signal_id);
+/**
+ * @brief Produce the replacement literal value for a tri-state default mode.
+ * @param mode Selected tri-state default.
+ * @param width Bit width of the replacement value.
+ * @return Bit pattern used when replacing `z`.
+ */
+static uint64_t default_value_for_width(IR_TristateDefault mode, int width);
+/**
+ * @brief Find the representative element of a union-find set.
+ * @param parent Union-find parent array.
+ * @param i Element index to resolve.
+ * @return Canonical representative index.
+ */
+static int uf_find(int *parent, int i);
+/**
+ * @brief Union two sets in the alias-detection union-find structure.
+ * @param parent Union-find parent array.
+ * @param rank Union-find rank array.
+ * @param a First element index.
+ * @param b Second element index.
+ */
+static void uf_union(int *parent, int *rank, int a, int b);
+/**
+ * @brief Find the array index for a signal ID inside a module.
+ * @param mod Module to search.
+ * @param signal_id Signal identifier to locate.
+ * @return Index into `mod->signals` or -1 when absent.
+ */
+static int find_signal_index(const IR_Module *mod, int signal_id);
+/**
+ * @brief Collect referenced non-register signals from an expression tree.
+ * @param mod Module that owns the expression.
+ * @param expr Expression tree to walk.
+ * @param out_indices Output array of signal indices.
+ * @param out_count In/out count of collected indices.
+ * @param max_count Maximum number of indices that fit in @p out_indices.
+ */
+static void collect_signal_refs_from_expr(const IR_Module *mod, const IR_Expr *expr,
+                                          int *out_indices, int *out_count, int max_count);
+/**
+ * @brief Collect alias relationships induced by assignments in a statement tree.
+ * @param mod Module whose statements are being inspected.
+ * @param stmt Statement subtree to walk.
+ * @param parent Union-find parent array.
+ * @param rank Union-find rank array.
+ */
+static void collect_alias_unions(const IR_Module *mod, const IR_Stmt *stmt, int *parent, int *rank);
+/**
+ * @brief Build alias groups for module ports that share a combinational source.
+ * @param mod Module to analyze.
+ * @param arena Arena used for group allocation.
+ */
+static void ir_build_port_alias_groups(IR_Module *mod, JZArena *arena);
+
 /* ======================================================================== */
 /*  Small helpers                                                            */
 /* ======================================================================== */
@@ -411,33 +494,118 @@ static void ir_build_port_alias_groups(IR_Module *mod, JZArena *arena)
  * A record of one instance port that drives a parent signal and can
  * produce z (making it a tri-state driver).
  */
+/**
+ * @struct SharedDriver
+ * @brief One child-instance port that contributes a tri-state-capable drive.
+ */
 typedef struct {
-    int inst_idx;        /* Index into parent module's instances array. */
-    int conn_idx;        /* Index into instance's connections array. */
-    int child_port_id;   /* Signal ID of the INOUT/OUT port in child. */
-    int child_module_id; /* ID of the child module. */
-    int parent_msb;      /* Slice bounds on the parent signal. */
-    int parent_lsb;
+    int inst_idx;        /**< Index into the parent module's `instances` array. */
+    int conn_idx;        /**< Index into the instance's `connections` array. */
+    int child_port_id;   /**< Signal ID of the child `OUT` or `INOUT` port. */
+    int child_module_id; /**< Child-module identifier that owns the port. */
+    int parent_msb;      /**< Upper bound of the parent slice driven by this port. */
+    int parent_lsb;      /**< Lower bound of the parent slice driven by this port. */
 } SharedDriver;
 
 /**
  * A parent signal that is driven by 2+ instance ports with z capability.
  */
+/**
+ * @struct SharedNet
+ * @brief One parent signal slice driven by multiple tri-state-capable child ports.
+ */
 typedef struct {
-    int           parent_signal_id;
-    int           width;            /* Width of the driven slice. */
-    int           parent_msb;
-    int           parent_lsb;
-    SharedDriver *drivers;
-    int           num_drivers;
-    int           driver_cap;
+    int           parent_signal_id;   /**< Parent signal identifier for the shared slice. */
+    int           width;              /**< Width of the driven slice. */
+    int           parent_msb;         /**< Upper bound of the parent slice. */
+    int           parent_lsb;         /**< Lower bound of the parent slice. */
+    SharedDriver *drivers;            /**< Dynamic array of contributing child drivers. */
+    int           num_drivers;        /**< Number of populated entries in @p drivers. */
+    int           driver_cap;         /**< Allocated capacity of @p drivers. */
 
     /* Fields for merged alias-connected nets. */
-    int          *merged_parent_ids;    /* Additional parent signal IDs. */
-    int           num_merged_parents;
-    int          *passthrough_driver;   /* Per-driver flag: 1 = pass-through (not a real driver). */
-    int           merged;               /* Non-zero if this net has been merged into another. */
+    int          *merged_parent_ids;  /**< Additional parent signal IDs folded into this net. */
+    int           num_merged_parents; /**< Number of populated merged-parent entries. */
+    int          *passthrough_driver; /**< Per-driver flag: non-zero for pass-through-only drivers. */
+    int           merged;             /**< Non-zero once this record has been folded into another one. */
 } SharedNet;
+
+/**
+ * @brief Release heap storage owned by a shared-net list.
+ * @param nets Shared-net array to free.
+ * @param count Number of entries in @p nets.
+ */
+static void shared_net_free(SharedNet *nets, int count);
+/**
+ * @brief Discover multi-driver tri-state nets in a parent module.
+ * @param design Design being transformed.
+ * @param parent Parent module to inspect.
+ * @param out_count Output count of discovered shared nets.
+ * @return Heap-allocated shared-net array or NULL on allocation failure.
+ */
+static SharedNet *find_shared_tristate_nets(const IR_Design *design,
+                                            const IR_Module *parent,
+                                            int *out_count);
+/**
+ * @brief Find the alias group that contains a given port ID.
+ * @param mod Module that owns the alias groups.
+ * @param port_id Port signal identifier to resolve.
+ * @return Matching alias group or NULL when none exists.
+ */
+static const IR_PortAliasGroup *find_alias_group_for_port(const IR_Module *mod, int port_id);
+/**
+ * @brief Find which parent signal connects to a child port.
+ * @param inst Instance connection list to inspect.
+ * @param child_port_id Child port identifier to match.
+ * @return Parent signal identifier or -1 when absent.
+ */
+static int find_parent_signal_for_child_port(const IR_Instance *inst, int child_port_id);
+/**
+ * @brief Find the shared-net entry that covers a parent signal slice.
+ * @param nets Shared-net array to search.
+ * @param count Number of entries in @p nets.
+ * @param parent_signal_id Parent signal identifier to match.
+ * @param msb Upper bound of the parent slice.
+ * @param lsb Lower bound of the parent slice.
+ * @return Matching shared-net index or -1 when absent.
+ */
+static int find_shared_net_for_signal(SharedNet *nets, int count, int parent_signal_id, int msb, int lsb);
+/**
+ * @brief Check whether a signal is already represented by a duplicate sink net.
+ * @param mod Module that owns the signal.
+ * @param signal_id Signal identifier to inspect.
+ * @return True when the signal name already represents a duplicate sink.
+ */
+static bool is_dup_sink_signal(const IR_Module *mod, int signal_id);
+/**
+ * @brief Append another parent signal to a merged shared-net record.
+ * @param net Shared-net record to extend.
+ * @param parent_signal_id Parent signal identifier to append.
+ * @return 0 on success or -1 on allocation failure.
+ */
+static int add_merged_parent(SharedNet *net, int parent_signal_id);
+/**
+ * @brief Append one driver record to a shared-net entry.
+ * @param net Shared-net record to update.
+ * @param drv Driver description to append.
+ * @return 0 on success or -1 on allocation failure.
+ */
+static int add_driver_to_net(SharedNet *net, const SharedDriver *drv);
+/**
+ * @brief Ensure the per-driver passthrough flag array is allocated.
+ * @param net Shared-net record to update.
+ * @return 0 on success or -1 on allocation failure.
+ */
+static int ensure_passthrough_array(SharedNet *net);
+/**
+ * @brief Merge shared-net records that are connected through port aliases.
+ * @param design Design being transformed.
+ * @param parent Parent module that owns the shared nets.
+ * @param nets_ptr Pointer to the shared-net array to mutate or replace.
+ * @param net_count_ptr In/out count of entries in the shared-net array.
+ */
+static void merge_alias_connected_nets(const IR_Design *design, const IR_Module *parent,
+                                       SharedNet **nets_ptr, int *net_count_ptr);
 
 static void shared_net_free(SharedNet *nets, int count)
 {
@@ -1156,6 +1324,73 @@ static void merge_alias_connected_nets(const IR_Design *design,
 /*  Helpers for allocating new IR nodes                                      */
 /* ======================================================================== */
 
+/**
+ * @brief Compute the next available signal identifier in a module.
+ * @param mod Module to inspect.
+ * @return Signal identifier greater than all existing module signal IDs.
+ */
+static int next_signal_id(IR_Module *mod);
+/**
+ * @brief Append a new signal to a module.
+ * @param mod Module to extend.
+ * @param arena Arena used for allocation.
+ * @param id Signal identifier to assign.
+ * @param name Signal name.
+ * @param kind Signal kind to create.
+ * @param dir Port direction when the kind is `SIG_PORT`.
+ * @param width Signal bit width.
+ * @param source_line Source line associated with the new signal.
+ * @return Pointer to the new signal or NULL on allocation failure.
+ */
+static IR_Signal *add_signal(IR_Module *mod, JZArena *arena, int id,
+                             const char *name, IR_SignalKind kind,
+                             IR_PortDirection dir, int width, int source_line);
+/**
+ * @brief Build a literal expression node.
+ * @param arena Arena used for allocation.
+ * @param width Literal width.
+ * @param value Literal value bits.
+ * @param is_z Non-zero when the literal represents high impedance.
+ * @return New literal expression or NULL on allocation failure.
+ */
+static IR_Expr *make_literal(JZArena *arena, int width, uint64_t value, int is_z);
+/**
+ * @brief Build a signal-reference expression node.
+ * @param arena Arena used for allocation.
+ * @param signal_id Referenced signal identifier.
+ * @param width Referenced signal width.
+ * @return New signal-reference expression or NULL on allocation failure.
+ */
+static IR_Expr *make_signal_ref(JZArena *arena, int signal_id, int width);
+/**
+ * @brief Build a ternary expression node.
+ * @param arena Arena used for allocation.
+ * @param cond Condition expression.
+ * @param true_val Expression used when the condition is true.
+ * @param false_val Expression used when the condition is false.
+ * @param width Result width of the expression.
+ * @return New ternary expression or NULL on allocation failure.
+ */
+static IR_Expr *make_ternary(JZArena *arena, IR_Expr *cond,
+                             IR_Expr *true_val, IR_Expr *false_val, int width);
+/**
+ * @brief Build an assignment statement node.
+ * @param arena Arena used for allocation.
+ * @param signal_id Left-hand-side signal identifier.
+ * @param rhs Right-hand-side expression.
+ * @param source_line Source line to record on the statement.
+ * @return New assignment statement or NULL on allocation failure.
+ */
+static IR_Stmt *make_assignment_stmt(JZArena *arena, int signal_id,
+                                     IR_Expr *rhs, int source_line);
+/**
+ * @brief Deep-copy an expression tree into an arena.
+ * @param arena Arena used for allocation.
+ * @param src Source expression tree to duplicate.
+ * @return Cloned expression tree or NULL on allocation failure.
+ */
+static IR_Expr *deep_copy_expr(JZArena *arena, const IR_Expr *src);
+
 static int next_signal_id(IR_Module *mod)
 {
     int max_id = -1;
@@ -1626,11 +1861,15 @@ static int add_instance_connection(IR_Instance *inst, JZArena *arena,
  * If 2+ always-active drivers remain on the same slice, the transform
  * introduced a multi-driver conflict.
  */
+/**
+ * @struct SliceDriverCount
+ * @brief Post-transform count of always-active drivers on one parent slice.
+ */
 typedef struct {
-    int parent_signal_id;
-    int msb;
-    int lsb;
-    int active_drivers;
+    int parent_signal_id; /**< Parent signal identifier for the slice. */
+    int msb;              /**< Upper bound of the driven slice. */
+    int lsb;              /**< Lower bound of the driven slice. */
+    int active_drivers;   /**< Number of non-tri-state child drivers on the slice. */
 } SliceDriverCount;
 
 static int validate_no_multidriver(const IR_Design *design,
@@ -1740,11 +1979,15 @@ static int validate_no_multidriver(const IR_Design *design,
  * to the child module twice. This structure tracks which (module, port)
  * pairs have already been split so we can reuse the existing port IDs.
  */
+/**
+ * @struct SplitPortRecord
+ * @brief Mapping from an original tri-state child port to generated `_out` and `_oe` ports.
+ */
 typedef struct {
-    int child_module_id;
-    int original_port_id;
-    int out_port_id;
-    int oe_port_id;
+    int child_module_id;  /**< Child module whose port was split. */
+    int original_port_id; /**< Original tri-state-capable port identifier. */
+    int out_port_id;      /**< Generated data-output port identifier. */
+    int oe_port_id;       /**< Generated output-enable port identifier. */
 } SplitPortRecord;
 
 static const SplitPortRecord *find_split_record(const SplitPortRecord *records,
@@ -2294,10 +2537,14 @@ static int append_diagnostics(JZDiagnosticList *dst,
     return 0;
 }
 
+/**
+ * @enum TristateTransformStatus
+ * @brief Internal status codes for the tri-state transform pipeline.
+ */
 typedef enum TristateTransformStatus {
-    TRISTATE_TRANSFORM_STATUS_OK = 0,
-    TRISTATE_TRANSFORM_STATUS_FAILED = 1,
-    TRISTATE_TRANSFORM_STATUS_POSTCHECK_FAILED = 2
+    TRISTATE_TRANSFORM_STATUS_OK = 0,         /**< Transform and validation completed successfully. */
+    TRISTATE_TRANSFORM_STATUS_FAILED = 1,     /**< Transform failed before post-check validation. */
+    TRISTATE_TRANSFORM_STATUS_POSTCHECK_FAILED = 2 /**< Transform ran but post-check validation failed. */
 } TristateTransformStatus;
 
 static JZLocation first_error_location(const JZDiagnosticList *diagnostics)
@@ -2554,11 +2801,15 @@ static bool stmt_signal_still_has_z(const IR_Stmt *stmt, int signal_id)
 /*  Per-bit tri-state detection                                              */
 /* ======================================================================== */
 
+/**
+ * @struct ZSliceRecord
+ * @brief One sliced assignment that still contains a `z` expression.
+ */
 typedef struct {
-    int signal_id;
-    int msb;
-    int lsb;
-    int source_line;
+    int signal_id;    /**< Signal identifier targeted by the sliced assignment. */
+    int msb;          /**< Upper bound of the assigned slice. */
+    int lsb;          /**< Lower bound of the assigned slice. */
+    int source_line;  /**< Source line where the sliced assignment originated. */
 } ZSliceRecord;
 
 static void collect_z_slices(const IR_Stmt *stmt, ZSliceRecord **out,

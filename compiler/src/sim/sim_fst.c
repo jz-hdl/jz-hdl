@@ -41,64 +41,312 @@
 /* ---- FST endianness test double ---- */
 static const double FST_DOUBLE_ENDTEST = 2.7182818284590452354;
 
-/* ---- Signal definition ---- */
+/* ---- Private types ---- */
+
+/**
+ * @brief Registered waveform signal metadata.
+ */
 typedef struct FSTSignal {
-    char *scope;
-    char *name;
-    int   width;
+    char *scope; /**< Hierarchical scope name. */
+    char *name;  /**< Leaf signal name. */
+    int width;   /**< Signal width in bits. */
 } FSTSignal;
 
-/* ---- Value change record ---- */
+/**
+ * @brief Buffered value change entry.
+ */
 typedef struct FSTChange {
-    uint32_t time_index;
-    int      sig_id;
-    uint64_t value;
+    uint32_t time_index; /**< Index into the shared time table. */
+    int sig_id;          /**< Signal identifier returned by `fst_add_signal()`. */
+    uint64_t value;      /**< Recorded signal value. */
 } FSTChange;
 
-/* ---- Dynamic byte buffer ---- */
+/**
+ * @brief Growable byte buffer used while assembling FST blocks.
+ */
 typedef struct FSTBuffer {
-    uint8_t *data;
-    size_t   len;
-    size_t   cap;
-    int      failed;
+    uint8_t *data; /**< Buffer storage. */
+    size_t len;    /**< Number of initialized bytes in `data`. */
+    size_t cap;    /**< Allocated capacity of `data`. */
+    int failed;    /**< Non-zero after a growth or overflow failure. */
 } FSTBuffer;
 
+/**
+ * @brief Mutable writer state for one FST output stream.
+ */
 struct FSTWriter {
-    FILE       *fp;
-    uint64_t    timescale_ps;
-    int8_t      timescale_exp;
-
-    FSTSignal   signals[FST_MAX_SIGNALS];
-    int         num_signals;
-    int         defs_ended;
-
-    /* Hierarchy data (built during add_signal, compressed at close) */
-    FSTBuffer   hier;
-    int         num_scopes;
-    char       *current_scope;
-
-    /* Value changes (buffered during simulation) */
-    FSTChange  *changes;
-    size_t      num_changes;
-    size_t      changes_cap;
-    size_t      changes_alloc_bytes;
-
-    uint64_t   *time_table;
-    size_t      time_count;
-    size_t      time_cap;
-    size_t      time_table_alloc_bytes;
-    uint32_t    current_time_index;
-
-    size_t      retained_trace_bytes;
-    int         trace_limit_hit;
-
-    uint64_t    current_time;
-    uint64_t    start_time;
-    uint64_t    end_time;
-    int         has_time;
+    FILE *fp;                    /**< Destination file handle. */
+    uint64_t timescale_ps;       /**< Requested timescale in picoseconds. */
+    int8_t timescale_exp;        /**< FST timescale exponent derived from `timescale_ps`. */
+    FSTSignal signals[FST_MAX_SIGNALS]; /**< Registered signal metadata. */
+    int num_signals;             /**< Number of valid entries in `signals`. */
+    int defs_ended;              /**< Non-zero after definitions are finalized. */
+    FSTBuffer hier;              /**< Buffered hierarchy block payload. */
+    int num_scopes;              /**< Number of emitted hierarchy scopes. */
+    char *current_scope;         /**< Currently open hierarchy scope name. */
+    FSTChange *changes;          /**< Buffered value changes. */
+    size_t num_changes;          /**< Number of valid entries in `changes`. */
+    size_t changes_cap;          /**< Allocated capacity of `changes`. */
+    size_t changes_alloc_bytes;  /**< Bytes retained by the `changes` allocation. */
+    uint64_t *time_table;        /**< Unique time values referenced by change records. */
+    size_t time_count;           /**< Number of valid entries in `time_table`. */
+    size_t time_cap;             /**< Allocated capacity of `time_table`. */
+    size_t time_table_alloc_bytes; /**< Bytes retained by the `time_table` allocation. */
+    uint32_t current_time_index; /**< Index of the current timestamp in `time_table`. */
+    size_t retained_trace_bytes; /**< Total retained bytes counted against the trace limit. */
+    int trace_limit_hit;         /**< Non-zero once trace growth has been capped. */
+    uint64_t current_time;       /**< Current simulation time in waveform units. */
+    uint64_t start_time;         /**< Earliest recorded simulation time. */
+    uint64_t end_time;           /**< Latest recorded simulation time. */
+    int has_time;                /**< Non-zero after the first timestamp is recorded. */
 };
 
-/* ---- Buffer helpers ---- */
+/* ---- Private declarations ---- */
+
+/**
+ * @brief Initialize an empty dynamic buffer.
+ *
+ * @param b Buffer to initialize.
+ */
+static void buf_init(FSTBuffer *b);
+
+/**
+ * @brief Ensure a buffer has room for additional bytes.
+ *
+ * @param b Buffer to grow.
+ * @param extra Additional bytes required.
+ * @return `0` on success, or `-1` on allocation or overflow failure.
+ */
+static int buf_ensure(FSTBuffer *b, size_t extra);
+
+/**
+ * @brief Append one byte to a dynamic buffer.
+ *
+ * @param b Destination buffer.
+ * @param v Byte value to append.
+ */
+static void buf_u8(FSTBuffer *b, uint8_t v);
+
+/**
+ * @brief Append an arbitrary byte sequence to a dynamic buffer.
+ *
+ * @param b Destination buffer.
+ * @param data Source byte sequence.
+ * @param len Number of bytes to append.
+ */
+static void buf_bytes(FSTBuffer *b, const void *data, size_t len);
+
+/**
+ * @brief Append a NUL-terminated string, including its terminator.
+ *
+ * @param b Destination buffer.
+ * @param s String to append, or `NULL` to append an empty string.
+ */
+static void buf_str(FSTBuffer *b, const char *s);
+
+/**
+ * @brief Release storage owned by a dynamic buffer.
+ *
+ * @param b Buffer to reset and free.
+ */
+static void buf_free(FSTBuffer *b);
+
+/**
+ * @brief Update retained trace accounting for a reallocated buffer.
+ *
+ * @param w FST writer that owns the tracked allocation.
+ * @param tracked_bytes Pointer to the currently-accounted byte count.
+ * @param new_bytes Replacement allocation size in bytes.
+ * @return `0` on success, or `-1` if the allocation would exceed limits.
+ */
+static int fst_update_tracked_allocation(FSTWriter *w, size_t *tracked_bytes, size_t new_bytes);
+
+/**
+ * @brief Grow the buffered change array to at least the requested size.
+ *
+ * @param w FST writer that owns the change buffer.
+ * @param min_count Minimum required entry capacity.
+ * @return `0` on success, or `-1` on allocation or accounting failure.
+ */
+static int fst_grow_changes(FSTWriter *w, size_t min_count);
+
+/**
+ * @brief Grow the buffered time table to at least the requested size.
+ *
+ * @param w FST writer that owns the time table.
+ * @param min_count Minimum required entry capacity.
+ * @return `0` on success, or `-1` on allocation or accounting failure.
+ */
+static int fst_grow_time_table(FSTWriter *w, size_t min_count);
+
+/**
+ * @brief Encode an unsigned integer using LEB128 and append it to a buffer.
+ *
+ * @param b Destination buffer.
+ * @param v Integer value to encode.
+ */
+static void buf_varint(FSTBuffer *b, uint64_t v);
+
+/**
+ * @brief Write one byte to the output stream.
+ *
+ * @param fp Destination stream.
+ * @param v Byte value to write.
+ */
+static void write_u8(FILE *fp, uint8_t v);
+
+/**
+ * @brief Write a 64-bit integer in big-endian byte order.
+ *
+ * @param fp Destination stream.
+ * @param v Integer value to write.
+ */
+static void write_u64(FILE *fp, uint64_t v);
+
+/**
+ * @brief Write an unsigned LEB128 integer to the output stream.
+ *
+ * @param fp Destination stream.
+ * @param v Integer value to encode and write.
+ */
+static void write_varint(FILE *fp, uint64_t v);
+
+/**
+ * @brief Compute the Adler-32 checksum for a byte range.
+ *
+ * @param data Input byte sequence.
+ * @param len Number of bytes to process.
+ * @return Adler-32 checksum.
+ */
+static uint32_t adler32(const uint8_t *data, size_t len);
+
+/**
+ * @brief Initialize the CRC32 lookup table on first use.
+ */
+static void crc32_init(void);
+
+/**
+ * @brief Compute the CRC32 checksum for a byte range.
+ *
+ * @param data Input byte sequence.
+ * @param len Number of bytes to process.
+ * @return CRC32 checksum.
+ */
+static uint32_t compute_crc32(const uint8_t *data, size_t len);
+
+/**
+ * @brief Compute the worst-case size of a stored deflate stream.
+ *
+ * @param len Uncompressed input length in bytes.
+ * @return Maximum encoded size in bytes.
+ */
+static size_t deflate_stored_size(size_t len);
+
+/**
+ * @brief Encode data as stored deflate blocks.
+ *
+ * @param out Destination buffer.
+ * @param in Input byte sequence.
+ * @param len Number of bytes to encode.
+ * @return Number of output bytes written.
+ */
+static size_t deflate_stored(uint8_t *out, const uint8_t *in, size_t len);
+
+/**
+ * @brief Compute the worst-case size of a stored zlib stream.
+ *
+ * @param len Uncompressed input length in bytes.
+ * @return Maximum encoded size in bytes.
+ */
+static size_t zlib_store_bound(size_t len);
+
+/**
+ * @brief Wrap stored deflate data in a zlib container.
+ *
+ * @param out Destination buffer.
+ * @param in Input byte sequence.
+ * @param len Number of bytes to encode.
+ * @return Number of output bytes written.
+ */
+static size_t zlib_store(uint8_t *out, const uint8_t *in, size_t len);
+
+/**
+ * @brief Compute the worst-case size of a stored gzip stream.
+ *
+ * @param len Uncompressed input length in bytes.
+ * @return Maximum encoded size in bytes.
+ */
+static size_t gzip_store_bound(size_t len);
+
+/**
+ * @brief Wrap stored deflate data in a gzip container.
+ *
+ * @param out Destination buffer.
+ * @param in Input byte sequence.
+ * @param len Number of bytes to encode.
+ * @return Number of output bytes written.
+ */
+static size_t gzip_store(uint8_t *out, const uint8_t *in, size_t len);
+
+/**
+ * @brief Convert a picosecond timescale to the FST exponent encoding.
+ *
+ * @param ps Timescale in picoseconds.
+ * @return Signed FST timescale exponent.
+ */
+static int8_t timescale_to_exponent(uint64_t ps);
+
+/**
+ * @brief Emit a hierarchy scope entry into the buffered hierarchy block.
+ *
+ * @param w FST writer that owns the hierarchy buffer.
+ * @param name Scope name to open.
+ */
+static void hier_open_scope(FSTWriter *w, const char *name);
+
+/**
+ * @brief Emit an upscope marker into the buffered hierarchy block.
+ *
+ * @param w FST writer that owns the hierarchy buffer.
+ */
+static void hier_close_scope(FSTWriter *w);
+
+/**
+ * @brief Emit one variable definition into the buffered hierarchy block.
+ *
+ * @param w FST writer that owns the hierarchy buffer.
+ * @param name Signal name.
+ * @param width Signal width in bits.
+ */
+static void hier_add_var(FSTWriter *w, const char *name, int width);
+
+/**
+ * @brief Write the fixed-size FST header block.
+ *
+ * @param w FST writer to serialize.
+ */
+static void write_hdr_block(FSTWriter *w);
+
+/**
+ * @brief Write the buffered value-change block.
+ *
+ * @param w FST writer to serialize.
+ */
+static void write_vcdata_block(FSTWriter *w);
+
+/**
+ * @brief Write the compressed geometry block.
+ *
+ * @param w FST writer to serialize.
+ */
+static void write_geom_block(FSTWriter *w);
+
+/**
+ * @brief Write the compressed hierarchy block.
+ *
+ * @param w FST writer to serialize.
+ */
+static void write_hier_block(FSTWriter *w);
 
 static void buf_init(FSTBuffer *b)
 {

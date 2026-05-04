@@ -1,0 +1,38 @@
+// RUN_UNTIL_NE_FORM: valid simulation @run_until(signal != value, timeout=unit=amount)
+// syntax advances until the inequality condition becomes true.
+
+@module RunUntilNeFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [8] count;
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        count = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= state + 8'h01;
+    }
+@endmod
+
+@simulation RunUntilNeFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        count [8];
+    }
+
+    @new dut RunUntilNeFormDut {
+        clk [1] = clk;
+        count [8] = count;
+    }
+
+    @run_until(count != 8'h00, timeout=ns=20)
+@endsim

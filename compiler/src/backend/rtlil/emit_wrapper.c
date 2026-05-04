@@ -1,14 +1,6 @@
-/*
- * emit_wrapper.c - Project wrapper emission for the RTLIL backend.
- *
- * The project wrapper is a top-level module that:
- *   - Exposes board pins as ports
- *   - Instantiates clock generators (PLL/DLL/CLKDIV)
- *   - Instantiates differential I/O primitives (OBUF/IBUF/OSER10)
- *   - Instantiates the user's top module with pin-to-port bindings
- *
- * Clock generator and differential I/O instantiation uses chip-specific
- * templates from chip data JSON files (the "rtlil" map entries).
+/**
+ * @file emit_wrapper.c
+ * @brief Emits the project-level RTLIL wrapper module.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,18 +11,131 @@
 #include "chip_data.h"
 #include "ir.h"
 
-/* Forward declaration for differential pin check (defined later in this file). */
-static int pin_has_diff_mapping(const IR_Project *proj, const IR_Pin *pin);
-
 /* Reuse Verilog backend helpers. */
 #include "backend/verilog-2005/verilog_internal.h"
 
-/* -------------------------------------------------------------------------
- * Clock gen template substitution helpers
- * -------------------------------------------------------------------------
+/**
+ * @brief Find a clock-generator config value by parameter name.
+ * @param unit Clock-generator unit to inspect.
+ * @param param_name Parameter name to match.
+ * @return Matching config value, or `NULL` if none exists.
  */
+static const char *find_clock_gen_config(const IR_ClockGenUnit *unit,
+                                         const char *param_name);
 
-/* Find a config value by parameter name. Returns NULL if not found. */
+/**
+ * @brief Find an output clock name by selector.
+ * @param unit Clock-generator unit to inspect.
+ * @param selector Output selector to match.
+ * @return Matching output clock name, or `NULL` if none exists.
+ */
+static const char *find_clock_gen_output(const IR_ClockGenUnit *unit,
+                                         const char *selector);
+
+/**
+ * @brief Look up the period of a named project clock.
+ * @param proj Project that owns the clock definitions.
+ * @param clock_name Clock name to match.
+ * @return Clock period in nanoseconds, or `0.0` if no match exists.
+ */
+static double find_clock_period_ns(const IR_Project *proj,
+                                   const char *clock_name);
+
+/**
+ * @brief Evaluate a simple arithmetic expression for clock-gen templates.
+ * @param unit Clock-generator unit that provides config identifiers.
+ * @param expr Arithmetic expression to evaluate.
+ * @param result Output location for the computed integer result.
+ * @param chip_data Optional chip data used for default parameter lookup.
+ * @param clock_gen_type Clock-generator type name for chip-data lookups.
+ * @return `1` on success, or `0` when the expression cannot be evaluated.
+ */
+static int eval_arith_expr(const IR_ClockGenUnit *unit,
+                           const char *expr,
+                           long *result,
+                           const JZChipData *chip_data,
+                           const char *clock_gen_type);
+
+/**
+ * @brief Evaluate a derived string expression for clock-gen templates.
+ * @param unit Clock-generator unit that provides config identifiers.
+ * @param expr Derived-expression text to evaluate.
+ * @param out_buf Destination buffer for the formatted result.
+ * @param buf_size Size of `out_buf` in bytes.
+ * @param chip_data Optional chip data used for default parameter lookup.
+ * @param clock_gen_type Clock-generator type name for chip-data lookups.
+ * @return `1` on success, or `0` when the expression cannot be evaluated.
+ */
+static int eval_derived_expr(const IR_ClockGenUnit *unit,
+                             const char *expr,
+                             char *out_buf, size_t buf_size,
+                             const JZChipData *chip_data,
+                             const char *clock_gen_type);
+
+/**
+ * @brief Expand and emit a clock-generator RTLIL template.
+ * @param out Destination RTLIL stream.
+ * @param proj Project that owns the clock generator.
+ * @param unit Clock-generator unit being emitted.
+ * @param template_text Template text to expand.
+ * @param chip_data Optional chip data used for placeholder defaults.
+ * @param clock_gen_type Clock-generator type name for chip-data lookups.
+ * @param cg_idx Clock-generator index within the project.
+ * @param unit_idx Unit index within the clock generator.
+ */
+static void emit_clock_gen_from_template(FILE *out,
+                                         const IR_Project *proj,
+                                         const IR_ClockGenUnit *unit,
+                                         const char *template_text,
+                                         const JZChipData *chip_data,
+                                         const char *clock_gen_type,
+                                         int cg_idx, int unit_idx);
+
+/**
+ * @struct DiffTemplateCtx
+ * @brief Carries placeholder values for differential-I/O template expansion.
+ */
+typedef struct DiffTemplateCtx {
+    const char *instance;  /**< Instance name to substitute. */
+    const char *input;     /**< Single-ended input signal name, if any. */
+    const char *output;    /**< Single-ended output signal name, if any. */
+    const char *pin_p;     /**< Positive board-pin name. */
+    const char *pin_n;     /**< Negative board-pin name. */
+    const char *diff_wire; /**< Internal differential data wire name. */
+    int ser_ratio;         /**< Serializer ratio used for D/Q placeholder bounds. */
+    const char *fclk;      /**< Fast clock signal name. */
+    const char *pclk;      /**< Pixel or parallel clock signal name. */
+    const char *reset;     /**< Reset signal name. */
+} DiffTemplateCtx;
+
+/**
+ * @brief Expand and emit a differential-I/O RTLIL template.
+ * @param out Destination RTLIL stream.
+ * @param template_text Template text to expand.
+ * @param ctx Placeholder context used for substitutions.
+ */
+static void emit_diff_from_template(FILE *out, const char *template_text,
+                                    const DiffTemplateCtx *ctx);
+
+/**
+ * @brief Find the project top-binding that targets one specific port bit.
+ * @param proj Project that owns the top bindings.
+ * @param top_signal_id IR signal identifier of the top-level port.
+ * @param top_bit_index Zero-based bit index within the top-level port.
+ * @return Matching top-binding entry, or `NULL` if none exists.
+ */
+static const IR_TopBinding *find_top_binding_for_bit(const IR_Project *proj,
+                                                     int top_signal_id,
+                                                     int top_bit_index);
+
+/**
+ * @brief Check whether a logical pin is mapped as a differential pair.
+ * @param proj Project that owns the pin mappings.
+ * @param pin Pin to inspect.
+ * @return Nonzero when the pin has both differential P and N mappings.
+ */
+static int pin_has_diff_mapping(const IR_Project *proj, const IR_Pin *pin);
+
 static const char *find_clock_gen_config(const IR_ClockGenUnit *unit,
                                          const char *param_name)
 {
@@ -44,7 +149,6 @@ static const char *find_clock_gen_config(const IR_ClockGenUnit *unit,
     return NULL;
 }
 
-/* Find an output clock name by selector. Returns NULL if not found. */
 static const char *find_clock_gen_output(const IR_ClockGenUnit *unit,
                                          const char *selector)
 {
@@ -58,7 +162,6 @@ static const char *find_clock_gen_output(const IR_ClockGenUnit *unit,
     return NULL;
 }
 
-/* Find the period (in ns) of a named clock from the project. */
 static double find_clock_period_ns(const IR_Project *proj, const char *clock_name)
 {
     if (!proj || !clock_name) return 0.0;
@@ -71,10 +174,6 @@ static double find_clock_period_ns(const IR_Project *proj, const char *clock_nam
     return 0.0;
 }
 
-/* Evaluate a simple arithmetic expression with identifiers resolved
- * against clock gen config values.  Supports +, -, *, / with standard
- * precedence.  Returns 1 on success, 0 on failure.
- */
 static int eval_arith_expr(const IR_ClockGenUnit *unit,
                            const char *expr,
                            long *result,
@@ -161,7 +260,6 @@ static int eval_arith_expr(const IR_ClockGenUnit *unit,
     return 1;
 }
 
-/* Evaluate a derived expression (e.g., toString(PHASESEL * 2, BIN, 4)). */
 static int eval_derived_expr(const IR_ClockGenUnit *unit,
                              const char *expr,
                              char *out_buf, size_t buf_size,
@@ -238,11 +336,6 @@ static int eval_derived_expr(const IR_ClockGenUnit *unit,
     return 0;
 }
 
-/* Emit a clock gen instantiation using the chip data RTLIL template.
- * Substitutes placeholders like %%refclk%%, %%BASE%%, %%IDIV%%, etc.
- * For the RTLIL backend, output selectors that have no matching clock name
- * get a dummy wire name using the pattern jz_unused_pll_SELECTOR_cgN_uM.
- */
 static void emit_clock_gen_from_template(FILE *out,
                                          const IR_Project *proj,
                                          const IR_ClockGenUnit *unit,
@@ -453,24 +546,6 @@ static void emit_clock_gen_from_template(FILE *out,
         ++p;
     }
 }
-
-/* -------------------------------------------------------------------------
- * Differential I/O template expansion
- * -------------------------------------------------------------------------
- */
-
-typedef struct DiffTemplateCtx {
-    const char *instance;
-    const char *input;
-    const char *output;
-    const char *pin_p;
-    const char *pin_n;
-    const char *diff_wire;
-    int         ser_ratio;
-    const char *fclk;
-    const char *pclk;
-    const char *reset;
-} DiffTemplateCtx;
 
 static void emit_diff_from_template(FILE *out,
                                      const char *template_text,

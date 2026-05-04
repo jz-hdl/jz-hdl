@@ -1,3 +1,8 @@
+/**
+ * @file driver_project_hw.c
+ * @brief Hardware-focused project semantic checks.
+ */
+
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
@@ -15,12 +20,28 @@
  * -------------------------------------------------------------------------
  */
 
+/**
+ * @brief Parse a non-negative decimal integer.
+ * @param s Source text to parse.
+ * @param out Output location for the parsed value.
+ * @return Non-zero on success.
+ */
 static int sem_parse_nonnegative_simple(const char *s, unsigned *out)
 {
     return parse_simple_nonnegative_int(s, out);
 }
 
+/** @brief Check whether a clock name is produced by a `CLOCK_GEN` unit.
+ *  @param project Project root node.
+ *  @param clock_name Clock name to search for.
+ *  @return Non-zero when the name matches a generated clock output.
+ */
 static int is_clock_gen_output(JZASTNode *project, const char *clock_name);
+/** @brief Check whether a clock name is consumed by a `CLOCK_GEN` unit.
+ *  @param project Project root node.
+ *  @param clock_name Clock name to search for.
+ *  @return Non-zero when the name matches a generated clock input.
+ */
 static int is_clock_gen_input(JZASTNode *project, const char *clock_name);
 static int is_clock_gen_named_signal(JZASTNode *project,
                                      const char *signal_name,
@@ -32,6 +53,14 @@ static int sem_is_valid_diff_reset_ref(JZASTNode *project,
                                        const JZBuffer *project_symbols,
                                        const char *name);
 
+/**
+ * @brief Parse the `period` and `edge` attributes of a clock declaration.
+ * @param attrs Attribute text attached to the declaration.
+ * @param out_period Output location for the parsed period.
+ * @param out_edge Buffer that receives the normalized edge name.
+ * @param out_edge_size Size of @p out_edge in bytes.
+ * @return Non-zero on success.
+ */
 static int sem_clock_parse_attrs(const char *attrs,
                                  double *out_period,
                                  char *out_edge,

@@ -51,6 +51,58 @@
 /* ------------------------------------------------------------------ */
 
 /**
+ * @brief Extract CHIP and project-name metadata from project source text.
+ * @param content Full source text to scan.
+ * @param chip Buffer that receives the CHIP attribute value.
+ * @param chip_cap Capacity of @p chip in bytes.
+ * @param name Buffer that receives the project name.
+ * @param name_cap Capacity of @p name in bytes.
+ */
+static void extract_project_metadata(const char *content,
+                                     char *chip, size_t chip_cap,
+                                     char *name, size_t name_cap);
+
+/**
+ * @brief Read a `.jz` file and detect whether it contains `@project`.
+ * @param path Source file to inspect.
+ * @param chip Buffer that receives the CHIP attribute value.
+ * @param chip_cap Capacity of @p chip in bytes.
+ * @param name Buffer that receives the project name.
+ * @param name_cap Capacity of @p name in bytes.
+ * @return 1 when a project directive is found or 0 otherwise.
+ */
+static int file_get_project_info(const char *path,
+                                 char *chip, size_t chip_cap,
+                                 char *name, size_t name_cap);
+
+/**
+ * @brief Split a file path into its containing directory.
+ * @param filepath Source path to split.
+ * @param dir Output buffer for the directory path.
+ * @param dir_cap Capacity of @p dir in bytes.
+ */
+static void extract_directory(const char *filepath, char *dir, size_t dir_cap);
+
+/**
+ * @brief Canonicalize a path when possible.
+ * @param path Path to canonicalize.
+ * @param out Output buffer for the normalized path.
+ * @param out_cap Capacity of @p out in bytes.
+ */
+static void canonicalize_path(const char *path, char *out, size_t out_cap);
+
+/**
+ * @brief Append a deduplicated project entry to a list.
+ * @param list Project list to update.
+ * @param file Canonical project file path.
+ * @param chip CHIP metadata to store.
+ * @param name Project name metadata to store.
+ */
+static void add_project_entry(LspProjectList *list,
+                              const char *file, const char *chip,
+                              const char *name);
+
+/**
  * @brief Extract CHIP and PROJECT_NAME from a @project directive line.
  *
  * Handles both forms:

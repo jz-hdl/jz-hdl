@@ -32,8 +32,24 @@
 #include "../sem/driver_internal.h"
 #include "util.h"
 
-/* ---- Forward declarations ---- */
+typedef struct SimClock SimClock;
+typedef struct SimTap SimTap;
 
+/* ---- Private declarations ---- */
+
+/**
+ * @brief Run one `TEST` block inside a `@testbench`.
+ *
+ * @param root Root AST node for the compilation unit.
+ * @param tb_node Parent `@testbench` AST node.
+ * @param test_node `TEST` AST node to execute.
+ * @param dut_module DUT module referenced by the testbench.
+ * @param design Full IR design containing compiled modules.
+ * @param seed Random seed for simulator initialization.
+ * @param verbose Non-zero to print per-step details.
+ * @param filename Source filename used in diagnostics.
+ * @return `0` when the test passes, or non-zero on failure.
+ */
 static int  sim_run_test(const JZASTNode *root,
                          const JZASTNode *tb_node,
                          const JZASTNode *test_node,
@@ -43,15 +59,367 @@ static int  sim_run_test(const JZASTNode *root,
                          int verbose,
                          const char *filename);
 
+/**
+ * @brief Copy testbench drive values into bound DUT input ports.
+ *
+ * @param ts Shared test or simulation state.
+ */
 static void sim_propagate_inputs(SimTestState *ts);
+/**
+ * @brief Copy bound DUT outputs back into testbench wires.
+ *
+ * @param ts Shared test or simulation state.
+ */
 static void sim_propagate_outputs(SimTestState *ts);
+/**
+ * @brief Run the full input-settle-inout-output propagation pipeline.
+ *
+ * @param ts Shared test or simulation state.
+ */
 static void sim_full_settle(SimTestState *ts);
+/**
+ * @brief Force all registers in one clock domain to their reset values.
+ *
+ * @param ctx Simulation context that owns the domain.
+ * @param cd Clock domain whose reset values should be applied.
+ */
 static void sim_apply_domain_reset(SimContext *ctx, const IR_ClockDomain *cd);
+/**
+ * @brief Fire clock domains that match a particular clock edge.
+ *
+ * @param ts Shared test or simulation state.
+ * @param clock_port_id DUT clock signal identifier, or `-1` to match all.
+ * @param new_clk_val Clock value after the edge.
+ * @param apply_nba_per_domain Non-zero to apply NBA updates after each fired domain.
+ */
 static void sim_fire_domains_for_clock(SimTestState *ts, int clock_port_id,
                                         uint64_t new_clk_val,
                                         int apply_nba_per_domain);
+/**
+ * @brief Advance a named testbench clock by a number of cycles.
+ *
+ * @param ts Shared testbench state.
+ * @param clock_name Testbench clock wire name.
+ * @param num_cycles Number of full cycles to execute.
+ */
 static void sim_clock_advance(SimTestState *ts, const char *clock_name, int num_cycles);
+/**
+ * @brief Append a formatted failure message to the current test state.
+ *
+ * @param ts Shared test or simulation state.
+ * @param msg Failure message to duplicate and store.
+ */
 static void record_failure(SimTestState *ts, const char *msg);
+/**
+ * @brief Mirror a DUT hierarchy runtime error into the enclosing test state.
+ *
+ * @param ts Shared test or simulation state.
+ */
+static void propagate_ctx_runtime_error(SimTestState *ts);
+/**
+ * @brief Settle combinational logic and record a runtime error on oscillation.
+ *
+ * @param ts Shared test or simulation state.
+ */
+static void sim_settle_checked(SimTestState *ts);
+/**
+ * @brief Find a compiled module by name in the IR design.
+ *
+ * @param design IR design to search.
+ * @param name Module name to resolve.
+ * @return Matching module, or `NULL` if it is not present.
+ */
+static const IR_Module *find_module_by_name(const IR_Design *design, const char *name);
+/**
+ * @brief Find the index of a named testbench wire.
+ *
+ * @param ts Shared test or simulation state.
+ * @param name Testbench wire name to look up.
+ * @return Wire index, or `-1` if not found.
+ */
+static int find_tb_wire(SimTestState *ts, const char *name);
+/**
+ * @brief Resolve a module port signal identifier from its name.
+ *
+ * @param mod Module whose ports should be searched.
+ * @param name Port name to look up.
+ * @return Matching signal identifier, or `-1` if not found.
+ */
+static int find_port_signal_id(const IR_Module *mod, const char *name);
+/**
+ * @brief Check whether a BUS definition contains a named member signal.
+ *
+ * @param bus_def BUS definition AST node.
+ * @param signal_name Member signal name to look up.
+ * @return Non-zero if the signal is present, or zero otherwise.
+ */
+static int tb_bus_def_has_signal(const JZASTNode *bus_def, const char *signal_name);
+/**
+ * @brief Check whether a DUT port name matches a BUS shorthand binding.
+ *
+ * @param bus_def BUS definition referenced by the shorthand.
+ * @param port_prefix BUS port prefix on the DUT side.
+ * @param signal_name Full DUT signal name to test.
+ * @return Non-zero if the signal matches the shorthand, or zero otherwise.
+ */
+static int tb_bus_shorthand_matches_signal(const JZASTNode *bus_def,
+                                           const char *port_prefix,
+                                           const char *signal_name);
+/**
+ * @brief Find a BUS definition by name in root or simulation/testbench scope.
+ *
+ * @param root Root AST node to search.
+ * @param bus_name BUS block name to resolve.
+ * @return Matching BUS AST node, or `NULL` if not found.
+ */
+static const JZASTNode *find_bus_def(const JZASTNode *root, const char *bus_name);
+/**
+ * @brief Parse a width string used by testbench wire declarations.
+ *
+ * @param text Width text such as `8` or `[8]`.
+ * @return Parsed positive width, defaulting to `1` on invalid input.
+ */
+static int parse_width_text(const char *text);
+/**
+ * @brief Parse a textual HDL literal into a simulation value.
+ *
+ * @param text Literal text to parse.
+ * @return Parsed simulation value.
+ */
+static SimValue parse_literal_to_simval(const char *text);
+/**
+ * @brief Evaluate `lit(...)` testbench helper syntax into a simulation value.
+ *
+ * @param expr Raw helper expression text.
+ * @param project_symbols Project symbol table used for constant subexpressions.
+ * @param out Output slot for the parsed value.
+ * @return Non-zero on success, or zero if the expression is malformed.
+ */
+static int eval_lit_call_to_simval(const char *expr,
+                                   const JZBuffer *project_symbols,
+                                   SimValue *out);
+/**
+ * @brief Resolve a `GLOBAL.CONST` reference into a simulation value.
+ *
+ * @param qname Qualified constant name.
+ * @param out Output slot for the resolved constant value.
+ * @return Non-zero on success, or zero if the constant cannot be resolved.
+ */
+static int resolve_global_const_simval(const char *qname, SimValue *out);
+/**
+ * @brief Resolve a named signal within one simulation context.
+ *
+ * @param ctx Simulation context to inspect.
+ * @param name Signal path to resolve relative to `ctx`.
+ * @param out Output slot for the current signal value.
+ * @return Non-zero on success, or zero if the signal is not present.
+ */
+static int resolve_ctx_signal_value(const SimContext *ctx, const char *name, SimValue *out);
+/**
+ * @brief Resolve a hierarchical testbench signal reference into a value.
+ *
+ * @param ts Shared test or simulation state.
+ * @param hier_name Hierarchical signal path to resolve.
+ * @param out Output slot for the current signal value.
+ * @return Non-zero on success, or zero if the path cannot be resolved.
+ */
+static int resolve_tb_hier_signal_simval(const SimTestState *ts,
+                                         const char *hier_name,
+                                         SimValue *out);
+/**
+ * @brief Free symbol tables built for testbench expression evaluation.
+ *
+ * @param module_scopes Module-scope symbol table buffer.
+ * @param project_symbols Project-wide symbol table buffer.
+ */
+static void free_built_symbol_tables(JZBuffer *module_scopes, JZBuffer *project_symbols);
+/**
+ * @brief Evaluate a testbench AST expression into a simulation value.
+ *
+ * @param ts Shared test or simulation state.
+ * @param node AST expression node to evaluate.
+ * @return Evaluated simulation value.
+ */
+static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node);
+/**
+ * @brief Execute a `@print` or `@print_if` directive.
+ *
+ * @param ts Shared test or simulation state.
+ * @param node Print AST node to execute.
+ */
+static void process_print(SimTestState *ts, const JZASTNode *node);
+/**
+ * @brief Count BUS member declarations in a BUS definition.
+ *
+ * @param bus_def BUS definition AST node.
+ * @return Number of `BUS_DECL` child nodes.
+ */
+static int count_bus_signals(const JZASTNode *bus_def);
+/**
+ * @brief Parse the array count attached to a BUS wire declaration.
+ *
+ * @param decl BUS wire declaration AST node.
+ * @param out_count Output slot for the parsed array count.
+ * @return `0` on success, or `-1` on overflow.
+ */
+static int parse_tb_bus_array_count(const JZASTNode *decl, int *out_count);
+/**
+ * @brief Collect clock and wire declarations for a testbench or simulation.
+ *
+ * @param ts Shared state to populate.
+ * @param container AST node that owns the declarations.
+ * @param root Root AST node used for BUS lookups.
+ * @param clock_block_type AST node type for the enclosing clock block.
+ * @param clock_decl_type AST node type for individual clock declarations.
+ * @return `0` on success, or `-1` on allocation or expansion failure.
+ */
+static int collect_decls(SimTestState *ts, const JZASTNode *container,
+                         const JZASTNode *root,
+                         JZASTNodeType clock_block_type,
+                         JZASTNodeType clock_decl_type);
+/**
+ * @brief Build testbench-to-DUT port bindings from an `@new` instance.
+ *
+ * @param ts Shared state to populate.
+ * @param root Root AST node used for BUS lookups.
+ * @param instance_node Module instance AST node.
+ * @param dut_module DUT module referenced by the instance.
+ * @return `0` on success, or `-1` on allocation failure.
+ */
+static int build_port_bindings(SimTestState *ts,
+                               const JZASTNode *root,
+                               const JZASTNode *instance_node,
+                               const IR_Module *dut_module);
+/**
+ * @brief Restore non-`z` testbench drive values onto inout ports driven as `z`.
+ *
+ * @param ts Shared test or simulation state.
+ */
+static void sim_resolve_inout_z(SimTestState *ts);
+/**
+ * @brief Execute a `@setup` or `@update` block with simultaneous assignment semantics.
+ *
+ * @param ts Shared testbench state.
+ * @param node Setup or update AST node.
+ * @param is_setup Non-zero for `@setup`, zero for `@update`.
+ */
+static void process_setup_update(SimTestState *ts, const JZASTNode *node, int is_setup);
+/**
+ * @brief Execute an equality or inequality expectation.
+ *
+ * @param ts Shared testbench state.
+ * @param node Expectation AST node.
+ * @param is_equal Non-zero for equality, zero for inequality.
+ */
+static void process_expect(SimTestState *ts, const JZASTNode *node, int is_equal);
+/**
+ * @brief Execute an `@expect_tristate` assertion.
+ *
+ * @param ts Shared testbench state.
+ * @param node Expectation AST node.
+ */
+static void process_expect_tristate(SimTestState *ts, const JZASTNode *node);
+/**
+ * @brief Compute the greatest common divisor of two unsigned integers.
+ *
+ * @param a First operand.
+ * @param b Second operand.
+ * @return Greatest common divisor of `a` and `b`.
+ */
+static uint64_t gcd64(uint64_t a, uint64_t b);
+/**
+ * @brief Convert a scaled time value into an exact integer picosecond count.
+ *
+ * @param value Numeric time value.
+ * @param scale Picosecond scale factor for `value`.
+ * @param ps_out Output slot for the converted picosecond count.
+ * @return `0` on success, or `-1` when the conversion is not exact.
+ */
+static int time_to_exact_ps(double value, double scale, uint64_t *ps_out);
+/**
+ * @brief Draw a Gaussian jitter sample for a simulated clock.
+ *
+ * @param clk Clock state that owns the jitter PRNG cache.
+ * @return Jitter offset in picoseconds.
+ */
+static double sim_gaussian(SimClock *clk);
+/**
+ * @brief Draw a clamped Gaussian drift sample.
+ *
+ * @param rng Random number generator state.
+ * @param max_ppm Maximum absolute drift in parts per million.
+ * @return Drift sample in parts per million.
+ */
+static double sim_gaussian_drift(uint32_t *rng, double max_ppm);
+/**
+ * @brief Compute the next actual clock toggle time after applying jitter.
+ *
+ * @param clk Clock state to update.
+ * @param current_time_ps Current simulation time in picoseconds.
+ * @return Scheduled toggle time in picoseconds.
+ */
+static uint64_t sim_jittered_toggle(SimClock *clk, uint64_t current_time_ps);
+/**
+ * @brief Collect simulation clock declarations into runtime clock state.
+ *
+ * @param sim_node `@simulation` AST node to scan.
+ * @param ts Shared simulation state used for wire lookups.
+ * @param clocks Output array for collected clocks.
+ * @param max_clocks Capacity of `clocks`.
+ * @return Number of collected clocks, or `-1` on conversion failure.
+ */
+static int collect_sim_clocks(const JZASTNode *sim_node, SimTestState *ts,
+                              SimClock *clocks, int max_clocks);
+/**
+ * @brief Dump all tracked testbench and tap signals to the waveform writer.
+ *
+ * @param wave Waveform writer to receive value changes.
+ * @param ts Shared simulation state.
+ * @param wave_ids Waveform signal identifiers for testbench wires.
+ * @param taps Registered internal signal taps.
+ * @param num_taps Number of valid tap entries.
+ */
+static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
+                          SimTap *taps, int num_taps);
+/**
+ * @brief Convert an `@run` directive duration into picoseconds.
+ *
+ * @param run_node `@run` AST node to interpret.
+ * @return Duration in picoseconds, or `0` when the directive is invalid.
+ */
+static uint64_t run_to_ps(const JZASTNode *run_node);
+/**
+ * @brief Run one `@simulation` block and emit waveform output.
+ *
+ * @param root Root AST node for the compilation unit.
+ * @param sim_node `@simulation` AST node to execute.
+ * @param dut_module DUT module referenced by the simulation.
+ * @param design Full IR design containing compiled modules.
+ * @param seed Random seed for simulator initialization.
+ * @param verbose Non-zero to print per-step details.
+ * @param filename Source filename used in diagnostics.
+ * @param output_path Waveform output path.
+ * @param format Requested waveform format.
+ * @param jitter_configs Optional per-clock jitter configuration array.
+ * @param num_jitter Number of entries in `jitter_configs`.
+ * @param drift_configs Optional per-clock drift configuration array.
+ * @param num_drift Number of entries in `drift_configs`.
+ * @return `0` on success, or non-zero on failure.
+ */
+static int sim_run_simulation(const JZASTNode *root,
+                              const JZASTNode *sim_node,
+                              const IR_Module *dut_module,
+                              const IR_Design *design,
+                              uint32_t seed,
+                              int verbose,
+                              const char *filename,
+                              const char *output_path,
+                              SimWaveFormat format,
+                              const SimJitterConfig *jitter_configs,
+                              int num_jitter,
+                              const SimDriftConfig *drift_configs,
+                              int num_drift);
+
 
 /* Expression evaluation is shared by @testbench and @simulation execution.
  * Rebuild project symbols once per run so GLOBAL.CONST can resolve here too.
@@ -60,9 +428,8 @@ static const JZBuffer *g_tb_expr_project_symbols = NULL;
 
 /* ---- Helpers ---- */
 
-/**
- * Check if any SimContext in the DUT hierarchy has flagged a runtime error
- * (e.g., z reached a non-tristate expression).  Propagate to the test state.
+/* Check if any SimContext in the DUT hierarchy has flagged a runtime error
+ * (e.g., z reached a non-tristate expression). Propagate to the test state.
  */
 static void propagate_ctx_runtime_error(SimTestState *ts) {
     if (ts->runtime_error) return;
@@ -76,10 +443,7 @@ static void propagate_ctx_runtime_error(SimTestState *ts) {
     }
 }
 
-/**
- * Settle combinational logic and check for oscillation.
- * Sets ts->runtime_error if settling does not converge (SE-001).
- */
+/* Settle combinational logic and check for oscillation. */
 static void sim_settle_checked(SimTestState *ts) {
     int rc = sim_settle_combinational(ts->dut, SIM_SETTLE_MAX_ITERS);
     if (rc != 0 && !ts->runtime_error) {
@@ -634,16 +998,7 @@ static void record_failure(SimTestState *ts, const char *msg) {
 
 /* ---- @print / @print_if execution ---- */
 
-/**
- * Process a @print or @print_if AST node.
- *
- * Format specifiers:
- *   %h  - hex value of next arg
- *   %d  - decimal value of next arg
- *   %b  - binary value of next arg
- *   %tick - current tick/cycle count
- *   %ms   - current simulation time in milliseconds
- */
+/* Process a @print or @print_if AST node. */
 static void process_print(SimTestState *ts, const JZASTNode *node) {
     if (!node) return;
 
@@ -755,13 +1110,7 @@ static int parse_tb_bus_array_count(const JZASTNode *decl, int *out_count) {
     return 0;
 }
 
-/**
- * Unified declaration collector for both @testbench and @simulation.
- * The only difference is the AST node types for clock blocks/decls:
- *   - Testbench:  JZ_AST_TB_CLOCK_BLOCK / JZ_AST_TB_CLOCK_DECL
- *   - Simulation: JZ_AST_SIM_CLOCK_BLOCK / JZ_AST_SIM_CLOCK_DECL
- * Wire blocks use JZ_AST_TB_WIRE_BLOCK / JZ_AST_TB_WIRE_DECL in both cases.
- */
+/* Unified declaration collector for both @testbench and @simulation. */
 static int collect_decls(SimTestState *ts, const JZASTNode *container,
                          const JZASTNode *root,
                          JZASTNodeType clock_block_type,
@@ -1097,11 +1446,7 @@ static void sim_propagate_outputs(SimTestState *ts) {
 
 /* ---- INOUT z-resolution ---- */
 
-/**
- * For INOUT ports, if the DUT drives z (high-impedance), restore the
- * testbench wire value.  This implements simple tri-state resolution:
- * z loses to any real value from the other side of the bus.
- */
+/* Restore testbench drive values when an inout port is driven as z by the DUT. */
 static void sim_resolve_inout_z(SimTestState *ts) {
     PERF_TIMER_START(PERF_RESOLVE_INOUT_Z);
     for (int i = 0; i < ts->num_bindings; i++) {
@@ -1174,14 +1519,7 @@ static void sim_apply_domain_reset(SimContext *ctx, const IR_ClockDomain *cd) {
 
 /* ---- Fire clock domains for a given clock edge ---- */
 
-/**
- * Check all clock domains against a clock edge and fire matching ones.
- * @param ts                Test state with DUT context.
- * @param clock_port_id     IR signal ID of the clock port (-1 for unknown).
- * @param new_clk_val       Current clock value after toggle (0 or 1).
- * @param apply_nba_per_domain  If true, apply NBA after each domain (testbench semantics).
- *                              If false, caller must apply NBA after all domains.
- */
+/* Check all clock domains against a clock edge and fire matching ones. */
 static void sim_fire_domains_for_clock(SimTestState *ts, int clock_port_id,
                                         uint64_t new_clk_val,
                                         int apply_nba_per_domain) {
@@ -1741,13 +2079,7 @@ static uint64_t gcd64(uint64_t a, uint64_t b) {
     return a;
 }
 
-/**
- * Convert a time value to exact integer picoseconds.
- * @param value  The numeric value (e.g., 10.0 for 10ns).
- * @param scale  Multiplier to picoseconds (1000.0 for ns, 1000000.0 for ms).
- * @param ps_out Output: the integer picosecond count.
- * @return 0 on success, -1 if the result is not an exact integer.
- */
+/* Convert a scaled time value to an exact integer number of picoseconds. */
 static int time_to_exact_ps(double value, double scale, uint64_t *ps_out) {
     double ps = value * scale;
     double rounded = floor(ps + 0.5);
@@ -1761,33 +2093,26 @@ static int time_to_exact_ps(double value, double scale, uint64_t *ps_out) {
 }
 
 /**
- * @brief Collect simulation clocks from a SIM_CLOCK_BLOCK.
- *
- * Fills parallel arrays of clock name, tb wire index, and toggle interval (in ps).
+ * @brief Runtime scheduling state for one simulated clock.
  */
-typedef struct SimClock {
-    const char *name;
-    int         tb_wire_idx;
-    uint64_t    toggle_ps;           /* half period in picoseconds (nominal) */
-    uint64_t    phase_ps;            /* phase offset in picoseconds */
-    uint64_t    next_toggle_ps;      /* next scheduled (actual) toggle time */
-    double      ideal_next_toggle;   /* next ideal toggle time as double (accumulates drift) */
-    double      drifted_toggle_ps;   /* drift-adjusted half period (double for sub-ps precision) */
-    double      drift_actual_ppm;    /* actual selected drift value in ppm */
-    double      drift_max_ppm;       /* configured max drift in ppm (0 = disabled) */
-    uint64_t    jitter_pp_ps;        /* peak-to-peak jitter (0 = disabled) */
-    double      jitter_sigma;        /* σ = pp/6 */
-    uint32_t    jitter_rng;          /* per-clock xorshift32 PRNG state */
-    int         jitter_has_spare;    /* Box-Muller spare available */
-    double      jitter_spare;        /* Box-Muller cached spare value */
-} SimClock;
+struct SimClock {
+    const char *name;          /**< Clock name from the AST declaration. */
+    int tb_wire_idx;           /**< Bound testbench wire index. */
+    uint64_t toggle_ps;        /**< Nominal half-period in picoseconds. */
+    uint64_t phase_ps;         /**< Initial phase offset in picoseconds. */
+    uint64_t next_toggle_ps;   /**< Next scheduled toggle time in picoseconds. */
+    double ideal_next_toggle;  /**< Drift-adjusted ideal toggle time accumulator. */
+    double drifted_toggle_ps;  /**< Drift-adjusted half-period in picoseconds. */
+    double drift_actual_ppm;   /**< Selected drift value for this run. */
+    double drift_max_ppm;      /**< Configured maximum drift magnitude. */
+    uint64_t jitter_pp_ps;     /**< Configured peak-to-peak jitter in picoseconds. */
+    double jitter_sigma;       /**< Jitter standard deviation in picoseconds. */
+    uint32_t jitter_rng;       /**< Per-clock PRNG state for jitter sampling. */
+    int jitter_has_spare;      /**< Non-zero when `jitter_spare` is valid. */
+    double jitter_spare;       /**< Cached Box-Muller sample. */
+};
 
-/**
- * @brief Generate a Gaussian random sample using Box-Muller transform.
- *
- * Consumes two uniform samples from xorshift32 PRNG to produce two
- * independent Gaussian samples. Caches the spare for the next call.
- */
+/* Generate a Gaussian random sample using the clock's jitter PRNG state. */
 static double sim_gaussian(SimClock *clk) {
     if (clk->jitter_has_spare) {
         clk->jitter_has_spare = 0;
@@ -1808,12 +2133,7 @@ static double sim_gaussian(SimClock *clk) {
     return u * factor * clk->jitter_sigma;
 }
 
-/**
- * @brief Generate a clamped Gaussian sample for drift selection.
- *
- * Returns a value in [-max_ppm, +max_ppm] drawn from Gaussian with σ = max/3.
- * Uses a temporary jitter state on the clock to avoid needing a separate PRNG.
- */
+/* Generate a clamped Gaussian sample for drift selection. */
 static double sim_gaussian_drift(uint32_t *rng, double max_ppm) {
     /* Box-Muller (no caching needed, called once per clock) */
     double u, v, s;
@@ -1829,12 +2149,7 @@ static double sim_gaussian_drift(uint32_t *rng, double max_ppm) {
     return sample;
 }
 
-/**
- * @brief Compute jittered next toggle time from ideal position.
- *
- * Applies Gaussian jitter offset clamped to ±pp/2, ensures the result
- * is strictly after current_time_ps.
- */
+/* Compute the next clock toggle time after applying jitter. */
 static uint64_t sim_jittered_toggle(SimClock *clk, uint64_t current_time_ps) {
     uint64_t ideal = (uint64_t)round(clk->ideal_next_toggle);
 
@@ -1921,16 +2236,16 @@ static int collect_sim_clocks(const JZASTNode *sim_node, SimTestState *ts,
     return n;
 }
 
-/**
- * @brief Dump all tracked signals to waveform writer.
- */
 /* ---- TAP signal tracking ---- */
 
-typedef struct SimTap {
-    int          wave_id;      /* waveform signal ID */
-    int          signal_id;    /* IR signal ID in DUT */
-    const char  *full_path;    /* e.g. "dut.count_a" */
-} SimTap;
+/**
+ * @brief Registered internal DUT signal tap for waveform dumping.
+ */
+struct SimTap {
+    int wave_id;            /**< Waveform signal identifier. */
+    int signal_id;          /**< DUT signal identifier in the IR. */
+    const char *full_path;  /**< Fully qualified tap path from the AST. */
+};
 
 static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
                            SimTap *taps, int num_taps) {
@@ -1953,9 +2268,7 @@ static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
     }
 }
 
-/**
- * @brief Convert @run duration to picoseconds.
- */
+/* Convert an @run duration to picoseconds. */
 static uint64_t run_to_ps(const JZASTNode *run_node) {
     if (!run_node || !run_node->text || !run_node->name) return 0;
 
@@ -1984,9 +2297,7 @@ static uint64_t run_to_ps(const JZASTNode *run_node) {
     return 0;
 }
 
-/**
- * @brief Run a single @simulation block.
- */
+/* Run a single @simulation block. */
 static int sim_run_simulation(const JZASTNode *root,
                                const JZASTNode *sim_node,
                                const IR_Module *dut_module,

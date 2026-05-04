@@ -89,6 +89,11 @@ int jz_ir_init_lowering(IR_Design *design,
  * @param tool_version Version string for the report header.
  * @param input_file   Input filename for the report header.
  */
+void jz_ir_tristate_report(FILE *out,
+                            const IR_Design *design,
+                            const char *tool_version,
+                            const char *input_file);
+
 /**
  * @brief Mark unreachable modules as eliminated.
  *
@@ -112,11 +117,6 @@ void jz_ir_eliminate_dead_modules(IR_Design *design);
  * @return 0 (always succeeds; diagnostics are advisory).
  */
 int jz_ir_div_guard_check(IR_Design *design,
-                           JZDiagnosticList *diagnostics);
-
-void jz_ir_tristate_report(FILE *out,
-                            const IR_Design *design,
-                            const char *tool_version,
-                            const char *input_file);
+                          JZDiagnosticList *diagnostics);
 
 #endif /* JZ_HDL_IR_BUILDER_H */

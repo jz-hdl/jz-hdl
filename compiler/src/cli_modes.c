@@ -1,3 +1,8 @@
+/**
+ * @file cli_modes.c
+ * @brief CLI mode dispatch for IR generation, backends, tests, and simulation.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,9 +18,32 @@
 #include "sim/sim_waveform.h"
 
 /**
- * Build IR if not already built, apply shared semantic IR passes.
- * Returns 0 on success, non-zero on failure.
+ * @brief Ensure the compiler has a lowered IR plus shared analysis passes.
+ *
+ * @param compiler Compiler context whose AST and IR are being updated.
+ * @param opts     Parsed CLI options controlling optional lowering passes.
+ * @return 0 on success, non-zero on failure.
  */
+static int ensure_ir(JZCompiler *compiler, const JZCLIOptions *opts);
+
+/**
+ * @brief Ensure the IR is ready for backend emission passes.
+ *
+ * @param compiler Compiler context whose IR will be lowered further as needed.
+ * @param opts     Parsed CLI options controlling optional lowering passes.
+ * @return 0 on success, non-zero on failure.
+ */
+static int ensure_backend_ir(JZCompiler *compiler, const JZCLIOptions *opts);
+
+/**
+ * @brief Emit any requested constraint sidecar files.
+ *
+ * @param compiler Compiler context containing the finalized IR.
+ * @param opts     Parsed CLI options with requested constraint outputs.
+ * @return 0 on success, non-zero on failure.
+ */
+static int emit_constraints(JZCompiler *compiler, const JZCLIOptions *opts);
+
 static int ensure_ir(JZCompiler *compiler, const JZCLIOptions *opts) {
     clock_t phase_t0;
     int rc = 0;
@@ -82,7 +110,6 @@ static int ensure_backend_ir(JZCompiler *compiler, const JZCLIOptions *opts) {
     return rc;
 }
 
-/** Emit constraint files (SDC, XDC, PCF, CST) if requested. */
 static int emit_constraints(JZCompiler *compiler, const JZCLIOptions *opts) {
     int rc = 0;
     if (opts->sdc_filename) {

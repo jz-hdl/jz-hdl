@@ -1,0 +1,40 @@
+// END_CLOSES_REPEAT_ONLY: @end closes @repeat without conflicting with @endsim.
+
+@module EndClosesRepeatOnlyDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation EndClosesRepeatOnlyDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut EndClosesRepeatOnlyDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    // Trigger 1: @end closes only this @repeat block.
+    @repeat 2
+        @run(ticks=1)
+    @end
+@endsim

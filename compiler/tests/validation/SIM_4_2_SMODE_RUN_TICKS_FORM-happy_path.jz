@@ -1,0 +1,37 @@
+// RUN_TICKS_FORM: valid simulation @run(ticks=<integer>) syntax advances time.
+
+@module RunTicksFormDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation RunTicksFormDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut RunTicksFormDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @run(ticks=2)
+@endsim

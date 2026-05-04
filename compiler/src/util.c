@@ -1,3 +1,8 @@
+/**
+ * @file util.c
+ * @brief General-purpose helpers for limits, file I/O, and output staging.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +16,27 @@
 #endif
 
 #include "../include/util.h"
+
+#ifndef _WIN32
+/**
+ * @brief Open a file descriptor using exclusive create semantics.
+ * @param path Path to create.
+ * @return Writable file descriptor, or `-1` on failure.
+ */
+static int jz_open_exclusive_fd(const char *path);
+/**
+ * @brief Build a temporary output path beside a target path.
+ * @param target Final output path.
+ * @param attempt Retry suffix used to keep paths unique.
+ * @param tmp_path Destination buffer for the generated path.
+ * @param tmp_path_size Size of @p tmp_path in bytes.
+ * @return `0` on success, or `-1` on failure.
+ */
+static int jz_build_temp_path(const char *target,
+                              unsigned attempt,
+                              char *tmp_path,
+                              size_t tmp_path_size);
+#endif
 
 size_t jz_input_limit_value(JZInputLimitKind kind)
 {

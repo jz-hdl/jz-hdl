@@ -21,37 +21,51 @@
 #include "../include/diagnostic.h"
 #include "../include/util.h"
 
-/* ── Dynamic string buffer ──────────────────────────────────────── */
-
+/**
+ * @struct StrBuf
+ * @brief Growable string buffer used during raw-text expansion.
+ */
 typedef struct {
-    char  *data;
-    size_t len;
-    size_t cap;
+    char  *data;  /**< Heap-allocated buffer contents. */
+    size_t len;   /**< Number of bytes currently written, excluding the terminator. */
+    size_t cap;   /**< Allocated capacity in bytes. */
 } StrBuf;
 
+/**
+ * @struct RepeatExpandContext
+ * @brief Shared expansion state for diagnostics and hard limits.
+ */
 typedef struct {
-    const char        *full_src;
-    const char        *filename;
-    JZDiagnosticList  *diagnostics;
-    JZExpansionLimits  limits;
+    const char        *full_src;    /**< Full unexpanded source text. */
+    const char        *filename;    /**< Diagnostic filename associated with the source. */
+    JZDiagnosticList  *diagnostics; /**< Diagnostic sink for expansion failures. */
+    JZExpansionLimits  limits;      /**< Effective expansion limits in force. */
 } RepeatExpandContext;
 
+/**
+ * @struct RepeatFrame
+ * @brief Stack frame used while iteratively expanding nested repeat regions.
+ */
 typedef struct {
-    const char *region_end;
-    const char *p;
-    StrBuf      nested_out;
-    StrBuf     *out;
-    int         owns_out;
-    int         pending_repeat;
-    size_t      pending_count;
-    const char *pending_repeat_at;
-    const char *pending_end_at;
+    const char *region_end;        /**< Exclusive end pointer of the current region. */
+    const char *p;                 /**< Current scan position within the region. */
+    StrBuf      nested_out;        /**< Owned output buffer for nested expansion results. */
+    StrBuf     *out;               /**< Buffer that receives output for this frame. */
+    int         owns_out;          /**< Non-zero when `nested_out` storage is owned here. */
+    int         pending_repeat;    /**< Non-zero when a child repeat body is being accumulated. */
+    size_t      pending_count;     /**< Iteration count for the pending repeat. */
+    const char *pending_repeat_at; /**< Pointer to the pending @repeat directive. */
+    const char *pending_end_at;    /**< Pointer to the matching @end directive. */
 } RepeatFrame;
 
+/**
+ * @struct RepeatFrameStack
+ * @brief Dynamic stack of active repeat-expansion frames.
+ */
 typedef struct {
-    RepeatFrame *data;
-    size_t       len;
-    size_t       cap;
+    RepeatFrame *data; /**< Stack storage. */
+    size_t       len;  /**< Number of active frames. */
+    size_t       cap;  /**< Allocated frame capacity. */
 } RepeatFrameStack;
 
 static int count_line(const char *src, const char *pos);

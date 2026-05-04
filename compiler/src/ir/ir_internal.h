@@ -498,6 +498,18 @@ int ir_collect_module_specializations(const JZModuleScope *scopes,
  * @param arena           Arena for allocation.
  * @return 0 on success, non-zero on failure.
  */
+int ir_build_instances_for_module(const JZModuleScope *scope,
+                                  IR_Module *mod,
+                                  const JZModuleScope *all_scopes,
+                                  size_t scope_count,
+                                  const JZBuffer *project_symbols,
+                                  const IR_ModuleSpec *specs,
+                                  int spec_count,
+                                  IR_Module *all_modules,
+                                  const IR_BusSignalMapping *parent_bus_map,
+                                  int parent_bus_map_count,
+                                  JZArena *arena);
+
 /**
  * @brief Build bus_map entries for instance output port bindings.
  *
@@ -521,16 +533,4 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
                                      IR_BusSignalMapping **bus_map,
                                      int *bus_map_count);
 
-int ir_build_instances_for_module(const JZModuleScope *scope,
-                                  IR_Module *mod,
-                                  const JZModuleScope *all_scopes,
-                                  size_t scope_count,
-                                  const JZBuffer *project_symbols,
-                                  const IR_ModuleSpec *specs,
-                                  int spec_count,
-                                  IR_Module *all_modules,
-                                  const IR_BusSignalMapping *parent_bus_map,
-                                  int parent_bus_map_count,
-                                  JZArena *arena);
-
-#endif
+#endif /* JZ_HDL_IR_INTERNAL_H */

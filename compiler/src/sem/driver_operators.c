@@ -1,3 +1,8 @@
+/**
+ * @file driver_operators.c
+ * @brief Expression type inference and operator semantic checks.
+ */
+
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -12,8 +17,10 @@
  * -------------------------------------------------------------------------
  */
 
-/* Helper for UNARY_ARITH_MISSING_PARENS: best-effort check that a unary
- * arithmetic operator appears immediately inside parentheses, e.g. "(-flag)".
+/**
+ * @brief Check whether a unary arithmetic operator is parenthesized in source.
+ * @param expr Unary expression node to inspect.
+ * @return Non-zero when the operator appears immediately inside parentheses or cannot be checked safely.
  */
 static int sem_unary_has_required_parens(const JZASTNode *expr)
 {

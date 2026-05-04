@@ -13,6 +13,119 @@
 #include "ir_internal.h"
 #include "../../include/util.h"
 
+/**
+ * @brief Build an IR signal-reference expression for a known signal ID.
+ *
+ * @param arena       Arena used for allocation.
+ * @param signal_id   Referenced IR signal ID.
+ * @param width       Expression width in bits.
+ * @param source_line Source line for the generated expression.
+ * @return Newly allocated IR expression, or NULL on allocation failure.
+ */
+static IR_Expr *ir_make_signal_ref_expr(JZArena *arena,
+                                        int signal_id,
+                                        int width,
+                                        int source_line);
+
+/**
+ * @brief Build an IR literal expression from an existing literal payload.
+ *
+ * @param arena       Arena used for allocation.
+ * @param lit         Literal payload to embed.
+ * @param source_line Source line for the generated expression.
+ * @return Newly allocated IR expression, or NULL on allocation failure.
+ */
+static IR_Expr *ir_make_literal_expr(JZArena *arena,
+                                     IR_Literal lit,
+                                     int source_line);
+
+/**
+ * @brief Build the reset-condition expression for a clock domain.
+ *
+ * @param arena       Arena used for allocation.
+ * @param mod         Owning IR module used for reset width lookup.
+ * @param cd          Clock domain whose reset condition is needed.
+ * @param source_line Source line for the generated expression.
+ * @return Reset condition expression, or NULL when no reset expression can be built.
+ */
+static IR_Expr *ir_build_reset_condition(JZArena *arena,
+                                         IR_Module *mod,
+                                         const IR_ClockDomain *cd,
+                                         int source_line);
+
+/**
+ * @brief Build the block of reset assignments for one clock domain.
+ *
+ * @param arena          Arena used for allocation.
+ * @param mod            Owning IR module.
+ * @param cd             Clock domain whose registers need reset assignments.
+ * @param next_assign_id Running assignment ID counter to update in place.
+ * @param source_line    Source line for generated statements.
+ * @return Reset-assignment block, or NULL when no reset block is needed.
+ */
+static IR_Stmt *ir_build_reset_assignments_block(JZArena *arena,
+                                                 IR_Module *mod,
+                                                 const IR_ClockDomain *cd,
+                                                 int *next_assign_id,
+                                                 int source_line);
+
+/**
+ * @brief Wrap a synchronous block with reset handling when the domain has a reset.
+ *
+ * @param arena          Arena used for allocation.
+ * @param mod            Owning IR module.
+ * @param cd             Clock domain whose reset behavior is being lowered.
+ * @param body           Existing synchronous body.
+ * @param next_assign_id Running assignment ID counter to update in place.
+ * @param source_line    Source line for generated statements.
+ * @return Wrapped statement tree, or `body` when no wrapping was needed.
+ */
+static IR_Stmt *ir_wrap_sync_block_with_reset(JZArena *arena,
+                                              IR_Module *mod,
+                                              const IR_ClockDomain *cd,
+                                              IR_Stmt *body,
+                                              int *next_assign_id,
+                                              int source_line);
+
+/**
+ * @brief Parse SYNCHRONOUS(...) header parameters into IR_ClockDomain fields.
+ *
+ * Mirrors the semantic expectations for clock domains, but performs parsing
+ * locally so that IR construction remains independent of the semantic
+ * clock-domain pass.
+ *
+ * @param scope               Module scope for symbol resolution.
+ * @param block               AST block node representing SYNCHRONOUS.
+ * @param out_clock_signal_id Output clock signal semantic ID.
+ * @param out_edge            Output clock edge.
+ * @param out_reset_signal_id Output reset signal semantic ID.
+ * @param out_reset_active    Output reset polarity.
+ * @param out_reset_type      Output reset type.
+ */
+static void ir_parse_sync_header(const JZModuleScope *scope,
+                                 JZASTNode *block,
+                                 int *out_clock_signal_id,
+                                 IR_ClockEdge *out_edge,
+                                 int *out_reset_signal_id,
+                                 IR_ResetPolarity *out_reset_active,
+                                 IR_ResetType *out_reset_type);
+
+/**
+ * @brief Walk an IR statement tree and collect registers written in a clock domain.
+ *
+ * Registers discovered here are added to the clock domain's register list and
+ * assigned a home clock-domain ID when they do not already have one.
+ *
+ * @param stmt            IR statement to inspect.
+ * @param mod             Owning IR module.
+ * @param clock_domain_id Clock-domain identifier to assign.
+ * @param ids_buf         Buffer that receives unique register IDs.
+ */
+static void ir_collect_register_ids_from_stmt(const IR_Stmt *stmt,
+                                              IR_Module *mod,
+                                              int clock_domain_id,
+                                              JZBuffer *ids_buf);
+
 static IR_Expr *ir_make_signal_ref_expr(JZArena *arena,
                                         int signal_id,
                                         int width,
@@ -179,21 +292,6 @@ static IR_Stmt *ir_wrap_sync_block_with_reset(JZArena *arena,
     return if_stmt;
 }
 
-/**
- * @brief Parse SYNCHRONOUS(...) header parameters into IR_ClockDomain fields.
- *
- * Mirrors the semantic expectations for clock domains, but performs parsing
- * locally so that IR construction remains independent of the semantic
- * clock-domain pass.
- *
- * @param scope               Module scope for symbol resolution.
- * @param block               AST block node representing SYNCHRONOUS.
- * @param out_clock_signal_id Output clock signal semantic ID.
- * @param out_edge            Output clock edge.
- * @param out_reset_signal_id Output reset signal semantic ID.
- * @param out_reset_active    Output reset polarity.
- * @param out_reset_type      Output reset type.
- */
 static void ir_parse_sync_header(const JZModuleScope *scope,
                           JZASTNode *block,
                           int *out_clock_signal_id,
@@ -284,18 +382,6 @@ static void ir_parse_sync_header(const JZModuleScope *scope,
     }
 }
 
-/**
- * @brief Walk an IR statement tree and collect registers written in a clock domain.
- *
- * Registers discovered here are:
- * - Added to the clock domain's register list
- * - Assigned a home_clock_domain_id if previously unset
- *
- * @param stmt             IR statement to inspect.
- * @param mod              Owning IR module.
- * @param clock_domain_id  Clock domain identifier.
- * @param ids_buf          Buffer to append unique register IDs into.
- */
 static void ir_collect_register_ids_from_stmt(const IR_Stmt *stmt,
                                       IR_Module *mod,
                                       int clock_domain_id,

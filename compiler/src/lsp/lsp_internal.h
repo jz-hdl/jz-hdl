@@ -18,18 +18,55 @@
  * @brief Growable string buffer for building JSON output.
  */
 typedef struct LspJson {
-    char  *data;
-    size_t len;
-    size_t cap;
-    int    failed;
+    char  *data;   /**< Backing buffer that stores the JSON text. */
+    size_t len;    /**< Current string length, excluding the null terminator. */
+    size_t cap;    /**< Allocated buffer capacity in bytes. */
+    int    failed; /**< Non-zero once allocation or append failure occurs. */
 } LspJson;
 
+/**
+ * @brief Initialize a JSON builder.
+ * @param j Builder state to initialize.
+ */
 void lsp_json_init(LspJson *j);
+/**
+ * @brief Release storage owned by a JSON builder.
+ * @param j Builder state to clear.
+ */
 void lsp_json_free(LspJson *j);
+/**
+ * @brief Append a null-terminated string to a JSON builder.
+ * @param j Builder state to update.
+ * @param s String to append.
+ * @return 0 on success or -1 on allocation failure.
+ */
 int lsp_json_append(LspJson *j, const char *s);
+/**
+ * @brief Append one character to a JSON builder.
+ * @param j Builder state to update.
+ * @param c Character to append.
+ * @return 0 on success or -1 on allocation failure.
+ */
 int lsp_json_append_char(LspJson *j, char c);
+/**
+ * @brief Append a decimal integer to a JSON builder.
+ * @param j Builder state to update.
+ * @param v Integer value to append.
+ * @return 0 on success or -1 on allocation failure.
+ */
 int lsp_json_append_int(LspJson *j, int v);
+/**
+ * @brief Append a JSON string literal with escaping.
+ * @param j Builder state to update.
+ * @param s Source string to quote and escape.
+ * @return 0 on success or -1 on allocation failure.
+ */
 int lsp_json_append_escaped(LspJson *j, const char *s);
+/**
+ * @brief Query whether a JSON builder has entered a failed state.
+ * @param j Builder state to inspect.
+ * @return Non-zero when previous operations failed.
+ */
 int lsp_json_failed(const LspJson *j);
 
 /* ------------------------------------------------------------------ */
@@ -97,22 +134,60 @@ int lsp_json_get_object(const char *json, const char *key,
 #define LSP_MAX_DOCUMENTS 128
 
 typedef struct LspDocument {
-    char *uri;      /* Document URI (heap-allocated). */
-    char *content;  /* Full document text (heap-allocated). */
-    int   version;  /* Client-reported version number. */
+    char *uri;      /**< Heap-allocated document URI. */
+    char *content;  /**< Heap-allocated full document text. */
+    int   version;  /**< Client-reported version number. */
 } LspDocument;
 
+/**
+ * @struct LspDocStore
+ * @brief Fixed-capacity store of open documents tracked by the LSP server.
+ */
 typedef struct LspDocStore {
-    LspDocument docs[LSP_MAX_DOCUMENTS];
-    size_t      count;
+    LspDocument docs[LSP_MAX_DOCUMENTS]; /**< Open-document slots. */
+    size_t      count;                   /**< Number of populated slots. */
 } LspDocStore;
 
+/**
+ * @brief Initialize a document store.
+ * @param store Store to reset.
+ */
 void lsp_docstore_init(LspDocStore *store);
+/**
+ * @brief Release all documents held in a store.
+ * @param store Store to clear.
+ */
 void lsp_docstore_free(LspDocStore *store);
+/**
+ * @brief Add a newly opened document to the store.
+ * @param store Store that owns the document.
+ * @param uri Document URI.
+ * @param content Initial document text.
+ * @param version Client-reported version number.
+ * @return Pointer to the stored document or NULL on failure.
+ */
 LspDocument *lsp_docstore_open(LspDocStore *store, const char *uri,
                                const char *content, int version);
+/**
+ * @brief Look up an open document by URI.
+ * @param store Store to search.
+ * @param uri Document URI to match.
+ * @return Matching document or NULL if absent.
+ */
 LspDocument *lsp_docstore_find(LspDocStore *store, const char *uri);
+/**
+ * @brief Replace a stored document's content and version.
+ * @param doc Document record to update.
+ * @param content Replacement full document text.
+ * @param version New client-reported version number.
+ * @return 0 on success or -1 on allocation failure.
+ */
 int lsp_docstore_update(LspDocument *doc, const char *content, int version);
+/**
+ * @brief Remove an open document from the store.
+ * @param store Store to update.
+ * @param uri Document URI to remove.
+ */
 void lsp_docstore_close(LspDocStore *store, const char *uri);
 
 /* ------------------------------------------------------------------ */
@@ -126,9 +201,9 @@ void lsp_docstore_close(LspDocStore *store, const char *uri);
  * @brief A single discovered project file with its metadata.
  */
 typedef struct LspProjectEntry {
-    char file[2048];  /* Absolute path to the project .jz file. */
-    char chip[256];   /* CHIP parameter (may be empty). */
-    char name[256];   /* Project name (may be empty). */
+    char file[2048]; /**< Absolute path to the project `.jz` file. */
+    char chip[256];  /**< Parsed `CHIP` parameter or `-` when unspecified. */
+    char name[256];  /**< Parsed project name or `-` when unspecified. */
 } LspProjectEntry;
 
 /**
@@ -136,8 +211,8 @@ typedef struct LspProjectEntry {
  * @brief Collection of discovered project files.
  */
 typedef struct LspProjectList {
-    LspProjectEntry entries[LSP_MAX_PROJECTS];
-    size_t          count;
+    LspProjectEntry entries[LSP_MAX_PROJECTS]; /**< Discovered project entries. */
+    size_t          count;                     /**< Number of populated entries. */
 } LspProjectList;
 
 /**

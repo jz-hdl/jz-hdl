@@ -1,3 +1,8 @@
+/**
+ * @file driver_control.c
+ * @brief Semantic checks for IF and SELECT control-flow structure.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -9,16 +14,84 @@
 #include "rules.h"
 #include "driver_internal.h"
 
-/* -------------------------------------------------------------------------
- *  CONTROL_FLOW_IF_SELECT: IF/ELIF conditions and SELECT/CASE structure
- * -------------------------------------------------------------------------
+/**
+ * @brief Look up a qualified GLOBAL constant declaration.
+ * @param qname Qualified name in `global.const` form.
+ * @param project_symbols Project-level symbols used for lookup.
+ * @return Matching CONST declaration, or `NULL` when none exists.
  */
+static const JZASTNode *sem_find_global_const_decl(const char *qname,
+                                                   const JZBuffer *project_symbols);
+/**
+ * @brief Evaluate a CASE value as an unsigned constant.
+ * @param val CASE value expression.
+ * @param mod_scope Module scope used for local CONST lookup.
+ * @param project_symbols Project-level symbols used for GLOBAL and CONFIG lookup.
+ * @param out_value Receives the evaluated value on success.
+ * @return Non-zero on success, or zero when the value is not statically known.
+ */
+static int sem_eval_select_case_numeric_value(JZASTNode *val,
+                                              const JZModuleScope *mod_scope,
+                                              const JZBuffer *project_symbols,
+                                              unsigned *out_value);
+/**
+ * @brief Check whether CASE keys cover every value of a selector width.
+ * @param keys Collected CASE keys.
+ * @param selector_width Bit width of the SELECT expression.
+ * @return Non-zero when coverage is complete, or zero otherwise.
+ */
+static int sem_select_keys_cover_all_values(const JZBuffer *keys,
+                                            unsigned selector_width);
+/**
+ * @brief Enforce width-1 IF and ELIF conditions.
+ * @param stmt IF or ELIF statement to validate.
+ * @param mod_scope Module scope containing the statement.
+ * @param project_symbols Project-level symbols used for expression inference.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_if_cond_width(JZASTNode *stmt,
+                                    const JZModuleScope *mod_scope,
+                                    const JZBuffer *project_symbols,
+                                    JZDiagnosticList *diagnostics);
+/**
+ * @brief Validate SELECT and CASE structural control-flow rules.
+ * @param select_stmt SELECT statement to validate.
+ * @param mod_scope Module scope containing the statement.
+ * @param project_symbols Project-level symbols used during expression checks.
+ * @param is_async Non-zero when the surrounding block is asynchronous.
+ * @param is_sync Non-zero when the surrounding block is synchronous.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_select_stmt_control_flow(JZASTNode *select_stmt,
+                                               const JZModuleScope *mod_scope,
+                                               const JZBuffer *project_symbols,
+                                               int is_async,
+                                               int is_sync,
+                                               JZDiagnosticList *diagnostics);
+/**
+ * @brief Dispatch control-flow checks for a statement subtree.
+ * @param stmt Statement subtree to validate.
+ * @param mod_scope Module scope containing the subtree.
+ * @param project_symbols Project-level symbols used during expression checks.
+ * @param is_async Non-zero when the surrounding block is asynchronous.
+ * @param is_sync Non-zero when the surrounding block is synchronous.
+ * @param in_conditional Non-zero when the subtree is inside conditional control flow.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
+static void sem_check_control_flow_stmt(JZASTNode *stmt,
+                                        const JZModuleScope *mod_scope,
+                                        const JZBuffer *project_symbols,
+                                        int is_async,
+                                        int is_sync,
+                                        int in_conditional,
+                                        JZDiagnosticList *diagnostics);
 
+/** @brief Captures one CASE key for SELECT coverage analysis. */
 typedef struct JZSelectCaseKey {
-    const char *repr;   /* textual representation: literal text or identifier */
-    JZLocation loc;     /* location of the CASE value expression */
-    int has_numeric;
-    unsigned numeric_value;
+    const char *repr;     /**< Literal text or identifier spelling. */
+    JZLocation loc;       /**< Location of the CASE value expression. */
+    int has_numeric;      /**< Non-zero when `numeric_value` is valid. */
+    unsigned numeric_value;/**< Parsed numeric value for the CASE key. */
 } JZSelectCaseKey;
 
 static const JZASTNode *sem_find_global_const_decl(const char *qname,

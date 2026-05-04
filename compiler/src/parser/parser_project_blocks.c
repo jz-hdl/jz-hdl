@@ -14,15 +14,6 @@
 
 #include "parser_internal.h"
 
-/**
- * @brief Parse the body of a CLOCKS block.
- *
- * CLOCKS blocks associate clock names with attribute dictionaries.
- *
- * @param p      Active parser
- * @param parent CLOCKS block AST node
- * @return 0 on success, -1 on error
- */
 int parse_clocks_block_body(Parser *p, JZASTNode *parent) {
     for (;;) {
         const JZToken *t = peek(p);
@@ -132,17 +123,6 @@ int parse_clocks_block_body(Parser *p, JZASTNode *parent) {
     }
 }
 
-/**
- * @brief Parse the body of a PIN block.
- *
- * Handles IN_PINS, OUT_PINS, and INOUT_PINS blocks with optional widths
- * and attribute dictionaries.
- *
- * @param p          Active parser
- * @param parent     PIN block AST node
- * @param block_kind Block kind string (IN_PINS, OUT_PINS, INOUT_PINS)
- * @return 0 on success, -1 on error
- */
 int parse_pins_block_body(Parser *p, JZASTNode *parent, const char *block_kind) {
     for (;;) {
         const JZToken *t = peek(p);
@@ -282,15 +262,6 @@ int parse_pins_block_body(Parser *p, JZASTNode *parent, const char *block_kind) 
     }
 }
 
-/**
- * @brief Parse the body of a MAP block.
- *
- * MAP blocks associate pins or pin bits with numeric locations.
- *
- * @param p      Active parser
- * @param parent MAP block AST node
- * @return 0 on success, -1 on error
- */
 int parse_map_block_body(Parser *p, JZASTNode *parent) {
     for (;;) {
         const JZToken *t = peek(p);
@@ -414,24 +385,6 @@ int parse_map_block_body(Parser *p, JZASTNode *parent) {
     }
 }
 
-/**
- * @brief Parse a CLOCK_GEN block inside a project.
- *
- * CLOCK_GEN blocks define PLLs/DLLs that generate clocks from other clocks.
- * The chip information comes from the PROJECT-level CHIP declaration.
- * The syntax is:
- *   CLOCK_GEN {
- *     PLL {
- *       IN <clock>;
- *       OUT <pll_output> <clock>;
- *       CONFIG { <param>=<value>; ... };
- *     };
- *   }
- *
- * @param p        Active parser
- * @param block_kw CLOCK_GEN keyword token
- * @return CLOCK_GEN block AST node, or NULL on error
- */
 JZASTNode *parse_clock_gen_block(Parser *p, const JZToken *block_kw) {
     JZASTNode *cgen = jz_ast_new(JZ_AST_CLOCK_GEN_BLOCK, block_kw->loc);
     if (!cgen) return NULL;

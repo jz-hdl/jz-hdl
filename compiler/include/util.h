@@ -1,9 +1,10 @@
 /**
  * @file util.h
- * @brief General-purpose utilities for string handling and dynamic buffers.
+ * @brief General-purpose helpers for file I/O, bounds checks, and buffers.
  *
- * Provides functions for string duplication, file I/O, and a growable
- * byte buffer implementation.
+ * Provides string duplication, bounded file-reading helpers, centralized
+ * compiler hard-limit lookups, checked size arithmetic, recursion guards,
+ * and a growable byte buffer implementation.
  */
 
 #ifndef JZ_HDL_UTIL_H
@@ -38,30 +39,34 @@
 #define JZ_MAX_SIM_MEMORY_OBJECT_BYTES      (128u * 1024u * 1024u)
 #define JZ_MAX_EMITTED_TRACE_BYTES          (64u * 1024u * 1024u)
 
+/**
+ * @enum JZInputLimitKind
+ * @brief Named compiler hard-limit categories returned by jz_input_limit_value().
+ */
 typedef enum JZInputLimitKind {
-    JZ_LIMIT_SOURCE_FILE_BYTES = 0,
-    JZ_LIMIT_SOURCE_TOKENS,
-    JZ_LIMIT_IMPORT_DEPTH,
-    JZ_LIMIT_IMPORT_RETAINED_SOURCE_BYTES,
-    JZ_LIMIT_IMPORT_RETAINED_TOKEN_BYTES,
-    JZ_LIMIT_CHIP_JSON_BYTES,
-    JZ_LIMIT_CHIP_JSON_TOKENS,
-    JZ_LIMIT_CHIP_JSON_NESTING_DEPTH,
-    JZ_LIMIT_MEM_INIT_FILE_BYTES,
-    JZ_LIMIT_MEM_INIT_MIF_DEPTH,
-    JZ_LIMIT_PARSER_EXPR_DEPTH,
-    JZ_LIMIT_PARSER_STATEMENT_DEPTH,
-    JZ_LIMIT_CONST_EVAL_DEPTH,
-    JZ_LIMIT_IR_EXPR_DEPTH,
-    JZ_LIMIT_IR_STATEMENT_DEPTH,
-    JZ_LIMIT_AST_DEPTH,
-    JZ_LIMIT_TEMPLATE_EXPAND_DEPTH,
-    JZ_LIMIT_TRISTATE_DEPTH,
-    JZ_LIMIT_SEM_RECURSION_DEPTH,
-    JZ_LIMIT_REPORT_RECURSION_DEPTH,
-    JZ_LIMIT_SIM_MEMORY_DEPTH,
-    JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES,
-    JZ_LIMIT_EMITTED_TRACE_BYTES
+    JZ_LIMIT_SOURCE_FILE_BYTES = 0,        /**< Maximum source file size in bytes. */
+    JZ_LIMIT_SOURCE_TOKENS,                /**< Maximum token count for a source file. */
+    JZ_LIMIT_IMPORT_DEPTH,                 /**< Maximum nested `@import` depth. */
+    JZ_LIMIT_IMPORT_RETAINED_SOURCE_BYTES, /**< Maximum retained imported source bytes. */
+    JZ_LIMIT_IMPORT_RETAINED_TOKEN_BYTES,  /**< Maximum retained imported token bytes. */
+    JZ_LIMIT_CHIP_JSON_BYTES,              /**< Maximum chip JSON file size in bytes. */
+    JZ_LIMIT_CHIP_JSON_TOKENS,             /**< Maximum chip JSON token count. */
+    JZ_LIMIT_CHIP_JSON_NESTING_DEPTH,      /**< Maximum chip JSON nesting depth. */
+    JZ_LIMIT_MEM_INIT_FILE_BYTES,          /**< Maximum memory init file size in bytes. */
+    JZ_LIMIT_MEM_INIT_MIF_DEPTH,           /**< Maximum parsed MIF nesting depth. */
+    JZ_LIMIT_PARSER_EXPR_DEPTH,            /**< Maximum parser expression recursion depth. */
+    JZ_LIMIT_PARSER_STATEMENT_DEPTH,       /**< Maximum parser statement recursion depth. */
+    JZ_LIMIT_CONST_EVAL_DEPTH,             /**< Maximum constant-evaluator recursion depth. */
+    JZ_LIMIT_IR_EXPR_DEPTH,                /**< Maximum IR expression traversal depth. */
+    JZ_LIMIT_IR_STATEMENT_DEPTH,           /**< Maximum IR statement traversal depth. */
+    JZ_LIMIT_AST_DEPTH,                    /**< Maximum AST traversal depth. */
+    JZ_LIMIT_TEMPLATE_EXPAND_DEPTH,        /**< Maximum template-expansion recursion depth. */
+    JZ_LIMIT_TRISTATE_DEPTH,               /**< Maximum tri-state analysis recursion depth. */
+    JZ_LIMIT_SEM_RECURSION_DEPTH,          /**< Maximum semantic-analysis recursion depth. */
+    JZ_LIMIT_REPORT_RECURSION_DEPTH,       /**< Maximum report-generation recursion depth. */
+    JZ_LIMIT_SIM_MEMORY_DEPTH,             /**< Maximum simulated memory depth. */
+    JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES,      /**< Maximum bytes for one simulated memory object. */
+    JZ_LIMIT_EMITTED_TRACE_BYTES           /**< Maximum emitted trace size in bytes. */
 } JZInputLimitKind;
 
 /**
@@ -117,24 +122,37 @@ int jz_get_fp_size(FILE *fp, size_t *out_size);
 
 /**
  * @brief Add two size_t values with overflow checking.
+ * @param a   Left operand.
+ * @param b   Right operand.
+ * @param out Receives the sum on success.
  * @return 0 on success, -1 on overflow or invalid output pointer.
  */
 int jz_size_add_checked(size_t a, size_t b, size_t *out);
 
 /**
  * @brief Multiply two size_t values with overflow checking.
+ * @param a   Left operand.
+ * @param b   Right operand.
+ * @param out Receives the product on success.
  * @return 0 on success, -1 on overflow or invalid output pointer.
  */
 int jz_size_mul_checked(size_t a, size_t b, size_t *out);
 
 /**
  * @brief Compute `a * b + c` with overflow checking.
+ * @param a   First multiplicand.
+ * @param b   Second multiplicand.
+ * @param c   Value added after multiplication.
+ * @param out Receives the result on success.
  * @return 0 on success, -1 on overflow or invalid output pointer.
  */
 int jz_size_mul_add_checked(size_t a, size_t b, size_t c, size_t *out);
 
 /**
  * @brief Round a size up to the next multiple of alignment.
+ * @param size      Value to round up.
+ * @param alignment Required power-of-two alignment.
+ * @param out       Receives the aligned size on success.
  * @return 0 on success, -1 on overflow, invalid output pointer, or zero/non-power-of-two alignment.
  */
 int jz_size_align_up_checked(size_t size, size_t alignment, size_t *out);
@@ -178,9 +196,9 @@ void jz_depth_leave(unsigned *depth);
  * @brief A growable dynamic byte buffer.
  */
 typedef struct JZBuffer {
-    unsigned char *data;  /* Pointer to buffer data. */
-    size_t         len;   /* Current length in bytes. */
-    size_t         cap;   /* Allocated capacity in bytes. */
+    unsigned char *data; /**< Pointer to the buffer storage, or NULL when empty. */
+    size_t         len;  /**< Number of valid bytes currently stored. */
+    size_t         cap;  /**< Allocated capacity in bytes. */
 } JZBuffer;
 
 /**
@@ -208,9 +226,9 @@ void  jz_buf_free(JZBuffer *buf);
 
 /**
  * @brief Open a unique temporary output file next to a target path using exclusive creation.
- * @param target Final output path.
- * @param out Receives writable stream on success.
- * @param tmp_path Receives actual temporary path on success.
+ * @param target Final output path that the temporary file will replace.
+ * @param out Receives a writable stream for the temporary file on success.
+ * @param tmp_path Receives the actual temporary path on success.
  * @param tmp_path_size Size of tmp_path buffer.
  * @return 0 on success, -1 on failure.
  */
@@ -222,7 +240,7 @@ int jz_open_exclusive_temp_output(const char *target,
 /**
  * @brief Flush, close, and atomically rename a temporary output into place.
  * @param out Open stream returned by jz_open_exclusive_temp_output().
- * @param tmp_path Temporary path.
+ * @param tmp_path Temporary path returned by jz_open_exclusive_temp_output().
  * @param final_path Final destination path.
  * @return 0 on success, -1 on failure.
  */
@@ -232,9 +250,9 @@ int jz_commit_exclusive_temp_output(FILE *out,
 
 /**
  * @brief Create a unique sidecar file path using exclusive creation.
- * @param prefix Sidecar filename prefix.
- * @param suffix Sidecar filename suffix, including dot if needed.
- * @param out Receives writable stream on success.
+ * @param prefix Sidecar filename prefix, including any directory portion.
+ * @param suffix Sidecar filename suffix, including the leading dot when needed.
+ * @param out Receives a writable stream for the sidecar file on success.
  * @param path_buf Receives the chosen sidecar path on success.
  * @param path_buf_size Size of path_buf buffer.
  * @return 0 on success, -1 on failure.

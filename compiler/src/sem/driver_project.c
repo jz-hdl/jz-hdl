@@ -1,3 +1,8 @@
+/**
+ * @file driver_project.c
+ * @brief Project-level symbol collection and semantic checks.
+ */
+
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -31,6 +36,17 @@ JZModuleScope *find_module_scope_for_node(JZBuffer *scopes,
 }
 
 /**
+ * @brief Collect declarations from a feature guard into the module scope.
+ * @param guard Feature guard node to walk.
+ * @param scope Module scope to populate.
+ * @param diagnostics Diagnostic sink for duplicate or invalid declarations.
+ * @return `0` on success, or `-1` on failure.
+ */
+static int collect_decls_from_feature(JZASTNode *guard,
+                                      JZModuleScope *scope,
+                                      JZDiagnosticList *diagnostics);
+
+/**
  * @brief Collect declarations from inside a FEATURE_GUARD AST node into the
  *        module symbol table. Both THEN and ELSE branches are walked so that
  *        both paths are validated (per spec).
@@ -42,8 +58,8 @@ static int collect_decls_from_feature_block(JZASTNode *block,
                                              JZDiagnosticList *diagnostics);
 
 static int collect_decls_from_feature(JZASTNode *guard,
-                                       JZModuleScope *scope,
-                                       JZDiagnosticList *diagnostics)
+                                      JZModuleScope *scope,
+                                      JZDiagnosticList *diagnostics)
 {
     if (!guard || guard->type != JZ_AST_FEATURE_GUARD) return 0;
     /* children[0] = condition, children[1] = THEN block, children[2] = ELSE block (optional) */

@@ -17,6 +17,13 @@
 #include "../../include/rules.h"
 #include "driver_internal.h"
 
+/**
+ * @brief Report a testbench rule diagnostic with the rule-configured severity.
+ * @param diagnostics Diagnostic sink to append to.
+ * @param loc Source location for the diagnostic.
+ * @param rule_id Rule identifier to emit.
+ * @param fallback Fallback message when the rule table has no explanation text.
+ */
 static void tb_report_rule(JZDiagnosticList *diagnostics,
                            JZLocation loc,
                            const char *rule_id,
@@ -38,6 +45,11 @@ static void tb_report_rule(JZDiagnosticList *diagnostics,
     jz_diagnostic_report(diagnostics, loc, sev, rule_id, msg);
 }
 
+/**
+ * @brief Count value-consuming conversion specifiers in a `@print` format string.
+ * @param fmt Format string to inspect.
+ * @return Number of `%h`, `%d`, and `%b` placeholders.
+ */
 static int tb_count_print_value_specifiers(const char *fmt)
 {
     int count = 0;

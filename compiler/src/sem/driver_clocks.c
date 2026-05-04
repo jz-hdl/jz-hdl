@@ -1,3 +1,8 @@
+/**
+ * @file driver_clocks.c
+ * @brief Clock-domain and synchronous-block semantic checks.
+ */
+
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
@@ -8,25 +13,28 @@
 #include "rules.h"
 #include "driver_internal.h"
 
-/* -------------------------------------------------------------------------
- *  SYNCHRONOUS block clock/domain rules (DOMAIN_CONFLICT, DUPLICATE_BLOCK,
- *  MULTI_CLK_ASSIGN)
- * -------------------------------------------------------------------------
- */
-
+/** @brief Tracks the owning clock domain for a register declaration. */
 typedef struct JZRegisterDomainInfo {
-    JZASTNode *decl;          /* REGISTER declaration node */
-    char       home_clk[64];  /* clock identifier for home domain */
-    int        has_home;      /* 1 if home_clk is valid */
-    int        multi_clk_reported; /* avoid duplicate MULTI_CLK_ASSIGN diags */
+    JZASTNode *decl;              /**< REGISTER declaration node. */
+    char       home_clk[64];      /**< Clock identifier for the home domain. */
+    int        has_home;          /**< Non-zero when `home_clk` is valid. */
+    int        multi_clk_reported;/**< Non-zero after reporting a multi-clock violation. */
 } JZRegisterDomainInfo;
 
+/** @brief Tracks the owning clock domain for a CDC destination alias. */
 typedef struct JZCdcAliasDomainInfo {
-    JZASTNode *decl;          /* destination alias identifier node */
-    char       home_clk[64];  /* clock identifier for alias home domain */
-    int        has_home;
+    JZASTNode *decl;         /**< Destination alias declaration node. */
+    char       home_clk[64]; /**< Clock identifier for the alias home domain. */
+    int        has_home;     /**< Non-zero when `home_clk` is valid. */
 } JZCdcAliasDomainInfo;
 
+/**
+ * @brief Find register-domain metadata for a declaration.
+ * @param regs Register-domain table to search.
+ * @param reg_count Number of entries in `regs`.
+ * @param decl Register declaration to match.
+ * @return Matching metadata entry, or `NULL` when none exists.
+ */
 static JZRegisterDomainInfo *sem_sync_find_reg_info(JZRegisterDomainInfo *regs,
                                                     size_t reg_count,
                                                     JZASTNode *decl)
@@ -40,6 +48,12 @@ static JZRegisterDomainInfo *sem_sync_find_reg_info(JZRegisterDomainInfo *regs,
     return NULL;
 }
 
+/**
+ * @brief Extract the `CLK` identifier associated with a synchronous block.
+ * @param block Synchronous block node to inspect.
+ * @param out Receives the clock identifier text.
+ * @param out_size Size of `out` in bytes.
+ */
 static void sem_sync_block_clock_id(JZASTNode *block,
                                     char *out,
                                     size_t out_size)
@@ -74,6 +88,13 @@ static void sem_sync_block_clock_id(JZASTNode *block,
     }
 }
 
+/**
+ * @brief Collect register assignments that appear within a statement subtree.
+ * @param stmt Statement subtree to inspect.
+ * @param scope Module scope containing the statement.
+ * @param nesting_depth Current control-flow nesting depth.
+ * @param out_targets Receives normalized assignment targets.
+ */
 static void sem_sync_collect_reg_assigns_stmt(JZASTNode *stmt,
                                               const JZModuleScope *scope,
                                               int nesting_depth,
@@ -130,6 +151,17 @@ static void sem_sync_collect_reg_assigns_stmt(JZASTNode *stmt,
     }
 }
 
+/**
+ * @brief Check expression reads against clock-domain ownership metadata.
+ * @param expr Expression subtree to inspect.
+ * @param scope Module scope containing the expression.
+ * @param block_clk Clock identifier for the current synchronous block.
+ * @param regs Register-domain metadata table.
+ * @param reg_count Number of entries in `regs`.
+ * @param aliases CDC alias metadata table.
+ * @param alias_count Number of entries in `aliases`.
+ * @param diagnostics Diagnostic sink for reported issues.
+ */
 static void sem_sync_check_register_uses_expr(JZASTNode *expr,
                                               const JZModuleScope *scope,
                                               const char *block_clk,
@@ -202,8 +234,12 @@ static void sem_sync_check_register_uses_expr(JZASTNode *expr,
     }
 }
 
-/* Walk a subtree looking for an identifier matching |name|.  Returns the
- * identifier node if found, NULL otherwise. */
+/**
+ * @brief Find an identifier node by name within a subtree.
+ * @param node Subtree to scan.
+ * @param name Identifier text to match.
+ * @return Matching identifier node, or `NULL` when none exists.
+ */
 static const JZASTNode *find_ident_in_subtree(const JZASTNode *node,
                                                const char *name)
 {
@@ -652,9 +688,10 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
             }
         }
 
+        /** @brief Tracks the first occurrence of a synchronous clock name. */
         typedef struct JZSyncClockSeen {
-            char      clk[64];
-            JZLocation first_loc;
+            char      clk[64];      /**< Clock identifier text. */
+            JZLocation first_loc;   /**< Location of the first matching block. */
         } JZSyncClockSeen;
 
         JZSyncClockSeen clk_seen[16];

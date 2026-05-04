@@ -1,3 +1,8 @@
+/**
+ * @file main.cpp
+ * @brief SDL and ImGui waveform viewer for JZW trace files.
+ */
+
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
@@ -25,74 +30,302 @@ static constexpr size_t JZW_MAX_ANNOTATIONS = 200000;
 static constexpr size_t JZW_MAX_CLOCKS = 4096;
 static constexpr size_t JZW_MAX_RESIDENT_TEXT_BYTES = 256 * 1024 * 1024;
 
-/* ---- JZW data model ---- */
-
+/**
+ * @struct Signal
+ * @brief One waveform signal displayed by the viewer.
+ */
 struct Signal {
-    int         id;
-    std::string name;
-    std::string scope;
-    int         width;
-    std::string type;
-    std::string display_name; /* scope.name */
-    bool        visible;      /* shown in waveform area */
-    bool        expanded;     /* show individual bits (width > 1 only) */
+    int         id;           /**< Signal identifier from the trace database. */
+    std::string name;         /**< Leaf signal name. */
+    std::string scope;        /**< Hierarchical scope path. */
+    int         width;        /**< Signal width in bits. */
+    std::string type;         /**< Signal classification such as `clock` or `tap`. */
+    std::string display_name; /**< Cached `scope.name` string for the UI. */
+    bool        visible;      /**< True when the signal is rendered in the waveform pane. */
+    bool        expanded;     /**< True when a multi-bit signal shows per-bit rows. */
 };
 
+/**
+ * @struct ValueChange
+ * @brief One timestamped signal value sample.
+ */
 struct ValueChange {
-    int64_t     time;
-    std::string value;
+    int64_t     time;  /**< Sample timestamp in picoseconds. */
+    std::string value; /**< Binary value string at @ref time. */
 };
 
+/**
+ * @struct Annotation
+ * @brief One annotation event loaded from a JZW trace.
+ */
 struct Annotation {
-    int64_t     time;
-    std::string type;       /* "mark", "alert", "trace" */
-    int         signal_id;  /* -1 for global */
-    std::string message;
-    std::string color;
-    int64_t     end_time;   /* 0 if not a range */
+    int64_t     time;      /**< Annotation start time in picoseconds. */
+    std::string type;      /**< Annotation type such as `mark`, `alert`, or `trace`. */
+    int         signal_id; /**< Related signal identifier, or `-1` for a global annotation. */
+    std::string message;   /**< Annotation message payload. */
+    std::string color;     /**< Named annotation color. */
+    int64_t     end_time;  /**< Annotation end time, or `0` when it is instantaneous. */
 };
 
+/**
+ * @struct ClockInfo
+ * @brief Clock metadata loaded from a JZW trace.
+ */
 struct ClockInfo {
-    std::string name;
-    int64_t     period_ps;
-    int64_t     phase_ps;
-    int64_t     jitter_pp_ps;
-    double      jitter_sigma_ps;
-    double      drift_max_ppm;
-    double      drift_actual_ppm;
-    double      drifted_period_ps;
+    std::string name;              /**< Clock name. */
+    int64_t     period_ps;         /**< Nominal period in picoseconds. */
+    int64_t     phase_ps;          /**< Phase offset in picoseconds. */
+    int64_t     jitter_pp_ps;      /**< Peak-to-peak jitter in picoseconds. */
+    double      jitter_sigma_ps;   /**< Jitter sigma in picoseconds. */
+    double      drift_max_ppm;     /**< Maximum drift in parts per million. */
+    double      drift_actual_ppm;  /**< Applied drift in parts per million. */
+    double      drifted_period_ps; /**< Effective drifted period in picoseconds. */
 };
 
+/**
+ * @struct JZWFile
+ * @brief In-memory representation and live-reload state for one JZW trace.
+ */
 struct JZWFile {
-    std::string                          filename;
-    std::string                          module_name;
-    int64_t                              sim_end_time = 0;
-    int64_t                              display_start_time = 0; /* first trace=on time */
-    int64_t                              tick_ps = 1;
-    std::vector<Signal>                  signals;
-    std::map<int, std::vector<ValueChange>> changes; /* signal_id -> changes */
-    std::vector<Annotation>              annotations;
-    std::vector<ClockInfo>               clocks;
+    std::string                          filename;            /**< Trace file path. */
+    std::string                          module_name;         /**< Module name stored in trace metadata. */
+    int64_t                              sim_end_time = 0;    /**< Declared simulation end time, if present. */
+    int64_t                              display_start_time = 0; /**< First user-visible trace time. */
+    int64_t                              tick_ps = 1;         /**< Tick size from metadata. */
+    std::vector<Signal>                  signals;             /**< Loaded signal table. */
+    std::map<int, std::vector<ValueChange>> changes;         /**< Value changes keyed by signal ID. */
+    std::vector<Annotation>              annotations;         /**< Loaded annotation events. */
+    std::vector<ClockInfo>               clocks;              /**< Loaded clock metadata. */
+    sqlite3     *db = nullptr;                               /**< Open SQLite handle for live reload. */
+    bool         watching = false;                           /**< True when the trace is open for polling. */
+    bool         sim_running = false;                        /**< True while the producer still appends data. */
+    int64_t      max_loaded_time = 0;                        /**< Latest loaded change timestamp. */
+    int          max_annotation_id = 0;                      /**< Highest loaded annotation row ID. */
+    int          loaded_signal_count = 0;                    /**< Number of signals already loaded. */
+    size_t       resident_text_bytes = 0;                    /**< Estimated resident text footprint. */
+    size_t       loaded_change_count = 0;                    /**< Total loaded value change count. */
+    std::string  error_message;                              /**< Last load or poll error message. */
 
-    /* Live-reload state */
-    sqlite3     *db = nullptr;
-    bool         watching = false;
-    bool         sim_running = false;
-    int64_t      max_loaded_time = 0;
-    int          max_annotation_id = 0;
-    int          loaded_signal_count = 0;
-    size_t       resident_text_bytes = 0;
-    size_t       loaded_change_count = 0;
-    std::string  error_message;
-
+    /**
+     * @brief Load a JZW trace from disk and initialize live-reload state.
+     * @param path Trace file path.
+     * @return `true` on success, or `false` when loading fails.
+     */
     bool load(const char *path);
+    /**
+     * @brief Poll the open trace database for incremental updates.
+     * @return `true` on success, or `false` when polling fails.
+     */
     bool poll();
+    /**
+     * @brief Close the active SQLite handle, if any.
+     */
     void close_db();
+    /**
+     * @brief Compute the effective visible end time for the trace.
+     * @return Declared end time when available, otherwise the latest loaded timestamp.
+     */
     int64_t effective_end_time() const {
         return sim_end_time > 0 ? sim_end_time : max_loaded_time;
     }
+    /**
+     * @brief Find the value visible for a signal at a given time.
+     * @param signal_id Signal identifier to query.
+     * @param time Trace time in picoseconds.
+     * @return Pointer to a resident value string, or `nullptr` when no value is available.
+     */
     const char *value_at(int signal_id, int64_t time) const;
 };
+
+/**
+ * @brief Record a formatted fatal error message on a trace object.
+ * @param jzw Trace object receiving the error.
+ * @param fmt `printf`-style format string.
+ * @param ... Format arguments for @p fmt.
+ * @return Always returns `false`.
+ */
+static bool jzw_fail(JZWFile *jzw, const char *fmt, ...);
+/**
+ * @brief Account for additional resident text memory.
+ * @param jzw Trace object whose quota is updated.
+ * @param add_bytes Number of bytes to add.
+ * @param what Short label describing the text being loaded.
+ * @return `true` on success, or `false` if the resident-text limit would be exceeded.
+ */
+static bool jzw_add_resident_text(JZWFile *jzw, size_t add_bytes, const char *what);
+/**
+ * @brief Read one SQLite text column into a C++ string with bounds checks.
+ * @param jzw Trace object used for error reporting.
+ * @param stmt SQLite statement positioned on a row.
+ * @param col Zero-based column index.
+ * @param label Human-readable column label for diagnostics.
+ * @param max_bytes Maximum accepted byte length.
+ * @param allow_null True when SQL `NULL` should be accepted as an empty string.
+ * @param out Destination string.
+ * @return `true` on success, or `false` on conversion or bounds failure.
+ */
+static bool jzw_read_text_column(JZWFile *jzw,
+                                 sqlite3_stmt *stmt,
+                                 int col,
+                                 const char *label,
+                                 size_t max_bytes,
+                                 bool allow_null,
+                                 std::string *out);
+/**
+ * @brief Parse a signed 64-bit integer from SQLite text data.
+ * @param jzw Trace object used for error reporting.
+ * @param text Source text.
+ * @param label Human-readable value label for diagnostics.
+ * @param out Destination integer.
+ * @return `true` on success, or `false` when parsing fails.
+ */
+static bool jzw_parse_i64(JZWFile *jzw,
+                          const std::string &text,
+                          const char *label,
+                          int64_t *out);
+/**
+ * @brief Append a signal definition to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param id Signal identifier.
+ * @param name Signal name.
+ * @param scope Signal scope.
+ * @param width Signal width in bits.
+ * @param type Signal type string.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_signal(JZWFile *jzw,
+                              int id,
+                              const std::string &name,
+                              const std::string &scope,
+                              int width,
+                              const std::string &type);
+/**
+ * @brief Append one value change sample to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param time Sample timestamp in picoseconds.
+ * @param signal_id Related signal identifier.
+ * @param value Binary value string.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_change(JZWFile *jzw, int64_t time, int signal_id, const std::string &value);
+/**
+ * @brief Append one annotation event to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param annotation Annotation to store.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_annotation(JZWFile *jzw, const Annotation &annotation);
+/**
+ * @brief Append one clock metadata record to the loaded trace.
+ * @param jzw Trace object to update.
+ * @param clock Clock metadata record.
+ * @return `true` on success, or `false` on validation or quota failure.
+ */
+static bool jzw_append_clock(JZWFile *jzw, const ClockInfo &clock);
+/**
+ * @brief Recompute the first time that should be shown in the waveform view.
+ * @param jzw Trace object to update.
+ */
+static void jzw_recompute_display_start_time(JZWFile *jzw);
+/**
+ * @brief Show a fatal error using stderr and an SDL message box when possible.
+ * @param title Dialog title.
+ * @param message Error text to display.
+ * @param window Parent window for the dialog, or `nullptr`.
+ */
+static void show_fatal_error(const char *title, const std::string &message, SDL_Window *window);
+/**
+ * @brief Convert a binary text string to a 64-bit integer.
+ * @param s Null-terminated binary string.
+ * @return Parsed integer value.
+ */
+static uint64_t binstr_to_u64(const char *s);
+/**
+ * @brief Format a picosecond timestamp into a short human-readable string.
+ * @param buf Destination buffer.
+ * @param bufsz Size of @p buf in bytes.
+ * @param ps Timestamp in picoseconds.
+ */
+static void format_time(char *buf, size_t bufsz, int64_t ps);
+/**
+ * @brief Format a binary value string into a compact display label.
+ * @param buf Destination buffer.
+ * @param bufsz Size of @p buf in bytes.
+ * @param binval Binary value string.
+ * @param width Signal width in bits.
+ */
+static void format_value(char *buf, size_t bufsz, const char *binval, int width);
+/**
+ * @brief Draw the fit-to-window toolbar icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ */
+static void draw_fit_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col);
+/**
+ * @brief Draw the zoom-in or zoom-out toolbar icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ * @param plus True for zoom-in, false for zoom-out.
+ */
+static void draw_zoom_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col, bool plus);
+/**
+ * @brief Draw the clock toolbar icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ */
+static void draw_clock_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col);
+/**
+ * @brief Draw a numbered cursor tag icon.
+ * @param dl ImGui draw list.
+ * @param pos Icon origin.
+ * @param size Icon size in pixels.
+ * @param col Icon color.
+ * @param label Short cursor label text.
+ * @param font Font used to render the label.
+ */
+static void draw_cursor_tag_icon(ImDrawList *dl, ImVec2 pos, float size, ImU32 col,
+                                 const char *label, ImFont *font);
+/**
+ * @brief Map an annotation color name to an ImGui color value.
+ * @param name Annotation color name.
+ * @return Packed ImGui color.
+ */
+static ImU32 annotation_color(const std::string &name);
+/**
+ * @brief Choose a display color for a signal row.
+ * @param sig Signal metadata.
+ * @return Packed ImGui color.
+ */
+static ImU32 signal_color(const Signal &sig);
+/**
+ * @brief Draw one signal waveform row inside the current viewport.
+ * @param dl ImGui draw list.
+ * @param sig Signal metadata.
+ * @param vc Ordered value changes for the signal.
+ * @param x0 Left edge of the waveform area.
+ * @param y0 Top edge of the waveform row.
+ * @param w Row width in pixels.
+ * @param h Row height in pixels.
+ * @param ps_per_px Horizontal time scale in picoseconds per pixel.
+ * @param scroll_ps Left-edge timestamp in picoseconds.
+ */
+static void draw_waveform(ImDrawList *dl, const Signal &sig,
+                          const std::vector<ValueChange> &vc,
+                          float x0, float y0, float w, float h,
+                          double ps_per_px, int64_t scroll_ps);
+/**
+ * @brief Launch the waveform viewer application.
+ * @param argc Process argument count.
+ * @param argv Process argument vector.
+ * @return Process exit status.
+ */
+int main(int argc, char **argv);
 
 static bool jzw_fail(JZWFile *jzw, const char *fmt, ...)
 {
@@ -750,9 +983,13 @@ const char *JZWFile::value_at(int signal_id, int64_t time) const
 
 /* ---- Zoom levels ---- */
 
+/**
+ * @struct ZoomLevel
+ * @brief One predefined horizontal zoom preset for the waveform viewer.
+ */
 struct ZoomLevel {
-    const char *label;
-    double      ps_per_pixel; /* picoseconds per pixel */
+    const char *label;       /**< Human-readable toolbar label. */
+    double      ps_per_pixel; /**< Horizontal scale in picoseconds per pixel. */
 };
 
 static const ZoomLevel zoom_levels[] = {

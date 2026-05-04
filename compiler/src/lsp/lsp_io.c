@@ -13,6 +13,18 @@
 
 #define LSP_MAX_CONTENT_LENGTH (16u * 1024u * 1024u)
 
+/**
+ * @brief Convert a hexadecimal digit character into its numeric value.
+ * @param c ASCII digit to decode.
+ * @return Hex digit value in the range 0-15, or -1 if invalid.
+ */
+static int hex_digit(char c);
+
+/**
+ * @brief Write a formatted debug log line for the LSP server.
+ * @param fmt `printf`-style format string.
+ * @param ... Format arguments.
+ */
 void lsp_log(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);

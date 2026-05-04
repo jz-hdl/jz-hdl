@@ -1,3 +1,8 @@
+/**
+ * @file cli_options.c
+ * @brief Command-line parsing helpers and option-state initialization.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,6 +10,24 @@
 
 #include "cli_options.h"
 #include "version.h"
+
+/**
+ * @brief Parse a strictly positive `size_t` from decimal text.
+ *
+ * @param text Input text to parse.
+ * @param out  Receives the parsed value on success.
+ * @return 1 on success, otherwise 0.
+ */
+static int parse_positive_size(const char *text, size_t *out);
+
+/**
+ * @brief Parse the `--expansion-limits` argument into a limits structure.
+ *
+ * @param limits Limit structure to update.
+ * @param arg    Comma-separated `name=value` list from the command line.
+ * @return 0 on success, non-zero on parse error.
+ */
+static int parse_expansion_limits_arg(JZExpansionLimits *limits, const char *arg);
 
 static int parse_positive_size(const char *text, size_t *out) {
     char *end = NULL;

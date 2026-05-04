@@ -1,3 +1,8 @@
+/**
+ * @file ast_json.c
+ * @brief Emits the AST as a JSON document.
+ */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -8,6 +13,37 @@
 static int s_ast_json_depth_reported = 0;
 static int s_ast_json_depth_failed = 0;
 static JZDiagnosticList *s_ast_json_diagnostics = NULL;
+
+/**
+ * @brief Write a JSON string literal with escaping.
+ * @param out Destination stream.
+ * @param s Null-terminated string to encode. A null pointer emits `""`.
+ */
+static void print_escaped_string(FILE *out, const char *s);
+
+/**
+ * @brief Map an AST node kind to its JSON type name.
+ * @param t AST node kind to describe.
+ * @return Stable node type string used in JSON output.
+ */
+static const char *node_type_name(JZASTNodeType t);
+
+/**
+ * @brief Emit indentation for one JSON nesting level.
+ * @param out Destination stream.
+ * @param level Indentation depth in two-space units.
+ */
+static void indent(FILE *out, int level);
+
+/**
+ * @brief Emit one AST node and its descendants as JSON.
+ * @param out Destination stream.
+ * @param node AST node to serialize.
+ * @param level Current indentation depth.
+ * @param depth Current recursion depth used for safety-limit checking.
+ */
+static void print_node(FILE *out, const JZASTNode *node, int level,
+                       unsigned depth);
 
 static void print_escaped_string(FILE *out, const char *s) {
     fputc('"', out);

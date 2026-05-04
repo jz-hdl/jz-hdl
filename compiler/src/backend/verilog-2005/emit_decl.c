@@ -1,8 +1,6 @@
-/*
- * emit_decl.c - Declaration emission for the Verilog-2005 backend.
- *
- * This file handles emitting module headers, port declarations, signal
- * declarations, and memory declarations.
+/**
+ * @file emit_decl.c
+ * @brief Module declaration emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
 #include <stdint.h>
@@ -13,6 +11,74 @@
 #include "verilog_internal.h"
 #include "ir.h"
 #include "util.h"
+
+/**
+ * @brief Check whether a statement subtree writes a specific signal.
+ * @param stmt Statement subtree to inspect.
+ * @param signal_id Signal identifier to search for.
+ * @return Non-zero when the subtree assigns to `signal_id`.
+ */
+static int stmt_assigns_to_signal(const IR_Stmt *stmt, int signal_id);
+
+/**
+ * @brief Count statement nodes that may be traversed during stack allocation.
+ * @param stmt Statement subtree to measure.
+ * @return Node count, or `SIZE_MAX` if the count overflows.
+ */
+static size_t stmt_traversal_node_count(const IR_Stmt *stmt);
+
+/**
+ * @brief Collect selector-signal references used by nested select statements.
+ * @param stmt Statement subtree to inspect.
+ * @param ids Destination array for signal identifiers.
+ * @param count In-out count of collected identifiers.
+ * @param cap Maximum number of identifiers that fit in `ids`.
+ */
+static void collect_select_signals_from_stmt(const IR_Stmt *stmt, int *ids, int *count, int cap);
+
+/**
+ * @brief Return whether a signal is used as a select-selector expression.
+ * @param mod Module that owns the statements.
+ * @param signal_id Signal identifier to test.
+ * @return `true` when the signal drives any select selector.
+ */
+static bool signal_is_select_selector(const IR_Module *mod, int signal_id);
+
+/**
+ * @brief Sanitize a memory-init fragment for hex sidecar output.
+ * @param src Source text fragment.
+ * @param dst Destination buffer.
+ * @param dst_size Size of `dst` in bytes.
+ */
+static void mem_init_sanitize_fragment(const char *src,
+                                       char *dst,
+                                       size_t dst_size);
+
+/**
+ * @brief Read one bit from a packed memory-init word buffer.
+ * @param word_bytes Byte array for the packed word.
+ * @param bytes_per_word Number of bytes in each stored word.
+ * @param word_width Logical width of the stored word in bits.
+ * @param bit_from_msb Bit index counted from the most-significant bit.
+ * @return Bit value at the requested position.
+ */
+static unsigned mem_init_word_bit(const uint8_t *word_bytes,
+                                  int bytes_per_word,
+                                  int word_width,
+                                  int bit_from_msb);
+
+/**
+ * @brief Write a memory-init blob to a sidecar hex file.
+ * @param mod Module that owns the memory.
+ * @param mem Memory description being emitted.
+ * @param path_buf In-out buffer that receives the generated sidecar path.
+ * @param path_buf_size Size of `path_buf` in bytes.
+ * @return `0` on success, `-1` on failure.
+ */
+static int mem_init_write_blob_sidecar_hex(const IR_Module *mod,
+                                           const IR_Memory *mem,
+                                           char *path_buf,
+                                           size_t path_buf_size);
 
 /* -------------------------------------------------------------------------
  * Helper: determine if a statement assigns to a given signal

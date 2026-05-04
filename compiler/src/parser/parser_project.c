@@ -23,21 +23,29 @@
 /**
  * @brief Parse the binding list inside a project-level @top block.
  *
- * This function parses structured port bindings of the form:
- *
- *   IN    [width] port = target;
- *   OUT   [width] port;
- *   INOUT [width] port = _;
- *
- * An optional leading OVERRIDE { ... } block is allowed and mirrors the
- * semantics of per-instance overrides in module-level @new instantiations.
- *
- * Parsing continues until the closing '}' of the @top block is encountered.
- *
  * @param p   Active parser
- * @param top Project top-instance AST node
+ * @param top Project top-instance AST node receiving parsed bindings
  * @return 0 on success, -1 on error
  */
+static int parse_project_top_binding_list(Parser *p, JZASTNode *top);
+
+/**
+ * @brief Parse the optional CHIP attribute in a @project header.
+ *
+ * @param p           Active parser positioned at the first header attribute token
+ * @param out_chip_id Output for the parsed CHIP value string
+ * @return 0 on success, -1 on parse or allocation failure
+ */
+static int parse_project_header_chip_attr(Parser *p, char **out_chip_id);
+
+/**
+ * @brief Parse a project-level @top instantiation.
+ *
+ * @param p Active parser
+ * @return Project top-instance AST node, or NULL on error
+ */
+static JZASTNode *parse_project_top_new(Parser *p);
+
 static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
     for (;;) {
         const JZToken *t = peek(p);
@@ -496,16 +504,6 @@ static int parse_project_header_chip_attr(Parser *p, char **out_chip_id) {
     return 0;
 }
 
-/**
- * @brief Parse a project-level @top instantiation.
- *
- * Supported forms:
- *   @top <module> { ... }
- *   @top <instance> <module> { ... }
- *
- * @param p Active parser
- * @return Project top-instance AST node, or NULL on error
- */
 static JZASTNode *parse_project_top_new(Parser *p) {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* @top already consumed */
 
@@ -554,15 +552,6 @@ static JZASTNode *parse_project_top_new(Parser *p) {
     return top;
 }
 
-/**
- * @brief Parse a BUS definition inside a project.
- *
- * BUS blocks define named signal groups with directional members.
- *
- * @param p      Active parser
- * @param bus_kw BUS keyword token
- * @return BUS AST node, or NULL on error
- */
 JZASTNode *parse_bus_definition(Parser *p, const JZToken *bus_kw) {
     if (!bus_kw) return NULL;
 
@@ -694,24 +683,6 @@ JZASTNode *parse_bus_definition(Parser *p, const JZToken *bus_kw) {
     }
 }
 
-/**
- * @brief Parse a @global block.
- *
- * Expects the @global keyword to have already been consumed. A global block
- * defines named constant expressions that are visible across the entire
- * project and all modules.
- *
- * The body of a @global block consists of one or more constant assignments:
- *
- *   <name> = <expression>;
- *
- * Parsing continues until the matching @endglob directive is encountered.
- * Global blocks are only permitted at the compilation-root level; any use
- * inside a @project or @module is diagnosed as an invalid context elsewhere.
- *
- * @param p Active parser
- * @return Global block AST node, or NULL on error
- */
 JZASTNode *parse_global(Parser *p)
 {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* already consumed @global */
@@ -820,27 +791,6 @@ JZASTNode *parse_global(Parser *p)
     return glob;
 }
 
-/**
- * @brief Parse an entire compilation unit.
- *
- * This is the top-level entry point for parsing a JZ HDL source file.
- * It consumes a pre-tokenized input stream and produces a fully-formed
- * project AST.
- *
- * Responsibilities:
- * - Parse top-level @module and @global blocks
- * - Enforce that exactly one @project block exists
- * - Attach parsed modules and globals to the project
- * - Report invalid top-level directives
- *
- * The returned AST node is the @project node; any temporary root used
- * during parsing is discarded before returning.
- *
- * @param filename     Source filename (used for diagnostics)
- * @param stream       Token stream produced by the lexer
- * @param diagnostics  Diagnostic sink for rule-based errors
- * @return Project AST node, or NULL on error
- */
 JZASTNode *jz_parse_file(const char *filename,
                          const JZTokenStream *stream,
                          JZDiagnosticList *diagnostics) {
@@ -1063,20 +1013,6 @@ JZASTNode *jz_parse_file(const char *filename,
     return proj_node;
 }
 
-/**
- * @brief Parse a compile-time @check directive.
- *
- * The @check directive has the form:
- *
- *   @check(<condition>, "message");
- *
- * The condition is parsed as a full expression and stored as both a
- * structured AST child and a reconstructed raw-text expression so that
- * existing constant-evaluation logic can be reused during semantic checks.
- *
- * @param p Active parser
- * @return Check AST node, or NULL on error
- */
 JZASTNode *parse_check(Parser *p) {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* @check already consumed */
 
@@ -1170,25 +1106,6 @@ JZASTNode *parse_check(Parser *p) {
     return check;
 }
 
-/**
- * @brief Parse a @project block.
- *
- * Expects the @project keyword to have already been consumed. A project
- * block defines the structural composition of a design, including imports,
- * configuration, clocks, pins, maps, blackboxes, BUS definitions, and a
- * single top-level instantiation.
- *
- * Enforced rules include:
- * - Imports must appear at the top of the project
- * - At most one CONFIG block is allowed
- * - At most one top-level @top instantiation is allowed
- * - Control-flow statements are forbidden at project scope
- *
- * Parsing continues until the matching @endproj directive is encountered.
- *
- * @param p Active parser
- * @return Project AST node, or NULL on error
- */
 JZASTNode *parse_project(Parser *p) {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* already consumed @project */
 

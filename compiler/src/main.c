@@ -1,3 +1,8 @@
+/**
+ * @file main.c
+ * @brief Command-line entry point for the JZ-HDL compiler and LSP server.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +24,12 @@
 /* Global verbose flag for timing diagnostics. */
 int jz_verbose = 0;
 
+/**
+ * @brief Run the requested JZ-HDL frontend, analysis, or language-server mode.
+ * @param argc Number of command-line arguments.
+ * @param argv Command-line argument vector.
+ * @return Process exit status.
+ */
 int main(int argc, char **argv) {
     if (argc < 2) {
         jz_cli_print_usage(argv[0]);

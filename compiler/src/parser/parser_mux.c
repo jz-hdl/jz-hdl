@@ -12,15 +12,6 @@
 
 #include "parser_internal.h"
 
-/**
- * @brief Parse the body of a MUX block.
- *
- * Supports aggregate and slice-based MUX declarations.
- *
- * @param p      Active parser
- * @param parent MUX block AST node
- * @return 0 on success, -1 on error
- */
 int parse_mux_block_body(Parser *p, JZASTNode *parent) {
     /* Parse structured MUX declarations:
      *   mux_id = src0, src1, ...;

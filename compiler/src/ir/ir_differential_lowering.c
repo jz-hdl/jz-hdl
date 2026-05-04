@@ -1,3 +1,8 @@
+/**
+ * @file ir_differential_lowering.c
+ * @brief Differential-pin lowering and serializer selection for IR projects.
+ */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -5,6 +10,13 @@
 #include "diagnostic.h"
 #include "ir.h"
 
+/**
+ * @brief Check whether a differential pin has an explicit negative-side mapping.
+ *
+ * @param proj Project-level IR metadata.
+ * @param pin  Pin to inspect.
+ * @return 1 when the pin is differential and mapped to an N-side board pin, otherwise 0.
+ */
 static int pin_has_diff_mapping(const IR_Project *proj, const IR_Pin *pin)
 {
     if (!proj || !pin || pin->mode != PIN_MODE_DIFFERENTIAL) return 0;
@@ -19,6 +31,15 @@ static int pin_has_diff_mapping(const IR_Project *proj, const IR_Pin *pin)
     return 0;
 }
 
+/**
+ * @brief Find the signal width bound to a top-level logical pin bit.
+ *
+ * @param design Full IR design.
+ * @param proj   Project-level IR metadata.
+ * @param pin_idx Index of the logical pin in the project pin table.
+ * @param pin_bit Bit index within the logical pin.
+ * @return Bound signal width in bits, or 0 when no binding can be resolved.
+ */
 static int find_signal_width_for_pin(const IR_Design *design,
                                       const IR_Project *proj,
                                       int pin_idx,
@@ -57,6 +78,12 @@ static int find_signal_width_for_pin(const IR_Design *design,
     return 0;
 }
 
+/**
+ * @brief Check whether a pin uses serializer clocking metadata.
+ *
+ * @param pin Pin to inspect.
+ * @return 1 when the pin is an output with serializer clocks, otherwise 0.
+ */
 static int pin_needs_output_serializer(const IR_Pin *pin)
 {
     if (!pin || pin->kind != PIN_OUT) return 0;

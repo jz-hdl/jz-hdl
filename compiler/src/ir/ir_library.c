@@ -25,7 +25,11 @@
  */
 
 /**
- * @brief Allocate an IR_Signal in an arena-owned array.
+ * @brief Allocate and zero an arena-owned signal array.
+ *
+ * @param arena Arena used for allocation.
+ * @param count Number of signals to allocate.
+ * @return Zero-initialized signal array, or NULL on allocation failure.
  */
 static IR_Signal *alloc_signals(JZArena *arena, int count)
 {
@@ -38,7 +42,15 @@ static IR_Signal *alloc_signals(JZArena *arena, int count)
 }
 
 /**
- * @brief Initialize a port signal.
+ * @brief Initialize one signal record as a module port.
+ *
+ * @param sig             Signal record to populate.
+ * @param id              Signal ID within the module.
+ * @param name            Signal name.
+ * @param width           Signal width in bits.
+ * @param dir             Port direction.
+ * @param owner_module_id Owning module ID.
+ * @param arena           Arena used for duplicating the name.
  */
 static void init_port_signal(IR_Signal *sig, int id, const char *name,
                              int width, IR_PortDirection dir,
@@ -53,7 +65,15 @@ static void init_port_signal(IR_Signal *sig, int id, const char *name,
 }
 
 /**
- * @brief Initialize a register signal.
+ * @brief Initialize one signal record as a register.
+ *
+ * @param sig                  Signal record to populate.
+ * @param id                   Signal ID within the module.
+ * @param name                 Signal name.
+ * @param width                Signal width in bits.
+ * @param home_clock_domain_id Home clock-domain ID.
+ * @param owner_module_id      Owning module ID.
+ * @param arena                Arena used for duplicating the name.
  */
 static void init_reg_signal(IR_Signal *sig, int id, const char *name,
                             int width, int home_clock_domain_id,
@@ -70,7 +90,14 @@ static void init_reg_signal(IR_Signal *sig, int id, const char *name,
 }
 
 /**
- * @brief Initialize a net/wire signal.
+ * @brief Initialize one signal record as a net.
+ *
+ * @param sig             Signal record to populate.
+ * @param id              Signal ID within the module.
+ * @param name            Signal name.
+ * @param width           Signal width in bits.
+ * @param owner_module_id Owning module ID.
+ * @param arena           Arena used for duplicating the name.
  */
 static void init_net_signal(IR_Signal *sig, int id, const char *name,
                             int width, int owner_module_id, JZArena *arena)

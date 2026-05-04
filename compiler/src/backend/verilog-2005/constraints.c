@@ -1,7 +1,6 @@
-/*
- * constraints.c - Constraint file emission for the Verilog-2005 backend.
- *
- * This file handles emitting SDC, XDC, PCF, and CST constraint files.
+/**
+ * @file constraints.c
+ * @brief Constraint-file emission for the Verilog-2005 backend.
  */
 #include <stdio.h>
 #include <string.h>
@@ -19,7 +18,11 @@
  * underscored forms (e.g. TMDS_33, LVDS_25) for certain standards.
  * -------------------------------------------------------------------------
  */
-static const struct { const char *jz; const char *xilinx; } xdc_std_map[] = {
+/** Maps JZ-HDL I/O standard spellings to XDC spellings. */
+static const struct {
+    const char *jz;      /**< Internal JZ-HDL I/O standard name. */
+    const char *xilinx;  /**< XDC spelling emitted for the same standard. */
+} xdc_std_map[] = {
     { "TMDS33",   "TMDS_33"   },
     { "LVDS25",   "LVDS_25"   },
     { "LVDS33",   "LVDS_33"   },
@@ -27,6 +30,13 @@ static const struct { const char *jz; const char *xilinx; } xdc_std_map[] = {
     { "LVPECL33", "LVPECL_33" },
     { NULL, NULL }
 };
+
+/**
+ * @brief Translate a JZ-HDL I/O standard to the XDC spelling.
+ * @param std JZ-HDL I/O standard name.
+ * @return Matching XDC spelling, or `std` when no translation is needed.
+ */
+static const char *xdc_iostandard(const char *std);
 
 static const char *xdc_iostandard(const char *std)
 {
