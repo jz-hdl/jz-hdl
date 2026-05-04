@@ -10,7 +10,7 @@
 
 #include "rtlil_internal.h"
 #include "ir.h"
-#include "../../include/util.h"
+#include "util.h"
 
 /* Reuse Verilog backend helpers. */
 #include "backend/verilog-2005/verilog_internal.h"
