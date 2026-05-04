@@ -632,9 +632,23 @@ int sem_expand_widthof_in_width_expr(const char *expr,
                 char num[32];
                 snprintf(num, sizeof(num), "%u", target_width);
                 size_t num_len = strlen(num);
-                if (out_len + num_len + 1 >= cap) {
-                    size_t new_cap = cap * 2u + num_len + 32u;
-                    char *new_buf = (char *)realloc(buf, new_cap);
+                size_t needed = 0;
+                if (jz_size_add_checked(out_len, num_len, &needed) != 0 ||
+                    jz_size_add_checked(needed, 1, &needed) != 0) {
+                    free(buf);
+                    return -1;
+                }
+                if (needed >= cap) {
+                    size_t doubled = 0;
+                    size_t new_cap = 0;
+                    char *new_buf = NULL;
+                    if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                        jz_size_add_checked(doubled, num_len, &new_cap) != 0 ||
+                        jz_size_add_checked(new_cap, 32u, &new_cap) != 0) {
+                        free(buf);
+                        return -1;
+                    }
+                    new_buf = (char *)realloc(buf, new_cap);
                     if (!new_buf) {
                         free(buf);
                         return -1;
@@ -649,9 +663,21 @@ int sem_expand_widthof_in_width_expr(const char *expr,
         }
 
         /* Default: copy one character. */
-        if (out_len + 2 >= cap) {
-            size_t new_cap = cap * 2u + 32u;
-            char *new_buf = (char *)realloc(buf, new_cap);
+        size_t needed = 0;
+        if (jz_size_add_checked(out_len, 2, &needed) != 0) {
+            free(buf);
+            return -1;
+        }
+        if (needed >= cap) {
+            size_t doubled = 0;
+            size_t new_cap = 0;
+            char *new_buf = NULL;
+            if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                jz_size_add_checked(doubled, 32u, &new_cap) != 0) {
+                free(buf);
+                return -1;
+            }
+            new_buf = (char *)realloc(buf, new_cap);
             if (!new_buf) {
                 free(buf);
                 return -1;
@@ -881,9 +907,23 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
                 char num[32];
                 snprintf(num, sizeof(num), "%u", target_width);
                 size_t num_len = strlen(num);
-                if (out_len + num_len + 1 >= cap) {
-                    size_t new_cap = cap * 2u + num_len + 32u;
-                    char *new_buf = (char *)realloc(buf, new_cap);
+                size_t needed = 0;
+                if (jz_size_add_checked(out_len, num_len, &needed) != 0 ||
+                    jz_size_add_checked(needed, 1, &needed) != 0) {
+                    free(buf);
+                    return -1;
+                }
+                if (needed >= cap) {
+                    size_t doubled = 0;
+                    size_t new_cap = 0;
+                    char *new_buf = NULL;
+                    if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                        jz_size_add_checked(doubled, num_len, &new_cap) != 0 ||
+                        jz_size_add_checked(new_cap, 32u, &new_cap) != 0) {
+                        free(buf);
+                        return -1;
+                    }
+                    new_buf = (char *)realloc(buf, new_cap);
                     if (!new_buf) {
                         free(buf);
                         return -1;
@@ -897,9 +937,21 @@ int sem_expand_widthof_in_width_expr_diag(const char *expr,
             }
         }
 
-        if (out_len + 2 >= cap) {
-            size_t new_cap = cap * 2u + 32u;
-            char *new_buf = (char *)realloc(buf, new_cap);
+        size_t needed = 0;
+        if (jz_size_add_checked(out_len, 2, &needed) != 0) {
+            free(buf);
+            return -1;
+        }
+        if (needed >= cap) {
+            size_t doubled = 0;
+            size_t new_cap = 0;
+            char *new_buf = NULL;
+            if (jz_size_add_checked(cap, cap, &doubled) != 0 ||
+                jz_size_add_checked(doubled, 32u, &new_cap) != 0) {
+                free(buf);
+                return -1;
+            }
+            new_buf = (char *)realloc(buf, new_cap);
             if (!new_buf) {
                 free(buf);
                 return -1;

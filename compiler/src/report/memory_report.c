@@ -45,8 +45,10 @@ static const char *g_mem_report_input = NULL;
 
 void jz_sem_enable_memory_report(FILE *out,
                                  const char *tool_version,
-                                 const char *input_filename)
+                                 const char *input_filename,
+                                 JZDiagnosticList *diagnostics)
 {
+    (void)diagnostics;
     g_mem_report_enabled = (out != NULL);
     g_mem_report_out = out;
     g_mem_report_version = tool_version;
@@ -155,14 +157,18 @@ static const char *jz_load_chip_json(const char *chip_id,
     char *path_lower = NULL;
     char *json = NULL;
     if (path) {
-        json = jz_read_entire_file(path, NULL);
+        json = jz_read_entire_file_limit(path,
+                                         jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                         NULL);
     }
     if (!json) {
         char *lower = jz_strdup_lower(chip_id);
         if (lower) {
             path_lower = jz_build_chip_json_path(project_filename, lower);
             if (path_lower) {
-                json = jz_read_entire_file(path_lower, NULL);
+                json = jz_read_entire_file_limit(path_lower,
+                                                 jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                                 NULL);
             }
         }
         free(lower);

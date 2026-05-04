@@ -43,7 +43,8 @@ int jz_sem_run(JZASTNode *root,
  */
 void jz_sem_enable_alias_report(FILE *out,
                                 const char *tool_version,
-                                const char *input_filename);
+                                const char *input_filename,
+                                JZDiagnosticList *diagnostics);
 
 /**
  * @brief Enable memory-report generation during semantic analysis.
@@ -57,7 +58,8 @@ void jz_sem_enable_alias_report(FILE *out,
  */
 void jz_sem_enable_memory_report(FILE *out,
                                  const char *tool_version,
-                                 const char *input_filename);
+                                 const char *input_filename,
+                                 JZDiagnosticList *diagnostics);
 
 /**
  * @brief Enable tri-state resolution reporting during semantic analysis.
@@ -73,7 +75,8 @@ void jz_sem_enable_memory_report(FILE *out,
  */
 void jz_sem_enable_tristate_report(FILE *out,
                                    const char *tool_version,
-                                   const char *input_filename);
+                                   const char *input_filename,
+                                   JZDiagnosticList *diagnostics);
 
 /**
  * @brief Inform semantic analysis that --tristate-default is active.

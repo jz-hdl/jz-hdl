@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 /* ---- PRNG ---- */
 
@@ -34,13 +35,19 @@ static void sigset_add(SigIdSet *s, int id) {
     for (int i = 0; i < s->count; i++)
         if (s->ids[i] == id) return;
     if (s->count >= s->cap) {
-        int new_cap = s->cap ? s->cap * 2 : 8;
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
         int *new_ids = NULL;
-        if (new_cap <= s->cap) return;
-        new_ids = realloc(s->ids, (size_t)new_cap * sizeof(int));
+        if (jz_size_grow_doubling_checked((size_t)s->cap,
+                                          (size_t)s->count + 1,
+                                          8,
+                                          &new_cap) != 0 ||
+            new_cap > (size_t)INT_MAX ||
+            jz_size_mul_checked(new_cap, sizeof(int), &new_bytes) != 0) return;
+        new_ids = realloc(s->ids, new_bytes);
         if (!new_ids) return;
         s->ids = new_ids;
-        s->cap = new_cap;
+        s->cap = (int)new_cap;
     }
     s->ids[s->count++] = id;
 }
@@ -250,6 +257,7 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
 
     for (int i = 0; i < module->num_memories; i++) {
         const IR_Memory *mem = &module->memories[i];
+        size_t mem_bytes = 0;
         if (mem->word_width > max_sim_width) {
             fprintf(stderr,
                     "error: memory '%s' word width %d exceeds simulator capacity (%d bits)\n",
@@ -259,12 +267,21 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
             sim_ctx_destroy(ctx);
             return NULL;
         }
-        if ((unsigned)mem->depth > JZ_MAX_SIM_MEMORY_DEPTH) {
+        if ((unsigned)mem->depth > jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_DEPTH)) {
             fprintf(stderr,
                     "error: memory '%s' depth %d exceeds simulator safety limit (%u words)\n",
                     mem->name ? mem->name : "?",
                     mem->depth,
-                    (unsigned)JZ_MAX_SIM_MEMORY_DEPTH);
+                    (unsigned)jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_DEPTH));
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+        if (jz_size_mul_checked((size_t)mem->depth, sizeof(SimValue), &mem_bytes) != 0 ||
+            mem_bytes > jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES)) {
+            fprintf(stderr,
+                    "error: memory '%s' allocation exceeds simulator safety limit (%u byte(s))\n",
+                    mem->name ? mem->name : "?",
+                    (unsigned)jz_input_limit_value(JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES));
             sim_ctx_destroy(ctx);
             return NULL;
         }
@@ -286,7 +303,12 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
     ctx->max_sig_id = max_id;
     ctx->sig_id_map = NULL;
     if (max_id >= 0) {
-        ctx->sig_id_map = malloc((size_t)(max_id + 1) * sizeof(int));
+        size_t sig_id_map_bytes = 0;
+        if (jz_size_mul_checked((size_t)(max_id + 1), sizeof(int), &sig_id_map_bytes) != 0) {
+            sim_ctx_destroy(ctx);
+            return NULL;
+        }
+        ctx->sig_id_map = malloc(sig_id_map_bytes);
         if (!ctx->sig_id_map) {
             sim_ctx_destroy(ctx);
             return NULL;

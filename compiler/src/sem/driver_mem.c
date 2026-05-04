@@ -286,7 +286,9 @@ static int sem_mem_extract_assignment(const char *text,
 static char *sem_mem_read_entire_fp(FILE *fp, size_t *size_out)
 {
     if (!fp) return NULL;
-    return jz_read_entire_fp_limit(fp, JZ_MAX_MEM_INIT_FILE_BYTES, size_out);
+    return jz_read_entire_fp_limit(fp,
+                                   jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                   size_out);
 }
 
 static char *sem_mem_strip_mif_comments(const char *contents, size_t size)
@@ -807,11 +809,13 @@ static void sem_check_mem_file_init(JZASTNode *mem,
     }
 
     if (jz_get_file_size(fullpath, &file_size) == 0 &&
-        file_size > JZ_MAX_MEM_INIT_FILE_BYTES) {
+        file_size > jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES)) {
         char msg[640];
         snprintf(msg, sizeof(msg),
                  "MEM init file '%s' is %zu byte(s), exceeding the compiler safety limit of %u byte(s)",
-                 fullpath, file_size, (unsigned)JZ_MAX_MEM_INIT_FILE_BYTES);
+                 fullpath,
+                 file_size,
+                 (unsigned)jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES));
         sem_report_rule(diagnostics,
                         init_expr->loc,
                         "MEM_INIT_FILE_HARD_LIMIT_EXCEEDED",
@@ -843,12 +847,12 @@ static void sem_check_mem_file_init(JZASTNode *mem,
     unsigned long long file_bits = 0ull;
 
     if (ext && sem_mem_ext_equals(ext, "mif") &&
-        depth > JZ_MAX_MEM_INIT_MIF_DEPTH) {
+        depth > jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH)) {
         char msg[640];
         fclose(fp);
         snprintf(msg, sizeof(msg),
                  "MEM declared depth %u exceeds the compiler MIF safety limit of %u words",
-                 depth, (unsigned)JZ_MAX_MEM_INIT_MIF_DEPTH);
+                 depth, (unsigned)jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH));
         sem_report_rule(diagnostics,
                         init_expr->loc,
                         "MEM_INIT_MIF_DEPTH_LIMIT_EXCEEDED",

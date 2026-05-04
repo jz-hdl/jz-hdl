@@ -25,10 +25,6 @@
 #include "parser_internal.h"
 #include "path_security.h"
 
-#define JZ_IMPORT_MAX_DEPTH_DEFAULT (64u)
-#define JZ_IMPORT_MAX_RETAINED_SOURCE_BYTES_DEFAULT (16u * 1024u * 1024u)
-#define JZ_IMPORT_MAX_RETAINED_TOKEN_BYTES_DEFAULT  (64u * 1024u * 1024u)
-
 /* Global storage for imported path lifetime management. */
 char  **g_imported_filenames      = NULL;
 size_t  g_imported_filenames_len  = 0;
@@ -82,11 +78,11 @@ static int import_budget_enter(ImportBudgetGuard *guard,
         return -1;
     }
     if (jz_size_add_checked(g_import_active_depth, 1, &next_depth) != 0 ||
-        next_depth > JZ_IMPORT_MAX_DEPTH_DEFAULT) {
+        next_depth > jz_input_limit_value(JZ_LIMIT_IMPORT_DEPTH)) {
         char msg[256];
         snprintf(msg, sizeof(msg),
                  "nested @import depth exceeds the compiler safety limit of %u file(s)",
-                 (unsigned)JZ_IMPORT_MAX_DEPTH_DEFAULT);
+                 (unsigned)jz_input_limit_value(JZ_LIMIT_IMPORT_DEPTH));
         report_import_limit(parent, import_token, "IMPORT_DEPTH_LIMIT_EXCEEDED", msg, path_hint);
         return -1;
     }
@@ -165,8 +161,16 @@ static int remember_imported_path(char ***paths,
 {
     if (!path) return 0;
     if (*len == *cap) {
-        size_t new_cap = *cap ? *cap * 2 : 8;
-        char **new_arr = (char **)realloc(*paths, new_cap * sizeof(char *));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        char **new_arr = NULL;
+        if (jz_size_grow_doubling_checked(*cap, *len + 1, 8, &new_cap) != 0) {
+            return -1;
+        }
+        if (jz_size_mul_checked(new_cap, sizeof(char *), &new_bytes) != 0) {
+            return -1;
+        }
+        new_arr = (char **)realloc(*paths, new_bytes);
         if (!new_arr) {
             /* If we fail here, we must not drop the pointer, otherwise it would
              * leak without being tracked. Just fall back to leaking this one
@@ -380,17 +384,17 @@ int import_modules_from_path(const Parser *parent,
     full_path = NULL;
 
     if (jz_get_file_size(g_imported_resolved_paths[g_imported_resolved_paths_len - 1], &size) == 0 &&
-        size > JZ_MAX_SOURCE_FILE_BYTES) {
+        size > jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES)) {
         char msg[256];
         snprintf(msg, sizeof(msg),
                  "imported source file exceeds the compiler safety limit of %u byte(s)",
-                 (unsigned)JZ_MAX_SOURCE_FILE_BYTES);
+                 (unsigned)jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES));
         report_import_limit(parent, import_token, "SOURCE_FILE_TOO_LARGE", msg, rel_path);
         goto cleanup;
     }
 
     source = jz_read_entire_file_limit(g_imported_resolved_paths[g_imported_resolved_paths_len - 1],
-                                       JZ_MAX_SOURCE_FILE_BYTES,
+                                       jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
                                        &size);
     if (!source) {
         fprintf(stderr, "%s:1:1: import error: failed to read imported file '%s'\n",
@@ -403,7 +407,7 @@ int import_modules_from_path(const Parser *parent,
             import_budget_add_bytes(&g_import_active_source_bytes,
                                     &budget.source_bytes,
                                     retained_source_bytes,
-                                    JZ_IMPORT_MAX_RETAINED_SOURCE_BYTES_DEFAULT,
+                                    jz_input_limit_value(JZ_LIMIT_IMPORT_RETAINED_SOURCE_BYTES),
                                     parent,
                                     import_token,
                                     rel_path,
@@ -423,7 +427,7 @@ int import_modules_from_path(const Parser *parent,
             import_budget_add_bytes(&g_import_active_token_bytes,
                                     &budget.token_bytes,
                                     retained_token_bytes,
-                                    JZ_IMPORT_MAX_RETAINED_TOKEN_BYTES_DEFAULT,
+                                    jz_input_limit_value(JZ_LIMIT_IMPORT_RETAINED_TOKEN_BYTES),
                                     parent,
                                     import_token,
                                     rel_path,

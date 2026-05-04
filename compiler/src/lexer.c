@@ -30,13 +30,9 @@ static void lexer_report_rule(LexerState *st,
 
 static int lexer_ensure_capacity(JZTokenStream *s) {
     if (s->count == s->capacity) {
-        size_t new_cap = s->capacity ? s->capacity : 128;
+        size_t new_cap = 0;
         size_t new_bytes = 0;
-        if (s->capacity != 0) {
-            if (new_cap > SIZE_MAX / 2) return -1;
-            new_cap *= 2;
-        }
-        if (new_cap <= s->count) return -1;
+        if (jz_size_grow_doubling_checked(s->capacity, s->count + 1, 128, &new_cap) != 0) return -1;
         if (jz_size_mul_checked(new_cap, sizeof(JZToken), &new_bytes) != 0) return -1;
         JZToken *new_tokens = (JZToken *)realloc(s->tokens, new_bytes);
         if (!new_tokens) return -1;

@@ -103,6 +103,30 @@ int jz_diagnostic_report(JZDiagnosticList *list,
                          const char *message);
 
 /**
+ * @brief Record a rule-based diagnostic using the rule table's configured severity.
+ * @param list     Diagnostic list to append to. Must not be NULL.
+ * @param loc      Source location of the diagnostic.
+ * @param code     Rule identifier.
+ * @param fallback Message to store when the rule table has no dynamic text.
+ * @return 0 on success, non-zero on allocation failure.
+ */
+int jz_diagnostic_report_rule(JZDiagnosticList *list,
+                              JZLocation loc,
+                              const char *code,
+                              const char *fallback);
+
+/**
+ * @brief Report a rule-based diagnostic at most once for a traversal limit hit.
+ * @param reported Guard flag updated to 1 after the first report.
+ * @return 0 when reported or already reported, non-zero only on allocation failure.
+ */
+int jz_diagnostic_report_rule_once(int *reported,
+                                   JZDiagnosticList *list,
+                                   JZLocation loc,
+                                   const char *code,
+                                   const char *fallback);
+
+/**
  * @brief Apply a warning policy to an existing diagnostic list.
  *
  * May drop diagnostics whose group is disabled, and/or promote

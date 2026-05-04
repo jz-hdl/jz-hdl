@@ -49,6 +49,52 @@ int jz_diagnostic_report(JZDiagnosticList *list,
     return jz_buf_append(&list->buffer, &diag, sizeof(diag));
 }
 
+int jz_diagnostic_report_rule(JZDiagnosticList *list,
+                              JZLocation loc,
+                              const char *code,
+                              const char *fallback)
+{
+    const JZRuleInfo *rule = NULL;
+    JZSeverity severity = JZ_SEVERITY_ERROR;
+    const char *message = NULL;
+
+    if (!list || !code) return -1;
+
+    rule = jz_rule_lookup(code);
+    if (rule) {
+        switch (rule->mode) {
+        case JZ_RULE_MODE_WRN:
+            severity = JZ_SEVERITY_WARNING;
+            break;
+        case JZ_RULE_MODE_INF:
+            severity = JZ_SEVERITY_NOTE;
+            break;
+        case JZ_RULE_MODE_ERR:
+        default:
+            severity = JZ_SEVERITY_ERROR;
+            break;
+        }
+    }
+
+    message = fallback ? fallback : code;
+    return jz_diagnostic_report(list, loc, severity, code, message);
+}
+
+int jz_diagnostic_report_rule_once(int *reported,
+                                   JZDiagnosticList *list,
+                                   JZLocation loc,
+                                   const char *code,
+                                   const char *fallback)
+{
+    if (reported && *reported) {
+        return 0;
+    }
+    if (reported) {
+        *reported = 1;
+    }
+    return jz_diagnostic_report_rule(list, loc, code, fallback);
+}
+
 static void normalize_filename(const char *filename,
                                const char *primary_filename,
                                char *out,

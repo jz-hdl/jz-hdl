@@ -20,6 +20,9 @@ static FILE *g_alias_report_out = NULL;
 static char g_alias_report_generated[64];
 static const char *g_alias_report_version = NULL;
 static const char *g_alias_report_input = NULL;
+static JZDiagnosticList *g_alias_report_diagnostics = NULL;
+static unsigned g_alias_report_depth = 0;
+static int g_alias_report_depth_reported = 0;
 
 /* Cross-module summary accumulator for finalize. */
 typedef struct {
@@ -35,12 +38,16 @@ static JZBuffer g_alias_summary = {0}; /* Array of JZAliasSummaryEntry */
 
 void jz_sem_enable_alias_report(FILE *out,
                                 const char *tool_version,
-                                const char *input_filename)
+                                const char *input_filename,
+                                JZDiagnosticList *diagnostics)
 {
     g_alias_report_enabled = (out != NULL);
     g_alias_report_out = out;
     g_alias_report_version = tool_version;
     g_alias_report_input = input_filename;
+    g_alias_report_diagnostics = diagnostics;
+    g_alias_report_depth = 0;
+    g_alias_report_depth_reported = 0;
     jz_buf_free(&g_alias_summary);
     memset(&g_alias_summary, 0, sizeof(g_alias_summary));
 
@@ -60,6 +67,24 @@ void jz_sem_enable_alias_report(FILE *out,
                  sizeof(g_alias_report_generated),
                  "<unknown>");
     }
+}
+
+static int alias_report_enter_depth(JZLocation loc)
+{
+    if (jz_depth_enter_checked(&g_alias_report_depth, JZ_LIMIT_REPORT_RECURSION_DEPTH) != 0) {
+        (void)jz_diagnostic_report_rule_once(&g_alias_report_depth_reported,
+                                             g_alias_report_diagnostics,
+                                             loc,
+                                             "REPORT_DEPTH_LIMIT_EXCEEDED",
+                                             "report traversal exceeds the compiler safety limit");
+        return 0;
+    }
+    return 1;
+}
+
+static void alias_report_leave_depth(void)
+{
+    jz_depth_leave(&g_alias_report_depth);
 }
 
 /* -------------------------------------------------------------------------
@@ -106,14 +131,20 @@ static int sem_decl_is_inout_port(const JZASTNode *decl)
 static int sem_expr_references_name(const JZASTNode *expr, const char *name)
 {
     if (!expr || !name) return 0;
+    if (!alias_report_enter_depth(expr->loc)) return 0;
     if ((expr->type == JZ_AST_EXPR_IDENTIFIER ||
          expr->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) &&
         expr->name && strcmp(expr->name, name) == 0) {
+        alias_report_leave_depth();
         return 1;
     }
     for (size_t i = 0; i < expr->child_count; ++i) {
-        if (sem_expr_references_name(expr->children[i], name)) return 1;
+        if (sem_expr_references_name(expr->children[i], name)) {
+            alias_report_leave_depth();
+            return 1;
+        }
     }
+    alias_report_leave_depth();
     return 0;
 }
 
@@ -184,6 +215,7 @@ static void sem_count_module_alias_stats(const JZASTNode *node,
                                          unsigned *out_alias_stmts)
 {
     if (!node) return;
+    if (!alias_report_enter_depth(node->loc)) return;
 
     if (node->name) {
         int is_user = 0;
@@ -221,6 +253,7 @@ static void sem_count_module_alias_stats(const JZASTNode *node,
                                      out_internal_identifiers,
                                      out_alias_stmts);
     }
+    alias_report_leave_depth();
 }
 
 /* Return non-zero if this module has any SYNCHRONOUS block that uses the
@@ -400,6 +433,7 @@ static int sem_alias_find_enclosing_block_rec(const JZASTNode *node,
                                               const char **out_kind)
 {
     if (!node || !target) return 0;
+    if (!alias_report_enter_depth(node->loc)) return 0;
 
     const JZASTNode *next_block = current_block;
     const char *next_kind = current_kind;
@@ -412,6 +446,7 @@ static int sem_alias_find_enclosing_block_rec(const JZASTNode *node,
     if (node == target) {
         if (out_block) *out_block = next_block;
         if (out_kind) *out_kind = next_kind;
+        alias_report_leave_depth();
         return 1;
     }
 
@@ -422,10 +457,12 @@ static int sem_alias_find_enclosing_block_rec(const JZASTNode *node,
                                                next_kind,
                                                out_block,
                                                out_kind)) {
+            alias_report_leave_depth();
             return 1;
         }
     }
 
+    alias_report_leave_depth();
     return 0;
 }
 
@@ -497,7 +534,9 @@ static char *sem_alias_get_stmt_source_line(const JZASTNode *stmt)
     if (!stmt || !stmt->loc.filename || stmt->loc.line <= 0) return NULL;
 
     size_t size = 0;
-    char *contents = jz_read_entire_file(stmt->loc.filename, &size);
+    char *contents = jz_read_entire_file_limit(stmt->loc.filename,
+                                               jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                               &size);
     if (!contents || size == 0) {
         if (contents) free(contents);
         return NULL;
@@ -689,6 +728,8 @@ void sem_emit_alias_report_for_module(const JZModuleScope *scope,
     if (!g_alias_report_enabled || !g_alias_report_out || !scope || !scope->node) {
         return;
     }
+    g_alias_report_depth = 0;
+    g_alias_report_depth_reported = 0;
 
     FILE *out = g_alias_report_out;
 

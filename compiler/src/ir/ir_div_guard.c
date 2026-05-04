@@ -41,9 +41,6 @@ static void report_div_guard_depth(JZDiagnosticList *diagnostics,
                                    const IR_Module *mod,
                                    int source_line)
 {
-    if (!diagnostics || s_div_guard_depth_reported) return;
-    s_div_guard_depth_reported = 1;
-
     const char *filename = "";
     if (design && mod &&
         mod->source_file_id >= 0 &&
@@ -52,16 +49,11 @@ static void report_div_guard_depth(JZDiagnosticList *diagnostics,
     }
 
     JZLocation loc = { filename, source_line, 0 };
-    const JZRuleInfo *rule = jz_rule_lookup("IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED");
-    JZSeverity sev = JZ_SEVERITY_ERROR;
-    if (rule && rule->mode == JZ_RULE_MODE_WRN) {
-        sev = JZ_SEVERITY_WARNING;
-    }
-    jz_diagnostic_report(diagnostics,
-                         loc,
-                         sev,
-                         "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED",
-                         "IR division-guard analysis exceeds the compiler safety limit");
+    (void)jz_diagnostic_report_rule_once(&s_div_guard_depth_reported,
+                                         diagnostics,
+                                         loc,
+                                         "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED",
+                                         "IR division-guard analysis exceeds the compiler safety limit");
 }
 
 static void guard_push(GuardStack *gs, int signal_id, bool is_nonzero)
@@ -348,13 +340,12 @@ static void check_expr_for_div(const IR_Expr *expr,
                                JZDiagnosticList *diagnostics)
 {
     if (!expr) return;
-    if (s_div_guard_depth >= JZ_MAX_IR_STMT_DEPTH) {
+    if (jz_depth_enter_checked(&s_div_guard_depth, JZ_LIMIT_IR_STATEMENT_DEPTH) != 0) {
         report_div_guard_depth(diagnostics, design, mod, expr->source_line);
         return;
     }
-    ++s_div_guard_depth;
     check_expr_for_div_impl(expr, design, mod, guards, diagnostics);
-    --s_div_guard_depth;
+    jz_depth_leave(&s_div_guard_depth);
 }
 
 static void check_expr_for_div_impl(const IR_Expr *expr,
@@ -519,13 +510,12 @@ static void check_stmt_for_div(const IR_Stmt *stmt,
                                JZDiagnosticList *diagnostics)
 {
     if (!stmt) return;
-    if (s_div_guard_depth >= JZ_MAX_IR_STMT_DEPTH) {
+    if (jz_depth_enter_checked(&s_div_guard_depth, JZ_LIMIT_IR_STATEMENT_DEPTH) != 0) {
         report_div_guard_depth(diagnostics, design, mod, stmt->source_line);
         return;
     }
-    ++s_div_guard_depth;
     check_stmt_for_div_impl(stmt, design, mod, guards, diagnostics);
-    --s_div_guard_depth;
+    jz_depth_leave(&s_div_guard_depth);
 }
 
 static void check_stmt_for_div_impl(const IR_Stmt *stmt,

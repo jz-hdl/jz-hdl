@@ -29,7 +29,10 @@ static char *jz_strdup_trim(const char *s)
     }
 
     size_t len = (size_t)(end - start);
-    char *copy = (char *)malloc(len + 1);
+    size_t alloc_size = 0;
+    char *copy = NULL;
+    if (jz_size_add_checked(len, 1, &alloc_size) != 0) return NULL;
+    copy = (char *)malloc(alloc_size);
     if (!copy) return NULL;
     if (len > 0) {
         memcpy(copy, start, len);
@@ -73,13 +76,12 @@ void jz_ast_set_width(JZASTNode *node, const char *width) {
 int jz_ast_add_child(JZASTNode *parent, JZASTNode *child) {
     if (!parent || !child) return -1;
     if (parent->child_count == parent->child_capacity) {
-        size_t new_cap = parent->child_capacity ? parent->child_capacity : INITIAL_CHILD_CAPACITY;
+        size_t new_cap = 0;
         size_t new_bytes = 0;
-        if (parent->child_capacity != 0) {
-            if (new_cap > SIZE_MAX / 2) return -1;
-            new_cap *= 2;
-        }
-        if (new_cap <= parent->child_count) return -1;
+        if (jz_size_grow_doubling_checked(parent->child_capacity,
+                                          parent->child_count + 1,
+                                          INITIAL_CHILD_CAPACITY,
+                                          &new_cap) != 0) return -1;
         if (jz_size_mul_checked(new_cap, sizeof(JZASTNode *), &new_bytes) != 0) return -1;
         JZASTNode **new_children = (JZASTNode **)realloc(parent->children, new_bytes);
         if (!new_children) return -1;
@@ -91,14 +93,11 @@ int jz_ast_add_child(JZASTNode *parent, JZASTNode *child) {
     return 0;
 }
 
-static void jz_ast_free_recursive(JZASTNode *node, unsigned depth)
+static void jz_ast_free_recursive_unbounded(JZASTNode *node)
 {
     if (!node) return;
-    if (depth >= JZ_MAX_AST_DEPTH) {
-        return;
-    }
     for (size_t i = 0; i < node->child_count; ++i) {
-        jz_ast_free_recursive(node->children[i], depth + 1);
+        jz_ast_free_recursive_unbounded(node->children[i]);
     }
     free(node->children);
     free(node->name);
@@ -109,5 +108,50 @@ static void jz_ast_free_recursive(JZASTNode *node, unsigned depth)
 }
 
 void jz_ast_free(JZASTNode *node) {
-    jz_ast_free_recursive(node, 0);
+    JZBuffer stack = {0};
+    JZASTNode *cur = NULL;
+
+    if (!node) return;
+    if (jz_buf_append(&stack, &node, sizeof(node)) != 0) {
+        jz_ast_free_recursive_unbounded(node);
+        return;
+    }
+
+    while (stack.len >= sizeof(cur)) {
+        memcpy(&cur, stack.data + stack.len - sizeof(cur), sizeof(cur));
+        stack.len -= sizeof(cur);
+        if (!cur) continue;
+
+        for (size_t i = 0; i < cur->child_count; ++i) {
+            JZASTNode *child = cur->children[i];
+            if (!child) continue;
+            if (jz_buf_append(&stack, &child, sizeof(child)) != 0) {
+                for (size_t j = i; j < cur->child_count; ++j) {
+                    jz_ast_free_recursive_unbounded(cur->children[j]);
+                }
+                free(cur->children);
+                free(cur->name);
+                free(cur->block_kind);
+                free(cur->text);
+                free(cur->width);
+                free(cur);
+                while (stack.len >= sizeof(cur)) {
+                    memcpy(&cur, stack.data + stack.len - sizeof(cur), sizeof(cur));
+                    stack.len -= sizeof(cur);
+                    jz_ast_free_recursive_unbounded(cur);
+                }
+                jz_buf_free(&stack);
+                return;
+            }
+        }
+
+        free(cur->children);
+        free(cur->name);
+        free(cur->block_kind);
+        free(cur->text);
+        free(cur->width);
+        free(cur);
+    }
+
+    jz_buf_free(&stack);
 }

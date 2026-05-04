@@ -33,8 +33,10 @@ static JZBuffer g_tristate_summary = {0};  /* Array of JZTristateSummaryEntry */
 
 void jz_sem_enable_tristate_report(FILE *out,
                                    const char *tool_version,
-                                   const char *input_filename)
+                                   const char *input_filename,
+                                   JZDiagnosticList *diagnostics)
 {
+    (void)diagnostics;
     g_tristate_report_enabled = (out != NULL);
     g_tristate_report_header_printed = 0;
     g_tristate_report_out = out;
@@ -72,7 +74,9 @@ static void tristate_print_source_at_loc(FILE *out, JZLocation loc)
     if (!out || !loc.filename || loc.line <= 0) return;
 
     size_t size = 0;
-    char *contents = jz_read_entire_file(loc.filename, &size);
+    char *contents = jz_read_entire_file_limit(loc.filename,
+                                               jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                               &size);
     if (!contents || size == 0) {
         if (contents) free(contents);
         return;

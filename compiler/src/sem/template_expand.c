@@ -109,7 +109,8 @@ static void report_rule(ExpandContext *ctx, JZLocation loc,
 
 static int template_enter_depth(JZLocation loc)
 {
-    if (s_template_expand_depth >= JZ_MAX_TEMPLATE_EXPAND_DEPTH) {
+    if (jz_depth_enter_checked(&s_template_expand_depth,
+                               JZ_LIMIT_TEMPLATE_EXPAND_DEPTH) != 0) {
         s_template_depth_failed = 1;
         if (!s_template_depth_reported && s_template_depth_ctx) {
             report_rule(s_template_depth_ctx,
@@ -120,15 +121,12 @@ static int template_enter_depth(JZLocation loc)
         }
         return 0;
     }
-    ++s_template_expand_depth;
     return 1;
 }
 
 static void template_leave_depth(void)
 {
-    if (s_template_expand_depth > 0) {
-        --s_template_expand_depth;
-    }
+    jz_depth_leave(&s_template_expand_depth);
 }
 
 /* ── CONST/CONFIG table for count evaluation ─────────────────────── */
@@ -136,8 +134,14 @@ static void template_leave_depth(void)
 static void collect_const_value(ExpandContext *ctx, const char *name, long value)
 {
     if (ctx->const_count == ctx->const_cap) {
-        size_t new_cap = ctx->const_cap ? ctx->const_cap * 2 : 64;
-        void *p = realloc(ctx->consts, new_cap * sizeof(ctx->consts[0]));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        void *p = NULL;
+        if (jz_size_grow_doubling_checked(ctx->const_cap, ctx->const_count + 1, 64, &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(ctx->consts[0]), &new_bytes) != 0) {
+            return;
+        }
+        p = realloc(ctx->consts, new_bytes);
         if (!p) return;
         ctx->consts = p;
         ctx->const_cap = new_cap;
@@ -220,16 +224,31 @@ static void add_const_def(JZASTNode *decl,
 {
     if (!decl || !decl->name || !decl->text) return;
     if (*count == *cap) {
-        size_t new_cap = *cap ? *cap * 2 : 64;
-        void *pd = realloc(*defs, new_cap * sizeof(JZConstDef));
-        void *ps = realloc(*stripped_exprs, new_cap * sizeof(char *));
-        if (!pd || !ps) {
-            if (pd) *defs = (JZConstDef *)pd;
-            if (ps) *stripped_exprs = (char **)ps;
+        size_t new_cap = 0;
+        size_t defs_bytes = 0;
+        size_t strs_bytes = 0;
+        JZConstDef *new_defs = NULL;
+        char **new_stripped = NULL;
+        if (jz_size_grow_doubling_checked(*cap, *count + 1, 64, &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(JZConstDef), &defs_bytes) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(char *), &strs_bytes) != 0) {
             return;
         }
-        *defs = (JZConstDef *)pd;
-        *stripped_exprs = (char **)ps;
+        new_defs = (JZConstDef *)malloc(defs_bytes);
+        new_stripped = (char **)malloc(strs_bytes);
+        if (!new_defs || !new_stripped) {
+            free(new_defs);
+            free(new_stripped);
+            return;
+        }
+        if (*count > 0) {
+            memcpy(new_defs, *defs, (*count) * sizeof(JZConstDef));
+            memcpy(new_stripped, *stripped_exprs, (*count) * sizeof(char *));
+        }
+        free(*defs);
+        free(*stripped_exprs);
+        *defs = new_defs;
+        *stripped_exprs = new_stripped;
         *cap = new_cap;
     }
     char *stripped = strip_config_prefix(decl->text);
@@ -861,8 +880,17 @@ static void substitute_in_node_impl(JZASTNode *node,
 static void register_template(ExpandContext *ctx, JZASTNode *def, JZASTNode *scope_module)
 {
     if (ctx->template_count == ctx->template_cap) {
-        size_t new_cap = ctx->template_cap ? ctx->template_cap * 2 : 16;
-        void *p = realloc(ctx->templates, new_cap * sizeof(TemplateEntry));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        void *p = NULL;
+        if (jz_size_grow_doubling_checked(ctx->template_cap,
+                                          ctx->template_count + 1,
+                                          16,
+                                          &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(TemplateEntry), &new_bytes) != 0) {
+            return;
+        }
+        p = realloc(ctx->templates, new_bytes);
         if (!p) return;
         ctx->templates = p;
         ctx->template_cap = new_cap;
@@ -1057,8 +1085,17 @@ static TemplateEntry *find_template(ExpandContext *ctx, const char *name, JZASTN
 static void add_scratch_wire(ExpandContext *ctx, JZASTNode *wire_decl)
 {
     if (ctx->scratch_wire_count == ctx->scratch_wire_cap) {
-        size_t new_cap = ctx->scratch_wire_cap ? ctx->scratch_wire_cap * 2 : 16;
-        void *p = realloc(ctx->scratch_wires, new_cap * sizeof(JZASTNode *));
+        size_t new_cap = 0;
+        size_t new_bytes = 0;
+        void *p = NULL;
+        if (jz_size_grow_doubling_checked(ctx->scratch_wire_cap,
+                                          ctx->scratch_wire_count + 1,
+                                          16,
+                                          &new_cap) != 0 ||
+            jz_size_mul_checked(new_cap, sizeof(JZASTNode *), &new_bytes) != 0) {
+            return;
+        }
+        p = realloc(ctx->scratch_wires, new_bytes);
         if (!p) return;
         ctx->scratch_wires = p;
         ctx->scratch_wire_cap = new_cap;
@@ -1675,8 +1712,18 @@ static int expand_apply(ExpandContext *ctx, JZASTNode *apply,
             }
 
             if (expanded_count == expanded_cap) {
-                size_t new_cap = expanded_cap ? expanded_cap * 2 : 16;
-                void *p = realloc(expanded, new_cap * sizeof(JZASTNode *));
+                size_t new_cap = 0;
+                size_t new_bytes = 0;
+                void *p = NULL;
+                if (jz_size_grow_doubling_checked(expanded_cap,
+                                                  expanded_count + 1,
+                                                  16,
+                                                  &new_cap) != 0 ||
+                    jz_size_mul_checked(new_cap, sizeof(JZASTNode *), &new_bytes) != 0) {
+                    jz_ast_free(clone);
+                    continue;
+                }
+                p = realloc(expanded, new_bytes);
                 if (!p) { jz_ast_free(clone); continue; }
                 expanded = p;
                 expanded_cap = new_cap;

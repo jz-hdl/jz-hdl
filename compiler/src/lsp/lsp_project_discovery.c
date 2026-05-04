@@ -131,7 +131,9 @@ static int file_get_project_info(const char *path,
                                  char *name, size_t name_cap)
 {
     size_t size = 0;
-    char *content = jz_read_entire_file(path, &size);
+    char *content = jz_read_entire_file_limit(path,
+                                              jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                              &size);
     if (!content) return 0;
 
     chip[0] = '\0';
@@ -218,7 +220,9 @@ static void add_project_entry(LspProjectList *list,
 static int read_rc_file(const char *rc_path, LspProjectList *out)
 {
     size_t size = 0;
-    char *content = jz_read_entire_file(rc_path, &size);
+    char *content = jz_read_entire_file_limit(rc_path,
+                                              jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                              &size);
     if (!content || size == 0) {
         free(content);
         return -1;
@@ -298,40 +302,17 @@ static int read_rc_file(const char *rc_path, LspProjectList *out)
 static void write_rc_file(const char *dir, const LspProjectList *projects)
 {
     char rc_path[2048];
+    FILE *f = NULL;
+    char tmp_path[2048];
     snprintf(rc_path, sizeof(rc_path), "%s/%s", dir, RC_FILENAME);
 
 #ifndef _WIN32
-    char tmp_path[2048];
-    FILE *f = NULL;
-    int fd = -1;
-    static unsigned long temp_counter = 0;
-
-    for (unsigned attempt = 0; attempt < 128; ++attempt) {
-        snprintf(tmp_path, sizeof(tmp_path), "%s/%s.tmp.%ld.%lu",
-                 dir, RC_FILENAME, (long)getpid(), temp_counter++);
-        fd = open(tmp_path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
-        if (fd >= 0) {
-            break;
-        }
-        if (errno != EEXIST) {
-            lsp_log("failed to create temporary rc file %s", tmp_path);
-            return;
-        }
-    }
-    if (fd < 0) {
-        lsp_log("failed to create temporary rc file in %s", dir);
-        return;
-    }
-
-    f = fdopen(fd, "w");
-    if (!f) {
-        close(fd);
-        unlink(tmp_path);
-        lsp_log("failed to open temporary rc file stream %s", tmp_path);
+    if (jz_open_exclusive_temp_output(rc_path, &f, tmp_path, sizeof(tmp_path)) != 0) {
+        lsp_log("failed to create temporary rc file for %s", rc_path);
         return;
     }
 #else
-    FILE *f = fopen(rc_path, "w");
+    f = fopen(rc_path, "w");
     if (!f) {
         lsp_log("failed to write %s", rc_path);
         return;
@@ -346,7 +327,9 @@ static void write_rc_file(const char *dir, const LspProjectList *projects)
     if (fflush(f) != 0 || ferror(f)) {
 #ifndef _WIN32
         fclose(f);
-        unlink(tmp_path);
+        if (tmp_path[0] != '\0') {
+            unlink(tmp_path);
+        }
         lsp_log("failed to flush %s", tmp_path);
 #else
         fclose(f);
@@ -366,9 +349,13 @@ static void write_rc_file(const char *dir, const LspProjectList *projects)
     }
 
 #ifndef _WIN32
-    if (rename(tmp_path, rc_path) != 0) {
-        unlink(tmp_path);
+    if (jz_commit_exclusive_temp_output(f, tmp_path, rc_path) != 0) {
         lsp_log("failed to replace %s", rc_path);
+        return;
+    }
+#else
+    if (fclose(f) != 0) {
+        lsp_log("failed to close %s", rc_path);
         return;
     }
 #endif
@@ -507,7 +494,9 @@ static int project_imports_file(const char *project_path,
                                 const char *target_file)
 {
     size_t size = 0;
-    char *content = jz_read_entire_file(project_path, &size);
+    char *content = jz_read_entire_file_limit(project_path,
+                                              jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                              &size);
     if (!content) return 0;
 
     /* Get the project file's directory for resolving relative imports. */
@@ -601,7 +590,9 @@ int lsp_discover_projects(const char *filepath,
         } else {
             /* Fall back to reading from disk. */
             size_t fsize = 0;
-            char *content = jz_read_entire_file(filepath, &fsize);
+            char *content = jz_read_entire_file_limit(filepath,
+                                                      jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                                      &fsize);
             if (content) {
                 extract_project_metadata(content, chip, sizeof(chip),
                                          name, sizeof(name));

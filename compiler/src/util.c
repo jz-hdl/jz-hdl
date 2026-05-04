@@ -12,6 +12,78 @@
 
 #include "../include/util.h"
 
+size_t jz_input_limit_value(JZInputLimitKind kind)
+{
+    switch (kind) {
+    case JZ_LIMIT_SOURCE_FILE_BYTES:
+        return JZ_MAX_SOURCE_FILE_BYTES;
+    case JZ_LIMIT_SOURCE_TOKENS:
+        return JZ_MAX_SOURCE_TOKENS;
+    case JZ_LIMIT_IMPORT_DEPTH:
+        return JZ_MAX_IMPORT_DEPTH;
+    case JZ_LIMIT_IMPORT_RETAINED_SOURCE_BYTES:
+        return JZ_MAX_IMPORT_RETAINED_SOURCE_BYTES;
+    case JZ_LIMIT_IMPORT_RETAINED_TOKEN_BYTES:
+        return JZ_MAX_IMPORT_RETAINED_TOKEN_BYTES;
+    case JZ_LIMIT_CHIP_JSON_BYTES:
+        return JZ_MAX_LOCAL_CHIP_JSON_BYTES;
+    case JZ_LIMIT_CHIP_JSON_TOKENS:
+        return JZ_MAX_LOCAL_CHIP_JSON_TOKENS;
+    case JZ_LIMIT_CHIP_JSON_NESTING_DEPTH:
+        return JZ_MAX_CHIP_JSON_NESTING_DEPTH;
+    case JZ_LIMIT_MEM_INIT_FILE_BYTES:
+        return JZ_MAX_MEM_INIT_FILE_BYTES;
+    case JZ_LIMIT_MEM_INIT_MIF_DEPTH:
+        return JZ_MAX_MEM_INIT_MIF_DEPTH;
+    case JZ_LIMIT_PARSER_EXPR_DEPTH:
+        return JZ_MAX_PARSER_EXPR_DEPTH;
+    case JZ_LIMIT_PARSER_STATEMENT_DEPTH:
+        return JZ_MAX_PARSER_STATEMENT_DEPTH;
+    case JZ_LIMIT_CONST_EVAL_DEPTH:
+        return JZ_MAX_CONST_EVAL_DEPTH;
+    case JZ_LIMIT_IR_EXPR_DEPTH:
+        return JZ_MAX_IR_EXPR_DEPTH;
+    case JZ_LIMIT_IR_STATEMENT_DEPTH:
+        return JZ_MAX_IR_STMT_DEPTH;
+    case JZ_LIMIT_AST_DEPTH:
+        return JZ_MAX_AST_DEPTH;
+    case JZ_LIMIT_TEMPLATE_EXPAND_DEPTH:
+        return JZ_MAX_TEMPLATE_EXPAND_DEPTH;
+    case JZ_LIMIT_TRISTATE_DEPTH:
+        return JZ_MAX_TRISTATE_DEPTH;
+    case JZ_LIMIT_SEM_RECURSION_DEPTH:
+        return JZ_MAX_SEM_RECURSION_DEPTH;
+    case JZ_LIMIT_REPORT_RECURSION_DEPTH:
+        return JZ_MAX_REPORT_RECURSION_DEPTH;
+    case JZ_LIMIT_SIM_MEMORY_DEPTH:
+        return JZ_MAX_SIM_MEMORY_DEPTH;
+    case JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES:
+        return JZ_MAX_SIM_MEMORY_OBJECT_BYTES;
+    case JZ_LIMIT_EMITTED_TRACE_BYTES:
+        return JZ_MAX_EMITTED_TRACE_BYTES;
+    default:
+        return 0;
+    }
+}
+
+int jz_depth_enter_checked(unsigned *depth, JZInputLimitKind kind)
+{
+    size_t limit = 0;
+
+    if (!depth) return -1;
+    limit = jz_input_limit_value(kind);
+    if (limit == 0 || (size_t)(*depth) >= limit) return -1;
+    ++(*depth);
+    return 0;
+}
+
+void jz_depth_leave(unsigned *depth)
+{
+    if (depth && *depth > 0) {
+        --(*depth);
+    }
+}
+
 int jz_size_add_checked(size_t a, size_t b, size_t *out)
 {
     if (!out) return -1;
@@ -28,6 +100,15 @@ int jz_size_mul_checked(size_t a, size_t b, size_t *out)
     return 0;
 }
 
+int jz_size_mul_add_checked(size_t a, size_t b, size_t c, size_t *out)
+{
+    size_t product = 0;
+
+    if (!out) return -1;
+    if (jz_size_mul_checked(a, b, &product) != 0) return -1;
+    return jz_size_add_checked(product, c, out);
+}
+
 int jz_size_align_up_checked(size_t size, size_t alignment, size_t *out)
 {
     size_t rounded = 0;
@@ -36,6 +117,42 @@ int jz_size_align_up_checked(size_t size, size_t alignment, size_t *out)
     if ((alignment & (alignment - 1u)) != 0u) return -1;
     if (jz_size_add_checked(size, alignment - 1u, &rounded) != 0) return -1;
     *out = rounded & ~(alignment - 1u);
+    return 0;
+}
+
+int jz_size_grow_doubling_checked(size_t current,
+                                  size_t minimum,
+                                  size_t initial,
+                                  size_t *out)
+{
+    size_t grown = 0;
+
+    if (!out) return -1;
+    if (minimum == 0) {
+        *out = current;
+        return 0;
+    }
+
+    grown = current ? current : initial;
+    if (grown == 0) {
+        grown = 1;
+    }
+    while (grown < minimum) {
+        size_t next = 0;
+        if (grown > SIZE_MAX / 2) {
+            grown = minimum;
+            break;
+        }
+        if (jz_size_add_checked(grown, grown, &next) != 0) {
+            grown = minimum;
+            break;
+        }
+        grown = next;
+    }
+    if (grown < minimum) {
+        return -1;
+    }
+    *out = grown;
     return 0;
 }
 
@@ -129,17 +246,19 @@ char *jz_read_entire_file(const char *filename, size_t *out_size) {
 
 int jz_buf_reserve(JZBuffer *buf, size_t new_cap)
 {
+    size_t cap = 0;
+    size_t new_bytes = 0;
+    unsigned char *data = NULL;
+
     if (!buf) return -1;
     if (new_cap <= buf->cap) return 0;
-    size_t cap = buf->cap ? buf->cap : 16;
-    while (cap < new_cap) {
-        if (cap > SIZE_MAX / 2) {
-            cap = new_cap;
-            break;
-        }
-        cap *= 2;
+    if (jz_size_grow_doubling_checked(buf->cap, new_cap, 16, &cap) != 0) {
+        return -1;
     }
-    unsigned char *data = (unsigned char *)realloc(buf->data, cap);
+    if (jz_size_mul_checked(cap, sizeof(*data), &new_bytes) != 0) {
+        return -1;
+    }
+    data = (unsigned char *)realloc(buf->data, new_bytes);
     if (!data) return -1;
     buf->data = data;
     buf->cap = cap;

@@ -21,7 +21,6 @@
 #include "sim_fst.h"
 
 #define FST_MAX_SIGNALS 4096
-#define FST_MAX_RETAINED_TRACE_BYTES (64u * 1024u * 1024u)
 
 /* ---- FST block types ---- */
 #define FST_BL_HDR               0
@@ -121,13 +120,9 @@ static int buf_ensure(FSTBuffer *b, size_t extra)
         return -1;
     }
     if (needed <= b->cap) return 0;
-    newcap = b->cap ? b->cap * 2 : 4096;
-    while (newcap < needed) {
-        if (newcap > SIZE_MAX / 2) {
-            b->failed = 1;
-            return -1;
-        }
-        newcap *= 2;
+    if (jz_size_grow_doubling_checked(b->cap, needed, 4096, &newcap) != 0) {
+        b->failed = 1;
+        return -1;
     }
     new_data = (uint8_t *)realloc(b->data, newcap);
     if (!new_data) {
@@ -181,7 +176,7 @@ static int fst_update_tracked_allocation(FSTWriter *w, size_t *tracked_bytes, si
     }
     retained_without = w->retained_trace_bytes - *tracked_bytes;
     if (jz_size_add_checked(retained_without, new_bytes, &new_total) != 0 ||
-        new_total > FST_MAX_RETAINED_TRACE_BYTES) {
+        new_total > jz_input_limit_value(JZ_LIMIT_EMITTED_TRACE_BYTES)) {
         return -1;
     }
     w->retained_trace_bytes = new_total;
@@ -202,12 +197,8 @@ static int fst_grow_changes(FSTWriter *w, size_t min_count)
         return 0;
     }
 
-    new_cap = w->changes_cap ? w->changes_cap : 8192;
-    while (new_cap < min_count) {
-        if (new_cap > SIZE_MAX / 2) {
-            return -1;
-        }
-        new_cap *= 2;
+    if (jz_size_grow_doubling_checked(w->changes_cap, min_count, 8192, &new_cap) != 0) {
+        return -1;
     }
     if (jz_size_mul_checked(new_cap, sizeof(FSTChange), &new_bytes) != 0) {
         return -1;
@@ -218,8 +209,10 @@ static int fst_grow_changes(FSTWriter *w, size_t min_count)
 
     new_changes = (FSTChange *)realloc(w->changes, new_bytes);
     if (!new_changes) {
-        fst_update_tracked_allocation(w, &w->changes_alloc_bytes,
-                                      w->changes_cap * sizeof(FSTChange));
+        size_t old_bytes = 0;
+        if (jz_size_mul_checked(w->changes_cap, sizeof(FSTChange), &old_bytes) == 0) {
+            fst_update_tracked_allocation(w, &w->changes_alloc_bytes, old_bytes);
+        }
         return -1;
     }
     w->changes = new_changes;
@@ -240,12 +233,8 @@ static int fst_grow_time_table(FSTWriter *w, size_t min_count)
         return 0;
     }
 
-    new_cap = w->time_cap ? w->time_cap : 1024;
-    while (new_cap < min_count) {
-        if (new_cap > SIZE_MAX / 2) {
-            return -1;
-        }
-        new_cap *= 2;
+    if (jz_size_grow_doubling_checked(w->time_cap, min_count, 1024, &new_cap) != 0) {
+        return -1;
     }
     if (jz_size_mul_checked(new_cap, sizeof(uint64_t), &new_bytes) != 0) {
         return -1;
@@ -256,8 +245,10 @@ static int fst_grow_time_table(FSTWriter *w, size_t min_count)
 
     new_times = (uint64_t *)realloc(w->time_table, new_bytes);
     if (!new_times) {
-        fst_update_tracked_allocation(w, &w->time_table_alloc_bytes,
-                                      w->time_cap * sizeof(uint64_t));
+        size_t old_bytes = 0;
+        if (jz_size_mul_checked(w->time_cap, sizeof(uint64_t), &old_bytes) == 0) {
+            fst_update_tracked_allocation(w, &w->time_table_alloc_bytes, old_bytes);
+        }
         return -1;
     }
     w->time_table = new_times;

@@ -10,9 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include "ir_library.h"
 #include "ir_internal.h"
+#include "../../include/util.h"
 
 /* -------------------------------------------------------------------------
  * Signal ID allocation for library modules
@@ -2369,8 +2371,21 @@ static int width_set_add(WidthSet *ws, int w)
         if (ws->widths[i] == w) return 0;
     }
     if (ws->count >= ws->capacity) {
-        int new_cap = ws->capacity ? ws->capacity * 2 : 8;
-        int *new_arr = (int *)realloc(ws->widths, sizeof(int) * (size_t)new_cap);
+        int new_cap = 0;
+        size_t new_bytes = 0;
+        int *new_arr = NULL;
+        if (ws->capacity == 0) {
+            new_cap = 8;
+        } else if (ws->capacity > INT_MAX / 2) {
+            return -1;
+        } else {
+            new_cap = ws->capacity * 2;
+        }
+        if (new_cap <= ws->capacity ||
+            jz_size_mul_checked((size_t)new_cap, sizeof(int), &new_bytes) != 0) {
+            return -1;
+        }
+        new_arr = (int *)realloc(ws->widths, new_bytes);
         if (!new_arr) return -1;
         ws->widths = new_arr;
         ws->capacity = new_cap;

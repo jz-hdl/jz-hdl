@@ -2,7 +2,12 @@
 #include <string.h>
 
 #include "../../include/ast.h"
+#include "../../include/diagnostic.h"
 #include "../../include/util.h"
+
+static int s_ast_json_depth_reported = 0;
+static int s_ast_json_depth_failed = 0;
+static JZDiagnosticList *s_ast_json_diagnostics = NULL;
 
 static void print_escaped_string(FILE *out, const char *s) {
     fputc('"', out);
@@ -198,7 +203,15 @@ static void print_node(FILE *out, const JZASTNode *node, int level, unsigned dep
     }
     fputc('}', out);
 
-    if (depth >= JZ_MAX_AST_DEPTH) {
+    if ((size_t)depth >= jz_input_limit_value(JZ_LIMIT_AST_DEPTH)) {
+        s_ast_json_depth_failed = 1;
+        if (node) {
+            (void)jz_diagnostic_report_rule_once(&s_ast_json_depth_reported,
+                                                 s_ast_json_diagnostics,
+                                                 node->loc,
+                                                 "AST_DEPTH_LIMIT_EXCEEDED",
+                                                 "AST traversal exceeds the compiler safety limit");
+        }
         fputs(", \"truncated\": true", out);
         fputc('}', out);
         return;
@@ -219,11 +232,17 @@ static void print_node(FILE *out, const JZASTNode *node, int level, unsigned dep
     fputc('}', out);
 }
 
-void jz_ast_print_json(FILE *out, const JZASTNode *root) {
+int jz_ast_print_json(FILE *out, const JZASTNode *root, JZDiagnosticList *diagnostics) {
+    s_ast_json_depth_reported = 0;
+    s_ast_json_depth_failed = 0;
+    s_ast_json_diagnostics = diagnostics;
     if (!root) {
         fputs("null\n", out);
-        return;
+        s_ast_json_diagnostics = NULL;
+        return 0;
     }
     print_node(out, root, 0, 0);
     fputc('\n', out);
+    s_ast_json_diagnostics = NULL;
+    return s_ast_json_depth_failed ? -1 : 0;
 }

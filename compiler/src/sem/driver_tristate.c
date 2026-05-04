@@ -31,18 +31,15 @@ static unsigned g_tristate_depth = 0;
 
 static int tristate_enter_depth(void)
 {
-    if (g_tristate_depth >= JZ_MAX_TRISTATE_DEPTH) {
+    if (jz_depth_enter_checked(&g_tristate_depth, JZ_LIMIT_TRISTATE_DEPTH) != 0) {
         return 0;
     }
-    ++g_tristate_depth;
     return 1;
 }
 
 static void tristate_leave_depth(void)
 {
-    if (g_tristate_depth > 0) {
-        --g_tristate_depth;
-    }
+    jz_depth_leave(&g_tristate_depth);
 }
 
 void jz_tristate_set_project_symbols(const JZBuffer *project_symbols)

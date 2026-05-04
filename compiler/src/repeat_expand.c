@@ -123,15 +123,12 @@ static int sb_append_limited(StrBuf *sb,
         return 1;
     }
     while (needed > sb->cap) {
-        size_t new_cap = sb->cap ? sb->cap : 4096;
+        size_t new_cap = 0;
         char *new_data = NULL;
-
-        while (needed > new_cap) {
-            if (new_cap > SIZE_MAX / 2) {
-                new_cap = needed;
-                break;
-            }
-            new_cap *= 2;
+        if (jz_size_grow_doubling_checked(sb->cap, needed, 4096, &new_cap) != 0) {
+            report_repeat_internal_failure(ctx, limit_at,
+                                           "internal error: @repeat expansion size overflow");
+            return 1;
         }
 
         new_data = realloc(sb->data, new_cap);

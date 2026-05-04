@@ -11,12 +11,13 @@
 
 #include <stdio.h>
 #include "ast.h"
+#include "diagnostic.h"
 
 /**
  * @brief Print an AST as pretty-printed JSON.
  * @param out  Output stream (e.g., stdout).
  * @param root Root AST node to serialize. Must not be NULL.
  */
-void jz_ast_print_json(FILE *out, const JZASTNode *root);
+int jz_ast_print_json(FILE *out, const JZASTNode *root, JZDiagnosticList *diagnostics);
 
 #endif /* JZ_HDL_AST_JSON_H */

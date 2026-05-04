@@ -496,8 +496,22 @@ static void record_failure(SimTestState *ts, const char *msg) {
     char *dup = NULL;
 
     if (ts->num_failure_msgs >= ts->cap_failure_msgs) {
-        int new_cap = ts->cap_failure_msgs < 8 ? 8 : ts->cap_failure_msgs * 2;
-        char **new_buf = (char **)realloc(ts->failure_msgs, (size_t)new_cap * sizeof(char *));
+        int new_cap = 0;
+        size_t new_bytes = 0;
+        char **new_buf = NULL;
+
+        if (ts->cap_failure_msgs < 8) {
+            new_cap = 8;
+        } else if (ts->cap_failure_msgs > INT_MAX / 2) {
+            return;
+        } else {
+            new_cap = ts->cap_failure_msgs * 2;
+        }
+        if (new_cap <= ts->cap_failure_msgs ||
+            jz_size_mul_checked((size_t)new_cap, sizeof(char *), &new_bytes) != 0) {
+            return;
+        }
+        new_buf = (char **)realloc(ts->failure_msgs, new_bytes);
         if (!new_buf) return;
         ts->failure_msgs = new_buf;
         ts->cap_failure_msgs = new_cap;
@@ -2660,11 +2674,19 @@ static int sim_run_simulation(const JZASTNode *root,
                 if (!mc) continue;
                 if (num_monitors >= cap_monitors) {
                     const JZASTNode **new_nodes = NULL;
+                    int new_cap = 0;
                     size_t new_bytes = 0;
 
-                    cap_monitors = cap_monitors ? cap_monitors * 2 : 8;
-                    if (cap_monitors <= num_monitors ||
-                        jz_size_mul_checked((size_t)cap_monitors,
+                    if (cap_monitors == 0) {
+                        new_cap = 8;
+                    } else if (cap_monitors > INT_MAX / 2) {
+                        fprintf(stderr, "error: monitor directive count exceeds supported size\n");
+                        goto cleanup_monitors;
+                    } else {
+                        new_cap = cap_monitors * 2;
+                    }
+                    if (new_cap <= num_monitors ||
+                        jz_size_mul_checked((size_t)new_cap,
                                             sizeof(const JZASTNode *),
                                             &new_bytes) != 0) {
                         fprintf(stderr, "error: monitor directive count exceeds supported size\n");
@@ -2676,6 +2698,7 @@ static int sim_run_simulation(const JZASTNode *root,
                         goto cleanup_monitors;
                     }
                     monitor_nodes = new_nodes;
+                    cap_monitors = new_cap;
                 }
                 monitor_nodes[num_monitors++] = mc;
             }

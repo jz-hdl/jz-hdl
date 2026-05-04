@@ -14,6 +14,9 @@
 
 #define JZ_MAX_SOURCE_FILE_BYTES            (16u * 1024u * 1024u)
 #define JZ_MAX_SOURCE_TOKENS                (1024u * 1024u)
+#define JZ_MAX_IMPORT_DEPTH                 64u
+#define JZ_MAX_IMPORT_RETAINED_SOURCE_BYTES (16u * 1024u * 1024u)
+#define JZ_MAX_IMPORT_RETAINED_TOKEN_BYTES  (64u * 1024u * 1024u)
 #define JZ_MAX_LOCAL_CHIP_JSON_BYTES        (4u * 1024u * 1024u)
 #define JZ_MAX_LOCAL_CHIP_JSON_TOKENS       (256u * 1024u)
 #define JZ_MAX_CHIP_JSON_NESTING_DEPTH      128u
@@ -28,9 +31,38 @@
 #define JZ_MAX_TEMPLATE_EXPAND_DEPTH        1024u
 #define JZ_MAX_TRISTATE_DEPTH               1024u
 #define JZ_MAX_SEM_RECURSION_DEPTH          1024u
+#define JZ_MAX_REPORT_RECURSION_DEPTH       1024u
 #define JZ_MAX_MAP_PIN_WIDTH                (1024u * 1024u)
 #define JZ_MAX_MAP_BITMAP_BYTES             (8u * 1024u * 1024u)
 #define JZ_MAX_SIM_MEMORY_DEPTH             (1024u * 1024u)
+#define JZ_MAX_SIM_MEMORY_OBJECT_BYTES      (128u * 1024u * 1024u)
+#define JZ_MAX_EMITTED_TRACE_BYTES          (64u * 1024u * 1024u)
+
+typedef enum JZInputLimitKind {
+    JZ_LIMIT_SOURCE_FILE_BYTES = 0,
+    JZ_LIMIT_SOURCE_TOKENS,
+    JZ_LIMIT_IMPORT_DEPTH,
+    JZ_LIMIT_IMPORT_RETAINED_SOURCE_BYTES,
+    JZ_LIMIT_IMPORT_RETAINED_TOKEN_BYTES,
+    JZ_LIMIT_CHIP_JSON_BYTES,
+    JZ_LIMIT_CHIP_JSON_TOKENS,
+    JZ_LIMIT_CHIP_JSON_NESTING_DEPTH,
+    JZ_LIMIT_MEM_INIT_FILE_BYTES,
+    JZ_LIMIT_MEM_INIT_MIF_DEPTH,
+    JZ_LIMIT_PARSER_EXPR_DEPTH,
+    JZ_LIMIT_PARSER_STATEMENT_DEPTH,
+    JZ_LIMIT_CONST_EVAL_DEPTH,
+    JZ_LIMIT_IR_EXPR_DEPTH,
+    JZ_LIMIT_IR_STATEMENT_DEPTH,
+    JZ_LIMIT_AST_DEPTH,
+    JZ_LIMIT_TEMPLATE_EXPAND_DEPTH,
+    JZ_LIMIT_TRISTATE_DEPTH,
+    JZ_LIMIT_SEM_RECURSION_DEPTH,
+    JZ_LIMIT_REPORT_RECURSION_DEPTH,
+    JZ_LIMIT_SIM_MEMORY_DEPTH,
+    JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES,
+    JZ_LIMIT_EMITTED_TRACE_BYTES
+} JZInputLimitKind;
 
 /**
  * @brief Duplicate a string using malloc.
@@ -96,10 +128,50 @@ int jz_size_add_checked(size_t a, size_t b, size_t *out);
 int jz_size_mul_checked(size_t a, size_t b, size_t *out);
 
 /**
+ * @brief Compute `a * b + c` with overflow checking.
+ * @return 0 on success, -1 on overflow or invalid output pointer.
+ */
+int jz_size_mul_add_checked(size_t a, size_t b, size_t c, size_t *out);
+
+/**
  * @brief Round a size up to the next multiple of alignment.
  * @return 0 on success, -1 on overflow, invalid output pointer, or zero/non-power-of-two alignment.
  */
 int jz_size_align_up_checked(size_t size, size_t alignment, size_t *out);
+
+/**
+ * @brief Grow a capacity using doubling arithmetic until it reaches a minimum.
+ * @param current Current capacity (0 means uninitialized).
+ * @param minimum Minimum required capacity.
+ * @param initial Initial capacity to use when current is 0.
+ * @param out Receives the grown capacity.
+ * @return 0 on success, -1 on overflow or invalid input.
+ */
+int jz_size_grow_doubling_checked(size_t current,
+                                  size_t minimum,
+                                  size_t initial,
+                                  size_t *out);
+
+/**
+ * @brief Return the central hard limit value for a named input/resource policy.
+ * @param kind Limit identifier.
+ * @return Limit value in bytes/items/levels depending on the policy kind.
+ */
+size_t jz_input_limit_value(JZInputLimitKind kind);
+
+/**
+ * @brief Enter a depth-limited recursive scope.
+ * @param depth Mutable depth counter.
+ * @param kind Named depth-limit policy.
+ * @return 0 on success, -1 if the limit would be exceeded or arguments are invalid.
+ */
+int jz_depth_enter_checked(unsigned *depth, JZInputLimitKind kind);
+
+/**
+ * @brief Leave a depth-limited recursive scope.
+ * @param depth Mutable depth counter.
+ */
+void jz_depth_leave(unsigned *depth);
 
 /**
  * @struct JZBuffer

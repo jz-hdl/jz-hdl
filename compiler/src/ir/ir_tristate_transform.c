@@ -35,11 +35,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #include "../../include/ir.h"
 #include "../../include/ir_builder.h"
 #include "../../include/arena.h"
 #include "../../include/diagnostic.h"
+#include "../../include/util.h"
 #include "ir_internal.h"
 
 /* ======================================================================== */
@@ -493,8 +495,22 @@ static SharedNet *find_shared_tristate_nets(const IR_Design *design,
             }
             if (!net) {
                 if (net_count >= net_cap) {
-                    net_cap = (net_cap == 0) ? 8 : (net_cap * 2);
-                    SharedNet *tmp = (SharedNet *)realloc(nets, (size_t)net_cap * sizeof(SharedNet));
+                    size_t new_bytes = 0;
+                    if (net_cap == 0) {
+                        net_cap = 8;
+                    } else if (net_cap > INT_MAX / 2) {
+                        shared_net_free(nets, net_count);
+                        *out_count = 0;
+                        return NULL;
+                    } else {
+                        net_cap *= 2;
+                    }
+                    if (jz_size_mul_checked((size_t)net_cap, sizeof(SharedNet), &new_bytes) != 0) {
+                        shared_net_free(nets, net_count);
+                        *out_count = 0;
+                        return NULL;
+                    }
+                    SharedNet *tmp = (SharedNet *)realloc(nets, new_bytes);
                     if (!tmp) { shared_net_free(nets, net_count); *out_count = 0; return NULL; }
                     nets = tmp;
                 }
@@ -508,9 +524,23 @@ static SharedNet *find_shared_tristate_nets(const IR_Design *design,
 
             /* Add this driver. */
             if (net->num_drivers >= net->driver_cap) {
-                net->driver_cap = (net->driver_cap == 0) ? 4 : (net->driver_cap * 2);
+                size_t new_bytes = 0;
+                if (net->driver_cap == 0) {
+                    net->driver_cap = 4;
+                } else if (net->driver_cap > INT_MAX / 2) {
+                    shared_net_free(nets, net_count);
+                    *out_count = 0;
+                    return NULL;
+                } else {
+                    net->driver_cap *= 2;
+                }
+                if (jz_size_mul_checked((size_t)net->driver_cap, sizeof(SharedDriver), &new_bytes) != 0) {
+                    shared_net_free(nets, net_count);
+                    *out_count = 0;
+                    return NULL;
+                }
                 SharedDriver *tmp = (SharedDriver *)realloc(
-                    net->drivers, (size_t)net->driver_cap * sizeof(SharedDriver));
+                    net->drivers, new_bytes);
                 if (!tmp) { shared_net_free(nets, net_count); *out_count = 0; return NULL; }
                 net->drivers = tmp;
             }
@@ -617,8 +647,14 @@ static int add_merged_parent(SharedNet *net, int parent_signal_id)
     for (int i = 0; i < net->num_merged_parents; i++) {
         if (net->merged_parent_ids[i] == parent_signal_id) return 0;
     }
-    int *tmp = (int *)realloc(net->merged_parent_ids,
-                               (size_t)(net->num_merged_parents + 1) * sizeof(int));
+    size_t new_count = 0;
+    size_t new_bytes = 0;
+    int *tmp = NULL;
+    if (jz_size_add_checked((size_t)net->num_merged_parents, 1, &new_count) != 0 ||
+        jz_size_mul_checked(new_count, sizeof(int), &new_bytes) != 0) {
+        return -1;
+    }
+    tmp = (int *)realloc(net->merged_parent_ids, new_bytes);
     if (!tmp) return -1;
     net->merged_parent_ids = tmp;
     net->merged_parent_ids[net->num_merged_parents++] = parent_signal_id;
@@ -632,9 +668,19 @@ static int add_merged_parent(SharedNet *net, int parent_signal_id)
 static int add_driver_to_net(SharedNet *net, const SharedDriver *drv)
 {
     if (net->num_drivers >= net->driver_cap) {
-        net->driver_cap = (net->driver_cap == 0) ? 4 : (net->driver_cap * 2);
+        size_t new_bytes = 0;
+        if (net->driver_cap == 0) {
+            net->driver_cap = 4;
+        } else if (net->driver_cap > INT_MAX / 2) {
+            return -1;
+        } else {
+            net->driver_cap *= 2;
+        }
+        if (jz_size_mul_checked((size_t)net->driver_cap, sizeof(SharedDriver), &new_bytes) != 0) {
+            return -1;
+        }
         SharedDriver *tmp = (SharedDriver *)realloc(
-            net->drivers, (size_t)net->driver_cap * sizeof(SharedDriver));
+            net->drivers, new_bytes);
         if (!tmp) return -1;
         net->drivers = tmp;
     }
@@ -652,9 +698,19 @@ static int ensure_passthrough_array(SharedNet *net)
         net->passthrough_driver = (int *)calloc((size_t)net->num_drivers, sizeof(int));
         if (!net->passthrough_driver) return -1;
     } else {
-        int *tmp = (int *)realloc(net->passthrough_driver,
-                                    (size_t)net->num_drivers * sizeof(int));
+        size_t new_bytes = 0;
+        int *tmp = NULL;
+        if (jz_size_mul_checked((size_t)net->num_drivers, sizeof(int), &new_bytes) != 0) {
+            return -1;
+        }
+        tmp = (int *)calloc((size_t)net->num_drivers, sizeof(int));
         if (!tmp) return -1;
+        if (net->num_drivers > 0) {
+            memcpy(tmp,
+                   net->passthrough_driver,
+                   (size_t)(net->num_drivers - 1) * sizeof(int));
+        }
+        free(net->passthrough_driver);
         net->passthrough_driver = tmp;
     }
     return 0;
@@ -773,17 +829,9 @@ static void merge_alias_connected_nets(const IR_Design *design,
             /* Mark this driver as pass-through. */
             ensure_passthrough_array(net);
             if (net->passthrough_driver) {
-                /* The passthrough_driver array may need to be
-                 * re-allocated after adding drivers above. */
-                int *tmp = (int *)realloc(net->passthrough_driver,
-                                           (size_t)net->num_drivers * sizeof(int));
-                if (tmp) {
-                    net->passthrough_driver = tmp;
-                    /* Zero out any new entries. */
-                    for (int z = 0; z < net->num_drivers; z++) {
-                        if (net->drivers[z].inst_idx == drv_inst_idx) {
-                            net->passthrough_driver[z] = 1;
-                        }
+                for (int z = 0; z < net->num_drivers; z++) {
+                    if (net->drivers[z].inst_idx == drv_inst_idx) {
+                        net->passthrough_driver[z] = 1;
                     }
                 }
             }
@@ -814,11 +862,29 @@ static void merge_alias_connected_nets(const IR_Design *design,
                     }
                 }
                 if (already) continue;
-                int *ti = (int *)realloc(pt_inst, (size_t)(pt_count + 1) * sizeof(int));
-                int *tc = (int *)realloc(pt_child, (size_t)(pt_count + 1) * sizeof(int));
-                if (!ti || !tc) { free(ti); free(tc); break; }
-                pt_inst = ti;
-                pt_child = tc;
+                size_t new_count = 0;
+                size_t bytes = 0;
+                int *new_pt_inst = NULL;
+                int *new_pt_child = NULL;
+                if (jz_size_add_checked((size_t)pt_count, 1, &new_count) != 0 ||
+                    jz_size_mul_checked(new_count, sizeof(int), &bytes) != 0) {
+                    break;
+                }
+                new_pt_inst = (int *)malloc(bytes);
+                new_pt_child = (int *)malloc(bytes);
+                if (!new_pt_inst || !new_pt_child) {
+                    free(new_pt_inst);
+                    free(new_pt_child);
+                    break;
+                }
+                if (pt_count > 0) {
+                    memcpy(new_pt_inst, pt_inst, (size_t)pt_count * sizeof(int));
+                    memcpy(new_pt_child, pt_child, (size_t)pt_count * sizeof(int));
+                }
+                free(pt_inst);
+                free(pt_child);
+                pt_inst = new_pt_inst;
+                pt_child = new_pt_child;
                 pt_inst[pt_count] = nets[n].drivers[d].inst_idx;
                 pt_child[pt_count] = nets[n].drivers[d].child_module_id;
                 pt_count++;
@@ -909,8 +975,14 @@ static void merge_alias_connected_nets(const IR_Design *design,
                     if (aliased_parent_sig != primary_parent_sig &&
                         !is_dup_sink_signal(parent, aliased_parent_sig)) {
                         /* Track as merged parent. Skip dup_sink signals. */
-                        int *mp = (int *)realloc(merged_parents,
-                            (size_t)(merged_parent_count + 1) * sizeof(int));
+                        size_t new_count = 0;
+                        size_t new_bytes = 0;
+                        int *mp = NULL;
+                        if (jz_size_add_checked((size_t)merged_parent_count, 1, &new_count) != 0 ||
+                            jz_size_mul_checked(new_count, sizeof(int), &new_bytes) != 0) {
+                            break;
+                        }
+                        mp = (int *)realloc(merged_parents, new_bytes);
                         if (mp) {
                             merged_parents = mp;
                             merged_parents[merged_parent_count++] = aliased_parent_sig;
@@ -946,9 +1018,27 @@ static void merge_alias_connected_nets(const IR_Design *design,
 
                             /* Found a real tristate driver. */
                             if (new_driver_count >= new_driver_cap) {
-                                new_driver_cap = (new_driver_cap == 0) ? 4 : (new_driver_cap * 2);
+                                size_t new_bytes = 0;
+                                if (new_driver_cap == 0) {
+                                    new_driver_cap = 4;
+                                } else if (new_driver_cap > INT_MAX / 2) {
+                                    free(new_drivers);
+                                    new_drivers = NULL;
+                                    new_driver_count = 0;
+                                    break;
+                                } else {
+                                    new_driver_cap *= 2;
+                                }
+                                if (jz_size_mul_checked((size_t)new_driver_cap,
+                                                        sizeof(SharedDriver),
+                                                        &new_bytes) != 0) {
+                                    free(new_drivers);
+                                    new_drivers = NULL;
+                                    new_driver_count = 0;
+                                    break;
+                                }
                                 SharedDriver *tmp = (SharedDriver *)realloc(new_drivers,
-                                    (size_t)new_driver_cap * sizeof(SharedDriver));
+                                    new_bytes);
                                 if (!tmp) { free(new_drivers); new_drivers = NULL; new_driver_count = 0; break; }
                                 new_drivers = tmp;
                             }
@@ -974,8 +1064,14 @@ static void merge_alias_connected_nets(const IR_Design *design,
                 int needed = net_count + 1;
                 if (needed > *net_count_ptr || !nets) {
                     int new_cap = (net_count == 0) ? 8 : (net_count * 2);
+                    size_t new_bytes = 0;
                     if (new_cap < needed) new_cap = needed;
-                    SharedNet *tmp2 = (SharedNet *)realloc(nets, (size_t)new_cap * sizeof(SharedNet));
+                    if (jz_size_mul_checked((size_t)new_cap, sizeof(SharedNet), &new_bytes) != 0) {
+                        free(new_drivers);
+                        free(merged_parents);
+                        continue;
+                    }
+                    SharedNet *tmp2 = (SharedNet *)realloc(nets, new_bytes);
                     if (!tmp2) { free(new_drivers); free(merged_parents); continue; }
                     nets = tmp2;
                     *nets_ptr = nets;
@@ -1577,9 +1673,23 @@ static int validate_no_multidriver(const IR_Design *design,
                 }
                 if (!entry) {
                     if (slice_count >= slice_cap) {
-                        slice_cap = (slice_cap == 0) ? 16 : (slice_cap * 2);
+                        size_t new_bytes = 0;
+                        if (slice_cap == 0) {
+                            slice_cap = 16;
+                        } else if (slice_cap > INT_MAX / 2) {
+                            free(slices);
+                            return 0;
+                        } else {
+                            slice_cap *= 2;
+                        }
+                        if (jz_size_mul_checked((size_t)slice_cap,
+                                                sizeof(SliceDriverCount),
+                                                &new_bytes) != 0) {
+                            free(slices);
+                            return 0;
+                        }
                         SliceDriverCount *tmp = (SliceDriverCount *)realloc(
-                            slices, (size_t)slice_cap * sizeof(SliceDriverCount));
+                            slices, new_bytes);
                         if (!tmp) { free(slices); return 0; }
                         slices = tmp;
                     }
@@ -1887,9 +1997,29 @@ static int transform_shared_nets(IR_Design *design,
                 /* Record this split so subsequent instances of the same module
                  * reuse the same _out/_oe ports. */
                 if (split_count >= split_cap) {
-                    split_cap = (split_cap == 0) ? 16 : (split_cap * 2);
+                    size_t new_bytes = 0;
+                    if (split_cap == 0) {
+                        split_cap = 16;
+                    } else if (split_cap > INT_MAX / 2) {
+                        free(parent_out_ids);
+                        free(parent_oe_ids);
+                        free(split_records);
+                        shared_net_free(shared, shared_count);
+                        return -1;
+                    } else {
+                        split_cap *= 2;
+                    }
+                    if (jz_size_mul_checked((size_t)split_cap,
+                                            sizeof(SplitPortRecord),
+                                            &new_bytes) != 0) {
+                        free(parent_out_ids);
+                        free(parent_oe_ids);
+                        free(split_records);
+                        shared_net_free(shared, shared_count);
+                        return -1;
+                    }
                     SplitPortRecord *tmp = (SplitPortRecord *)realloc(
-                        split_records, (size_t)split_cap * sizeof(SplitPortRecord));
+                        split_records, new_bytes);
                     if (!tmp) { free(parent_out_ids); free(parent_oe_ids);
                         free(split_records); shared_net_free(shared, shared_count); return -1; }
                     split_records = tmp;
@@ -2232,8 +2362,17 @@ static int eliminate_passthrough_loops(IR_Design *design,
             if (!cp || cp->kind != SIG_PORT) continue;
             if (cp->u.port.direction != PORT_IN) continue;
 
-            InputSlice *tmp = (InputSlice *)realloc(inputs,
-                (size_t)(num_inputs + 1) * sizeof(InputSlice));
+            size_t new_count = 0;
+            size_t new_bytes = 0;
+            InputSlice *tmp = NULL;
+            if (jz_size_add_checked((size_t)num_inputs, 1, &new_count) != 0 ||
+                jz_size_mul_checked(new_count, sizeof(InputSlice), &new_bytes) != 0) {
+                free(inputs);
+                inputs = NULL;
+                num_inputs = 0;
+                break;
+            }
+            tmp = (InputSlice *)realloc(inputs, new_bytes);
             if (!tmp) { free(inputs); inputs = NULL; num_inputs = 0; break; }
             inputs = tmp;
             inputs[num_inputs].sig = conn->parent_signal_id;
@@ -2430,8 +2569,18 @@ static void collect_z_slices(const IR_Stmt *stmt, ZSliceRecord **out,
     case STMT_ASSIGNMENT:
         if (stmt->u.assign.is_sliced && expr_has_z(stmt->u.assign.rhs)) {
             if (*count >= *cap) {
-                *cap = (*cap == 0) ? 16 : (*cap * 2);
-                ZSliceRecord *tmp = (ZSliceRecord *)realloc(*out, (size_t)*cap * sizeof(ZSliceRecord));
+                size_t new_bytes = 0;
+                if (*cap == 0) {
+                    *cap = 16;
+                } else if (*cap > INT_MAX / 2) {
+                    return;
+                } else {
+                    *cap *= 2;
+                }
+                if (jz_size_mul_checked((size_t)*cap, sizeof(ZSliceRecord), &new_bytes) != 0) {
+                    return;
+                }
+                ZSliceRecord *tmp = (ZSliceRecord *)realloc(*out, new_bytes);
                 if (!tmp) return;
                 *out = tmp;
             }

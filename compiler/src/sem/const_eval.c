@@ -250,6 +250,19 @@ static void parser_diag(Parser *p, const char *msg)
     }
 }
 
+static void parser_diag_rule(Parser *p, const char *code, const char *msg)
+{
+    if (p->error) return;
+    p->error = 1;
+    if (p->opts && p->opts->diagnostics) {
+        JZLocation loc;
+        loc.filename = p->opts->filename;
+        loc.line = 1;
+        loc.column = 1;
+        (void)jz_diagnostic_report_rule(p->opts->diagnostics, loc, code, msg);
+    }
+}
+
 static long long eval_clog2_positive(unsigned long long u)
 {
     /* Spec §5.5.5 defines clog2(1) as 1 instead of the usual 0. */
@@ -274,19 +287,18 @@ static long long parse_shift(Parser *p);
 
 static int parser_enter_expr_depth(Parser *p)
 {
-    if (p->expr_depth >= JZ_MAX_CONST_EVAL_DEPTH) {
-        parser_diag(p, "constant expression nesting exceeds the compiler safety limit");
+    if (jz_depth_enter_checked(&p->expr_depth, JZ_LIMIT_CONST_EVAL_DEPTH) != 0) {
+        parser_diag_rule(p,
+                         "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",
+                         "constant expression nesting exceeds the compiler safety limit");
         return -1;
     }
-    p->expr_depth++;
     return 0;
 }
 
 static void parser_leave_expr_depth(Parser *p)
 {
-    if (p->expr_depth > 0) {
-        p->expr_depth--;
-    }
+    jz_depth_leave(&p->expr_depth);
 }
 
 static long long parse_primary(Parser *p)
@@ -589,6 +601,19 @@ static void env_parser_diag(EnvParser *p, const char *msg)
     }
 }
 
+static void env_parser_diag_rule(EnvParser *p, const char *code, const char *msg)
+{
+    if (p->error) return;
+    p->error = 1;
+    if (p->env && p->env->opts && p->env->opts->diagnostics) {
+        JZLocation loc;
+        loc.filename = p->env->opts->filename;
+        loc.line = 1;
+        loc.column = 1;
+        (void)jz_diagnostic_report_rule(p->env->opts->diagnostics, loc, code, msg);
+    }
+}
+
 static void env_parser_init(EnvParser *p, const char *src,
                             EvalEnv *env, size_t index)
 {
@@ -613,19 +638,18 @@ static long long env_parse_shift(EnvParser *p);
 
 static int env_parser_enter_expr_depth(EnvParser *p)
 {
-    if (p->expr_depth >= JZ_MAX_CONST_EVAL_DEPTH) {
-        env_parser_diag(p, "constant expression nesting exceeds the compiler safety limit");
+    if (jz_depth_enter_checked(&p->expr_depth, JZ_LIMIT_CONST_EVAL_DEPTH) != 0) {
+        env_parser_diag_rule(p,
+                             "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",
+                             "constant expression nesting exceeds the compiler safety limit");
         return -1;
     }
-    p->expr_depth++;
     return 0;
 }
 
 static void env_parser_leave_expr_depth(EnvParser *p)
 {
-    if (p->expr_depth > 0) {
-        p->expr_depth--;
-    }
+    jz_depth_leave(&p->expr_depth);
 }
 
 static long long env_parse_primary(EnvParser *p)

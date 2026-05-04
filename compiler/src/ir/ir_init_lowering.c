@@ -636,11 +636,14 @@ static int lower_text_mem_init(const char *file_path,
     size_t file_size = 0;
     char *contents = NULL;
 
-    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
                                  diagnostics, &file_size) != 0) {
         return -1;
     }
-    contents = jz_read_entire_file_limit(file_path, JZ_MAX_MEM_INIT_FILE_BYTES, &file_size);
+    contents = jz_read_entire_file_limit(file_path,
+                                         jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                         &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -722,10 +725,11 @@ static int lower_binary_mem_init(const char *file_path,
     size_t max_bytes = capacity_bytes;
     char *contents = NULL;
 
-    if (max_bytes > JZ_MAX_MEM_INIT_FILE_BYTES) {
-        max_bytes = JZ_MAX_MEM_INIT_FILE_BYTES;
+    if (max_bytes > jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES)) {
+        max_bytes = jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES);
     }
-    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
                                  diagnostics, &file_size) != 0) {
         return -1;
     }
@@ -764,11 +768,14 @@ static int lower_coe_mem_init(const char *file_path,
     MemInitRadix radix;
     int addr = 0;
 
-    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
                                  diagnostics, &file_size) != 0) {
         return -1;
     }
-    contents = jz_read_entire_file_limit(file_path, JZ_MAX_MEM_INIT_FILE_BYTES, &file_size);
+    contents = jz_read_entire_file_limit(file_path,
+                                         jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                         &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -857,16 +864,19 @@ static int lower_mif_mem_init(const char *file_path,
     MemInitRadix addr_radix = MEM_RADIX_NONE;
     MemInitRadix data_radix = MEM_RADIX_NONE;
 
-    if ((unsigned)depth > JZ_MAX_MEM_INIT_MIF_DEPTH) {
+    if ((unsigned)depth > jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH)) {
         report_file_error(diagnostics, file_path,
                           "declared MIF depth exceeds the compiler safety limit");
         return -1;
     }
-    if (check_mem_init_file_size(file_path, JZ_MAX_MEM_INIT_FILE_BYTES,
+    if (check_mem_init_file_size(file_path,
+                                 jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
                                  diagnostics, &file_size) != 0) {
         return -1;
     }
-    contents = jz_read_entire_file_limit(file_path, JZ_MAX_MEM_INIT_FILE_BYTES, &file_size);
+    contents = jz_read_entire_file_limit(file_path,
+                                         jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES),
+                                         &file_size);
     if (!contents) {
         report_file_error(diagnostics, file_path,
                           "failed to read memory initialization file");
@@ -890,7 +900,7 @@ static int lower_mif_mem_init(const char *file_path,
                           "missing or invalid DEPTH in MIF file");
         return -1;
     }
-    if (mif_depth > (unsigned long long)JZ_MAX_MEM_INIT_MIF_DEPTH) {
+    if (mif_depth > (unsigned long long)jz_input_limit_value(JZ_LIMIT_MEM_INIT_MIF_DEPTH)) {
         free(stripped);
         report_file_error(diagnostics, file_path,
                           "MIF DEPTH exceeds the compiler safety limit");

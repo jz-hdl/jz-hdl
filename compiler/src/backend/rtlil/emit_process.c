@@ -24,9 +24,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #include "rtlil_internal.h"
 #include "ir.h"
+#include "../../include/util.h"
 
 /* Reuse Verilog backend helpers. */
 #include "backend/verilog-2005/verilog_internal.h"
@@ -74,9 +76,21 @@ static const char *pctx_find(const ProcessContext *ctx, int signal_id) {
 static void pctx_add(ProcessContext *ctx, int signal_id, const char *name) {
     if (pctx_find(ctx, signal_id)) return;
     if (ctx->count >= ctx->capacity) {
-        int new_cap = ctx->capacity == 0 ? 16 : ctx->capacity * 2;
-        ProcessIntermediate *new_entries = realloc(ctx->entries,
-            (size_t)new_cap * sizeof(ProcessIntermediate));
+        int new_cap = 0;
+        size_t new_bytes = 0;
+        ProcessIntermediate *new_entries = NULL;
+        if (ctx->capacity == 0) {
+            new_cap = 16;
+        } else if (ctx->capacity > INT_MAX / 2) {
+            return;
+        } else {
+            new_cap = ctx->capacity * 2;
+        }
+        if (new_cap <= ctx->capacity ||
+            jz_size_mul_checked((size_t)new_cap, sizeof(ProcessIntermediate), &new_bytes) != 0) {
+            return;
+        }
+        new_entries = realloc(ctx->entries, new_bytes);
         if (!new_entries) return;
         ctx->entries = new_entries;
         ctx->capacity = new_cap;
@@ -130,8 +144,21 @@ static void siglist_add(SignalIdList *list, int id) {
         if (list->ids[i] == id) return;
     }
     if (list->count >= list->capacity) {
-        int new_cap = list->capacity == 0 ? 16 : list->capacity * 2;
-        int *new_ids = realloc(list->ids, (size_t)new_cap * sizeof(int));
+        int new_cap = 0;
+        size_t new_bytes = 0;
+        int *new_ids = NULL;
+        if (list->capacity == 0) {
+            new_cap = 16;
+        } else if (list->capacity > INT_MAX / 2) {
+            return;
+        } else {
+            new_cap = list->capacity * 2;
+        }
+        if (new_cap <= list->capacity ||
+            jz_size_mul_checked((size_t)new_cap, sizeof(int), &new_bytes) != 0) {
+            return;
+        }
+        new_ids = realloc(list->ids, new_bytes);
         if (!new_ids) return;
         list->ids = new_ids;
         list->capacity = new_cap;

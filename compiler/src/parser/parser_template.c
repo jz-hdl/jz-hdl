@@ -57,7 +57,13 @@ JZASTNode *parse_scratch_decl(Parser *p) {
         const JZToken *wt = &p->tokens[i];
         if (wt->lexeme) {
             size_t tl = strlen(wt->lexeme);
-            char *nw = (char *)realloc(width_str, width_len + tl + 1);
+            size_t new_size = 0;
+            char *nw = NULL;
+            if (jz_size_mul_add_checked(1, width_len, tl + 1, &new_size) != 0) {
+                free(width_str);
+                return NULL;
+            }
+            nw = (char *)realloc(width_str, new_size);
             if (!nw) { free(width_str); return NULL; }
             width_str = nw;
             memcpy(width_str + width_len, wt->lexeme, tl);
@@ -354,7 +360,14 @@ JZASTNode *parse_apply_stmt(Parser *p) {
             const JZToken *ct = &p->tokens[i];
             if (ct->lexeme) {
                 size_t tl = strlen(ct->lexeme);
-                char *nc = (char *)realloc(count_str, count_len + tl + 1);
+                size_t new_size = 0;
+                char *nc = NULL;
+                if (jz_size_mul_add_checked(1, count_len, tl + 1, &new_size) != 0) {
+                    free(count_str);
+                    jz_ast_free(apply);
+                    return NULL;
+                }
+                nc = (char *)realloc(count_str, new_size);
                 if (!nc) { free(count_str); jz_ast_free(apply); return NULL; }
                 count_str = nc;
                 memcpy(count_str + count_len, ct->lexeme, tl);

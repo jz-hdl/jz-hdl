@@ -51,7 +51,14 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
             break;
         }
         size_t len = strlen(id->lexeme);
-        char *new_buf = (char *)realloc(buf, buf_sz + len + 2);
+        size_t new_size = 0;
+        char *new_buf = NULL;
+        if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+            jz_size_add_checked(new_size, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
         if (!new_buf) {
             free(buf);
             return NULL;
@@ -64,7 +71,11 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
         if (!match(p, JZ_TOK_DOT)) {
             break;
         }
-        char *new_buf2 = (char *)realloc(buf, buf_sz + 2);
+        if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        char *new_buf2 = (char *)realloc(buf, new_size);
         if (!new_buf2) {
             free(buf);
             return NULL;
@@ -958,7 +969,7 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
  * @return 0 on success, -1 on error
  */
 int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, int is_sync) {
-    if (g_parser_stmt_depth >= JZ_MAX_PARSER_STATEMENT_DEPTH) {
+    if (jz_depth_enter_checked(&g_parser_stmt_depth, JZ_LIMIT_PARSER_STATEMENT_DEPTH) != 0) {
         parser_report_rule(p,
                            peek(p),
                            "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",
@@ -966,7 +977,6 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
         return -1;
     }
 
-    g_parser_stmt_depth++;
     for (;;) {
         const JZToken *t = peek(p);
         if (t->type == terminator) {
@@ -1110,10 +1120,10 @@ int parse_statement_list(Parser *p, JZASTNode *parent, JZTokenType terminator, i
         }
     }
 
-    g_parser_stmt_depth--;
+    jz_depth_leave(&g_parser_stmt_depth);
     return 0;
 
 fail:
-    g_parser_stmt_depth--;
+    jz_depth_leave(&g_parser_stmt_depth);
     return -1;
 }

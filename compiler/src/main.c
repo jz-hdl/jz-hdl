@@ -231,15 +231,15 @@ int main(int argc, char **argv) {
 
     if (alias_report_active && opts.input_filename) {
         FILE *out = alias_out ? alias_out : stdout;
-        jz_sem_enable_alias_report(out, "JZ-HDL 1.0", opts.input_filename);
+        jz_sem_enable_alias_report(out, "JZ-HDL 1.0", opts.input_filename, &compiler.diagnostics);
     }
     if (memory_report_active && opts.input_filename) {
         FILE *out = memory_out ? memory_out : stdout;
-        jz_sem_enable_memory_report(out, "JZ-HDL 1.0", opts.input_filename);
+        jz_sem_enable_memory_report(out, "JZ-HDL 1.0", opts.input_filename, &compiler.diagnostics);
     }
     if (tristate_report_active && opts.input_filename) {
         FILE *out = tristate_out ? tristate_out : stdout;
-        jz_sem_enable_tristate_report(out, "JZ-HDL 1.0", opts.input_filename);
+        jz_sem_enable_tristate_report(out, "JZ-HDL 1.0", opts.input_filename, &compiler.diagnostics);
     }
 
     if (opts.tristate_default != 0) {

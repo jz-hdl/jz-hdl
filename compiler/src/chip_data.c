@@ -1254,10 +1254,18 @@ static void variant_axes_free(VariantAxis *axes, size_t count)
 
 static int variant_axes_add_sval(VariantAxis *ax, const char *v)
 {
+    size_t new_count = 0;
+    size_t new_bytes = 0;
+    char **nv = NULL;
+
     for (size_t i = 0; i < ax->val_count; ++i) {
         if (strcmp(ax->svals[i], v) == 0) return 1;
     }
-    char **nv = (char **)realloc(ax->svals, sizeof(char *) * (ax->val_count + 1));
+    if (jz_size_add_checked(ax->val_count, 1, &new_count) != 0 ||
+        jz_size_mul_checked(new_count, sizeof(char *), &new_bytes) != 0) {
+        return 0;
+    }
+    nv = (char **)realloc(ax->svals, new_bytes);
     if (!nv) return 0;
     ax->svals = nv;
     ax->svals[ax->val_count] = strdup(v);
@@ -1268,10 +1276,18 @@ static int variant_axes_add_sval(VariantAxis *ax, const char *v)
 
 static int variant_axes_add_ival(VariantAxis *ax, int v)
 {
+    size_t new_count = 0;
+    size_t new_bytes = 0;
+    int *nv = NULL;
+
     for (size_t i = 0; i < ax->val_count; ++i) {
         if (ax->ivals[i] == v) return 1;
     }
-    int *nv = (int *)realloc(ax->ivals, sizeof(int) * (ax->val_count + 1));
+    if (jz_size_add_checked(ax->val_count, 1, &new_count) != 0 ||
+        jz_size_mul_checked(new_count, sizeof(int), &new_bytes) != 0) {
+        return 0;
+    }
+    nv = (int *)realloc(ax->ivals, new_bytes);
     if (!nv) return 0;
     ax->ivals = nv;
     ax->ivals[ax->val_count++] = v;
@@ -1311,10 +1327,19 @@ static int variant_build_axes(const JZChipClockGen *cg,
             }
             if (ai == *out_count) {
                 if (*out_count == cap) {
-                    cap = cap ? cap * 2 : 4;
-                    VariantAxis *na = (VariantAxis *)realloc(axes, sizeof(VariantAxis) * cap);
+                    size_t new_cap = 0;
+                    size_t new_bytes = 0;
+                    VariantAxis *na = NULL;
+
+                    if (jz_size_grow_doubling_checked(cap, *out_count + 1, 4, &new_cap) != 0 ||
+                        jz_size_mul_checked(new_cap, sizeof(VariantAxis), &new_bytes) != 0) {
+                        variant_axes_free(axes, *out_count);
+                        return 0;
+                    }
+                    na = (VariantAxis *)realloc(axes, new_bytes);
                     if (!na) { variant_axes_free(axes, *out_count); return 0; }
                     axes = na;
+                    cap = new_cap;
                 }
                 memset(&axes[*out_count], 0, sizeof(VariantAxis));
                 axes[*out_count].kind = fs[fi].kind;
@@ -2149,11 +2174,15 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
     size_t json_size = 0;
     if (path) {
         if (jz_get_file_size(path, &json_size) == 0 &&
-            json_size > JZ_MAX_LOCAL_CHIP_JSON_BYTES) {
+            json_size > jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES)) {
             jz_chip_set_error("CHIP_JSON_TOO_LARGE: local chip JSON '%s' is %zu byte(s), exceeding the safety limit of %u byte(s)",
-                              path, json_size, (unsigned)JZ_MAX_LOCAL_CHIP_JSON_BYTES);
+                              path,
+                              json_size,
+                              (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES));
         } else {
-            json = jz_read_entire_file_limit(path, JZ_MAX_LOCAL_CHIP_JSON_BYTES, &json_size);
+            json = jz_read_entire_file_limit(path,
+                                             jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                             &json_size);
         }
     }
     if (!json && path == NULL) {
@@ -2165,11 +2194,15 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
             path_lower = jz_build_chip_json_path(project_filename, lower);
             if (path_lower) {
                 if (jz_get_file_size(path_lower, &json_size) == 0 &&
-                    json_size > JZ_MAX_LOCAL_CHIP_JSON_BYTES) {
+                    json_size > jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES)) {
                     jz_chip_set_error("CHIP_JSON_TOO_LARGE: local chip JSON '%s' is %zu byte(s), exceeding the safety limit of %u byte(s)",
-                                      path_lower, json_size, (unsigned)JZ_MAX_LOCAL_CHIP_JSON_BYTES);
+                                      path_lower,
+                                      json_size,
+                                      (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES));
                 } else {
-                    json = jz_read_entire_file_limit(path_lower, JZ_MAX_LOCAL_CHIP_JSON_BYTES, &json_size);
+                    json = jz_read_entire_file_limit(path_lower,
+                                                     jz_input_limit_value(JZ_LIMIT_CHIP_JSON_BYTES),
+                                                     &json_size);
                 }
             }
             if (!json && !path_lower) {
@@ -2209,9 +2242,9 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
         jz_chip_data_free(out);
         return JZ_CHIP_LOAD_JSON_ERROR;
     }
-    if ((size_t)tok_count > JZ_MAX_LOCAL_CHIP_JSON_TOKENS) {
+    if ((size_t)tok_count > jz_input_limit_value(JZ_LIMIT_CHIP_JSON_TOKENS)) {
         jz_chip_set_error("CHIP_JSON_TOKEN_LIMIT_EXCEEDED: chip JSON token count %d exceeds the safety limit of %u token(s)",
-                          tok_count, (unsigned)JZ_MAX_LOCAL_CHIP_JSON_TOKENS);
+                          tok_count, (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_TOKENS));
         free(json);
         jz_chip_data_free(out);
         return JZ_CHIP_LOAD_JSON_ERROR;
@@ -2232,9 +2265,11 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
         jz_chip_data_free(out);
         return JZ_CHIP_LOAD_JSON_ERROR;
     }
-    if (jz_json_check_nesting_limit(toks, tok_count, JZ_MAX_CHIP_JSON_NESTING_DEPTH) != 0) {
+    if (jz_json_check_nesting_limit(toks,
+                                    tok_count,
+                                    (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_NESTING_DEPTH)) != 0) {
         jz_chip_set_error("CHIP_JSON_NESTING_LIMIT_EXCEEDED: chip JSON nesting exceeds the safety limit of %u level(s)",
-                          (unsigned)JZ_MAX_CHIP_JSON_NESTING_DEPTH);
+                          (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_NESTING_DEPTH));
         free(toks);
         free(json);
         jz_chip_data_free(out);

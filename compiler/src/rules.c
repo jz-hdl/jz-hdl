@@ -28,6 +28,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "PARSE", "COMMENT_NESTED_BLOCK",                              0, JZ_RULE_MODE_ERR, "S1.4 Nested block comment `/* ... /* ... */ ... */` detected" },
     { "PARSE", "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S3.2 Expression nesting exceeds the compiler safety limit" },
     { "PARSE", "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 Statement nesting exceeds the compiler safety limit" },
+    { "PARSE", "AST_DEPTH_LIMIT_EXCEEDED",                          0, JZ_RULE_MODE_ERR, "AST traversal exceeds the compiler safety limit" },
     { "PARSE", "DIRECTIVE_INVALID_CONTEXT",                         0, JZ_RULE_MODE_ERR, "S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location" },
     { "PARSE", "KEYWORD_AS_IDENTIFIER",                             2, JZ_RULE_MODE_ERR, "S1.1 Reserved keyword used as identifier" },
     { "PARSE", "IF_COND_MISSING_PARENS",                            0, JZ_RULE_MODE_ERR, "S5.3 IF/ELIF condition missing required parentheses" },
@@ -64,6 +65,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "OPERATORS_AND_EXPRESSIONS", "DIV_CONST_ZERO",                0, JZ_RULE_MODE_ERR, "S3.2 Division/modulus by compile-time constant zero divisor" },
     { "OPERATORS_AND_EXPRESSIONS", "DIV_UNGUARDED_RUNTIME_ZERO",    0, JZ_RULE_MODE_WRN, "S3.2 Divisor may be zero at runtime; guard with IF (divisor != 0) or use a compile-time constant" },
     { "OPERATORS_AND_EXPRESSIONS", "IR_EXPR_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S3.2 IR expression lowering exceeds the compiler safety limit" },
+    { "OPERATORS_AND_EXPRESSIONS", "IR_STMT_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 IR statement traversal exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S3.2 IR division-guard analysis exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_EXPRESSION", 0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in arithmetic/logical expressions" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_CONCAT",     0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in concatenations" },
@@ -98,6 +100,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "CONST_RULES", "CONST_CIRCULAR_DEP",                         1, JZ_RULE_MODE_ERR, "S4.3/S7.10 Circular dependency in CONST/CONFIG definitions" },
     { "CONST_RULES", "CONST_CYCLE_ANALYSIS_OVERFLOW",              0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST cycle analysis exceeds safe adjacency-matrix size limits" },
     { "CONST_RULES", "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "S4.3/S7.10 Constant-expression nesting exceeds the compiler safety limit" },
+    { "CONST_RULES", "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "Semantic traversal exceeds the compiler safety limit" },
 
     /* [PORT_WIRE_REGISTER_DECLS] */
     { "PORT_WIRE_REGISTER_DECLS", "PORT_MISSING_WIDTH",             0, JZ_RULE_MODE_ERR, "S4.4/S8.1 Port declaration without mandatory `[N]` width" },
@@ -482,6 +485,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "TEMPLATE", "TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 @apply count exceeds the configured hard limit" },
     { "TEMPLATE", "TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 Template expansion exceeds the configured total growth limit" },
     { "TEMPLATE", "TEMPLATE_EXPANSION_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 Template expansion nesting exceeds the compiler safety limit" },
+    { "REPORTS", "REPORT_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "Report traversal exceeds the compiler safety limit" },
 
     /* [TESTBENCH] */
     { "TESTBENCH", "TB_WRONG_TOOL",               0, JZ_RULE_MODE_ERR, "File contains @testbench blocks; use --test to run testbenches" },

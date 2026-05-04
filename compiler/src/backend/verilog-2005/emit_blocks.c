@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #include "verilog_internal.h"
 #include "ir.h"
@@ -230,8 +231,22 @@ static void access_list_free(BlockMemAccessList *list)
 static void access_list_add(BlockMemAccessList *list, BlockMemAccess access)
 {
     if (list->count >= list->capacity) {
-        int new_cap = list->capacity == 0 ? 8 : list->capacity * 2;
-        BlockMemAccess *new_items = realloc(list->items, new_cap * sizeof(BlockMemAccess));
+        int new_cap = 0;
+        size_t new_bytes = 0;
+        BlockMemAccess *new_items = NULL;
+
+        if (list->capacity == 0) {
+            new_cap = 8;
+        } else if (list->capacity > INT_MAX / 2) {
+            return;
+        } else {
+            new_cap = list->capacity * 2;
+        }
+        if (new_cap <= list->capacity ||
+            jz_size_mul_checked((size_t)new_cap, sizeof(BlockMemAccess), &new_bytes) != 0) {
+            return;
+        }
+        new_items = realloc(list->items, new_bytes);
         if (!new_items) return;
         list->items = new_items;
         list->capacity = new_cap;

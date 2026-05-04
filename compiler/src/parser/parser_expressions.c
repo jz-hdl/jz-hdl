@@ -975,7 +975,14 @@ JZASTNode *parse_primary_expr(Parser *p) {
                 break;
             }
             size_t len = strlen(id->lexeme);
-            char *new_buf = (char *)realloc(buf, buf_sz + len + 2);
+            size_t new_size = 0;
+            char *new_buf = NULL;
+            if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+                jz_size_add_checked(new_size, 2, &new_size) != 0) {
+                free(buf);
+                return NULL;
+            }
+            new_buf = (char *)realloc(buf, new_size);
             if (!new_buf) {
                 free(buf);
                 return NULL;
@@ -989,7 +996,11 @@ JZASTNode *parse_primary_expr(Parser *p) {
                 break;
             }
             /* append '.' */
-            new_buf = (char *)realloc(buf, buf_sz + 2);
+            if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+                free(buf);
+                return NULL;
+            }
+            new_buf = (char *)realloc(buf, new_size);
             if (!new_buf) {
                 free(buf);
                 return NULL;
@@ -1091,7 +1102,7 @@ JZASTNode *parse_simple_index_expr(Parser *p) {
 JZASTNode *parse_expression(Parser *p) {
     JZASTNode *expr = NULL;
 
-    if (g_parser_expr_depth >= JZ_MAX_PARSER_EXPR_DEPTH) {
+    if (jz_depth_enter_checked(&g_parser_expr_depth, JZ_LIMIT_PARSER_EXPR_DEPTH) != 0) {
         parser_report_rule(p,
                            peek(p),
                            "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",
@@ -1099,8 +1110,7 @@ JZASTNode *parse_expression(Parser *p) {
         return NULL;
     }
 
-    g_parser_expr_depth++;
     expr = parse_ternary_expr(p);
-    g_parser_expr_depth--;
+    jz_depth_leave(&g_parser_expr_depth);
     return expr;
 }

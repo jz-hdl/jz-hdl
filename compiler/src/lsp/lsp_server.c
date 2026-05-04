@@ -748,7 +748,7 @@ static void publish_diagnostics_via_project(const char *uri,
     /* Read the project file from disk. */
     size_t proj_size = 0;
     if (jz_get_file_size(project_path, &proj_size) == 0 &&
-        proj_size > JZ_MAX_SOURCE_FILE_BYTES) {
+        proj_size > jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES)) {
         lsp_log("project file exceeds safety limit: %s (%zu bytes)",
                 project_path, proj_size);
         jz_compiler_dispose(&compiler);
@@ -762,7 +762,9 @@ static void publish_diagnostics_via_project(const char *uri,
         lsp_json_free(&j);
         return;
     }
-    char *proj_source = jz_read_entire_file_limit(project_path, JZ_MAX_SOURCE_FILE_BYTES, &proj_size);
+    char *proj_source = jz_read_entire_file_limit(project_path,
+                                                  jz_input_limit_value(JZ_LIMIT_SOURCE_FILE_BYTES),
+                                                  &proj_size);
     if (!proj_source) {
         lsp_log("failed to read project file: %s", project_path);
         jz_compiler_dispose(&compiler);

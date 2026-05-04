@@ -10,6 +10,7 @@
 
 #include "verilog_internal.h"
 #include "ir.h"
+#include "../../../include/util.h"
 
 /* -------------------------------------------------------------------------
  * Alias context globals
@@ -568,11 +569,15 @@ static SignalCoverage *find_or_create_coverage(int signal_id, int width)
     if (s_cov_len >= s_cov_cap) {
         int new_cap = s_cov_cap ? s_cov_cap * 2 : 16;
         SignalCoverage *new_cov = NULL;
+        size_t new_bytes = 0;
 
         if (new_cap <= s_cov_cap) {
             return NULL;
         }
-        new_cov = (SignalCoverage *)realloc(s_cov, (size_t)new_cap * sizeof(*s_cov));
+        if (jz_size_mul_checked((size_t)new_cap, sizeof(*s_cov), &new_bytes) != 0) {
+            return NULL;
+        }
+        new_cov = (SignalCoverage *)realloc(s_cov, new_bytes);
         if (!new_cov) {
             return NULL;
         }

@@ -23,19 +23,11 @@ static int s_ir_expr_depth_reported = 0;
 
 static void ir_report_expr_depth_limit(JZDiagnosticList *diagnostics, JZLocation loc)
 {
-    if (!diagnostics || s_ir_expr_depth_reported) return;
-    s_ir_expr_depth_reported = 1;
-
-    const JZRuleInfo *rule = jz_rule_lookup("IR_EXPR_DEPTH_LIMIT_EXCEEDED");
-    JZSeverity sev = JZ_SEVERITY_ERROR;
-    if (rule && rule->mode == JZ_RULE_MODE_WRN) {
-        sev = JZ_SEVERITY_WARNING;
-    }
-    jz_diagnostic_report(diagnostics,
-                         loc,
-                         sev,
-                         "IR_EXPR_DEPTH_LIMIT_EXCEEDED",
-                         "IR expression lowering exceeds the compiler safety limit");
+    (void)jz_diagnostic_report_rule_once(&s_ir_expr_depth_reported,
+                                         diagnostics,
+                                         loc,
+                                         "IR_EXPR_DEPTH_LIMIT_EXCEEDED",
+                                         "IR expression lowering exceeds the compiler safety limit");
 }
 
 static int ir_eval_lit_call_in_project(const char *expr,
@@ -316,12 +308,11 @@ static int ir_expr_to_const_expr_string_rec_impl(const JZASTNode *expr, JZBuffer
 
 static int ir_expr_to_const_expr_string_rec(const JZASTNode *expr, JZBuffer *buf)
 {
-    if (s_ir_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+    if (jz_depth_enter_checked(&s_ir_expr_depth, JZ_LIMIT_IR_EXPR_DEPTH) != 0) {
         return -1;
     }
-    ++s_ir_expr_depth;
     int rc = ir_expr_to_const_expr_string_rec_impl(expr, buf);
-    --s_ir_expr_depth;
+    jz_depth_leave(&s_ir_expr_depth);
     return rc;
 }
 
@@ -405,12 +396,11 @@ static int ir_lit_expr_to_const_string_rec(const JZASTNode *expr,
                                            const JZBuffer *project_symbols,
                                            JZBuffer *buf)
 {
-    if (s_ir_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+    if (jz_depth_enter_checked(&s_ir_expr_depth, JZ_LIMIT_IR_EXPR_DEPTH) != 0) {
         return -1;
     }
-    ++s_ir_expr_depth;
     int rc = ir_lit_expr_to_const_string_rec_impl(expr, mod_scope, project_symbols, buf);
-    --s_ir_expr_depth;
+    jz_depth_leave(&s_ir_expr_depth);
     return rc;
 }
 
@@ -751,14 +741,13 @@ IR_Expr *ir_build_expr(JZArena *arena,
                        int bus_map_count,
                        JZDiagnosticList *diagnostics)
 {
-    if (s_ir_expr_depth >= JZ_MAX_IR_EXPR_DEPTH) {
+    if (jz_depth_enter_checked(&s_ir_expr_depth, JZ_LIMIT_IR_EXPR_DEPTH) != 0) {
         if (expr) {
             ir_report_expr_depth_limit(diagnostics, expr->loc);
         }
         return NULL;
     }
 
-    ++s_ir_expr_depth;
     IR_Expr *ir = ir_build_expr_impl(arena,
                                      expr,
                                      mod_scope,
@@ -766,7 +755,7 @@ IR_Expr *ir_build_expr(JZArena *arena,
                                      bus_map,
                                      bus_map_count,
                                      diagnostics);
-    --s_ir_expr_depth;
+    jz_depth_leave(&s_ir_expr_depth);
     return ir;
 }
 

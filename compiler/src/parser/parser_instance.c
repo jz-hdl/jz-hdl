@@ -155,7 +155,14 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
         const JZToken *id = peek(p);
         if (id->type != JZ_TOK_IDENTIFIER || !id->lexeme) break;
         size_t len = strlen(id->lexeme);
-        char *new_buf = (char *)realloc(buf, buf_sz + len + 2);
+        size_t new_size = 0;
+        char *new_buf = NULL;
+        if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+            jz_size_add_checked(new_size, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
         if (!new_buf) {
             free(buf);
             return NULL;
@@ -168,7 +175,11 @@ static JZASTNode *parse_instance_parent_signal_expr(Parser *p)
         if (!match(p, JZ_TOK_DOT)) {
             break;
         }
-        new_buf = (char *)realloc(buf, buf_sz + 2);
+        if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
         if (!new_buf) {
             free(buf);
             return NULL;

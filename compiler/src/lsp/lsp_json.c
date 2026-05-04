@@ -4,6 +4,7 @@
  */
 
 #include "lsp/lsp_internal.h"
+#include "util.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -31,11 +32,21 @@ void lsp_json_free(LspJson *j) {
 }
 
 static int lsp_json_grow(LspJson *j, size_t need) {
+    size_t required = 0;
+    size_t new_cap = 0;
+    char *tmp = NULL;
+
     if (j->failed) return -1;
-    if (j->len + need <= j->cap) return 0;
-    size_t new_cap = j->cap ? j->cap * 2 : 256;
-    while (new_cap < j->len + need) new_cap *= 2;
-    char *tmp = realloc(j->data, new_cap);
+    if (jz_size_add_checked(j->len, need, &required) != 0) {
+        j->failed = 1;
+        return -1;
+    }
+    if (required <= j->cap) return 0;
+    if (jz_size_grow_doubling_checked(j->cap, required, 256, &new_cap) != 0) {
+        j->failed = 1;
+        return -1;
+    }
+    tmp = realloc(j->data, new_cap);
     if (!tmp) {
         j->failed = 1;
         return -1;
