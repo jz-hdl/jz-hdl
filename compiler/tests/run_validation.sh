@@ -30,6 +30,13 @@ tmp_out="$(mktemp)"
 tmp_err="$(mktemp)"
 trap 'rm -f "${tmp_out}" "${tmp_err}"' EXIT
 
+normalize_validation_output() {
+  local src="$1"
+  local dst="$2"
+
+  sed -E 's|^(VCD written to: ).*/compiler/tests/validation/([^/]+\.vcd)$|\1compiler/tests/validation/\2|' "${src}" > "${dst}"
+}
+
 copy_generated_mem_sidecars() {
   local src_dir="$1"
   local dst_dir="$2"
@@ -146,15 +153,23 @@ for file in "${validation_files[@]}"; do
     rm -rf "${temp_input_dir}"
   fi
 
-  if diff -u "${expected_out}" "${tmp_out}" > /dev/null; then
+  normalized_expected="$(mktemp)"
+  normalized_actual="$(mktemp)"
+  trap 'rm -f "${tmp_out}" "${tmp_err}" "${normalized_expected}" "${normalized_actual}"' EXIT
+  normalize_validation_output "${expected_out}" "${normalized_expected}"
+  normalize_validation_output "${tmp_out}" "${normalized_actual}"
+
+  if diff -u "${normalized_expected}" "${normalized_actual}" > /dev/null; then
     echo "PASS ${rel_path}"
     ((pass++))
   else
     echo "FAIL ${rel_path}"
-    diff -u "${expected_out}" "${tmp_out}" || true
+    diff -u "${normalized_expected}" "${normalized_actual}" || true
     ((fail++))
     exit 1
   fi
+
+  rm -f "${normalized_expected}" "${normalized_actual}"
 
 done
 
