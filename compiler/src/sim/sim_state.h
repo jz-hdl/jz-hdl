@@ -114,6 +114,7 @@ typedef struct SimTestState {
     int              runtime_error; /* non-zero if z observed; abort test */
     JZDiagnosticList *diagnostics;
     const char       *filename;
+    const char       *dut_instance_name;
 
     /* Shared: failure reporting */
     int              num_failed;

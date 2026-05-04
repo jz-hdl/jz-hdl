@@ -874,6 +874,40 @@ static void check_tb_bus_wire_declarations(const JZASTNode *tb,
     }
 }
 
+static void check_tb_bus_instance_bindings(const JZASTNode *test,
+                                           const JZASTNode *root,
+                                           JZDiagnosticList *diagnostics)
+{
+    if (!test || !root) return;
+
+    for (size_t i = 0; i < test->child_count; ++i) {
+        const JZASTNode *inst = test->children[i];
+        if (!inst || inst->type != JZ_AST_MODULE_INSTANCE) continue;
+
+        for (size_t j = 0; j < inst->child_count; ++j) {
+            const JZASTNode *decl = inst->children[j];
+            char msg[512];
+
+            if (!decl || decl->type != JZ_AST_PORT_DECL ||
+                !decl->block_kind || strcmp(decl->block_kind, "BUS") != 0) {
+                continue;
+            }
+
+            if (tb_find_bus_def(root, decl->text)) {
+                continue;
+            }
+
+            snprintf(msg, sizeof(msg),
+                     "testbench @new BUS binding for `%s` references unknown BUS definition `%s`;\n"
+                     "declare BUS `%s` at file scope or inside a @testbench before the TEST block",
+                     decl->name ? decl->name : "?",
+                     decl->text ? decl->text : "?",
+                     decl->text ? decl->text : "?");
+            tb_report_rule(diagnostics, decl->loc, "TB_BUS_NOT_FOUND", msg);
+        }
+    }
+}
+
 static void check_stimulus_clock_assignments(const JZASTNode *tb,
                                              const JZASTNode *block,
                                              JZDiagnosticList *diagnostics)
@@ -1045,6 +1079,8 @@ static void check_test_block_semantics(const JZASTNode *tb,
                                        JZDiagnosticList *diagnostics)
 {
     if (!tb || !root || !test) return;
+
+    check_tb_bus_instance_bindings(test, root, diagnostics);
 
     for (size_t i = 0; i < test->child_count; ++i) {
         const JZASTNode *child = test->children[i];

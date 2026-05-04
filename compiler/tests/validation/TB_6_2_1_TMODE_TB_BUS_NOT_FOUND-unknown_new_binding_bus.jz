@@ -1,0 +1,43 @@
+// TB_BUS_NOT_FOUND: testbench BUS shorthand @new bindings must reference a BUS
+// definition in scope.
+// Target diagnostic: TB_BUS_NOT_FOUND on the unknown BUS shorthand binding.
+// Non-target diagnostics: none.
+// Fixture plan: one valid DUT, one valid TEST, valid scalar clock/wire setup,
+// and a single BUS shorthand binding that names an undefined BUS id.
+
+@module UnknownNewBindingBusDut
+    PORT {
+        IN  [1] clk;
+        IN  [8] data_in;
+        OUT [8] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out = data_in;
+    }
+@endmod
+
+@testbench UnknownNewBindingBusDut
+    CLOCK {
+        clk;
+    }
+
+    WIRE {
+        data_in [8];
+        data_out [8];
+        probe_DATA [8];
+    }
+
+    TEST "unknown BUS id in @new shorthand is rejected" {
+        @new dut UnknownNewBindingBusDut {
+            clk [1] = clk;
+            BUS MISSING_BUS probe = probe;
+            data_in [8] = data_in;
+            data_out [8] = data_out;
+        }
+
+        @setup {
+            data_in <= 8'h00;
+        }
+    }
+@endtb

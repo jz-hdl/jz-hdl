@@ -1,0 +1,78 @@
+// EXPECT_EQUAL_HIERARCHICAL_SIGNAL: runtime @expect_equal must read dotted DUT
+// hierarchy values, not just testbench wires.
+
+@module TbHierExpectLeaf
+    PORT {
+        IN  [8] din;
+        OUT [8] q;
+    }
+
+    WIRE {
+        leaf_wire [8];
+    }
+
+    ASYNCHRONOUS {
+        leaf_wire = din;
+        q = leaf_wire;
+    }
+@endmod
+
+@module TbHierExpectMid
+    PORT {
+        IN  [8] din;
+        OUT [8] q;
+    }
+
+    WIRE {
+        leaf_q [8];
+    }
+
+    @new leaf TbHierExpectLeaf {
+        IN  [8] din = din;
+        OUT [8] q = leaf_q;
+    };
+
+    ASYNCHRONOUS {
+        q = leaf_q;
+    }
+@endmod
+
+@module TbHierExpectDut
+    PORT {
+        IN  [8] din;
+        OUT [8] q;
+    }
+
+    WIRE {
+        mid_q [8];
+    }
+
+    @new mid TbHierExpectMid {
+        IN  [8] din = din;
+        OUT [8] q = mid_q;
+    };
+
+    ASYNCHRONOUS {
+        q = mid_q;
+    }
+@endmod
+
+@testbench TbHierExpectDut
+    WIRE {
+        din [8];
+        q [8];
+    }
+
+    TEST "hierarchical @expect_equal reads DUT child state" {
+        @new dut TbHierExpectDut {
+            din [8] = din;
+            q [8] = q;
+        }
+
+        @setup {
+            din <= 8'hA5;
+        }
+
+        @expect_equal(dut.mid.leaf.leaf_wire, 8'hA5)
+    }
+@endtb

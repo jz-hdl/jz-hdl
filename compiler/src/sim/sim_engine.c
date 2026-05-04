@@ -124,6 +124,47 @@ static int find_port_signal_id(const IR_Module *mod, const char *name) {
     return -1;
 }
 
+static int tb_bus_def_has_signal(const JZASTNode *bus_def, const char *signal_name) {
+    if (!bus_def || !signal_name || !*signal_name) return 0;
+
+    for (size_t i = 0; i < bus_def->child_count; i++) {
+        const JZASTNode *decl = bus_def->children[i];
+        if (!decl || decl->type != JZ_AST_BUS_DECL || !decl->name) continue;
+        if (strcmp(decl->name, signal_name) == 0)
+            return 1;
+    }
+
+    return 0;
+}
+
+static int tb_bus_shorthand_matches_signal(const JZASTNode *bus_def,
+                                           const char *port_prefix,
+                                           const char *signal_name) {
+    size_t prefix_len;
+    const char *tail;
+    const char *member_name;
+
+    if (!bus_def || !port_prefix || !signal_name) return 0;
+
+    prefix_len = strlen(port_prefix);
+    if (strncmp(signal_name, port_prefix, prefix_len) != 0) {
+        return 0;
+    }
+
+    tail = signal_name + prefix_len;
+    if (*tail == '_') {
+        member_name = tail + 1;
+    } else {
+        const char *digit_tail = tail;
+        if (!isdigit((unsigned char)*digit_tail)) return 0;
+        while (isdigit((unsigned char)*digit_tail)) ++digit_tail;
+        if (*digit_tail != '_') return 0;
+        member_name = digit_tail + 1;
+    }
+
+    return tb_bus_def_has_signal(bus_def, member_name);
+}
+
 static const JZASTNode *find_bus_def(const JZASTNode *root, const char *bus_name) {
     if (!root || !bus_name) return NULL;
     /* Search root-level children first */
@@ -367,6 +408,73 @@ static int resolve_global_const_simval(const char *qname, SimValue *out)
     return 0;
 }
 
+static int resolve_ctx_signal_value(const SimContext *ctx,
+                                    const char *path,
+                                    SimValue *out)
+{
+    const char *dot;
+
+    if (!ctx || !path || !*path || !out) return 0;
+
+    dot = strchr(path, '.');
+    if (!dot) {
+        for (int i = 0; i < ctx->module->num_signals; ++i) {
+            const IR_Signal *sig = &ctx->module->signals[i];
+            SimSignalEntry *entry;
+
+            if (!sig->name || strcmp(sig->name, path) != 0) continue;
+
+            entry = sim_ctx_lookup((SimContext *)ctx, sig->id);
+            if (!entry) return 0;
+            *out = entry->current;
+            return 1;
+        }
+
+        return 0;
+    }
+
+    {
+        size_t inst_len = (size_t)(dot - path);
+
+        if (inst_len == 0 || dot[1] == '\0') return 0;
+
+        for (int i = 0; i < ctx->num_children; ++i) {
+            const SimChildInstance *child = &ctx->children[i];
+
+            if (!child->ctx || !child->inst || !child->inst->name) continue;
+            if (strlen(child->inst->name) != inst_len ||
+                strncmp(child->inst->name, path, inst_len) != 0) {
+                continue;
+            }
+
+            return resolve_ctx_signal_value(child->ctx, dot + 1, out);
+        }
+    }
+
+    return 0;
+}
+
+static int resolve_tb_hier_signal_simval(const SimTestState *ts,
+                                         const char *qname,
+                                         SimValue *out)
+{
+    const char *dot;
+    size_t root_len;
+
+    if (!ts || !ts->dut || !ts->dut_instance_name || !qname || !out) return 0;
+
+    dot = strchr(qname, '.');
+    if (!dot || dot == qname || dot[1] == '\0') return 0;
+
+    root_len = (size_t)(dot - qname);
+    if (strlen(ts->dut_instance_name) != root_len ||
+        strncmp(ts->dut_instance_name, qname, root_len) != 0) {
+        return 0;
+    }
+
+    return resolve_ctx_signal_value(ts->dut, dot + 1, out);
+}
+
 static void free_built_symbol_tables(JZBuffer *module_scopes, JZBuffer *project_symbols)
 {
     size_t scope_count;
@@ -406,9 +514,12 @@ static SimValue eval_tb_ast_expr(SimTestState *ts, const JZASTNode *node) {
         int idx = find_tb_wire(ts, node->name);
         if (idx >= 0) return ts->tb_wires[idx].value;
         if (node->type == JZ_AST_EXPR_QUALIFIED_IDENTIFIER) {
-            SimValue global_value;
-            if (resolve_global_const_simval(node->name, &global_value)) {
-                return global_value;
+            SimValue resolved_value;
+            if (resolve_global_const_simval(node->name, &resolved_value)) {
+                return resolved_value;
+            }
+            if (resolve_tb_hier_signal_simval(ts, node->name, &resolved_value)) {
+                return resolved_value;
             }
         }
         return sim_val_all_x(1);
@@ -821,6 +932,7 @@ fail:
 /* ---- Build port bindings from @new ---- */
 
 static int build_port_bindings(SimTestState *ts,
+                               const JZASTNode *root,
                                const JZASTNode *instance_node,
                                const IR_Module *dut_module) {
     /* First pass: count how many bindings we'll need (BUS expands to many) */
@@ -829,14 +941,13 @@ static int build_port_bindings(SimTestState *ts,
         const JZASTNode *pd = instance_node->children[i];
         if (!pd || pd->type != JZ_AST_PORT_DECL) continue;
         if (pd->block_kind && strcmp(pd->block_kind, "BUS") == 0) {
+            const JZASTNode *bus_def = find_bus_def(root, pd->text);
             /* Count DUT port signals matching this prefix */
             const char *port_prefix = pd->name;
-            size_t plen = strlen(port_prefix);
             for (int s = 0; s < dut_module->num_signals; s++) {
                 if (dut_module->signals[s].kind != SIG_PORT) continue;
                 const char *sn = dut_module->signals[s].name;
-                if (strncmp(sn, port_prefix, plen) == 0 &&
-                    (sn[plen] == '_' || (sn[plen] >= '0' && sn[plen] <= '9')))
+                if (tb_bus_shorthand_matches_signal(bus_def, port_prefix, sn))
                     n++;
             }
         } else {
@@ -858,6 +969,7 @@ static int build_port_bindings(SimTestState *ts,
 
         if (pd->block_kind && strcmp(pd->block_kind, "BUS") == 0) {
             /* BUS port binding: expand by matching DUT port prefix to tb wire prefix */
+            const JZASTNode *bus_def = find_bus_def(root, pd->text);
             const char *port_prefix = pd->name;
             size_t plen = strlen(port_prefix);
 
@@ -870,9 +982,7 @@ static int build_port_bindings(SimTestState *ts,
             for (int s = 0; s < dut_module->num_signals; s++) {
                 if (dut_module->signals[s].kind != SIG_PORT) continue;
                 const char *sn = dut_module->signals[s].name;
-                if (strncmp(sn, port_prefix, plen) != 0) continue;
-                /* Must be followed by digit or underscore */
-                if (sn[plen] != '_' && !(sn[plen] >= '0' && sn[plen] <= '9'))
+                if (!tb_bus_shorthand_matches_signal(bus_def, port_prefix, sn))
                     continue;
 
                 /* Compute wire name by replacing port_prefix with wire_prefix */
@@ -1410,6 +1520,8 @@ static int sim_run_test(const JZASTNode *root,
         return 1;
     }
 
+    ts.dut_instance_name = instance_node->name;
+
     /* Create DUT context */
     ts.dut = sim_ctx_create(dut_module, design, seed);
     if (!ts.dut) {
@@ -1421,7 +1533,7 @@ static int sim_run_test(const JZASTNode *root,
     }
 
     /* Build port bindings */
-    if (build_port_bindings(&ts, instance_node, dut_module) != 0) {
+    if (build_port_bindings(&ts, root, instance_node, dut_module) != 0) {
         sim_ctx_destroy(ts.dut);
         for (int fi = 0; fi < ts.num_tb_wires; fi++)
             if (ts.tb_wires[fi].owns_name) free((char *)ts.tb_wires[fi].name);
@@ -1914,6 +2026,8 @@ static int sim_run_simulation(const JZASTNode *root,
         goto cleanup_early;
     }
 
+    ts.dut_instance_name = instance_node->name;
+
     /* Create DUT context */
     ts.dut = sim_ctx_create(dut_module, design, seed);
     if (!ts.dut) {
@@ -1922,7 +2036,7 @@ static int sim_run_simulation(const JZASTNode *root,
     }
 
     /* Build port bindings */
-    if (build_port_bindings(&ts, instance_node, dut_module) != 0) {
+    if (build_port_bindings(&ts, root, instance_node, dut_module) != 0) {
         goto cleanup_dut;
     }
 
