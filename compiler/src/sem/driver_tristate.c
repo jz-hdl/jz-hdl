@@ -375,6 +375,46 @@ static const char *tristate_effective_name(const JZASTNode *node)
     return node->name;
 }
 
+static size_t tristate_format_condition(const JZASTNode *expr, char *buf, size_t buf_size);
+
+static size_t tristate_format_builtin_call(const JZASTNode *expr, char *buf, size_t buf_size)
+{
+    if (!expr || expr->type != JZ_AST_EXPR_BUILTIN_CALL || !expr->name ||
+        !buf || buf_size == 0) {
+        return 0;
+    }
+
+    size_t pos = 0;
+    int n = snprintf(buf, buf_size, "%s(", expr->name);
+    if (n <= 0 || (size_t)n >= buf_size) return 0;
+    pos = (size_t)n;
+
+    for (size_t i = 0; i < expr->child_count; ++i) {
+        if (i > 0) {
+            n = snprintf(buf + pos, buf_size - pos, ", ");
+            if (n <= 0 || (size_t)n >= buf_size - pos) return 0;
+            pos += (size_t)n;
+        }
+
+        char arg_buf[128];
+        size_t arg_len = tristate_format_condition(expr->children[i],
+                                                   arg_buf,
+                                                   sizeof(arg_buf));
+        if (arg_len == 0) {
+            return 0;
+        }
+
+        n = snprintf(buf + pos, buf_size - pos, "%s", arg_buf);
+        if (n <= 0 || (size_t)n >= buf_size - pos) return 0;
+        pos += (size_t)n;
+    }
+
+    n = snprintf(buf + pos, buf_size - pos, ")");
+    if (n <= 0 || (size_t)n >= buf_size - pos) return 0;
+    pos += (size_t)n;
+    return pos;
+}
+
 static void tristate_format_expr(const JZASTNode *expr, char *buf, size_t buf_size)
 {
     if (!buf || buf_size == 0) return;
@@ -411,6 +451,8 @@ static void tristate_format_expr(const JZASTNode *expr, char *buf, size_t buf_si
                 snprintf(buf, buf_size, "%s[%s]", base_buf, idx1_buf);
             }
         }
+    } else if (expr->type == JZ_AST_EXPR_BUILTIN_CALL) {
+        (void)tristate_format_builtin_call(expr, buf, buf_size);
     }
 }
 
@@ -438,6 +480,10 @@ static size_t tristate_format_condition(const JZASTNode *expr, char *buf, size_t
             return (n > 0 && (size_t)n < buf_size) ? (size_t)n : 0;
         }
         return 0;
+    }
+
+    if (expr->type == JZ_AST_EXPR_BUILTIN_CALL) {
+        return tristate_format_builtin_call(expr, buf, buf_size);
     }
 
     if (expr->type == JZ_AST_EXPR_UNARY && expr->block_kind && expr->child_count >= 1) {

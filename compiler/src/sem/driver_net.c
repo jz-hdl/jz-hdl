@@ -2258,7 +2258,7 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
                      * check fails even though no individual field has a conflict.
                      */
                     int bus_ok = 0;
-                    if (project_symbols && jz_tristate_net_is_bus_port(net)) {
+                    if (project_symbols) {
                         bus_ok = sem_tristate_check_declared_bus_per_field(
                             net, net_name, scope, module_scopes,
                             project_symbols);

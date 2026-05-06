@@ -53,8 +53,8 @@
         SDIO_CLK = { standard=LVCMOS33, drive=8 };
         SDIO_CMD = { standard=LVCMOS33, drive=8 };
         SDIO_D3  = { standard=LVCMOS33, drive=8 };
-        TMDS_CLK     = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, width=10, fclk = serial_clk, pclk = pixel_clk };
-        TMDS_DATA[3] = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, width=10, fclk = serial_clk, pclk = pixel_clk };
+        TMDS_CLK     = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, width=10, fclk = serial_clk, pclk = pixel_clk, reset = pll_lock };
+        TMDS_DATA[3] = { mode=DIFFERENTIAL, standard=LVDS25, drive=3.5, width=10, fclk = serial_clk, pclk = pixel_clk, reset = pll_lock };
         O_sdram_clk      = { standard=LVCMOS33, drive=8 };
         O_sdram_cke      = { standard=LVCMOS33, drive=8 };
         O_sdram_cs_n     = { standard=LVCMOS33, drive=8 };
@@ -175,6 +175,7 @@
         PLL {
             IN REF_CLK SCLK;          // 27MHz crystal
             OUT BASE  serial_clk;    // 371.25 MHz (5x pixel clock)
+            WIRE LOCK pll_lock;
 
             CONFIG {
                 IDIV = 3;            // divider = 4

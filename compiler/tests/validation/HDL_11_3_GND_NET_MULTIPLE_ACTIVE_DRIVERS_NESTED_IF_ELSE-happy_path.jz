@@ -1,0 +1,56 @@
+// HAPPY_PATH: Nested IF/ELSE tri-state guards on a BUS field are mutually
+// exclusive. This mirrors the control-flow shape from examples/soc/src/
+// sdram_bus.jz closely enough to catch regressions in guard extraction.
+
+@global CMD
+    READ  = 1'b0;
+    WRITE = 1'b1;
+@endglob
+
+@project NET_MULTIPLE_ACTIVE_DRIVERS_nested_if_else_ok
+    BUS SIMPLE_BUS {
+        OUT   [1] CMD;
+        OUT   [1] VALID;
+        INOUT [32] DATA;
+        IN    [1] DONE;
+    }
+
+    @top TopMod {
+        IN  [1] valid = _;
+        IN  [1] state_wait = _;
+        IN  [1] done = _;
+        IN  [1] cmd = _;
+        IN  [32] rdata = _;
+        BUS SIMPLE_BUS TARGET pbus = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        ST_WAIT = 1;
+    }
+
+    PORT {
+        IN  [1] valid;
+        IN  [1] state_wait;
+        IN  [1] done;
+        IN  [1] cmd;
+        IN  [32] rdata;
+        BUS SIMPLE_BUS TARGET pbus;
+    }
+
+    ASYNCHRONOUS {
+        pbus.DATA <= (valid && cmd == CMD.READ && state_wait == lit(1, ST_WAIT) && done == 1'b1)
+            ? rdata : 32'bz;
+
+        IF (valid) {
+            IF (state_wait == lit(1, ST_WAIT) && done == 1'b1) {
+                pbus.DONE <= 1'b1;
+            } ELSE {
+                pbus.DONE <= 1'b0;
+            }
+        } ELSE {
+            pbus.DONE <= 1'bz;
+        }
+    }
+@endmod
