@@ -1,0 +1,45 @@
+// Golden test: XDC physical pin values must emit as raw validated tokens.
+// Verifies both single-ended and differential mappings for Xilinx backends.
+
+@project(CHIP="XC7A35T-2FGG484") XDC_PHYSICAL_PIN_VALUES
+    CLOCKS {
+        SCLK = { period=5.0 };
+    }
+
+    IN_PINS {
+        SCLK    = { standard=DIFF_SSTL15, mode=DIFFERENTIAL };
+        UART_RX = { standard=LVCMOS33 };
+        AUX_IN  = { standard=LVDS25, mode=DIFFERENTIAL };
+    }
+
+    OUT_PINS {
+        UART_TX       = { standard=LVCMOS33, drive=4 };
+    }
+
+    MAP {
+        SCLK = { P=R4, N=T4 };
+        UART_RX = P14;
+        UART_TX = P15;
+        AUX_IN = { P=V18, N=V19 };
+    }
+
+    @top passthrough_top {
+        IN  [1] clk       = SCLK;
+        IN  [1] uart_rx   = UART_RX;
+        OUT [1] uart_tx   = UART_TX;
+        IN  [1] aux_in    = AUX_IN;
+    }
+@endproj
+
+@module passthrough_top
+    PORT {
+        IN  [1] clk;
+        IN  [1] uart_rx;
+        OUT [1] uart_tx;
+        IN  [1] aux_in;
+    }
+
+    ASYNCHRONOUS {
+        uart_tx = uart_rx ^ aux_in;
+    }
+@endmod

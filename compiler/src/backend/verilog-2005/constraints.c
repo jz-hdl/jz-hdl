@@ -273,13 +273,11 @@ int jz_emit_xdc_constraints(const IR_Design *design,
             }
 
             /* P pin constraints */
-            fprintf(out, "set_property PACKAGE_PIN ");
-            verilog_emit_tcl_braced(out, m->board_pin_id);
+            fprintf(out, "set_property PACKAGE_PIN %s", m->board_pin_id);
             fprintf(out, " [get_ports ");
             verilog_emit_tcl_braced(out, p_port);
             fprintf(out, "]\n");
-            fprintf(out, "set_property LOC ");
-            verilog_emit_tcl_braced(out, m->board_pin_id);
+            fprintf(out, "set_property LOC %s", m->board_pin_id);
             fprintf(out, " [get_ports ");
             verilog_emit_tcl_braced(out, p_port);
             fprintf(out, "]\n");
@@ -312,13 +310,11 @@ int jz_emit_xdc_constraints(const IR_Design *design,
             }
 
             /* N pin constraints */
-            fprintf(out, "set_property PACKAGE_PIN ");
-            verilog_emit_tcl_braced(out, m->board_pin_n_id);
+            fprintf(out, "set_property PACKAGE_PIN %s", m->board_pin_n_id);
             fprintf(out, " [get_ports ");
             verilog_emit_tcl_braced(out, n_port);
             fprintf(out, "]\n");
-            fprintf(out, "set_property LOC ");
-            verilog_emit_tcl_braced(out, m->board_pin_n_id);
+            fprintf(out, "set_property LOC %s", m->board_pin_n_id);
             fprintf(out, " [get_ports ");
             verilog_emit_tcl_braced(out, n_port);
             fprintf(out, "]\n");
@@ -338,8 +334,7 @@ int jz_emit_xdc_constraints(const IR_Design *design,
             }
         } else {
             /* Single-ended pin */
-            fprintf(out, "set_property PACKAGE_PIN ");
-            verilog_emit_tcl_braced(out, m->board_pin_id);
+            fprintf(out, "set_property PACKAGE_PIN %s", m->board_pin_id);
             fprintf(out, " [get_ports ");
             fputc('{', out);
             fprintf(out, "%s", port_name);
@@ -347,8 +342,7 @@ int jz_emit_xdc_constraints(const IR_Design *design,
                 fprintf(out, "[%d]", m->bit_index);
             }
             fprintf(out, "}]\n");
-            fprintf(out, "set_property LOC ");
-            verilog_emit_tcl_braced(out, m->board_pin_id);
+            fprintf(out, "set_property LOC %s", m->board_pin_id);
             fprintf(out, " [get_ports ");
             fputc('{', out);
             fprintf(out, "%s", port_name);
