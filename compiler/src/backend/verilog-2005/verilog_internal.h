@@ -48,6 +48,10 @@ int verilog_is_keyword(const char *name);
  * the escaped form (\name ) into `buf` and return `buf`.
  */
 const char *verilog_safe_name(const char *name, char *buf, int buf_size);
+void verilog_emit_escaped_string(FILE *out, const char *text);
+int verilog_constraint_value_is_safe(const char *text);
+void verilog_emit_constraint_comment_text(FILE *out, const char *text);
+void verilog_emit_tcl_braced(FILE *out, const char *text);
 
 /* Return a safe Verilog memory array name, disambiguating when it collides
  * with the enclosing module name (which triggers a yosys crash).

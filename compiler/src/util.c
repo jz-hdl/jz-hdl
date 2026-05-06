@@ -87,6 +87,8 @@ size_t jz_input_limit_value(JZInputLimitKind kind)
         return JZ_MAX_SIM_MEMORY_OBJECT_BYTES;
     case JZ_LIMIT_EMITTED_TRACE_BYTES:
         return JZ_MAX_EMITTED_TRACE_BYTES;
+    case JZ_LIMIT_RTLIL_MEM_INIT_EMIT_BYTES:
+        return JZ_MAX_RTLIL_MEM_INIT_EMIT_BYTES;
     default:
         return 0;
     }

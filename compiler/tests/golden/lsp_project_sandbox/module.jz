@@ -1,0 +1,13 @@
+@module Standalone
+    PORT {
+        OUT [1] q;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        q = r;
+    }
+@endmod

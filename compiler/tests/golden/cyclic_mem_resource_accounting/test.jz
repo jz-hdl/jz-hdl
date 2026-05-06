@@ -1,0 +1,32 @@
+// Golden test: cyclic instantiation must not crash memory resource accounting.
+
+@project CYCLIC_MEM_RESOURCE_ACCOUNTING
+    @top ModA {
+        IN  [1] clk = _;
+        OUT [1] q = _;
+    }
+@endproj
+
+@module ModA
+    PORT {
+        IN  [1] clk;
+        OUT [1] q;
+    }
+
+    @new inst_b ModB {
+        IN  [1] clk = clk;
+        OUT [1] q = q;
+    };
+@endmod
+
+@module ModB
+    PORT {
+        IN  [1] clk;
+        OUT [1] q;
+    }
+
+    @new inst_a ModA {
+        IN  [1] clk = clk;
+        OUT [1] q = q;
+    };
+@endmod

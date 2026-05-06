@@ -1,0 +1,29 @@
+// Golden test: wide RTLIL fallback constants must not shift past 63 bits.
+
+@project RTLIL_WIDE_CONST_ZERO_EXTENSION
+    @top TopMod {
+        OUT [72] q = _;
+    }
+@endproj
+
+@module WideChild
+    PORT {
+        IN  [72] d;
+        OUT [72] q;
+    }
+
+    ASYNCHRONOUS {
+        q = d;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        OUT [72] q;
+    }
+
+    @new child WideChild {
+        IN  [72] d = 72'h000000000000000001;
+        OUT [72] q = q;
+    };
+@endmod

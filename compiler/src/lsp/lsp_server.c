@@ -1501,9 +1501,30 @@ static void handle_select_project(const char *msg, LspDocStore *store) {
     char filepath[1024];
     if (lsp_uri_to_path(uri, filepath, sizeof(filepath)) != 0) return;
 
+    if (s_workspace_root[0]) {
+        jz_path_security_init(filepath);
+        jz_path_security_add_root(s_workspace_root);
+    } else {
+        jz_path_security_init(filepath);
+    }
+
     lsp_log("selectProject: %s -> %s", filepath, project_file);
 
-    set_project_override(filepath, project_file);
+    {
+        JZLocation loc;
+        char *validated = NULL;
+        memset(&loc, 0, sizeof(loc));
+        jz_path_security_set_allow_absolute(1);
+        validated = jz_path_validate(project_file, NULL, loc, NULL);
+        jz_path_security_set_allow_absolute(0);
+        jz_path_security_cleanup();
+        if (!validated) {
+            lsp_log("selectProject rejected outside-sandbox project: %s", project_file);
+            return;
+        }
+        set_project_override(filepath, validated);
+        free(validated);
+    }
 
     /* Re-run diagnostics with the new project selection. */
     publish_diagnostics(uri, store);

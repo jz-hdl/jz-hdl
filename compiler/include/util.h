@@ -38,6 +38,7 @@
 #define JZ_MAX_SIM_MEMORY_DEPTH             (1024u * 1024u)
 #define JZ_MAX_SIM_MEMORY_OBJECT_BYTES      (128u * 1024u * 1024u)
 #define JZ_MAX_EMITTED_TRACE_BYTES          (64u * 1024u * 1024u)
+#define JZ_MAX_RTLIL_MEM_INIT_EMIT_BYTES    (64u * 1024u * 1024u)
 
 /**
  * @enum JZInputLimitKind
@@ -66,7 +67,8 @@ typedef enum JZInputLimitKind {
     JZ_LIMIT_REPORT_RECURSION_DEPTH,       /**< Maximum report-generation recursion depth. */
     JZ_LIMIT_SIM_MEMORY_DEPTH,             /**< Maximum simulated memory depth. */
     JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES,      /**< Maximum bytes for one simulated memory object. */
-    JZ_LIMIT_EMITTED_TRACE_BYTES           /**< Maximum emitted trace size in bytes. */
+    JZ_LIMIT_EMITTED_TRACE_BYTES,          /**< Maximum emitted trace size in bytes. */
+    JZ_LIMIT_RTLIL_MEM_INIT_EMIT_BYTES     /**< Maximum emitted RTLIL bytes for memory init cells. */
 } JZInputLimitKind;
 
 /**

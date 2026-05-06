@@ -1,0 +1,33 @@
+// Golden test: string-valued instance overrides must be escaped in Verilog.
+
+@project VERILOG_STRING_PARAM_ESCAPE
+    @blackbox vendor_ip {
+        CONST {
+            DATA_FILE = "default.mem";
+        }
+        PORT {
+            IN  [1] clk;
+            OUT [1] q;
+        }
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] q = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] q;
+    }
+
+    @new inst_vendor vendor_ip {
+        OVERRIDE {
+            DATA_FILE = "rom\\shared\\payload.mem";
+        }
+        IN  [1] clk = clk;
+        OUT [1] q = q;
+    };
+@endmod

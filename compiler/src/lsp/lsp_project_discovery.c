@@ -25,6 +25,7 @@
  */
 
 #include "lsp/lsp_internal.h"
+#include "path_security.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -101,6 +102,10 @@ static void canonicalize_path(const char *path, char *out, size_t out_cap);
 static void add_project_entry(LspProjectList *list,
                               const char *file, const char *chip,
                               const char *name);
+static int lsp_project_path_allowed(const char *raw_path,
+                                    const char *base_dir,
+                                    char *canonical,
+                                    size_t canonical_cap);
 
 /**
  * @brief Extract CHIP and PROJECT_NAME from a @project directive line.
@@ -259,6 +264,28 @@ static void add_project_entry(LspProjectList *list,
     e->chip[sizeof(e->chip) - 1] = '\0';
     strncpy(e->name, (name && name[0]) ? name : "-", sizeof(e->name) - 1);
     e->name[sizeof(e->name) - 1] = '\0';
+}
+
+static int lsp_project_path_allowed(const char *raw_path,
+                                    const char *base_dir,
+                                    char *canonical,
+                                    size_t canonical_cap)
+{
+    char *validated = NULL;
+    JZLocation loc;
+
+    if (!raw_path || !canonical || canonical_cap == 0) return 0;
+
+    memset(&loc, 0, sizeof(loc));
+    jz_path_security_set_allow_absolute(1);
+    validated = jz_path_validate(raw_path, base_dir, loc, NULL);
+    jz_path_security_set_allow_absolute(0);
+    if (!validated) return 0;
+
+    strncpy(canonical, validated, canonical_cap - 1);
+    canonical[canonical_cap - 1] = '\0';
+    free(validated);
+    return 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -468,7 +495,10 @@ static int scan_dir_for_projects(const char *dir, LspProjectList *list,
 
         /* Canonicalize for comparison. */
         char canonical[2048];
-        canonicalize_path(fullpath, canonical, sizeof(canonical));
+        if (!lsp_project_path_allowed(entry->d_name, dir,
+                                      canonical, sizeof(canonical))) {
+            continue;
+        }
 
         if (exclude_file && strcmp(canonical, exclude_file) == 0) continue;
 
@@ -524,8 +554,13 @@ static int scan_subdirs_for_projects(const char *dir, LspProjectList *list,
 static int validate_rc_entries(const LspProjectList *list)
 {
     for (size_t i = 0; i < list->count; i++) {
+        char canonical[2048];
         struct stat st;
-        if (stat(list->entries[i].file, &st) != 0 || !S_ISREG(st.st_mode)) {
+        if (!lsp_project_path_allowed(list->entries[i].file, NULL,
+                                      canonical, sizeof(canonical))) {
+            return 0;
+        }
+        if (stat(canonical, &st) != 0 || !S_ISREG(st.st_mode)) {
             return 0;
         }
     }
@@ -592,11 +627,15 @@ static int project_imports_file(const char *project_path,
         /* Resolve the full path and compare. */
         char resolved[2048];
         if (import_path[0] == '/') {
-            canonicalize_path(import_path, resolved, sizeof(resolved));
+            if (!lsp_project_path_allowed(import_path, NULL,
+                                          resolved, sizeof(resolved))) {
+                continue;
+            }
         } else {
-            char joined[2048];
-            snprintf(joined, sizeof(joined), "%s/%s", proj_dir, import_path);
-            canonicalize_path(joined, resolved, sizeof(resolved));
+            if (!lsp_project_path_allowed(import_path, proj_dir,
+                                          resolved, sizeof(resolved))) {
+                continue;
+            }
         }
 
         if (strcmp(resolved, target_file) == 0) {
@@ -626,7 +665,10 @@ int lsp_discover_projects(const char *filepath,
     extract_directory(filepath, file_dir, sizeof(file_dir));
 
     char canonical_file[2048];
-    canonicalize_path(filepath, canonical_file, sizeof(canonical_file));
+    if (!lsp_project_path_allowed(filepath, NULL,
+                                  canonical_file, sizeof(canonical_file))) {
+        return -1;
+    }
 
     /* Step 1: If this file IS a project file, extract its info and
      * write/update the rc file. */

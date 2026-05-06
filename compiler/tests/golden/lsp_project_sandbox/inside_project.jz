@@ -1,0 +1,19 @@
+@project INSIDE_PROJECT
+    @top TopMod {
+        OUT [1] q = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        OUT [1] q;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        q = r;
+    }
+@endmod
