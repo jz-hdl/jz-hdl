@@ -14,6 +14,25 @@
 #include "ir_internal.h"
 #include "../../include/util.h"
 
+static int ir_report_instance_expansion_limit(JZDiagnosticList *diagnostics,
+                                              JZLocation loc,
+                                              const char *what)
+{
+    char msg[256];
+
+    if (!diagnostics) return -1;
+    snprintf(msg, sizeof(msg),
+             "%s exceeds the compiler safety limit of %u expanded item(s)",
+             what,
+             (unsigned)jz_input_limit_value(JZ_LIMIT_IR_EXPANDED_ITEMS));
+    jz_diagnostic_report(diagnostics,
+                         loc,
+                         JZ_SEVERITY_ERROR,
+                         "IR_EXPANSION_LIMIT_EXCEEDED",
+                         msg);
+    return -1;
+}
+
 /**
  * @brief Look up a BUS definition in the project symbol table.
  *
@@ -991,6 +1010,7 @@ int ir_build_instances_for_module(const JZModuleScope *scope,
                                   const JZModuleScope *all_scopes,
                                   size_t scope_count,
                                   const JZBuffer *project_symbols,
+                                  JZDiagnosticList *diagnostics,
                                   const IR_ModuleSpec *specs,
                                   int spec_count,
                                   IR_Module *all_modules,
@@ -1020,7 +1040,7 @@ int ir_build_instances_for_module(const JZModuleScope *scope,
      * instance as scalar (count = 1) and rely on the semantic pass to have
      * already reported INSTANCE_ARRAY_COUNT_INVALID.
      */
-    int instance_count = 0;
+    size_t instance_count = 0;
     for (int ai = 0; ai < active_inst_node_count; ++ai) {
         JZASTNode *child = active_inst_nodes[ai];
         if (!child || child->type != JZ_AST_MODULE_INSTANCE) {
@@ -1034,7 +1054,14 @@ int ir_build_instances_for_module(const JZModuleScope *scope,
                 count = tmp;
             }
         }
-        instance_count += (int)count;
+        if (jz_limit_accumulate_checked(instance_count,
+                                        (size_t)count,
+                                        JZ_LIMIT_IR_EXPANDED_ITEMS,
+                                        &instance_count) != 0) {
+            return ir_report_instance_expansion_limit(diagnostics,
+                                                      child ? child->loc : scope->node->loc,
+                                                      "instance array expansion");
+        }
     }
 
     if (instance_count == 0) {
@@ -1043,14 +1070,20 @@ int ir_build_instances_for_module(const JZModuleScope *scope,
         return 0;
     }
 
-    IR_Instance *instances = (IR_Instance *)jz_arena_alloc(arena, sizeof(IR_Instance) * (size_t)instance_count);
+    if (instance_count > (size_t)INT_MAX) {
+        return ir_report_instance_expansion_limit(diagnostics,
+                                                  scope->node ? scope->node->loc : (JZLocation){0},
+                                                  "instance allocation");
+    }
+
+    IR_Instance *instances = (IR_Instance *)jz_arena_alloc(arena, sizeof(IR_Instance) * instance_count);
     if (!instances) {
         return -1;
     }
     memset(instances, 0, sizeof(IR_Instance) * (size_t)instance_count);
 
     int inst_index = 0;
-    for (int ai = 0; ai < active_inst_node_count && inst_index < instance_count; ++ai) {
+    for (int ai = 0; ai < active_inst_node_count && (size_t)inst_index < instance_count; ++ai) {
         JZASTNode *inst_node = active_inst_nodes[ai];
         if (!inst_node || inst_node->type != JZ_AST_MODULE_INSTANCE) {
             continue;
@@ -1692,6 +1725,7 @@ int ir_build_instances_for_module(const JZModuleScope *scope,
 int ir_build_instance_port_mappings(const JZModuleScope *scope,
                                      const JZBuffer *project_symbols,
                                      JZArena *arena,
+                                     JZDiagnosticList *diagnostics,
                                      IR_BusSignalMapping **bus_map,
                                      int *bus_map_count)
 {
@@ -1715,7 +1749,7 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
      * signals across all scalar instances. Instance arrays are handled
      * per-element if each element has a distinct parent signal.
      */
-    int needed = 0;
+    size_t needed = 0;
     for (int ai = 0; ai < active_inst_node_count; ++ai) {
         JZASTNode *inst_node = active_inst_nodes[ai];
         if (!inst_node || inst_node->type != JZ_AST_MODULE_INSTANCE) {
@@ -1773,7 +1807,14 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
                 if (psym && (psym->kind == JZ_SYM_PORT ||
                              psym->kind == JZ_SYM_WIRE ||
                              psym->kind == JZ_SYM_REGISTER)) {
-                    needed += (int)array_count;
+                    if (jz_limit_accumulate_checked(needed,
+                                                    (size_t)array_count,
+                                                    JZ_LIMIT_IR_EXPANDED_ITEMS,
+                                                    &needed) != 0) {
+                        return ir_report_instance_expansion_limit(diagnostics,
+                                                                  inst_node->loc,
+                                                                  "instance port mapping expansion");
+                    }
                 }
             }
         }
@@ -1784,7 +1825,14 @@ int ir_build_instance_port_mappings(const JZModuleScope *scope,
     }
 
     /* Grow the bus_map array. */
-    int new_map_count = *bus_map_count + needed;
+    if (needed > (size_t)INT_MAX ||
+        *bus_map_count > INT_MAX - (int)needed) {
+        return ir_report_instance_expansion_limit(diagnostics,
+                                                  scope->node ? scope->node->loc : (JZLocation){0},
+                                                  "instance port mapping allocation");
+    }
+
+    int new_map_count = *bus_map_count + (int)needed;
     IR_BusSignalMapping *new_map = (IR_BusSignalMapping *)jz_arena_alloc(
         arena, sizeof(IR_BusSignalMapping) * (size_t)new_map_count);
     if (!new_map) {

@@ -800,49 +800,48 @@ static void sem_check_mem_file_init(JZASTNode *mem,
     if (!mem || !init_expr || !init_expr->text || !diagnostics) return;
 
     /* Validate the @file() path against security policy. */
-    char base_dir[512];
+    char base_dir[4096];
     sem_base_dir_from_filename_resolved(mem->loc.filename,
                                         base_dir,
                                         sizeof(base_dir));
 
-    char *validated = jz_path_validate(init_expr->text,
-                                        base_dir[0] ? base_dir : NULL,
-                                        init_expr->loc,
-                                        diagnostics);
-    char fullpath[512];
+    char *validated = NULL;
     size_t file_size = 0;
-    if (validated) {
-        snprintf(fullpath, sizeof(fullpath), "%s", validated);
-        free(validated);
-    } else {
+    FILE *fp = jz_path_open_validated_read(init_expr->text,
+                                           base_dir[0] ? base_dir : NULL,
+                                           init_expr->loc,
+                                           diagnostics,
+                                           &validated);
+    if (!validated) {
         /* Path validation failed; diagnostic already emitted. */
         return;
     }
+    if (!fp) {
+        char msg[600];
+        snprintf(msg, sizeof(msg),
+                 "MEM init file not found or not readable: %s", validated);
+        sem_report_rule(diagnostics,
+                        init_expr->loc,
+                        "MEM_INIT_FILE_NOT_FOUND",
+                        msg);
+        free(validated);
+        return;
+    }
 
-    if (jz_get_file_size(fullpath, &file_size) == 0 &&
+    if (jz_get_fp_size(fp, &file_size) == 0 &&
         file_size > jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES)) {
         char msg[640];
         snprintf(msg, sizeof(msg),
                  "MEM init file '%s' is %zu byte(s), exceeding the compiler safety limit of %u byte(s)",
-                 fullpath,
+                 validated,
                  file_size,
                  (unsigned)jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES));
         sem_report_rule(diagnostics,
                         init_expr->loc,
                         "MEM_INIT_FILE_HARD_LIMIT_EXCEEDED",
                         msg);
-        return;
-    }
-
-    FILE *fp = fopen(fullpath, "rb");
-    if (!fp) {
-        char msg[600];
-        snprintf(msg, sizeof(msg),
-                 "MEM init file not found or not readable: %s", fullpath);
-        sem_report_rule(diagnostics,
-                        init_expr->loc,
-                        "MEM_INIT_FILE_NOT_FOUND",
-                        msg);
+        fclose(fp);
+        free(validated);
         return;
     }
 
@@ -942,6 +941,7 @@ static void sem_check_mem_file_init(JZASTNode *mem,
     unsigned long long capacity_bits =
         (unsigned long long)word_w * (unsigned long long)depth;
     if (capacity_bits == 0) {
+        free(validated);
         return;
     }
 
@@ -962,6 +962,7 @@ static void sem_check_mem_file_init(JZASTNode *mem,
                         "MEM_WARN_PARTIAL_INIT",
                         msg);
     }
+    free(validated);
 }
 
 /* Given a qualified name "mem.port" or "mem.port.<field>", locate the

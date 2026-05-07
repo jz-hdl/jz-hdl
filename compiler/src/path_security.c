@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifndef _WIN32
+#include <sys/types.h>
+#endif
 
 #include "path_security.h"
 #include "rules.h"
@@ -467,6 +470,66 @@ char *jz_path_validate(const char *raw_path,
 
     /* Step 8: Return canonical path. */
     return canonical;
+}
+
+FILE *jz_path_open_validated_read(const char *raw_path,
+                                  const char *base_dir,
+                                  JZLocation loc,
+                                  JZDiagnosticList *diag,
+                                  char **out_canonical)
+{
+    char *canonical = NULL;
+    FILE *fp = NULL;
+
+    if (out_canonical) *out_canonical = NULL;
+
+    canonical = jz_path_validate(raw_path, base_dir, loc, diag);
+    if (!canonical) return NULL;
+    if (out_canonical) {
+        *out_canonical = canonical;
+    }
+
+#ifndef _WIN32
+    {
+        struct stat before;
+        struct stat after;
+
+        if (stat(canonical, &before) != 0 || !S_ISREG(before.st_mode)) {
+            return NULL;
+        }
+
+        fp = fopen(canonical, "rb");
+        if (!fp) {
+            return NULL;
+        }
+
+        if (fstat(fileno(fp), &after) != 0 ||
+            !S_ISREG(after.st_mode) ||
+            before.st_dev != after.st_dev ||
+            before.st_ino != after.st_ino) {
+            fclose(fp);
+            if (out_canonical) {
+                free(*out_canonical);
+                *out_canonical = NULL;
+            } else {
+                free(canonical);
+            }
+            path_report(diag, loc, "PATH_OUTSIDE_SANDBOX",
+                        "path changed after validation and could not be opened safely");
+            return NULL;
+        }
+    }
+#else
+    fp = fopen(canonical, "rb");
+    if (!fp) {
+        return NULL;
+    }
+#endif
+
+    if (!out_canonical) {
+        free(canonical);
+    }
+    return fp;
 }
 
 void jz_path_security_cleanup(void)

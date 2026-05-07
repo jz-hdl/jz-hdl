@@ -17,6 +17,8 @@
 
 #include "parser_internal.h"
 
+static unsigned g_instance_clone_depth = 0;
+
 /**
  * @brief Map an instance binding operator token to its stored binding kind.
  *
@@ -93,8 +95,15 @@ static int parse_instance_binding_operator(Parser *p,
 
 static JZASTNode *clone_expr_tree(const JZASTNode *src) {
     if (!src) return NULL;
+    if (jz_depth_enter_checked(&g_instance_clone_depth,
+                               JZ_LIMIT_PARSER_EXPR_DEPTH) != 0) {
+        return NULL;
+    }
     JZASTNode *copy = jz_ast_new(src->type, src->loc);
-    if (!copy) return NULL;
+    if (!copy) {
+        jz_depth_leave(&g_instance_clone_depth);
+        return NULL;
+    }
 
     if (src->name) {
         jz_ast_set_name(copy, src->name);
@@ -113,14 +122,17 @@ static JZASTNode *clone_expr_tree(const JZASTNode *src) {
         JZASTNode *child_copy = clone_expr_tree(src->children[i]);
         if (!child_copy) {
             jz_ast_free(copy);
+            jz_depth_leave(&g_instance_clone_depth);
             return NULL;
         }
         if (jz_ast_add_child(copy, child_copy) != 0) {
             jz_ast_free(child_copy);
             jz_ast_free(copy);
+            jz_depth_leave(&g_instance_clone_depth);
             return NULL;
         }
     }
+    jz_depth_leave(&g_instance_clone_depth);
     return copy;
 }
 

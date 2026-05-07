@@ -10,8 +10,13 @@
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#ifndef _WIN32
+#include <sys/select.h>
+#include <unistd.h>
+#endif
 
 #define LSP_MAX_CONTENT_LENGTH (16u * 1024u * 1024u)
+#define LSP_BODY_READ_TIMEOUT_MS 250
 
 /**
  * @brief Convert a hexadecimal digit character into its numeric value.
@@ -19,6 +24,10 @@
  * @return Hex digit value in the range 0-15, or -1 if invalid.
  */
 static int hex_digit(char c);
+static int lsp_read_body_exact(char *body, size_t content_length);
+#ifndef _WIN32
+static int lsp_wait_stdin_readable(int timeout_ms);
+#endif
 
 /**
  * @brief Write a formatted debug log line for the LSP server.
@@ -39,6 +48,12 @@ char *lsp_io_read_message(size_t *out_len) {
     /* Read headers until we find Content-Length and a blank line. */
     size_t content_length = 0;
     int have_content_length = 0;
+    static int stdio_unbuffered = 0;
+
+    if (!stdio_unbuffered) {
+        (void)setvbuf(stdin, NULL, _IONBF, 0);
+        stdio_unbuffered = 1;
+    }
 
     for (;;) {
         char header[256];
@@ -83,14 +98,9 @@ char *lsp_io_read_message(size_t *out_len) {
     char *body = malloc(content_length + 1);
     if (!body) return NULL;
 
-    size_t total = 0;
-    while (total < content_length) {
-        size_t n = fread(body + total, 1, content_length - total, stdin);
-        if (n == 0) {
-            free(body);
-            return NULL; /* EOF or error */
-        }
-        total += n;
+    if (lsp_read_body_exact(body, content_length) != 0) {
+        free(body);
+        return NULL;
     }
     body[content_length] = '\0';
 
@@ -138,6 +148,51 @@ int lsp_uri_to_path(const char *uri, char *out, size_t out_cap) {
         out[i++] = *p++;
     }
     out[i] = '\0';
+    return 0;
+}
+
+#ifndef _WIN32
+static int lsp_wait_stdin_readable(int timeout_ms)
+{
+    fd_set rfds;
+    struct timeval tv;
+    int fd = fileno(stdin);
+
+    if (fd < 0) return -1;
+
+    FD_ZERO(&rfds);
+    FD_SET(fd, &rfds);
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    return select(fd + 1, &rfds, NULL, NULL, &tv);
+}
+#endif
+
+static int lsp_read_body_exact(char *body, size_t content_length)
+{
+    size_t total = 0;
+
+    if (!body) return -1;
+
+    while (total < content_length) {
+#ifndef _WIN32
+        int ready = lsp_wait_stdin_readable(LSP_BODY_READ_TIMEOUT_MS);
+        if (ready <= 0) {
+            lsp_log("timed out waiting for LSP body bytes (%zu/%zu read)",
+                    total, content_length);
+            return -1;
+        }
+#endif
+        int ch = fgetc(stdin);
+        if (ch == EOF) {
+            lsp_log("unexpected EOF in LSP message body (%zu/%zu read)",
+                    total, content_length);
+            return -1;
+        }
+        body[total++] = (char)ch;
+    }
+
     return 0;
 }
 

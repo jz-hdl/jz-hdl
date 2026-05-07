@@ -81,6 +81,14 @@ size_t jz_input_limit_value(JZInputLimitKind kind)
         return JZ_MAX_SEM_RECURSION_DEPTH;
     case JZ_LIMIT_REPORT_RECURSION_DEPTH:
         return JZ_MAX_REPORT_RECURSION_DEPTH;
+    case JZ_LIMIT_CHIP_VARIANT_TUPLES:
+        return JZ_MAX_CHIP_VARIANT_TUPLES;
+    case JZ_LIMIT_IR_EXPANDED_ITEMS:
+        return JZ_MAX_IR_EXPANDED_ITEMS;
+    case JZ_LIMIT_SEM_BRANCH_STATES:
+        return JZ_MAX_SEM_BRANCH_STATES;
+    case JZ_LIMIT_SIM_INSTANCE_DEPTH:
+        return JZ_MAX_SIM_INSTANCE_DEPTH;
     case JZ_LIMIT_SIM_MEMORY_DEPTH:
         return JZ_MAX_SIM_MEMORY_DEPTH;
     case JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES:
@@ -181,6 +189,22 @@ int jz_size_grow_doubling_checked(size_t current,
         return -1;
     }
     *out = grown;
+    return 0;
+}
+
+int jz_limit_accumulate_checked(size_t current,
+                                size_t add,
+                                JZInputLimitKind kind,
+                                size_t *out)
+{
+    size_t next = 0;
+    size_t limit = 0;
+
+    if (!out) return -1;
+    if (jz_size_add_checked(current, add, &next) != 0) return -1;
+    limit = jz_input_limit_value(kind);
+    if (limit != 0 && next > limit) return -1;
+    *out = next;
     return 0;
 }
 

@@ -47,6 +47,15 @@
 
 #define RC_FILENAME ".jzhdl-lsp.rc"
 
+typedef struct LspDiscoveryCache {
+    char filepath[2048];
+    char workspace_root[2048];
+    LspProjectList projects;
+    int valid;
+} LspDiscoveryCache;
+
+static LspDiscoveryCache s_discovery_cache = {0};
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
@@ -62,6 +71,12 @@
 static void extract_project_metadata(const char *content,
                                      char *chip, size_t chip_cap,
                                      char *name, size_t name_cap);
+static int discovery_cache_lookup(const char *filepath,
+                                  const char *workspace_root,
+                                  LspProjectList *out);
+static void discovery_cache_store(const char *filepath,
+                                  const char *workspace_root,
+                                  const LspProjectList *projects);
 
 /**
  * @brief Read a `.jz` file and detect whether it contains `@project`.
@@ -208,6 +223,40 @@ static int file_get_project_info(const char *path,
     /* If we got a name, we found it.  If chip is empty that's okay
      * (@project without CHIP= is valid). */
     return (name[0] != '\0' || chip[0] != '\0') ? 1 : 0;
+}
+
+static int discovery_cache_lookup(const char *filepath,
+                                  const char *workspace_root,
+                                  LspProjectList *out)
+{
+    if (!filepath || !out || !s_discovery_cache.valid) return 0;
+    if (strcmp(s_discovery_cache.filepath, filepath) != 0) return 0;
+    if (((workspace_root && *workspace_root) ? workspace_root : "")[0] != '\0' ||
+        s_discovery_cache.workspace_root[0] != '\0') {
+        if (strcmp(s_discovery_cache.workspace_root,
+                   (workspace_root && *workspace_root) ? workspace_root : "") != 0) {
+            return 0;
+        }
+    }
+    *out = s_discovery_cache.projects;
+    return 1;
+}
+
+static void discovery_cache_store(const char *filepath,
+                                  const char *workspace_root,
+                                  const LspProjectList *projects)
+{
+    if (!filepath || !projects) return;
+    snprintf(s_discovery_cache.filepath,
+             sizeof(s_discovery_cache.filepath),
+             "%s",
+             filepath);
+    snprintf(s_discovery_cache.workspace_root,
+             sizeof(s_discovery_cache.workspace_root),
+             "%s",
+             (workspace_root && *workspace_root) ? workspace_root : "");
+    s_discovery_cache.projects = *projects;
+    s_discovery_cache.valid = 1;
 }
 
 /**
@@ -661,6 +710,11 @@ int lsp_discover_projects(const char *filepath,
     if (!filepath || !out) return -1;
     out->count = 0;
 
+    if (!is_project_file && !source_content &&
+        discovery_cache_lookup(filepath, workspace_root, out)) {
+        return (out->count > 0) ? 0 : -1;
+    }
+
     char file_dir[2048];
     extract_directory(filepath, file_dir, sizeof(file_dir));
 
@@ -699,6 +753,7 @@ int lsp_discover_projects(const char *filepath,
         scan_dir_for_projects(file_dir, out, canonical_file);
 
         write_rc_file(file_dir, out);
+        discovery_cache_store(filepath, workspace_root, out);
         return 0;
     }
 
@@ -719,6 +774,7 @@ int lsp_discover_projects(const char *filepath,
                     lsp_log("found valid rc at %s with %zu project(s)",
                             rc_path, rc_list.count);
                     *out = rc_list;
+                    discovery_cache_store(filepath, workspace_root, out);
                     return 0;
                 }
                 /* Stale rc — remove and continue searching. */
@@ -758,6 +814,7 @@ int lsp_discover_projects(const char *filepath,
                         found.count, search_dir);
                 write_rc_file(search_dir, &found);
                 *out = found;
+                discovery_cache_store(filepath, workspace_root, out);
                 return 0;
             }
 
@@ -777,6 +834,7 @@ int lsp_discover_projects(const char *filepath,
     }
 
     lsp_log("no project files found for %s", filepath);
+    discovery_cache_store(filepath, workspace_root, out);
     return -1;
 }
 

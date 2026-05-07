@@ -72,6 +72,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "OPERATORS_AND_EXPRESSIONS", "IR_EXPR_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S3.2 IR expression lowering exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "IR_STMT_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 IR statement traversal exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S3.2 IR division-guard analysis exceeds the compiler safety limit" },
+    { "OPERATORS_AND_EXPRESSIONS", "IR_EXPANSION_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S4.4.1/S4.13.1/S5.3 IR expansion exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_EXPRESSION", 0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in arithmetic/logical expressions" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_CONCAT",     0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in concatenations" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_SLICED",        0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not be sliced or indexed" },
@@ -106,6 +107,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "CONST_RULES", "CONST_CYCLE_ANALYSIS_OVERFLOW",              0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST cycle analysis exceeds safe adjacency-matrix size limits" },
     { "CONST_RULES", "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "S4.3/S7.10 Constant-expression nesting exceeds the compiler safety limit" },
     { "CONST_RULES", "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "Semantic traversal exceeds the compiler safety limit" },
+    { "CONST_RULES", "SEM_BRANCH_STATE_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "Semantic branch-state growth exceeds the compiler safety limit" },
 
     /* [PORT_WIRE_REGISTER_DECLS] */
     { "PORT_WIRE_REGISTER_DECLS", "PORT_MISSING_WIDTH",             0, JZ_RULE_MODE_ERR, "S4.4/S8.1 Port declaration without mandatory `[N]` width" },
@@ -517,6 +519,8 @@ const JZRuleInfo jz_rule_table[] = {
     /* [SIMULATION_RUNTIME] */
     { "SIMULATION", "SIM_RUN_COND_TIMEOUT",         0, JZ_RULE_MODE_ERR, "SIM-030 @run_until/@run_while condition not met within timeout" },
     { "SIMULATION", "SIM_MEMORY_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-031 Declared simulation memory depth exceeds the simulator safety limit" },
+    { "SIMULATION", "SIM_INSTANCE_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-032 Simulation instance hierarchy exceeds the safety recursion limit" },
+    { "SIMULATION", "SIM_TRACE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-033 Emitted simulation trace exceeds the safety size limit" },
 
     /* [PRINT_DIRECTIVES] */
     { "PRINT_DIRECTIVES", "PRT_ARG_COUNT_MISMATCH", 0, JZ_RULE_MODE_ERR, "PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments" },

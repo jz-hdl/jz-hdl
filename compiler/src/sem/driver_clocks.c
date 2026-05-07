@@ -13,6 +13,21 @@
 #include "rules.h"
 #include "driver_internal.h"
 
+static unsigned g_sem_clock_depth = 0;
+
+static int sem_clock_enter_depth(JZDiagnosticList *diagnostics, JZLocation loc)
+{
+    if (jz_depth_enter_checked(&g_sem_clock_depth,
+                               JZ_LIMIT_SEM_RECURSION_DEPTH) != 0) {
+        sem_report_rule(diagnostics,
+                        loc,
+                        "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",
+                        "semantic traversal exceeds the compiler safety limit");
+        return 0;
+    }
+    return 1;
+}
+
 /** @brief Tracks the owning clock domain for a register declaration. */
 typedef struct JZRegisterDomainInfo {
     JZASTNode *decl;              /**< REGISTER declaration node. */
@@ -101,6 +116,10 @@ static void sem_sync_collect_reg_assigns_stmt(JZASTNode *stmt,
                                               JZBuffer *out_targets)
 {
     if (!stmt || !scope || !out_targets) return;
+    if (jz_depth_enter_checked(&g_sem_clock_depth,
+                               JZ_LIMIT_SEM_RECURSION_DEPTH) != 0) {
+        return;
+    }
 
     switch (stmt->type) {
     case JZ_AST_STMT_ASSIGN:
@@ -149,6 +168,7 @@ static void sem_sync_collect_reg_assigns_stmt(JZASTNode *stmt,
     default:
         break;
     }
+    jz_depth_leave(&g_sem_clock_depth);
 }
 
 /**
@@ -172,6 +192,7 @@ static void sem_sync_check_register_uses_expr(JZASTNode *expr,
                                               JZDiagnosticList *diagnostics)
 {
     if (!expr || !scope || !block_clk || !*block_clk) return;
+    if (!sem_clock_enter_depth(diagnostics, expr->loc)) return;
 
     if (expr->type == JZ_AST_EXPR_IDENTIFIER && expr->name) {
         /* Check REGISTER home domain via CDC or assignment. */
@@ -232,6 +253,7 @@ static void sem_sync_check_register_uses_expr(JZASTNode *expr,
                                           alias_count,
                                           diagnostics);
     }
+    jz_depth_leave(&g_sem_clock_depth);
 }
 
 /**

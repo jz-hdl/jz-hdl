@@ -11,8 +11,28 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include "ir_internal.h"
+
+static int ir_report_expansion_limit(JZDiagnosticList *diagnostics,
+                                     JZLocation loc,
+                                     const char *what)
+{
+    char msg[256];
+
+    if (!diagnostics) return -1;
+    snprintf(msg, sizeof(msg),
+             "%s exceeds the compiler safety limit of %u expanded item(s)",
+             what,
+             (unsigned)jz_input_limit_value(JZ_LIMIT_IR_EXPANDED_ITEMS));
+    jz_diagnostic_report(diagnostics,
+                         loc,
+                         JZ_SEVERITY_ERROR,
+                         "IR_EXPANSION_LIMIT_EXCEEDED",
+                         msg);
+    return -1;
+}
 
 /* ============================================================================
  * BUS Signal Expansion Helpers
@@ -220,6 +240,7 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
                                 int owner_module_id,
                                 JZArena *arena,
                                 const JZBuffer *project_symbols,
+                                JZDiagnosticList *diagnostics,
                                 IR_Signal **out_signals,
                                 int *out_count,
                                 IR_BusSignalMapping **out_bus_map,
@@ -240,8 +261,8 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
      * For BUS ports, we count the number of signals in the BUS definition
      * multiplied by the array count (default 1).
      */
-    int count = 0;
-    int bus_map_count = 0;
+    size_t count = 0;
+    size_t bus_map_count = 0;
     for (size_t i = 0; i < sym_count; ++i) {
         const JZSymbol *sym = &syms[i];
         if (sym->kind == JZ_SYM_PORT) {
@@ -271,18 +292,46 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
                                 }
                             }
                         }
-                        count += bus_sig_count * (int)array_count;
-                        bus_map_count += bus_sig_count * (int)array_count;
+                        if (bus_sig_count > 0) {
+                            size_t added = 0;
+                            if (jz_size_mul_checked((size_t)bus_sig_count,
+                                                    (size_t)array_count,
+                                                    &added) != 0 ||
+                                jz_limit_accumulate_checked(count,
+                                                            added,
+                                                            JZ_LIMIT_IR_EXPANDED_ITEMS,
+                                                            &count) != 0 ||
+                                jz_limit_accumulate_checked(bus_map_count,
+                                                            added,
+                                                            JZ_LIMIT_IR_EXPANDED_ITEMS,
+                                                            &bus_map_count) != 0) {
+                                return ir_report_expansion_limit(diagnostics,
+                                                                 sym->node ? sym->node->loc : scope->node->loc,
+                                                                 "BUS signal expansion");
+                            }
+                        }
                     }
                 }
             } else {
                 /* Regular port. */
-                count++;
+                if (jz_limit_accumulate_checked(count, 1,
+                                                JZ_LIMIT_IR_EXPANDED_ITEMS,
+                                                &count) != 0) {
+                    return ir_report_expansion_limit(diagnostics,
+                                                     sym->node ? sym->node->loc : scope->node->loc,
+                                                     "signal expansion");
+                }
             }
         } else if (sym->kind == JZ_SYM_WIRE ||
                    sym->kind == JZ_SYM_REGISTER ||
                    sym->kind == JZ_SYM_LATCH) {
-            count++;
+            if (jz_limit_accumulate_checked(count, 1,
+                                            JZ_LIMIT_IR_EXPANDED_ITEMS,
+                                            &count) != 0) {
+                return ir_report_expansion_limit(diagnostics,
+                                                 sym->node ? sym->node->loc : scope->node->loc,
+                                                 "signal expansion");
+            }
         }
     }
 
@@ -292,7 +341,13 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
         return 0;
     }
 
-    IR_Signal *signals = (IR_Signal *)jz_arena_alloc(arena, sizeof(IR_Signal) * (size_t)count);
+    if (count > (size_t)INT_MAX || bus_map_count > (size_t)INT_MAX) {
+        return ir_report_expansion_limit(diagnostics,
+                                         scope->node ? scope->node->loc : (JZLocation){0},
+                                         "IR signal allocation");
+    }
+
+    IR_Signal *signals = (IR_Signal *)jz_arena_alloc(arena, sizeof(IR_Signal) * count);
     if (!signals) {
         return -1;
     }
@@ -302,7 +357,7 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
     IR_BusSignalMapping *bus_map = NULL;
     if (bus_map_count > 0) {
         bus_map = (IR_BusSignalMapping *)jz_arena_alloc(
-            arena, sizeof(IR_BusSignalMapping) * (size_t)bus_map_count);
+            arena, sizeof(IR_BusSignalMapping) * bus_map_count);
         if (!bus_map) {
             return -1;
         }

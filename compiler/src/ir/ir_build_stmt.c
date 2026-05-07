@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 
 #include "ir_internal.h"
 #include "../sem/driver_internal.h"
@@ -221,6 +222,14 @@ static int ir_build_assignment_stmt(JZArena *arena,
             }
 
             int count = (int)info.count;
+            if (count <= 0 || (size_t)count > jz_input_limit_value(JZ_LIMIT_IR_EXPANDED_ITEMS)) {
+                jz_diagnostic_report(diagnostics,
+                                     lhs->loc,
+                                     JZ_SEVERITY_ERROR,
+                                     "IR_EXPANSION_LIMIT_EXCEEDED",
+                                     "dynamic BUS assignment expansion exceeds the compiler safety limit");
+                return -1;
+            }
             IR_Stmt *sub_stmts = (IR_Stmt *)jz_arena_alloc(arena,
                                      sizeof(IR_Stmt) * (size_t)count);
             if (!sub_stmts) return -1;

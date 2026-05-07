@@ -14,6 +14,8 @@
 #include "rules.h"
 #include "driver_internal.h"
 
+static unsigned g_sem_comb_depth = 0;
+
 /** @brief Directed combinational dependency between two net indices. */
 typedef struct JZCombEdge {
     size_t src_net_ix; /**< Source net index. */
@@ -1040,12 +1042,18 @@ static void sem_comb_build_summary(JZModuleCombCache *slot,
                                    JZBuffer *cache)
 {
     if (!slot || !child_scope || !child_scope->node) return;
+    if (jz_depth_enter_checked(&g_sem_comb_depth,
+                               JZ_LIMIT_SEM_RECURSION_DEPTH) != 0) {
+        slot->state = COMB_CACHE_OPAQUE;
+        return;
+    }
 
     slot->state = COMB_CACHE_IN_PROGRESS;
 
     JZASTNode *mod = child_scope->node;
     if (mod->type == JZ_AST_BLACKBOX) {
         slot->state = COMB_CACHE_OPAQUE;
+        jz_depth_leave(&g_sem_comb_depth);
         return;
     }
 
@@ -1053,6 +1061,7 @@ static void sem_comb_build_summary(JZModuleCombCache *slot,
     JZBuffer bindings = (JZBuffer){0};
     if (sem_net_build_module_graph(child_scope, project_symbols, &nets, &bindings) != 0) {
         slot->state = COMB_CACHE_OPAQUE;
+        jz_depth_leave(&g_sem_comb_depth);
         return;
     }
 
@@ -1166,6 +1175,7 @@ static void sem_comb_build_summary(JZModuleCombCache *slot,
     sem_net_free_module_graph(&nets, &bindings);
 
     slot->state = COMB_CACHE_DONE;
+    jz_depth_leave(&g_sem_comb_depth);
 }
 
 void sem_check_combinational_loops_for_module(const JZModuleScope *scope,

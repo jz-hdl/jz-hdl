@@ -1509,6 +1509,22 @@ static int variant_validate_coverage(const JZChipClockGen *cg)
         return 1;
     }
 
+    {
+        size_t tuple_count = 1;
+        for (size_t ai = 0; ai < axis_count; ++ai) {
+            if (axes[ai].val_count == 0) continue;
+            if (jz_size_mul_checked(tuple_count, axes[ai].val_count, &tuple_count) != 0 ||
+                tuple_count > jz_input_limit_value(JZ_LIMIT_CHIP_VARIANT_TUPLES)) {
+                jz_chip_set_error(
+                    "clock_gen '%s': variant coverage tuple count exceeds the safety limit of %u combinations",
+                    cg->type ? cg->type : "?",
+                    (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_VARIANT_TUPLES));
+                variant_axes_free(axes, axis_count);
+                return 0;
+            }
+        }
+    }
+
     size_t *idx = (size_t *)calloc(axis_count, sizeof(size_t));
     if (!idx) {
         jz_chip_set_error("clock_gen '%s': out of memory validating variants",

@@ -571,10 +571,18 @@ static double ir_cgen_eval_shift(const char **pp, IRCGenEvalCtx *ctx)
         if ((*pp)[0] == '<' && (*pp)[1] == '<') {
             *pp += 2;
             double right = ir_cgen_eval_add(pp, ctx);
+            if (right < 0.0 || right >= 63.0) {
+                ctx->ok = 0;
+                return 0.0;
+            }
             left = (double)((long long)left << (int)right);
         } else if ((*pp)[0] == '>' && (*pp)[1] == '>') {
             *pp += 2;
             double right = ir_cgen_eval_add(pp, ctx);
+            if (right < 0.0 || right >= 63.0) {
+                ctx->ok = 0;
+                return 0.0;
+            }
             left = (double)((long long)left >> (int)right);
         } else break;
     }
@@ -892,6 +900,7 @@ int jz_ir_build_design(JZASTNode *root,
                                             mod->id,
                                             arena,
                                             &project_symbols,
+                                            diagnostics,
                                             &mod->signals,
                                             &mod->num_signals,
                                             &bus_map,
@@ -940,6 +949,7 @@ int jz_ir_build_design(JZASTNode *root,
             if (ir_build_instance_port_mappings(scope,
                                                  &project_symbols,
                                                  arena,
+                                                 diagnostics,
                                                  &bus_map,
                                                  &bus_map_count) != 0) {
                 goto ir_fail;
@@ -1013,6 +1023,7 @@ int jz_ir_build_design(JZASTNode *root,
                                               scopes,
                                               scope_count,
                                               &project_symbols,
+                                              diagnostics,
                                               specs,
                                               spec_count,
                                               design->modules,

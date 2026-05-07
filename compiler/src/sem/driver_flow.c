@@ -15,6 +15,35 @@
 #include "driver_internal.h"
 #include <time.h>
 
+static unsigned g_sem_flow_depth = 0;
+
+static int sem_flow_enter_depth(JZDiagnosticList *diagnostics, JZLocation loc)
+{
+    if (jz_depth_enter_checked(&g_sem_flow_depth,
+                               JZ_LIMIT_SEM_RECURSION_DEPTH) != 0) {
+        sem_report_rule(diagnostics,
+                        loc,
+                        "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",
+                        "semantic traversal exceeds the compiler safety limit");
+        return 0;
+    }
+    return 1;
+}
+
+static int sem_flow_branch_state_limit_ok(size_t count,
+                                          JZLocation loc,
+                                          JZDiagnosticList *diagnostics)
+{
+    if (count > jz_input_limit_value(JZ_LIMIT_SEM_BRANCH_STATES)) {
+        sem_report_rule(diagnostics,
+                        loc,
+                        "SEM_BRANCH_STATE_LIMIT_EXCEEDED",
+                        "semantic branch-state growth exceeds the compiler safety limit");
+        return 0;
+    }
+    return 1;
+}
+
 
 /* -------------------------------------------------------------------------
  *  Constant expression evaluator for template-expanded slice bounds
@@ -564,6 +593,7 @@ static void sem_excl_analyze_if_chain(JZASTNode *block,
 {
     if (!block || !scope || !paths) return;
     if (end_index <= start_index) return;
+    if (!sem_flow_enter_depth(diagnostics, block->loc)) return;
 
     size_t branch_count = end_index - start_index;
     int has_else = 0;
@@ -573,6 +603,12 @@ static void sem_excl_analyze_if_chain(JZASTNode *block,
     }
 
     size_t path_count = paths->len / sizeof(JZPathState);
+    if (!sem_flow_branch_state_limit_ok(branch_count * (path_count ? path_count : 1u),
+                                        block->loc,
+                                        diagnostics)) {
+        jz_depth_leave(&g_sem_flow_depth);
+        return;
+    }
     JZPathState *base_arr = (JZPathState *)paths->data;
 
     for (size_t pi = 0; pi < path_count; ++pi) {
@@ -660,6 +696,7 @@ static void sem_excl_analyze_if_chain(JZASTNode *block,
         }
         free(branch_new);
     }
+    jz_depth_leave(&g_sem_flow_depth);
 }
 
 static void sem_excl_analyze_select(JZASTNode *select_stmt,
@@ -672,6 +709,7 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
 {
     if (!select_stmt || !paths) return;
     if (select_stmt->child_count < 2) return;
+    if (!sem_flow_enter_depth(diagnostics, select_stmt->loc)) return;
 
     size_t path_count = paths->len / sizeof(JZPathState);
     JZPathState *base_arr = (JZPathState *)paths->data;
@@ -697,6 +735,12 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
         if (!case_node) continue;
         size_t body_start = (case_node->type == JZ_AST_STMT_CASE) ? 1u : 0u;
         if (case_node->child_count > body_start) actual_branch_count++;
+    }
+    if (!sem_flow_branch_state_limit_ok(actual_branch_count * (path_count ? path_count : 1u),
+                                        select_stmt->loc,
+                                        diagnostics)) {
+        jz_depth_leave(&g_sem_flow_depth);
+        return;
     }
 
     for (size_t pi = 0; pi < path_count; ++pi) {
@@ -784,6 +828,7 @@ static void sem_excl_analyze_select(JZASTNode *select_stmt,
         }
         free(branch_new);
     }
+    jz_depth_leave(&g_sem_flow_depth);
 }
 
 static void sem_excl_analyze_stmt(JZASTNode *stmt,
@@ -881,6 +926,7 @@ static void sem_excl_analyze_block(JZASTNode *block,
                                    JZDiagnosticList *diagnostics)
 {
     if (!block || !scope || !paths) return;
+    if (!sem_flow_enter_depth(diagnostics, block->loc)) return;
 
     for (size_t i = 0; i < block->child_count; ++i) {
         JZASTNode *stmt = block->children[i];
@@ -910,6 +956,7 @@ static void sem_excl_analyze_block(JZASTNode *block,
             sem_excl_analyze_stmt(stmt, scope, project_symbols, is_sync, nesting_depth, paths, diagnostics);
         }
     }
+    jz_depth_leave(&g_sem_flow_depth);
 }
 
 static void sem_excl_check_async_undefined_paths(const JZModuleScope *scope,

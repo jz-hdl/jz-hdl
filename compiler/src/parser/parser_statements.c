@@ -17,6 +17,7 @@
 #include "parser_internal.h"
 
 static unsigned g_parser_stmt_depth = 0;
+static unsigned g_parser_lvalue_depth = 0;
 
 /**
  * @brief Parse the primary identifier form of an assignment lvalue.
@@ -161,6 +162,14 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
 }
 
 static JZASTNode *parse_lvalue(Parser *p) {
+    if (jz_depth_enter_checked(&g_parser_lvalue_depth,
+                               JZ_LIMIT_PARSER_EXPR_DEPTH) != 0) {
+        parser_report_rule(p,
+                           peek(p),
+                           "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",
+                           "lvalue nesting exceeds the parser safety limit");
+        return NULL;
+    }
     if (match(p, JZ_TOK_LBRACE)) {
         /* Concatenation lvalue: { lhs1, lhs2, ... } */
         JZASTNode *concat = jz_ast_new(JZ_AST_EXPR_CONCAT, peek(p)->loc);
@@ -184,13 +193,18 @@ static JZASTNode *parse_lvalue(Parser *p) {
         if (!match(p, JZ_TOK_RBRACE)) {
             jz_ast_free(concat);
             parser_error(p, "expected '}' at end of concatenation left-hand side");
+            jz_depth_leave(&g_parser_lvalue_depth);
             return NULL;
         }
+        jz_depth_leave(&g_parser_lvalue_depth);
         return concat;
     }
 
     JZASTNode *base = parse_lvalue_primary(p);
-    if (!base) return NULL;
+    if (!base) {
+        jz_depth_leave(&g_parser_lvalue_depth);
+        return NULL;
+    }
 
     /* Optional slice chains on lvalue. */
     for (;;) {
@@ -204,6 +218,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
             msb = parse_simple_index_expr(p);
             if (!msb) {
                 jz_ast_free(base);
+                jz_depth_leave(&g_parser_lvalue_depth);
                 return NULL;
             }
         }
@@ -217,6 +232,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
             if (!lsb) {
                 jz_ast_free(base);
                 jz_ast_free(msb);
+                jz_depth_leave(&g_parser_lvalue_depth);
                 return NULL;
             }
         }
@@ -226,6 +242,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
             jz_ast_free(msb);
             if (lsb) jz_ast_free(lsb);
             parser_error(p, "expected ']' after lvalue slice/index");
+            jz_depth_leave(&g_parser_lvalue_depth);
             return NULL;
         }
 
@@ -235,6 +252,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
                 jz_ast_free(base);
                 if (msb) jz_ast_free(msb);
                 parser_error(p, "expected BUS member identifier after '.'");
+                jz_depth_leave(&g_parser_lvalue_depth);
                 return NULL;
             }
 
@@ -242,6 +260,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
                 jz_ast_free(base);
                 if (msb) jz_ast_free(msb);
                 parser_error(p, "expected BUS port identifier before member access");
+                jz_depth_leave(&g_parser_lvalue_depth);
                 return NULL;
             }
 
@@ -249,6 +268,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
             if (!member) {
                 jz_ast_free(base);
                 if (msb) jz_ast_free(msb);
+                jz_depth_leave(&g_parser_lvalue_depth);
                 return NULL;
             }
             jz_ast_set_name(member, base->name);
@@ -260,6 +280,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
                     jz_ast_free(member);
                     jz_ast_free(msb);
                     jz_ast_free(base);
+                    jz_depth_leave(&g_parser_lvalue_depth);
                     return NULL;
                 }
             }
@@ -272,6 +293,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
         if (is_wildcard) {
             jz_ast_free(base);
             parser_error(p, "wildcard index is only valid for BUS member access");
+            jz_depth_leave(&g_parser_lvalue_depth);
             return NULL;
         }
 
@@ -281,6 +303,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
             if (!lsb) {
                 jz_ast_free(base);
                 jz_ast_free(msb);
+                jz_depth_leave(&g_parser_lvalue_depth);
                 return NULL;
             }
             if (msb->type == JZ_AST_EXPR_IDENTIFIER) {
@@ -295,6 +318,7 @@ static JZASTNode *parse_lvalue(Parser *p) {
             jz_ast_free(base);
             jz_ast_free(msb);
             jz_ast_free(lsb);
+            jz_depth_leave(&g_parser_lvalue_depth);
             return NULL;
         }
         if (jz_ast_add_child(slice, base) != 0 ||
@@ -304,11 +328,13 @@ static JZASTNode *parse_lvalue(Parser *p) {
             jz_ast_free(base);
             jz_ast_free(msb);
             jz_ast_free(lsb);
+            jz_depth_leave(&g_parser_lvalue_depth);
             return NULL;
         }
         base = slice;
     }
 
+    jz_depth_leave(&g_parser_lvalue_depth);
     return base;
 }
 
@@ -853,24 +879,35 @@ static int parse_feature_guard_stmt(Parser *p, JZASTNode *parent, int is_sync)
 int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
                                   int (*body_fn)(Parser *p, JZASTNode *parent))
 {
+    if (jz_depth_enter_checked(&g_parser_stmt_depth,
+                               JZ_LIMIT_PARSER_STATEMENT_DEPTH) != 0) {
+        parser_report_rule(p,
+                           peek(p),
+                           "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",
+                           "feature nesting exceeds the parser safety limit");
+        return -1;
+    }
     const JZToken *feat_tok = peek(p);
     advance(p); /* consume @feature */
 
     /* Parse the feature condition expression. */
     JZASTNode *cond = parse_expression(p);
     if (!cond) {
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
 
     JZASTNode *guard = jz_ast_new(JZ_AST_FEATURE_GUARD, feat_tok->loc);
     if (!guard) {
         jz_ast_free(cond);
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
     jz_ast_set_block_kind(guard, "FEATURE_DECL");
     if (jz_ast_add_child(guard, cond) != 0) {
         jz_ast_free(cond);
         jz_ast_free(guard);
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
 
@@ -878,6 +915,7 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
     JZASTNode *then_block = jz_ast_new(JZ_AST_BLOCK, feat_tok->loc);
     if (!then_block) {
         jz_ast_free(guard);
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
     jz_ast_set_block_kind(then_block, "FEATURE_THEN");
@@ -885,11 +923,13 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
     if (body_fn(p, then_block) != 0) {
         jz_ast_free(then_block);
         jz_ast_free(guard);
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
     if (jz_ast_add_child(guard, then_block) != 0) {
         jz_ast_free(then_block);
         jz_ast_free(guard);
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
 
@@ -901,6 +941,7 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
         JZASTNode *else_block = jz_ast_new(JZ_AST_BLOCK, else_tok->loc);
         if (!else_block) {
             jz_ast_free(guard);
+            jz_depth_leave(&g_parser_stmt_depth);
             return -1;
         }
         jz_ast_set_block_kind(else_block, "FEATURE_ELSE");
@@ -908,11 +949,13 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
         if (body_fn(p, else_block) != 0) {
             jz_ast_free(else_block);
             jz_ast_free(guard);
+            jz_depth_leave(&g_parser_stmt_depth);
             return -1;
         }
         if (jz_ast_add_child(guard, else_block) != 0) {
             jz_ast_free(else_block);
             jz_ast_free(guard);
+            jz_depth_leave(&g_parser_stmt_depth);
             return -1;
         }
     }
@@ -921,15 +964,18 @@ int parse_feature_guard_in_block(Parser *p, JZASTNode *parent,
     if (peek(p)->type != JZ_TOK_KW_ENDFEAT) {
         parser_error(p, "missing @endfeat for @feature block");
         jz_ast_free(guard);
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
     advance(p); /* consume @endfeat */
 
     if (jz_ast_add_child(parent, guard) != 0) {
         jz_ast_free(guard);
+        jz_depth_leave(&g_parser_stmt_depth);
         return -1;
     }
 
+    jz_depth_leave(&g_parser_stmt_depth);
     return 0;
 }
 
