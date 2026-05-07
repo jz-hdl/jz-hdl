@@ -846,9 +846,19 @@ static void sem_excl_analyze_stmt(JZASTNode *stmt,
         if (stmt->child_count < 2) break;
         JZASTNode *lhs = stmt->children[0];
         JZASTNode *rhs = stmt->children[1];
-
         const char *op = stmt->block_kind ? stmt->block_kind : "";
+        int is_alias   = (strcmp(op, "ALIAS") == 0 ||
+                          strcmp(op, "ALIAS_Z") == 0 ||
+                          strcmp(op, "ALIAS_S") == 0);
         int is_drive   = (strncmp(op, "DRIVE", 5) == 0);
+
+        /* Unconditional alias statements merge nets; they are not writes for
+         * exclusive-assignment purposes, so cycles like a=b; b=c; c=a; must
+         * not be classified as multiple assignments.
+         */
+        if (is_alias) {
+            break;
+        }
 
         /* Choose the real assignment target based on directional semantics:
          *   - DRIVE*:  source => sink   (RHS is the driven net)

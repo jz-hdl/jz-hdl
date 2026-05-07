@@ -27,12 +27,12 @@
 
     ASYNCHRONOUS {
         // Trigger 1: WIRE assigned twice within the same block (same scope).
-        w     = a;
-        w     = b;
+        w     <= a;
+        w     <= b;
         // Trigger 2: PORT assigned twice within the same block (same scope).
-        out_a = a;
-        out_a = b;
+        out_a <= a;
+        out_a <= b;
         // Valid assignment to a different identifier (no false positive).
-        out_b = a;
+        out_b <= a;
     }
 @endmod

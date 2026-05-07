@@ -1,0 +1,45 @@
+// HAPPY_PATH: unconditional alias cycles in ASYNCHRONOUS blocks collapse into
+// a single merged net instead of triggering exclusive-assignment diagnostics.
+
+@project HAPPY_PATH_alias_cyclic_closure
+    @top TopMod {
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module AliasCycleMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    WIRE {
+        a [8];
+        b [8];
+        c [8];
+    }
+
+    ASYNCHRONOUS {
+        a = din;
+        b = a;
+        c = b;
+        a = c;
+        dout <= a;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    @new inst AliasCycleMod {
+        IN  [8] din = din;
+        OUT [8] dout = dout;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

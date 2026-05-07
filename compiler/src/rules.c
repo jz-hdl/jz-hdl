@@ -262,10 +262,10 @@ const JZRuleInfo jz_rule_table[] = {
     { "BUS_RULES", "BUS_PORT_INDEX_OUT_OF_RANGE",                    0, JZ_RULE_MODE_ERR, "S4.4.1 BUS port index is outside the declared range" },
     { "BUS_RULES", "BUS_PORT_NOT_BUS",                               0, JZ_RULE_MODE_ERR, "S4.4.1 BUS member access used on non-BUS port" },
     { "BUS_RULES", "BUS_SIGNAL_UNDEFINED",                           0, JZ_RULE_MODE_ERR, "S4.4.1 BUS signal does not exist in BUS definition" },
-    { "BUS_RULES", "BUS_SIGNAL_READ_FROM_WRITABLE",                  0, JZ_RULE_MODE_ERR, "S4.4.1 Read access to writable BUS signal is not allowed" },
-    { "BUS_RULES", "BUS_SIGNAL_WRITE_TO_READABLE",                   0, JZ_RULE_MODE_ERR, "S4.4.1 Write access to readable BUS signal is not allowed" },
+    { "BUS_RULES", "BUS_SIGNAL_READ_FROM_WRITABLE",                  1, JZ_RULE_MODE_ERR, "S4.4.1 Read access to writable BUS signal is not allowed" },
+    { "BUS_RULES", "BUS_SIGNAL_WRITE_TO_READABLE",                   1, JZ_RULE_MODE_ERR, "S4.4.1 Write access to readable BUS signal is not allowed" },
     { "BUS_RULES", "BUS_WILDCARD_WIDTH_MISMATCH",                    0, JZ_RULE_MODE_ERR, "S4.4.1 BUS wildcard assignment requires RHS width of 1 or array count" },
-    { "BUS_RULES", "BUS_TRISTATE_MISMATCH",                          0, JZ_RULE_MODE_ERR, "S4.4.1 Only writable BUS signals (INOUT or OUT from this role) may be assigned 'z' for tri-state" },
+    { "BUS_RULES", "BUS_TRISTATE_MISMATCH",                          1, JZ_RULE_MODE_ERR, "S4.4.1 Only writable BUS signals (INOUT or OUT from this role) may be assigned 'z' for tri-state" },
     { "BUS_RULES", "BUS_BULK_BUS_MISMATCH",                          0, JZ_RULE_MODE_ERR, "S6.8 Bulk BUS assignment requires both sides to reference the same BUS id" },
     { "BUS_RULES", "BUS_BULK_ROLE_CONFLICT",                         0, JZ_RULE_MODE_ERR, "S6.8 Bulk BUS assignment between instances with the same BUS role (SOURCE/SOURCE or TARGET/TARGET) is not allowed" },
 

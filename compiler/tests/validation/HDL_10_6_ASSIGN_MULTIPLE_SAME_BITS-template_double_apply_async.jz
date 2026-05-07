@@ -87,7 +87,7 @@
 
         // Trigger 3: @apply + direct assignment to same wire
         @apply set_high(w2);
-        w2 = GND;
+        w2 <= GND;
 
         // Valid: @apply in mutually exclusive IF/ELSE branches (no error)
         IF (sel) {

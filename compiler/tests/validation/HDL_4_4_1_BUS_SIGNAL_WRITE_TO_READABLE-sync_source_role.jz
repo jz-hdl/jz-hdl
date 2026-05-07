@@ -1,0 +1,57 @@
+// BUS_SIGNAL_WRITE_TO_READABLE: sync write to a SOURCE-role readable BUS
+// signal. ASSIGN_TO_NON_REGISTER_IN_SYNC is semantically inseparable because
+// all BUS signals are non-registers in SYNCHRONOUS blocks.
+
+@project BUS_SIGNAL_WRITE_TO_READABLE_sync_source_role
+    BUS MY_BUS {
+        OUT [8] tx;
+        IN  [8] rx;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [8] din = _;
+        OUT [8] dout = _;
+    }
+@endproj
+
+@module SyncBusSourceMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        BUS MY_BUS SOURCE sbus;
+        OUT [8] dout;
+    }
+
+    REGISTER {
+        r [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        dout <= sbus.rx;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+        // Trigger: SOURCE-role `rx` is readable-only, not writable.
+        sbus.rx <= r;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [8] din;
+        OUT [8] dout;
+    }
+
+    @new inst SyncBusSourceMod {
+        IN  [1] clk = clk;
+        IN  [8] din = din;
+        BUS MY_BUS SOURCE sbus = _;
+        OUT [8] dout = dout;
+    };
+
+    ASYNCHRONOUS {
+    }
+@endmod

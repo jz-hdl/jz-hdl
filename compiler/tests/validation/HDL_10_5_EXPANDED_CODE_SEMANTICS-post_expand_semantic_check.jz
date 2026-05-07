@@ -60,9 +60,10 @@
     };
 
     ASYNCHRONOUS {
-        // Trigger 1: expanded template assignment and callsite assignment conflict.
+        // Trigger 1: expanded template assignment and callsite assignment
+        // conflict on the same execution path.
         @apply drive_high(w_conflict);
-        w_conflict = GND;
+        w_conflict <= GND;
 
         // Valid: expansion with no second assignment.
         @apply drive_high(w_ok);

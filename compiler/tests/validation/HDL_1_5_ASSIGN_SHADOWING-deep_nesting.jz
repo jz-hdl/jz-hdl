@@ -28,7 +28,7 @@
     }
     ASYNCHRONOUS {
         // Trigger: root assignment shadowed by deeply nested IF
-        out_a = GND;
+        out_a <= GND;
         IF (sel_a) {
             IF (sel_b) {
                 IF (sel_c) {
@@ -78,7 +78,7 @@
     };
 
     ASYNCHRONOUS {
-        out_a = ha_a;
-        out_b = ha_b;
+        out_a <= ha_a;
+        out_b <= ha_b;
     }
 @endmod
