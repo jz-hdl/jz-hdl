@@ -2,7 +2,7 @@
 # jz-hdl version: Version 0.1.8 (29db3ba)
 
 attribute \src "jz-hdl:11"
-module \reset_imm_hi
+module \reset_clk_hi_fall
   wire width 1 input 1 \clk
   wire width 1 input 2 \rst
   wire width 1 input 3 \en
@@ -23,10 +23,8 @@ module \reset_imm_hi
           case
         end
     end
-    sync posedge \clk
+    sync negedge \clk
       update \reg_a $0\reg_a[7:0]
-    sync high \rst
-      update \reg_a 8'00000000
   end
 end
 

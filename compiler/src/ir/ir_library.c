@@ -1443,115 +1443,6 @@ static int build_cdc_mcp_module(IR_Module *mod, int module_id,
 }
 
 /* -------------------------------------------------------------------------
- * Reset synchronizer library module builder
- * -------------------------------------------------------------------------
- *
- * Async assert, sync deassert reset synchronizer.
- * Ports: clk (IN 1), rst_async_n (IN 1), rst_sync_n (OUT 1)
- * Regs:  sync_ff1 (1), sync_ff2 (1)
- *
- * always @(posedge clk or negedge rst_async_n)
- *   if (!rst_async_n) { sync_ff1 <= 0; sync_ff2 <= 0; }
- *   else { sync_ff1 <= 1; sync_ff2 <= sync_ff1; }
- * assign rst_sync_n = sync_ff2;
- */
-static int build_reset_sync_module(IR_Module *mod, int module_id, JZArena *arena)
-{
-    mod->id = module_id;
-    mod->name = ir_strdup_arena(arena, "JZHDL_LIB_RESET_SYNC");
-    mod->base_module_id = -1;
-    mod->source_file_id = -1;
-
-    enum {
-        SID_CLK = 0, SID_RST_ASYNC_N, SID_RST_SYNC_N,
-        SID_SYNC_FF1, SID_SYNC_FF2, NUM_SIGS
-    };
-
-    IR_Signal *sigs = alloc_signals(arena, NUM_SIGS);
-    if (!sigs) return -1;
-
-    init_port_signal(&sigs[SID_CLK],         SID_CLK,         "clk",         1, PORT_IN, module_id, arena);
-    init_port_signal(&sigs[SID_RST_ASYNC_N], SID_RST_ASYNC_N, "rst_async_n", 1, PORT_IN, module_id, arena);
-    init_port_signal(&sigs[SID_RST_SYNC_N],  SID_RST_SYNC_N,  "rst_sync_n",  1, PORT_OUT, module_id, arena);
-
-    init_reg_signal(&sigs[SID_SYNC_FF1], SID_SYNC_FF1, "sync_ff1", 1, 0, module_id, arena);
-    init_reg_signal(&sigs[SID_SYNC_FF2], SID_SYNC_FF2, "sync_ff2", 1, 0, module_id, arena);
-
-    mod->signals = sigs;
-    mod->num_signals = NUM_SIGS;
-
-    /* 1 clock domain: posedge clk, async reset on rst_async_n (active-low) */
-    IR_ClockDomain *cd = alloc_clock_domains(arena, 1);
-    if (!cd) return -1;
-
-    cd[0].id = 0;
-    cd[0].clock_signal_id = SID_CLK;
-    cd[0].edge = EDGE_RISING;
-    cd[0].reset_signal_id = SID_RST_ASYNC_N;
-    cd[0].reset_sync_signal_id = -1;
-    cd[0].reset_active = RESET_ACTIVE_LOW;
-    cd[0].reset_type = RESET_IMMEDIATE;
-
-    {
-        int *rids = (int *)jz_arena_alloc(arena, sizeof(int) * 2);
-        if (!rids) return -1;
-        rids[0] = SID_SYNC_FF1;
-        rids[1] = SID_SYNC_FF2;
-        cd[0].register_ids = rids;
-        cd[0].num_registers = 2;
-    }
-
-    /* Build: if (!rst_async_n) { ff1<=0; ff2<=0; } else { ff1<=1; ff2<=ff1; }
-     * This explicitly creates the reset if-else rather than relying on
-     * the user-module wrapping pass (which doesn't run for library modules).
-     */
-    {
-        /* Reset branch */
-        IR_Stmt *rst_stmts = alloc_stmts(arena, 2);
-        if (!rst_stmts) return -1;
-        rst_stmts[0] = make_assign_stmt(SID_SYNC_FF1, make_literal(arena, 0, 1));
-        rst_stmts[1] = make_assign_stmt(SID_SYNC_FF2, make_literal(arena, 0, 1));
-
-        /* Normal branch */
-        IR_Stmt *norm_stmts = alloc_stmts(arena, 2);
-        if (!norm_stmts) return -1;
-        norm_stmts[0] = make_assign_stmt(SID_SYNC_FF1, make_literal(arena, 1, 1));
-        norm_stmts[1] = make_assign_stmt(SID_SYNC_FF2, make_sig_ref(arena, SID_SYNC_FF1, 1));
-
-        /* Condition: !rst_async_n */
-        IR_Expr *rst_ref = make_sig_ref(arena, SID_RST_ASYNC_N, 1);
-        IR_Expr *not_rst = make_binary(arena, EXPR_LOGICAL_NOT, rst_ref, NULL, 1);
-
-        /* Build if-else statement */
-        IR_Stmt *if_stmt = (IR_Stmt *)jz_arena_alloc(arena, sizeof(IR_Stmt));
-        if (!if_stmt) return -1;
-        memset(if_stmt, 0, sizeof(*if_stmt));
-        if_stmt->kind = STMT_IF;
-        if_stmt->u.if_stmt.condition = not_rst;
-        if_stmt->u.if_stmt.then_block = make_block(arena, rst_stmts, 2);
-        if_stmt->u.if_stmt.elif_chain = NULL;
-        if_stmt->u.if_stmt.else_block = make_block(arena, norm_stmts, 2);
-
-        cd[0].statements = if_stmt;
-    }
-    if (build_sensitivity_list(&cd[0], arena) != 0) return -1;
-
-    mod->clock_domains = cd;
-    mod->num_clock_domains = 1;
-
-    /* Async: rst_sync_n = sync_ff2; */
-    {
-        IR_Stmt *async_stmts = alloc_stmts(arena, 1);
-        if (!async_stmts) return -1;
-        async_stmts[0] = make_assign_stmt(SID_RST_SYNC_N, make_sig_ref(arena, SID_SYNC_FF2, 1));
-        async_stmts[0].u.assign.kind = ASSIGN_ALIAS;
-        mod->async_block = make_block(arena, async_stmts, 1);
-    }
-
-    return 0;
-}
-
-/* -------------------------------------------------------------------------
  * CDC entry -> Instance lowering
  * -------------------------------------------------------------------------
  */
@@ -2435,7 +2326,6 @@ int ir_build_library_modules(IR_Design *design, JZArena *arena)
     int need_bit = 0;
     int need_pulse = 0;
     int need_raw = 0;
-    int need_reset_sync = 0;
     WidthSet bus_widths;
     WidthSet fifo_widths;
     WidthSet handshake_widths;
@@ -2488,16 +2378,9 @@ int ir_build_library_modules(IR_Design *design, JZArena *arena)
             }
         }
 
-        /* Check for Immediate resets needing reset synchronizer */
-        for (int cdi = 0; cdi < mod->num_clock_domains; ++cdi) {
-            if (mod->clock_domains[cdi].reset_signal_id >= 0 &&
-                mod->clock_domains[cdi].reset_type == RESET_IMMEDIATE) {
-                need_reset_sync = 1;
-            }
-        }
     }
 
-    int num_lib = need_bit + need_pulse + need_reset_sync +
+    int num_lib = need_bit + need_pulse +
                   bus_widths.count + fifo_widths.count +
                   handshake_widths.count + mcp_widths.count;
     if (num_lib == 0 && !need_raw) {
@@ -2536,14 +2419,6 @@ int ir_build_library_modules(IR_Design *design, JZArena *arena)
     if (need_pulse) {
         pulse_module_id = lib_idx;
         if (build_cdc_pulse_module(&new_modules[lib_idx], lib_idx, arena) != 0) goto fail;
-        ++lib_idx;
-    }
-
-    /* Reset synchronizer module */
-    int reset_sync_module_id = -1;
-    if (need_reset_sync) {
-        reset_sync_module_id = lib_idx;
-        if (build_reset_sync_module(&new_modules[lib_idx], lib_idx, arena) != 0) goto fail;
         ++lib_idx;
     }
 
@@ -2750,122 +2625,6 @@ int ir_build_library_modules(IR_Design *design, JZArena *arena)
         mod->num_cdc_crossings = 0;
     }
 
-    /* Phase 5: Auto-instantiate reset synchronizers for Immediate resets.
-     * For each user module with RESET_TYPE=Immediate clock domains,
-     * add a JZHDL_LIB_RESET_SYNC instance and update the clock domain
-     * to use the synchronized reset in its body guard.
-     */
-    if (reset_sync_module_id >= 0) {
-        for (int mi = 0; mi < old_count; ++mi) {
-            IR_Module *mod = &new_modules[mi];
-            int num_imm_resets = 0;
-
-            /* Count immediate resets */
-            for (int cdi = 0; cdi < mod->num_clock_domains; ++cdi) {
-                if (mod->clock_domains[cdi].reset_signal_id >= 0 &&
-                    mod->clock_domains[cdi].reset_type == RESET_IMMEDIATE) {
-                    ++num_imm_resets;
-                }
-            }
-            if (num_imm_resets == 0) continue;
-
-            /* Grow instances array */
-            int old_inst_count = mod->num_instances;
-            int new_inst_count = old_inst_count + num_imm_resets;
-            IR_Instance *new_insts = (IR_Instance *)jz_arena_alloc(
-                arena, sizeof(IR_Instance) * (size_t)new_inst_count);
-            if (!new_insts) goto fail_cleanup;
-            memset(new_insts, 0, sizeof(IR_Instance) * (size_t)new_inst_count);
-            if (mod->instances && old_inst_count > 0) {
-                memcpy(new_insts, mod->instances,
-                       sizeof(IR_Instance) * (size_t)old_inst_count);
-            }
-
-            /* Grow signals array for rst_sync wires */
-            int old_sig_count = mod->num_signals;
-            int new_sig_count = old_sig_count + num_imm_resets;
-            IR_Signal *new_sigs = (IR_Signal *)jz_arena_alloc(
-                arena, sizeof(IR_Signal) * (size_t)new_sig_count);
-            if (!new_sigs) goto fail_cleanup;
-            memset(new_sigs, 0, sizeof(IR_Signal) * (size_t)new_sig_count);
-            if (mod->signals && old_sig_count > 0) {
-                memcpy(new_sigs, mod->signals,
-                       sizeof(IR_Signal) * (size_t)old_sig_count);
-            }
-
-            int next_inst = old_inst_count;
-            int next_sig = old_sig_count;
-
-            for (int cdi = 0; cdi < mod->num_clock_domains; ++cdi) {
-                IR_ClockDomain *cd = &mod->clock_domains[cdi];
-                if (cd->reset_signal_id < 0 || cd->reset_type != RESET_IMMEDIATE) continue;
-
-                /* Create a wire signal for the synchronized reset */
-                char sig_name[64];
-                snprintf(sig_name, sizeof(sig_name), "rst_sync_%d", cdi);
-                init_net_signal(&new_sigs[next_sig], next_sig, sig_name, 1, mod->id, arena);
-                int sync_sig_id = next_sig;
-                ++next_sig;
-
-                /* Create instance */
-                IR_Instance *inst = &new_insts[next_inst];
-                char inst_name[64];
-                snprintf(inst_name, sizeof(inst_name), "u_rst_sync_%d", cdi);
-                inst->id = next_inst;
-                inst->name = ir_strdup_arena(arena, inst_name);
-                inst->child_module_id = reset_sync_module_id;
-
-                const IR_Module *lib_mod_rs = &new_modules[reset_sync_module_id];
-                const IR_Signal *c_clk = lib_find_signal_by_name(lib_mod_rs, "clk");
-                const IR_Signal *c_rst_in = lib_find_signal_by_name(lib_mod_rs, "rst_async_n");
-                const IR_Signal *c_rst_out = lib_find_signal_by_name(lib_mod_rs, "rst_sync_n");
-                if (!c_clk || !c_rst_in || !c_rst_out) goto fail_cleanup;
-
-                IR_InstanceConnection *conns = (IR_InstanceConnection *)jz_arena_alloc(
-                    arena, sizeof(IR_InstanceConnection) * 3);
-                if (!conns) goto fail_cleanup;
-                memset(conns, 0, sizeof(IR_InstanceConnection) * 3);
-
-                conns[0] = make_conn(cd->clock_signal_id, c_clk->id, -1, -1);
-                conns[1] = make_conn(cd->reset_signal_id, c_rst_in->id, -1, -1);
-                conns[2] = make_conn(sync_sig_id, c_rst_out->id, -1, -1);
-
-                inst->connections = conns;
-                inst->num_connections = 3;
-                ++next_inst;
-
-                /* Update clock domain to use synchronized reset in body guard.
-                 * Patch the statement tree's reset condition to reference
-                 * the synchronized signal instead of the raw async reset.
-                 * The statement tree is: if (!reset) { reset_vals } else { body }
-                 * We need to replace the signal ref in the condition.
-                 */
-                cd->reset_sync_signal_id = sync_sig_id;
-                if (cd->statements && cd->statements->kind == STMT_IF) {
-                    IR_Expr *cond = cd->statements->u.if_stmt.condition;
-                    /* For active-low: cond is EXPR_LOGICAL_NOT wrapping a signal ref */
-                    if (cond && cond->kind == EXPR_LOGICAL_NOT && cond->u.unary.operand) {
-                        IR_Expr *inner = cond->u.unary.operand;
-                        if (inner->kind == EXPR_SIGNAL_REF &&
-                            inner->u.signal_ref.signal_id == cd->reset_signal_id) {
-                            inner->u.signal_ref.signal_id = sync_sig_id;
-                        }
-                    }
-                    /* For active-high: cond is a direct signal ref */
-                    else if (cond && cond->kind == EXPR_SIGNAL_REF &&
-                             cond->u.signal_ref.signal_id == cd->reset_signal_id) {
-                        cond->u.signal_ref.signal_id = sync_sig_id;
-                    }
-                }
-            }
-
-            mod->instances = new_insts;
-            mod->num_instances = next_inst;
-            mod->signals = new_sigs;
-            mod->num_signals = next_sig;
-        }
-    }
-
     free(bus_module_ids);
     free(fifo_module_ids);
     free(handshake_module_ids);
@@ -2876,7 +2635,6 @@ int ir_build_library_modules(IR_Design *design, JZArena *arena)
     width_set_free(&mcp_widths);
     return 0;
 
-fail_cleanup:
     free(bus_module_ids);
     free(fifo_module_ids);
     free(handshake_module_ids);

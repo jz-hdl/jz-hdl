@@ -4,7 +4,7 @@
 
 `default_nettype none
 
-module reset_imm_lo (
+module reset_clk_hi_fall (
     clk,
     rst,
     en,
@@ -24,8 +24,8 @@ module reset_imm_lo (
     assign q = reg_a;
 
 
-    always @(posedge clk or negedge rst) begin
-        if (!rst) begin
+    always @(negedge clk) begin
+        if (rst) begin
             reg_a <= 8'b00000000;
         end
         else begin

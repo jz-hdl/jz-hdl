@@ -1,11 +1,11 @@
 {
   "ir_version": "0.1.0",
   "design": {
-    "name": "reset_immediate_active_high_test",
+    "name": "reset_clocked_active_high_falling_test",
     "modules": [
       {
         "id": 0,
-        "name": "reset_imm_hi",
+        "name": "reset_clk_hi_fall",
         "base_module_id": -1,
         "source_line": 11,
         "source_file": "test.jz",
@@ -81,13 +81,13 @@
           {
             "id": 0,
             "clock_signal_id": 0,
-            "edge": "RISING",
+            "edge": "FALLING",
             "register_ids": [5],
             "reset_signal_id": 1,
             "reset_sync_signal_id": -1,
             "reset_active": "ACTIVE_HIGH",
-            "reset_type": "IMMEDIATE",
-            "sensitivity_list": [{ "signal_id": 0, "edge": "RISING" }, { "signal_id": 1, "edge": "RISING" }],
+            "reset_type": "CLOCKED",
+            "sensitivity_list": [{ "signal_id": 0, "edge": "FALLING" }],
             "statements": { "kind": "if", "source_line": 28, "condition": { "kind": "signal_ref", "width": 1, "source_line": 28, "signal_id": 1 }, "then": { "kind": "block", "source_line": 28, "statements": [{ "kind": "assignment", "id": 1, "source_line": 28, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 5, "is_sliced": false, "rhs": { "kind": "literal", "width": 8, "source_line": 28, "literal": { "value": 0, "width": 8 } } }] }, "else": { "kind": "block", "source_line": 28, "statements": [{ "kind": "if", "source_line": 35, "condition": { "kind": "signal_ref", "width": 1, "source_line": 35, "signal_id": 2 }, "then": { "kind": "block", "source_line": 35, "statements": [{ "kind": "assignment", "id": 0, "source_line": 36, "assignment_kind": "ASSIGN_RECEIVE", "lhs_signal_id": 5, "is_sliced": false, "rhs": { "kind": "signal_ref", "width": 8, "source_line": 36, "signal_id": 3 } }] } }] } }
           }
         ],
@@ -101,7 +101,7 @@
       }
     ],
     "project": {
-      "name": "reset_immediate_active_high_test",
+      "name": "reset_clocked_active_high_falling_test",
       "clocks": [
       ],
       "clock_gens": [

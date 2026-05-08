@@ -52,17 +52,17 @@ check_absent() {
 echo "Checking reset and sync hold logic in generated Verilog..."
 
 # --- Test 1: Immediate reset (async) on posedge clk1 ---
-# RESET_TYPE=Immediate with synchronizer: raw rst is NOT in the sensitivity list
-# because the body uses the synchronized signal (rst_sync_0), not the raw rst.
-check "immediate reset: sensitivity list is posedge clk1 only" \
-      "always @(posedge clk1)"
+check "immediate reset: sensitivity list includes raw active-high reset" \
+      "always @(posedge clk1 or posedge rst)"
 
-check_absent "immediate reset: no raw rst in clk1 sensitivity list" \
-             "always @(posedge clk1 or"
+check_absent "immediate reset: no synchronized reset helper instance" \
+             "JZHDL_LIB_RESET_SYNC"
 
-# Reset condition uses synchronized reset signal
-check "immediate reset: synchronized reset guard" \
-      "if (rst_sync_0) begin"
+check_absent "immediate reset: no synchronized reset signal" \
+             "rst_sync_0"
+
+check "immediate reset: raw reset guard" \
+      "if (rst) begin"
 
 # The reset assignment zeros the register
 check "immediate reset: reg_immediate reset to zero" \
