@@ -28,6 +28,8 @@
  * @return 0 on success, -1 on error
  */
 static int parse_project_top_binding_list(Parser *p, JZASTNode *top);
+static JZASTNode *clone_project_top_expr_tree(const JZASTNode *src);
+static JZASTNode *parse_project_top_bus_target_expr(Parser *p);
 
 /**
  * @brief Parse the optional CHIP attribute in a @project header.
@@ -45,6 +47,199 @@ static int parse_project_header_chip_attr(Parser *p, char **out_chip_id);
  * @return Project top-instance AST node, or NULL on error
  */
 static JZASTNode *parse_project_top_new(Parser *p);
+
+static JZASTNode *clone_project_top_expr_tree(const JZASTNode *src)
+{
+    if (!src) return NULL;
+    JZASTNode *copy = jz_ast_new(src->type, src->loc);
+    if (!copy) return NULL;
+
+    if (src->name) {
+        jz_ast_set_name(copy, src->name);
+    }
+    if (src->text) {
+        jz_ast_set_text(copy, src->text);
+    }
+    if (src->width) {
+        jz_ast_set_width(copy, src->width);
+    }
+    if (src->block_kind) {
+        jz_ast_set_block_kind(copy, src->block_kind);
+    }
+
+    for (size_t i = 0; i < src->child_count; ++i) {
+        JZASTNode *child_copy = clone_project_top_expr_tree(src->children[i]);
+        if (!child_copy) {
+            jz_ast_free(copy);
+            return NULL;
+        }
+        if (jz_ast_add_child(copy, child_copy) != 0) {
+            jz_ast_free(child_copy);
+            jz_ast_free(copy);
+            return NULL;
+        }
+    }
+    return copy;
+}
+
+static JZASTNode *parse_project_top_bus_target_expr(Parser *p)
+{
+    const JZToken *t = peek(p);
+    if (t->type == JZ_TOK_NUMBER || t->type == JZ_TOK_SIZED_NUMBER) {
+        JZASTNode *lit = jz_ast_new(JZ_AST_EXPR_LITERAL, t->loc);
+        if (!lit) return NULL;
+        if (t->lexeme) {
+            jz_ast_set_text(lit, t->lexeme);
+        }
+        advance(p);
+        return lit;
+    }
+
+    if (t->type == JZ_TOK_LBRACE) {
+        JZLocation loc = t->loc;
+        advance(p);
+        JZASTNode *concat = jz_ast_new(JZ_AST_EXPR_CONCAT, loc);
+        if (!concat) return NULL;
+        if (peek(p)->type != JZ_TOK_RBRACE) {
+            for (;;) {
+                JZASTNode *elem = parse_project_top_bus_target_expr(p);
+                if (!elem) {
+                    jz_ast_free(concat);
+                    return NULL;
+                }
+                if (jz_ast_add_child(concat, elem) != 0) {
+                    jz_ast_free(elem);
+                    jz_ast_free(concat);
+                    return NULL;
+                }
+                if (!match(p, JZ_TOK_COMMA)) break;
+            }
+        }
+        if (!match(p, JZ_TOK_RBRACE)) {
+            jz_ast_free(concat);
+            parser_error(p, "expected '}' at end of concatenation in project @top BUS binding");
+            return NULL;
+        }
+        return concat;
+    }
+
+    if (t->type != JZ_TOK_IDENTIFIER) {
+        parser_error(p, "expected pin, pin bus, or literal on right-hand side of project @top BUS binding");
+        return NULL;
+    }
+
+    JZLocation loc = t->loc;
+    char *buf = NULL;
+    size_t buf_sz = 0;
+
+    for (;;) {
+        const JZToken *id = peek(p);
+        if (id->type != JZ_TOK_IDENTIFIER || !id->lexeme) break;
+        size_t len = strlen(id->lexeme);
+        size_t new_size = 0;
+        char *new_buf = NULL;
+        if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+            jz_size_add_checked(new_size, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
+        if (!new_buf) {
+            free(buf);
+            return NULL;
+        }
+        buf = new_buf;
+        memcpy(buf + buf_sz, id->lexeme, len);
+        buf_sz += len;
+        buf[buf_sz] = '\0';
+        advance(p);
+        if (!match(p, JZ_TOK_DOT)) {
+            break;
+        }
+        if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
+        if (!new_buf) {
+            free(buf);
+            return NULL;
+        }
+        buf = new_buf;
+        buf[buf_sz++] = '.';
+        buf[buf_sz] = '\0';
+    }
+
+    if (!buf) {
+        parser_error(p, "expected identifier in project @top BUS binding");
+        return NULL;
+    }
+
+    JZASTNode *base = jz_ast_new(strchr(buf, '.') ? JZ_AST_EXPR_QUALIFIED_IDENTIFIER
+                                                  : JZ_AST_EXPR_IDENTIFIER,
+                                 loc);
+    if (!base) {
+        free(buf);
+        return NULL;
+    }
+    jz_ast_set_name(base, buf);
+    free(buf);
+
+    if (!match(p, JZ_TOK_LBRACKET)) {
+        return base;
+    }
+
+    JZASTNode *msb = parse_simple_index_expr(p);
+    if (!msb) {
+        jz_ast_free(base);
+        return NULL;
+    }
+
+    JZASTNode *lsb = NULL;
+    int is_slice = 0;
+    if (match(p, JZ_TOK_OP_COLON)) {
+        is_slice = 1;
+        lsb = parse_simple_index_expr(p);
+        if (!lsb) {
+            jz_ast_free(msb);
+            jz_ast_free(base);
+            return NULL;
+        }
+    }
+
+    if (!match(p, JZ_TOK_RBRACKET)) {
+        jz_ast_free(lsb);
+        jz_ast_free(msb);
+        jz_ast_free(base);
+        parser_error(p, "expected ']' after slice/index in project @top BUS binding");
+        return NULL;
+    }
+
+    JZASTNode *slice = jz_ast_new(JZ_AST_EXPR_SLICE, loc);
+    if (!slice) {
+        jz_ast_free(lsb);
+        jz_ast_free(msb);
+        jz_ast_free(base);
+        return NULL;
+    }
+    if (!is_slice) {
+        lsb = clone_project_top_expr_tree(msb);
+        if (!lsb) {
+            jz_ast_free(slice);
+            jz_ast_free(msb);
+            jz_ast_free(base);
+            return NULL;
+        }
+    }
+
+    if (jz_ast_add_child(slice, base) != 0 ||
+        jz_ast_add_child(slice, msb) != 0 ||
+        jz_ast_add_child(slice, lsb) != 0) {
+        jz_ast_free(slice);
+        return NULL;
+    }
+    return slice;
+}
 
 static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
     for (;;) {
@@ -188,17 +383,20 @@ static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
             /* Optional '= target' part for BUS binding (similar to regular ports). */
             if (match(p, JZ_TOK_OP_ASSIGN)) {
                 const JZToken *target_tok = peek(p);
-                /* Check for no-connect: _ is lexed as JZ_TOK_IDENTIFIER with lexeme "_" */
-                if (target_tok->type == JZ_TOK_IDENTIFIER &&
-                    target_tok->lexeme && strcmp(target_tok->lexeme, "_") == 0) {
+                if (target_tok->type == JZ_TOK_NO_CONNECT) {
                     /* Explicit no-connect: BUS ... = _; */
                     advance(p);
-                    /* No-connect is already implied by absence of target; nothing to set. */
                 } else {
-                    /* TODO: handle non-trivial BUS binding targets if needed. */
-                    parser_error(p, "BUS port bindings in @top currently only support '= _' (no-connect)");
-                    jz_ast_free(decl);
-                    return -1;
+                    JZASTNode *rhs = parse_project_top_bus_target_expr(p);
+                    if (!rhs) {
+                        jz_ast_free(decl);
+                        return -1;
+                    }
+                    if (jz_ast_add_child(decl, rhs) != 0) {
+                        jz_ast_free(rhs);
+                        jz_ast_free(decl);
+                        return -1;
+                    }
                 }
             }
 

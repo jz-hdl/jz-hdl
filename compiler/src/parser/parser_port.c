@@ -35,6 +35,9 @@ int parse_port_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "PORT")) {
+            continue;
+        }
 
         /* BUS <bus_id> <ROLE> [N] <port_name>; */
         if (t->type == JZ_TOK_IDENTIFIER && t->lexeme && strcmp(t->lexeme, "BUS") == 0) {

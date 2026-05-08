@@ -1,0 +1,41 @@
+// HAPPY_PATH: project-level @top BUS binding parses and elaborates cleanly.
+// Exercises a BUS top binding connected to a declared input pin bus.
+
+@project HAPPY_PATH_top_module_bus
+    IN_PINS {
+        data [4] = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        led = { standard=LVCMOS33, drive=8 };
+    }
+
+    MAP {
+        data[0] = 1;
+        data[1] = 2;
+        data[2] = 3;
+        data[3] = 4;
+        data[4] = 5;
+        led = 6;
+    }
+
+    @top TopMod {
+        BUS MY_BUS SOURCE sbus = data;
+        OUT [1] led = led;
+    }
+@endproj
+
+BUS MY_BUS {
+    IN [5] payload;
+}
+
+@module TopMod
+    PORT {
+        BUS MY_BUS SOURCE sbus;
+        OUT [1] led;
+    }
+
+    ASYNCHRONOUS {
+        led = sbus.payload[0];
+    }
+@endmod

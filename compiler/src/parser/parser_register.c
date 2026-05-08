@@ -35,6 +35,9 @@ int parse_register_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "REGISTER")) {
+            continue;
+        }
 
         const JZToken *name_tok = peek(p);
         if (!is_decl_identifier_token(name_tok)) {
@@ -168,6 +171,9 @@ int parse_latch_block_body(Parser *p, JZASTNode *parent) {
         if (t->type == JZ_TOK_KW_FEATURE) {
             if (parse_feature_guard_in_block(p, parent, parse_latch_block_body) != 0)
                 return -1;
+            continue;
+        }
+        if (parser_recover_decl_block_bad_token(p, "LATCH")) {
             continue;
         }
 

@@ -207,6 +207,19 @@ JZASTNode *parse_block(Parser *p,
 int parse_const_block_body(Parser *p, JZASTNode *parent);
 
 /**
+ * @brief Recover from a misplaced directive/control-flow token inside a declaration block.
+ *
+ * This reports a rule-specific diagnostic when possible, skips the malformed
+ * construct up to a safe declaration boundary, and lets the caller continue
+ * parsing the surrounding block.
+ *
+ * @param p          Active parser
+ * @param block_kind Human-readable block name (e.g. "PORT", "WIRE")
+ * @return 1 if a bad token was recognized and recovered, 0 otherwise
+ */
+int parser_recover_decl_block_bad_token(Parser *p, const char *block_kind);
+
+/**
  * @brief Parse the body of a PORT block.
  *
  * @param p      Active parser

@@ -40,6 +40,9 @@ int parse_cdc_block_body(Parser *p, JZASTNode *parent) {
             advance(p);
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "CDC")) {
+            continue;
+        }
 
         /* cdc_type: BIT | BUS | FIFO (identifier token) */
         const JZToken *type_tok = peek(p);

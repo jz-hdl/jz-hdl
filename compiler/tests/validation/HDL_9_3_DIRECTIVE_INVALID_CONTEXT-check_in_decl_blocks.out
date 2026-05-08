@@ -1,0 +1,7 @@
+File: HDL_9_3_DIRECTIVE_INVALID_CONTEXT-check_in_decl_blocks.jz
+      17:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location
+      21:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location
+      28:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location
+      33:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location
+      38:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location
+      43:9    error DIRECTIVE_INVALID_CONTEXT S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location

@@ -36,6 +36,9 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "MEM")) {
+            continue;
+        }
 
         const JZToken *name_tok = peek(p);
         if (!is_decl_identifier_token(name_tok)) {

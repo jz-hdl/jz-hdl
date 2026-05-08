@@ -50,6 +50,9 @@ int parse_mux_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "MUX")) {
+            continue;
+        }
 
         /* MUX identifier. */
         if (!is_decl_identifier_token(t) || !t->lexeme) {

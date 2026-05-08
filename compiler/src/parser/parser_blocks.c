@@ -242,6 +242,74 @@ static int parse_decl_block_body_with_apply_recovery(Parser *p,
     return rc;
 }
 
+int parser_recover_decl_block_bad_token(Parser *p, const char *block_kind)
+{
+    const JZToken *t = peek(p);
+    const char *kind = block_kind ? block_kind : "declaration";
+
+    if (!t) return 0;
+
+    if (t->type == JZ_TOK_KW_APPLY) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "@apply found inside %s block; @apply may only appear "
+                 "inside ASYNCHRONOUS or SYNCHRONOUS blocks",
+                 kind);
+        parser_report_rule(p, t, "TEMPLATE_APPLY_OUTSIDE_BLOCK", msg);
+    } else if (t->type == JZ_TOK_KW_CHECK ||
+               t->type == JZ_TOK_KW_NEW ||
+               t->type == JZ_TOK_KW_PROJECT ||
+               t->type == JZ_TOK_KW_ENDPROJ ||
+               t->type == JZ_TOK_KW_MODULE ||
+               t->type == JZ_TOK_KW_ENDMOD ||
+               t->type == JZ_TOK_KW_BLACKBOX ||
+               t->type == JZ_TOK_KW_IMPORT ||
+               t->type == JZ_TOK_KW_GLOBAL ||
+               t->type == JZ_TOK_KW_ENDGLOB) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "structural directive is not allowed inside %s block",
+                 kind);
+        parser_report_rule(p, t, "DIRECTIVE_INVALID_CONTEXT", msg);
+    } else {
+        return 0;
+    }
+
+    advance(p);
+
+    if (t->type == JZ_TOK_KW_NEW) {
+        int depth = 0;
+        while (peek(p)->type != JZ_TOK_EOF &&
+               peek(p)->type != JZ_TOK_RBRACE &&
+               peek(p)->type != JZ_TOK_KW_FEATURE_ELSE &&
+               peek(p)->type != JZ_TOK_KW_ENDFEAT) {
+            if (peek(p)->type == JZ_TOK_LBRACE) {
+                depth++;
+            } else if (peek(p)->type == JZ_TOK_RBRACE) {
+                if (depth == 0) break;
+                depth--;
+            } else if (peek(p)->type == JZ_TOK_SEMICOLON && depth == 0) {
+                advance(p);
+                break;
+            }
+            advance(p);
+        }
+        return 1;
+    }
+
+    while (peek(p)->type != JZ_TOK_EOF &&
+           peek(p)->type != JZ_TOK_SEMICOLON &&
+           peek(p)->type != JZ_TOK_RBRACE &&
+           peek(p)->type != JZ_TOK_KW_FEATURE_ELSE &&
+           peek(p)->type != JZ_TOK_KW_ENDFEAT) {
+        advance(p);
+    }
+    if (peek(p)->type == JZ_TOK_SEMICOLON) {
+        advance(p);
+    }
+    return 1;
+}
+
 /**
  * @brief Parse a generic braced block as raw text items.
  *
@@ -531,6 +599,9 @@ int parse_const_block_body(Parser *p, JZASTNode *parent) {
         if (t->type == JZ_TOK_KW_FEATURE) {
             if (parse_feature_guard_in_block(p, parent, parse_const_block_body) != 0)
                 return -1;
+            continue;
+        }
+        if (parser_recover_decl_block_bad_token(p, "CONST")) {
             continue;
         }
 
