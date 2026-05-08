@@ -325,6 +325,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "CLOCKS_PINS_MAP", "CLOCK_EDGE_INVALID",                      0, JZ_RULE_MODE_ERR, "S6.4/S6.9 Invalid edge specifier (not Rising/Falling)" },
     { "CLOCKS_PINS_MAP", "PIN_DECLARED_MULTIPLE_BLOCKS",            0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Same pin name appears in more than one of IN_PINS/OUT_PINS/INOUT_PINS" },
     { "CLOCKS_PINS_MAP", "PIN_INVALID_STANDARD",                    0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Invalid electrical standard in PIN declaration" },
+    { "CLOCKS_PINS_MAP", "PIN_DRIVE_FORBIDDEN_ON_INPUT",            0, JZ_RULE_MODE_ERR, "S6.5.1 IN_PINS must not declare a drive attribute" },
     { "CLOCKS_PINS_MAP", "PIN_DRIVE_MISSING_OR_INVALID",            0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Missing or nonpositive drive value for OUT_PINS/INOUT_PINS" },
     { "CLOCKS_PINS_MAP", "PIN_BUS_WIDTH_INVALID",                   0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Bus pin width non-integer or <= 0" },
     { "CLOCKS_PINS_MAP", "PIN_WIDTH_LIMIT_EXCEEDED",                0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Pin width exceeds the compiler safety limit" },

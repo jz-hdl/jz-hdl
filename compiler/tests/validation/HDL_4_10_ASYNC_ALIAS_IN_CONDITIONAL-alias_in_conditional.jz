@@ -24,12 +24,11 @@
     }
 
     ASYNCHRONOUS {
+        dout <= din_b;
+
         // Trigger 1: alias = in IF body (helper module)
         IF (sel) {
             dout = din_a;
-        } ELSE {
-            // Valid: receive-assign in ELSE (no error)
-            dout <= din_b;
         }
     }
 @endmod
@@ -44,9 +43,10 @@
     }
 
     ASYNCHRONOUS {
+        dout <= din_a;
+
         // Trigger 2: alias = in ELSE body (second helper)
         IF (sel) {
-            dout <= din_a;
         } ELSE {
             dout = din_b;
         }
@@ -78,14 +78,14 @@
     };
 
     ASYNCHRONOUS {
+        dout_c <= din_b;
+
         // Trigger 3: alias = in SELECT/CASE body (top module)
         SELECT (sel) {
             CASE (1'b0) {
                 dout_c = din_a;
             }
             DEFAULT {
-                // Valid: receive-assign in DEFAULT (no error)
-                dout_c <= din_b;
             }
         }
     }

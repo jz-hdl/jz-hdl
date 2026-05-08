@@ -11,8 +11,8 @@
     }
 
     IN_PINS {
-        sys_clk = { standard=LVCMOS33, drive=8 };
-        rd_en_pin = { standard=LVCMOS33, drive=8 };
+        sys_clk = { standard=LVCMOS33 };
+        rd_en_pin = { standard=LVCMOS33 };
     }
 
     OUT_PINS {

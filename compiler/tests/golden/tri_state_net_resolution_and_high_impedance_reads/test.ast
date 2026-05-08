@@ -3,7 +3,7 @@
     {"type": "ConstDecl", "name": "sys_clk", "text": "period = 10.0", "loc": {"line": 3, "column": 5, "file": "test.jz"}}
   ]},
   {"type": "InPinsBlock", "block_kind": "IN_PINS", "loc": {"line": 6, "column": 3, "file": "test.jz"}, "children": [
-    {"type": "PortDecl", "name": "sys_clk", "block_kind": "IN_PINS", "text": "standard = LVCMOS33 , drive = 8", "loc": {"line": 7, "column": 5, "file": "test.jz"}}
+    {"type": "PortDecl", "name": "sys_clk", "block_kind": "IN_PINS", "text": "standard = LVCMOS33", "loc": {"line": 7, "column": 5, "file": "test.jz"}}
   ]},
   {"type": "InoutPinsBlock", "block_kind": "INOUT_PINS", "loc": {"line": 11, "column": 3, "file": "test.jz"}, "children": [
     {"type": "PortDecl", "name": "ext_data_bus", "block_kind": "INOUT_PINS", "text": "standard = LVCMOS33 , drive = 8", "width": "8", "loc": {"line": 12, "column": 5, "file": "test.jz"}}

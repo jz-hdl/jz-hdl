@@ -1,2 +1,3 @@
 File: HDL_5_3_ASYNC_ALIAS_IN_CONDITIONAL-nested_if_alias.jz
+      19:17   error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
       25:17   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?

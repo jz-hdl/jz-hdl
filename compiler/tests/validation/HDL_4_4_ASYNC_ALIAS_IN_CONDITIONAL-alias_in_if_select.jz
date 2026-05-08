@@ -21,11 +21,11 @@
     }
 
     ASYNCHRONOUS {
+        data_out <= din;
+
         // Trigger 1: alias inside IF then-branch
         IF (ctrl) {
             data_out = din;
-        } ELSE {
-            data_out <= din;
         }
     }
 @endmod
@@ -39,9 +39,10 @@
     }
 
     ASYNCHRONOUS {
+        data_out <= din;
+
         // Trigger 2: alias inside IF else-branch
         IF (ctrl) {
-            data_out <= din;
         } ELSE {
             data_out = din;
         }
@@ -70,11 +71,11 @@
     };
 
     ASYNCHRONOUS {
+        dout_a <= din;
+
         // Trigger 3: alias inside IF in top module
         IF (ctrl) {
             dout_a = din;
-        } ELSE {
-            dout_a <= din;
         }
         // Valid: receive-assign inside IF (not alias)
         IF (ctrl) {

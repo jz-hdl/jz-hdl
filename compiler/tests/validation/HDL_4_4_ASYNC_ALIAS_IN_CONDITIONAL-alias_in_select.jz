@@ -19,6 +19,8 @@
     }
 
     ASYNCHRONOUS {
+        data_out <= din;
+
         SELECT (sel) {
             CASE (2'b00) {
                 // Trigger: alias inside SELECT CASE

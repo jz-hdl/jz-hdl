@@ -1409,6 +1409,13 @@ void sem_check_project_pins(JZASTNode *project,
                 }
             }
 
+            if (is_in_block && has_drive) {
+                sem_report_rule(diagnostics,
+                                decl->loc,
+                                "PIN_DRIVE_FORBIDDEN_ON_INPUT",
+                                "drive attribute is not valid on input-only pins (IN_PINS)");
+            }
+
             if (require_drive) {
                 if (!has_drive || !drive_valid) {
                     sem_report_rule(diagnostics,
