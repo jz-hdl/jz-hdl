@@ -11,7 +11,7 @@ outline: deep
 ## Synopsis
 
 ```bash
-Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [-o OUT_FILE]
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
@@ -19,13 +19,22 @@ Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] 
        ./jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ast [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]
-       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX]
-       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX]
+       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX] [--jitter=CLOCK:PS] [--drift=CLOCK:PPM] [--tristate-default=GND|VCC]
        ./jz-hdl --chip-info [CHIP_ID] [-o OUT_FILE]
        ./jz-hdl --lint-rules
        ./jz-hdl --lsp
        ./jz-hdl --help
        ./jz-hdl --version
+
+Simulation timing options:
+  --jitter=CLOCK:PS       Add peak-to-peak clock jitter in picoseconds (may repeat)
+  --drift=CLOCK:PPM       Add maximum clock drift in parts per million (may repeat)
+
+Expansion safety options:
+  --expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>
+                           Override hard expansion limits (defaults: repeat-count=1024,
+                           repeat-bytes=1048576, apply-count=1024, apply-growth=4096)
 
 Path security options:
   --sandbox-root=<dir>     Add permitted root directory for file access
@@ -83,14 +92,22 @@ Path security options:
 
 By default, the compiler restricts all file paths to be within the directory containing the input file. See [Path Security](/reference-manual/formal-reference/projects#path-security-sandbox) for details.
 
-## Tristate default (with `--verilog`, `--rtlil`, or `--ir`)
+## Tristate default
 
 | Option | Description |
 | --- | --- |
 | `--tristate-default=GND` | Convert internal tri-state nets to priority muxes with GND default. |
 | `--tristate-default=VCC` | Convert internal tri-state nets to priority muxes with VCC default. |
 
+This option is accepted with `--lint`, `--verilog`, `--rtlil`, `--ir`, `--test`, and `--simulate`. It is rejected with `--ast`.
+
 See [Tristate Default](../reference-manual/tristate-default.md) for details.
+
+## Expansion safety options
+
+| Option | Description |
+| --- | --- |
+| `--expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>` | Override the hard expansion safety limits for `@repeat` and template `@apply`. Defaults: `repeat-count=1024`, `repeat-bytes=1048576`, `apply-count=1024`, `apply-growth=4096`. |
 
 ## Testbench options (with `--test`)
 
@@ -116,6 +133,8 @@ See [Tristate Default](../reference-manual/tristate-default.md) for details.
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format. |
 | `--jzw` | Force JZW output format (SQLite-based). |
+| `--jitter=<clock>:<ps>` | Add peak-to-peak clock jitter in picoseconds. May be specified multiple times. |
+| `--drift=<clock>:<ppm>` | Add maximum clock drift in parts per million. May be specified multiple times. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 | `--seed=0xHEX` | 32-bit hex seed for register/memory randomization. Default: `0xDEADBEEF`. |
 
@@ -173,6 +192,9 @@ jz-hdl sim_fifo.jz --simulate -o fifo_waves.vcd
 # Run simulation in FST or JZW format
 jz-hdl sim_fifo.jz --simulate --fst
 jz-hdl sim_fifo.jz --simulate --jzw
+
+# Run simulation with clock jitter and drift
+jz-hdl sim_fifo.jz --simulate --jitter=clk:200 --drift=clk:50
 
 # Run simulation with verbose output and fixed seed
 jz-hdl sim_fifo.jz --simulate --verbose --seed=0x1234

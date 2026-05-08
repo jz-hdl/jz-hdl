@@ -55,7 +55,7 @@ cmake --build compiler/build
 
 ```bash
 $ ./jz-hdl
-Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [-o OUT_FILE]
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
@@ -63,13 +63,22 @@ Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] 
        ./jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ast [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]
-       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX]
-       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX]
+       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX] [--jitter=CLOCK:PS] [--drift=CLOCK:PPM] [--tristate-default=GND|VCC]
        ./jz-hdl --chip-info [CHIP_ID] [-o OUT_FILE]
        ./jz-hdl --lint-rules
        ./jz-hdl --lsp
        ./jz-hdl --help
        ./jz-hdl --version
+
+Simulation timing options:
+  --jitter=CLOCK:PS       Add peak-to-peak clock jitter in picoseconds (may repeat)
+  --drift=CLOCK:PPM       Add maximum clock drift in parts per million (may repeat)
+
+Expansion safety options:
+  --expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>
+                           Override hard expansion limits (defaults: repeat-count=1024,
+                           repeat-bytes=1048576, apply-count=1024, apply-growth=4096)
 
 Path security options:
   --sandbox-root=<dir>     Add permitted root directory for file access
@@ -84,7 +93,7 @@ Path security options:
 bash compiler/tests/run_validation.sh
 
 # Run CTest suite
-cmake -S compilerz-hdl -B compiler/build -DBUILD_TESTING=ON
+cmake -S compiler -B compiler/build -DBUILD_TESTING=ON
 ctest --test-dir compiler/build
 ```
 

@@ -12,10 +12,10 @@ outline: deep
 
 The `@simulation` construct provides a **time-based, multi-clock continuous simulation environment**. While [`@testbench`](/reference-manual/testbench) provides strictly manual, cycle-stepped control for functional verification, `@simulation` runs clocks automatically in the background based on their defined periods.
 
-In a simulation, the simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (VCD) at each clock event.
+In a simulation, the simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (`VCD`, `FST`, or `JZW`) at each clock event.
 
 ::: tip When to use @simulation vs @testbench
-Use `@simulation` for **waveform-based analysis** — observing multi-clock behavior over time with automatic clock toggling and VCD output. Use [`@testbench`](/reference-manual/testbench) for **functional verification** — asserting specific values at specific cycle counts.
+Use `@simulation` for **waveform-based analysis** — observing multi-clock behavior over time with automatic clock toggling and waveform output. Use [`@testbench`](/reference-manual/testbench) for **functional verification** — asserting specific values at specific cycle counts.
 :::
 
 ## Timing and Execution Model
@@ -427,10 +427,11 @@ Every signal in CLOCK, WIRE, and TAP blocks is sampled and written to the wavefo
 ```bash
 jz-hdl sim_file.jz --simulate                    # produces sim_file.vcd
 jz-hdl sim_file.jz --simulate -o output.vcd      # explicit output path
-jz-hdl sim_file.jz --simulate --seed=0xCAFE      # reproducible register init
-jz-hdl sim_file.jz --simulate --verbose           # print tick resolution, events
-jz-hdl sim_file.jz --simulate --jitter=clk:200   # 200ps peak-to-peak jitter
-jz-hdl sim_file.jz --simulate --drift=clk:50    # ±50 ppm crystal tolerance
+jz-hdl sim_file.jz --simulate --seed=0xCAFE            # reproducible register init
+jz-hdl sim_file.jz --simulate --verbose                # print tick resolution, events
+jz-hdl sim_file.jz --simulate --jitter=clk:200         # 200ps peak-to-peak jitter
+jz-hdl sim_file.jz --simulate --drift=clk:50           # +/-50 ppm crystal tolerance
+jz-hdl sim_file.jz --simulate --jitter=clk:200 --drift=clk:50
 ```
 
 Files containing `@simulation` blocks must be run with `--simulate`. Using `--lint` or `--test` on a file that contains `@simulation` will produce a `SIM_WRONG_TOOL` error.
@@ -447,6 +448,7 @@ Files containing `@simulation` blocks must be run with `--simulate`. Using `--li
 | `--jzw` | Force JZW output format (SQLite-based). |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<ps>` is peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times. See [Clock Jitter](#clock-jitter). |
 | `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<ppm>` is the maximum drift in parts per million. Actual drift selected from Gaussian (σ = ppm/3, clamped at ±ppm). May be specified multiple times. See [Clock Drift](#clock-drift). |
+| `--tristate-default=GND|VCC` | Apply internal tri-state lowering before simulation, using the selected default when all drivers release. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 
 ## Complete Example

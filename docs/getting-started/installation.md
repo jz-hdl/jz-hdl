@@ -21,30 +21,40 @@ git clone <repository-url>
 cd JZ-HDL
 
 # Configure the build
-cmake -S jz-hdl -B jz-hdl/build
+cmake -S compiler -B compiler/build
 
 # Build
-cmake --build jz-hdl/build
+cmake --build compiler/build
 ```
 
-The compiler binary is produced at `jz-hdl/build/jz-hdl`.
+The compiler binary is produced at `compiler/build/jz-hdl`.
 
 ## Building with tests
 
 ```bash
-cmake -S jz-hdl -B jz-hdl/build -DBUILD_TESTING=ON
-cmake --build jz-hdl/build
+cmake -S compiler -B compiler/build -DBUILD_TESTING=ON
+cmake --build compiler/build
 
-# Run all tests
-ctest --test-dir jz-hdl/build
+# Run the CTest suite
+ctest --test-dir compiler/build --output-on-failure
 ```
+
+Current CTest targets are:
+
+- `const_eval`
+- `type_semantics`
+- `literal_semantics`
+- `lint_validation`
 
 ## Verifying the installation
 
 ```bash
 # Check that the compiler runs
-jz-hdl/build/jz-hdl --help
+compiler/build/jz-hdl --help
 
-# Lint a test file
-jz-hdl/build/jz-hdl --lint jz-hdl/tests/blink.jz
+# Run the focused CTest validation target
+ctest --test-dir compiler/build --output-on-failure -R lint_validation
+
+# Run the full validation script directly
+bash compiler/tests/run_validation.sh
 ```

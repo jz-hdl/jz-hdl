@@ -639,6 +639,7 @@ jz-hdl --simulate sim_file.jz --jitter=clk:200       # 200ps p-p jitter on clk
 jz-hdl --simulate sim_file.jz --jitter=clk_wr:200 --jitter=clk_rd:500
 jz-hdl --simulate sim_file.jz --drift=clk:50            # ±50 ppm crystal tolerance
 jz-hdl --simulate sim_file.jz --jitter=clk:200 --drift=clk:50  # jitter + drift
+jz-hdl --simulate sim_file.jz --tristate-default=GND
 ```
 
 ### 5.2 Flags
@@ -650,8 +651,10 @@ jz-hdl --simulate sim_file.jz --jitter=clk:200 --drift=clk:50  # jitter + drift
 | `--seed=0x<hex>` | 32-bit seed for register randomization. Default: `0xDEADBEEF`. |
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format. |
+| `--jzw` | Force JZW output format (SQLite-based). |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ps>` is the peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times for different clocks. See Section 2.2.1. |
 | `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ppm>` is the maximum drift in parts per million. The actual drift is selected from a Gaussian distribution (σ = ppm/3, clamped at ±ppm) at simulation start. May be specified multiple times for different clocks. See Section 2.2.2. |
+| `--tristate-default=GND|VCC` | Apply internal tri-state lowering before simulation, using the selected default when all drivers release. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 
 ---
