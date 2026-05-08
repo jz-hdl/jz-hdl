@@ -1,0 +1,35 @@
+// HAPPY_PATH: synchronous MEM writes accept narrower write data with `<=z`.
+// Covers §7.3.3 Req #8 on a plain IN write port.
+
+@project WRITE_WDATA_ZERO_EXTEND_happy_path
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [4] narrow_wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [4] narrow_wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem.wr[addr] <=z narrow_wdata;
+    }
+@endmod

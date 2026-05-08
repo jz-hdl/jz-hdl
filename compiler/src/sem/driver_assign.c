@@ -1578,7 +1578,7 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
      * so that the primary rule remains the MUX_RULES category, matching the
      * spec text for MUX_ASSIGN_LHS.
      */
-    if (lhs->type == JZ_AST_EXPR_SLICE && lhs_w != rhs_w) {
+    if (lhs->type == JZ_AST_EXPR_SLICE && lhs_w != rhs_w && !lhs_is_mem_slice) {
         int is_mux_lhs = 0;
         if (lhs->child_count >= 1) {
             JZASTNode *base = lhs->children[0];

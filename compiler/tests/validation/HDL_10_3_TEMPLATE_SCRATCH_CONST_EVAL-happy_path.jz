@@ -1,0 +1,52 @@
+// HAPPY_PATH: @scratch widths accept compile-time expressions after template substitution.
+// Covers §10.3 Req #26 with widthof(), clog2(CONFIG.*), and IDX + 1.
+
+@project TEMPLATE_SCRATCH_CONST_EVAL_happy_path
+    CONFIG {
+        DEPTH = 16;
+    }
+
+    @top TopMod {
+        IN  [8] src8 = _;
+        IN  [2] src2 = _;
+        IN  [4] src4 = _;
+        OUT [8] copy8 = _;
+        OUT [4] addr_w = _;
+        OUT [4] idx_out = _;
+    }
+@endproj
+
+@template copy_widthof(src, dst)
+    @scratch tmp [widthof(src)];
+    tmp <= src;
+    dst <= tmp;
+@endtemplate
+
+@template copy_clog2(src, dst)
+    @scratch tmp [clog2(CONFIG.DEPTH)];
+    tmp <=z src;
+    dst <= tmp;
+@endtemplate
+
+@template copy_idx_bit(dst, src)
+    @scratch tmp [IDX + 1];
+    tmp <= src[IDX:0];
+    dst[IDX:IDX] <= tmp[IDX:IDX];
+@endtemplate
+
+@module TopMod
+    PORT {
+        IN  [8] src8;
+        IN  [2] src2;
+        IN  [4] src4;
+        OUT [8] copy8;
+        OUT [4] addr_w;
+        OUT [4] idx_out;
+    }
+
+    ASYNCHRONOUS {
+        @apply copy_widthof(src8, copy8);
+        @apply copy_clog2(src2, addr_w);
+        @apply[4] copy_idx_bit(idx_out, src4);
+    }
+@endmod
