@@ -112,7 +112,7 @@ See [Tristate Default](../reference-manual/tristate-default.md) for details.
 
 | Option | Description |
 | --- | --- |
-| `-o WAVEFORM_FILE` | Output waveform file path. Default: `<input_basename>.vcd`. |
+| `-o WAVEFORM_FILE` | Output waveform file path. Default: `<input_basename>.vcd`, or the selected format's extension when `--fst` or `--jzw` is specified. |
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format. |
 | `--jzw` | Force JZW output format (SQLite-based). |
@@ -169,6 +169,10 @@ jz-hdl sim_fifo.jz --simulate
 
 # Run simulation with explicit output path
 jz-hdl sim_fifo.jz --simulate -o fifo_waves.vcd
+
+# Run simulation in FST or JZW format
+jz-hdl sim_fifo.jz --simulate --fst
+jz-hdl sim_fifo.jz --simulate --jzw
 
 # Run simulation with verbose output and fixed seed
 jz-hdl sim_fifo.jz --simulate --verbose --seed=0x1234

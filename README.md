@@ -36,7 +36,7 @@ The compiler enforces strict rules around clocks, resets, driver ownership, widt
 - **Tristate proof engine** — verifies that tristate buses have proper non-overlapping enable conditions
 - **Bus abstraction** — structured bus interfaces with source/target ports and automatic interconnect
 - **Memory primitives** — first-class support for register files, block RAM, and ROM with explicit read/write port semantics
-- **Cycle-accurate simulator** — built-in simulation engine with VCD waveform output
+- **Cycle-accurate simulator** — built-in simulation engine with `VCD`, `FST`, and `JZW` waveform output
 - **FPGA backend** — generates synthesizable Verilog targeting Gowin, iCE40, and ECP5 FPGAs
 
 ## Building

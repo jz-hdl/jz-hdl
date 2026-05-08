@@ -30,7 +30,7 @@ This specification defines the **JZW (JZ-HDL Waveform)** file format, a SQLite-b
 
 **Relationship to VCD and FST:**
 
-JZW does not replace VCD or FST output. The simulator supports all three formats via CLI flags (`--vcd`, `--fst`, `--jzw`). VCD and FST remain available for interoperability with third-party tools (e.g., GTKWave).
+JZW does not replace VCD or FST output. The simulator supports all three formats via CLI flags (`--vcd`, `--fst`, `--jzw`), with one output format selected per simulation run. VCD and FST remain available for interoperability with third-party tools (e.g., GTKWave).
 
 ---
 
@@ -393,15 +393,11 @@ PRAGMA temp_store = MEMORY;
 ### 7.1 Output Format Selection
 
 ```bash
-jz-hdl --simulate sim_file.jz --jzw               # produces sim_file.jzw
+jz-hdl --simulate sim_file.jz --jzw                # produces sim_file.jzw
 jz-hdl --simulate sim_file.jz --jzw -o output.jzw  # explicit output path
 ```
 
-The `--jzw` flag may be combined with `--vcd` or `--fst` to produce multiple output formats simultaneously:
-
-```bash
-jz-hdl --simulate sim_file.jz --vcd --jzw          # produces both .vcd and .jzw
-```
+Format flags are mutually exclusive; each simulation run produces exactly one waveform output format.
 
 If no format flag is specified, the default output format is VCD (unchanged from the Simulation Specification).
 

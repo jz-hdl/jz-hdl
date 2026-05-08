@@ -18,7 +18,7 @@ header-includes:
 
 This specification defines the `@simulation` construct for JZ-HDL. While `@testbench` provides strictly manual, cycle-stepped control for functional verification, `@simulation` provides a **time-based, multi-clock continuous simulation environment**.
 
-In a `@simulation`, clocks run automatically in the background based on their defined periods. The simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (e.g., VCD/FST) at each clock event.
+In a `@simulation`, clocks run automatically in the background based on their defined periods. The simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (`VCD`, `FST`, or `JZW`) at each clock event.
 
 **Relationship to `@testbench`:**
 
@@ -646,7 +646,7 @@ jz-hdl --simulate sim_file.jz --jitter=clk:200 --drift=clk:50  # jitter + drift
 | Flag | Description |
 |---|---|
 | `--simulate` | Run all `@simulation` blocks in the file. |
-| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`. |
+| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`, or the selected format's extension when `--fst` or `--jzw` is specified. |
 | `--seed=0x<hex>` | 32-bit seed for register randomization. Default: `0xDEADBEEF`. |
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format. |

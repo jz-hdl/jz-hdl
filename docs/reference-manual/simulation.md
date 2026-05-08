@@ -440,10 +440,11 @@ Files containing `@simulation` blocks must be run with `--simulate`. Using `--li
 | Flag | Description |
 | --- | --- |
 | `--simulate` | Run all `@simulation` blocks in the file. |
-| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`. |
+| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`, or the selected format's extension when `--fst` or `--jzw` is specified. |
 | `--seed=0xHEX` | 32-bit seed for register randomization. Default: `0xDEADBEEF`. |
 | `--vcd` | Force VCD output format (default). |
-| `--fst` | Force FST output format (not yet supported). |
+| `--fst` | Force FST output format. |
+| `--jzw` | Force JZW output format (SQLite-based). |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<ps>` is peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times. See [Clock Jitter](#clock-jitter). |
 | `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<ppm>` is the maximum drift in parts per million. Actual drift selected from Gaussian (σ = ppm/3, clamped at ±ppm). May be specified multiple times. See [Clock Drift](#clock-drift). |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
