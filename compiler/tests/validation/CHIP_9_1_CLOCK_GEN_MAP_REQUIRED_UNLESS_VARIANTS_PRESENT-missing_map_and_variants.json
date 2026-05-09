@@ -1,0 +1,30 @@
+{
+  "chipid": "CHIP_9_1_CLOCK_GEN_MAP_REQUIRED_UNLESS_VARIANTS_PRESENT-missing_map_and_variants",
+  "description": "Clock generator entry missing both map and variants.",
+  "boards": [],
+  "resources": {},
+  "latches": {
+    "source": "DS",
+    "FAB": {
+      "description": "Fabric latch support",
+      "D": false,
+      "SR": false
+    }
+  },
+  "dsp": {
+    "source": "DS",
+    "description": "No DSP blocks"
+  },
+  "memory": [],
+  "clock_gen": [
+    {
+      "type": "pll",
+      "source": "DS Section 1",
+      "description": "PLL entry missing both map and variants",
+      "count": 1,
+      "parameters": {},
+      "outputs": {}
+    }
+  ],
+  "fixed_pins": []
+}

@@ -1,0 +1,40 @@
+// ANNOTATION_COLOR_PREDEFINED_NAMES: valid predefined annotation colors in JZW simulation directives.
+
+@module AnnotationColorPredefinedNamesDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] flag;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        flag = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation AnnotationColorPredefinedNamesDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        flag [1];
+    }
+
+    @new dut AnnotationColorPredefinedNamesDut {
+        clk [1] = clk;
+        flag [1] = flag;
+    }
+
+    @mark(YELLOW, "highlight")
+    @alert(PURPLE, "debug group")
+    @mark(WHITE)
+    @run(ns=10)
+@endsim

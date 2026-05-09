@@ -1,0 +1,44 @@
+// PRT_ARG_COUNT_MISMATCH: matching @print_if specifier and argument counts.
+// Exercises a valid @print_if call with one autonomous specifier and two
+// value-consuming specifiers so the compiler accepts the directive.
+
+@module PrintArgCountMatchSimDut
+    PORT {
+        IN  [1] clk;
+        OUT [8] count;
+        OUT [1] flag;
+    }
+
+    REGISTER {
+        state [8] = 8'h00;
+    }
+
+    ASYNCHRONOUS {
+        count = state;
+        flag = state[0:0];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= state + 8'h01;
+    }
+@endmod
+
+@simulation PrintArgCountMatchSimDut
+    CLOCK {
+        clk = { period=10.0 };
+    }
+
+    WIRE {
+        count [8];
+        flag [1];
+    }
+
+    @new dut PrintArgCountMatchSimDut {
+        clk [1] = clk;
+        count [8] = count;
+        flag [1] = flag;
+    }
+
+    @print_if(flag, "tick=%tick count=%h flag=%b", count, flag)
+    @run(ns=10)
+@endsim

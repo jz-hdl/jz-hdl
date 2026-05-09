@@ -1,0 +1,28 @@
+// RPT_COUNT_INVALID: @repeat with a positive integer count is valid.
+// Verifies that the owned rule accepts a minimal positive literal count.
+
+@project RPT_COUNT_INVALID_happy_path
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: @repeat 1 is the minimal valid positive integer count.
+        @repeat 1
+            r <= ~r;
+        @end
+    }
+@endmod

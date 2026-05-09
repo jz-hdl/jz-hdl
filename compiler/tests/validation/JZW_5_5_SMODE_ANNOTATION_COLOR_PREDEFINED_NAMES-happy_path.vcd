@@ -1,0 +1,23 @@
+$date
+  2026-05-09 09:50:20
+$end
+$version
+  JZ-HDL Simulator 1.0
+$end
+$timescale 1ns $end
+$scope module clocks $end
+$var wire 1 ! clk $end
+$upscope $end
+$scope module wires $end
+$var wire 1 " flag $end
+$upscope $end
+$enddefinitions $end
+#0
+0!
+1"
+#5
+1!
+0"
+#10
+0!
+0"

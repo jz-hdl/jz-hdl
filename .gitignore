@@ -7,5 +7,6 @@ boards
 __pycache__/
 *.pyc
 /audit/
+/audit-*/
 /security-audit/
 /doxygen-audit/

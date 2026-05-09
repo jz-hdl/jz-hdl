@@ -1,0 +1,32 @@
+{
+  "chipid": "CHIP_9_1_CLOCK_GEN_EXACTLY_ONE_OF_MAP_OR_VARIANTS-both_map_and_variants",
+  "description": "Clock generator entry incorrectly provides both map and variants.",
+  "boards": [],
+  "resources": {},
+  "latches": {
+    "source": "DS",
+    "FAB": {
+      "description": "Fabric latch support",
+      "D": false,
+      "SR": false
+    }
+  },
+  "dsp": {
+    "source": "DS",
+    "description": "No DSP blocks"
+  },
+  "memory": [],
+  "clock_gen": [
+    {
+      "type": "pll",
+      "source": "DS Section 1",
+      "description": "PLL entry with both map and variants",
+      "count": 1,
+      "map": {},
+      "variants": [],
+      "parameters": {},
+      "outputs": {}
+    }
+  ],
+  "fixed_pins": []
+}

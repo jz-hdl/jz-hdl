@@ -1,0 +1,10 @@
+@module OutsideSandboxTarget
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod

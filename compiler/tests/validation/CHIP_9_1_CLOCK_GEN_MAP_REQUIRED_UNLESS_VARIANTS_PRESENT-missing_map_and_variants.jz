@@ -1,0 +1,45 @@
+// CLOCK_GEN_MAP_REQUIRED_UNLESS_VARIANTS_PRESENT: local chip JSON must provide
+// either a top-level map or variants for each clock_gen entry.
+// Trigger 1 is isolated in the companion local chip JSON file.
+
+@project(CHIP="CHIP_9_1_CLOCK_GEN_MAP_REQUIRED_UNLESS_VARIANTS_PRESENT-missing_map_and_variants") CLOCK_GEN_MAP_REQUIRED_UNLESS_VARIANTS_PRESENT_missing_map_and_variants
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_h Helper {
+        IN  [1] din = r;
+        OUT [1] dout = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod
