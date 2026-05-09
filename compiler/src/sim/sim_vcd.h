@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
+#include "sim_value.h"
 
 /**
  * @struct VCDWriter
@@ -62,10 +63,9 @@ void vcd_set_time(VCDWriter *w, uint64_t time_ps);
  *
  * @param w      VCD writer.
  * @param sig_id Signal ID returned by vcd_add_signal().
- * @param value  Signal value (up to 64 bits).
- * @param width Declared signal width in bits. This backend uses the width already registered for the signal.
+ * @param value  Full simulator value. This backend uses the width already registered for the signal.
  */
-void vcd_dump_value(VCDWriter *w, int sig_id, uint64_t value, int width);
+void vcd_dump_value(VCDWriter *w, int sig_id, SimValue value);
 
 /**
  * @brief Close the VCD file and free all writer resources.

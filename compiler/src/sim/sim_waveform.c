@@ -96,16 +96,15 @@ void sim_wave_set_time(SimWaveWriter *w, uint64_t time_ps)
         vcd_set_time(w->backend.vcd, time_ps);
 }
 
-void sim_wave_dump_value(SimWaveWriter *w, int sig_id, uint64_t value,
-                          int width)
+void sim_wave_dump_value(SimWaveWriter *w, int sig_id, SimValue value)
 {
     if (!w) return;
     if (w->format == SIM_WAVE_JZW)
-        jzw_dump_value(w->backend.jzw, sig_id, value, width);
+        jzw_dump_value(w->backend.jzw, sig_id, value);
     else if (w->format == SIM_WAVE_FST)
-        fst_dump_value(w->backend.fst, sig_id, value, width);
+        fst_dump_value(w->backend.fst, sig_id, value);
     else
-        vcd_dump_value(w->backend.vcd, sig_id, value, width);
+        vcd_dump_value(w->backend.vcd, sig_id, value);
 }
 
 void sim_wave_add_annotation(SimWaveWriter *w, uint64_t time_ps,

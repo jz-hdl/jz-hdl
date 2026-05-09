@@ -41,6 +41,7 @@ static const IR_Signal *find_signal_in_ctx(SimContext *ctx, int signal_id);
  * @return Non-zero when the compared words match exactly, or zero otherwise.
  */
 static inline int sim_val_same(SimValue a, SimValue b, int nw);
+static int sim_value_to_mem_index(SimValue v, int depth, int *out);
 
 /**
  * @brief Propagate parent-driven inputs into one child instance.
@@ -303,12 +304,11 @@ void sim_exec_stmt(SimContext *ctx, const IR_Stmt *stmt, int is_nba) {
     case STMT_MEM_WRITE: {
         const IR_MemWriteStmt *mw = &stmt->u.mem_write;
         SimMemEntry *me = sim_ctx_lookup_mem(ctx, mw->memory_name);
+        int idx = 0;
         if (!me) break;
         SimValue addr = sim_eval_expr(ctx, mw->address);
         SimValue data = sim_eval_expr(ctx, mw->data);
-        if (sim_val_has_xz(addr)) break;
-        uint64_t idx = addr.val[0];
-        if (idx >= (uint64_t)me->depth) break;
+        if (sim_value_to_mem_index(addr, me->depth, &idx) != 0) break;
         me->cells[idx] = data;
         break;
     }
@@ -334,6 +334,20 @@ static inline int sim_val_same(SimValue a, SimValue b, int nw) {
             return 0;
     }
     return 1;
+}
+
+static int sim_value_to_mem_index(SimValue v, int depth, int *out) {
+    int nw = (v.width + 63) / 64;
+    uint64_t raw = 0;
+    if (nw <= 0) nw = 1;
+    if (sim_val_has_xz(v)) return -1;
+    for (int i = 1; i < nw; i++) {
+        if (v.val[i] != 0) return -1;
+    }
+    raw = v.val[0];
+    if (raw >= (uint64_t)depth || raw > (uint64_t)INT32_MAX) return -1;
+    *out = (int)raw;
+    return 0;
 }
 
 static int propagate_to_child(SimContext *parent, SimChildInstance *ci) {

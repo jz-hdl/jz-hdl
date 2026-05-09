@@ -2251,9 +2251,9 @@ static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
                            SimTap *taps, int num_taps) {
     for (int i = 0; i < ts->num_tb_wires; i++) {
         if (wave_ids[i] >= 0) {
-            sim_wave_dump_value(wave, wave_ids[i],
-                                ts->tb_wires[i].value.val[0],
-                                ts->tb_wires[i].width);
+            SimValue value = ts->tb_wires[i].value;
+            value.width = ts->tb_wires[i].width;
+            sim_wave_dump_value(wave, wave_ids[i], value);
         }
     }
     /* Dump TAP signals from DUT internals */
@@ -2261,8 +2261,9 @@ static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
         if (taps[i].wave_id >= 0 && ts->dut) {
             SimSignalEntry *se = sim_ctx_lookup(ts->dut, taps[i].signal_id);
             if (se) {
-                sim_wave_dump_value(wave, taps[i].wave_id, se->current.val[0],
-                                    se->current.width);
+                SimValue value = se->current;
+                value.width = se->current.width;
+                sim_wave_dump_value(wave, taps[i].wave_id, value);
             }
         }
     }
@@ -2312,6 +2313,7 @@ static int sim_run_simulation(const JZASTNode *root,
                                const SimDriftConfig *drift_configs,
                                int num_drift) {
     SimTestState ts;
+    int rc = 1;
     memset(&ts, 0, sizeof(ts));
     ts.verbose = verbose;
     ts.filename = filename;
@@ -3148,6 +3150,7 @@ static int sim_run_simulation(const JZASTNode *root,
     fprintf(stdout, "%s written to: %s\n",
             format == SIM_WAVE_JZW ? "JZW" : format == SIM_WAVE_FST ? "FST" : "VCD",
             output_path);
+    rc = ts.runtime_error ? 1 : 0;
 
     /* Cleanup */
     free(wave_ids);
@@ -3182,7 +3185,7 @@ cleanup_early:
         free(ts.failure_msgs[i]);
     free(ts.failure_msgs);
 
-    return 0;
+    return rc;
 }
 
 /* ---- Public API: jz_sim_run_simulations ---- */

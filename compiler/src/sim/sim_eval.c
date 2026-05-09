@@ -8,6 +8,80 @@
 #include <string.h>
 #include <stdio.h>
 
+static int sim_value_to_index(SimValue v, int *out);
+static SimValue sim_value_from_index(int value, int width);
+static SimValue sim_value_abs(SimValue src, int result_w);
+static SimValue sim_value_signed_choice(SimValue a, SimValue b, int pick_min,
+                                        int result_w);
+
+static int sim_value_to_index(SimValue v, int *out) {
+    int nw = (v.width + 63) / 64;
+    uint64_t raw = 0;
+    if (nw <= 0) nw = 1;
+    if (sim_val_has_xz(v)) return -1;
+    for (int i = 1; i < nw; i++) {
+        if (v.val[i] != 0) return -1;
+    }
+    raw = v.val[0];
+    if (raw > (uint64_t)INT32_MAX) return -1;
+    *out = (int)raw;
+    return 0;
+}
+
+static SimValue sim_value_from_index(int value, int width) {
+    SimValue r = sim_val_zero(width);
+    uint32_t raw = (uint32_t)value;
+    int bit = 0;
+    while (raw != 0) {
+        if (raw & 1U) sim_val_set_bit(&r, bit, 1);
+        raw >>= 1;
+        bit++;
+    }
+    return sim_val_mask(r);
+}
+
+static SimValue sim_value_abs(SimValue src, int result_w) {
+    int src_w = src.width > 0 ? src.width : 1;
+    SimValue magnitude = sim_val_get_bit(src, src_w - 1) ? sim_val_neg(src) : src;
+    magnitude = sim_val_zext(magnitude, result_w > src_w ? result_w : src_w);
+    magnitude.width = result_w;
+    magnitude = sim_val_mask(magnitude);
+
+    if (sim_val_get_bit(src, src_w - 1)) {
+        SimValue most_neg = sim_val_zero(src_w);
+        sim_val_set_bit(&most_neg, src_w - 1, 1);
+        if (sim_val_equal(sim_val_mask(src), most_neg) && result_w > 0)
+            sim_val_set_bit(&magnitude, result_w - 1, 1);
+    }
+    return sim_val_mask(magnitude);
+}
+
+static SimValue sim_value_signed_choice(SimValue a, SimValue b, int pick_min,
+                                        int result_w)
+{
+    int width = a.width > b.width ? a.width : b.width;
+    int sign_a = sim_val_get_bit(a, a.width - 1);
+    int sign_b = sim_val_get_bit(b, b.width - 1);
+    int pick_a = 0;
+
+    a = sim_val_sext(a, width);
+    b = sim_val_sext(b, width);
+
+    if (sign_a != sign_b) {
+        pick_a = pick_min ? sign_a : !sign_a;
+    } else {
+        int a_lt_b = sim_val_is_true(sim_val_lt(a, b)) == 1;
+        pick_a = pick_min ? a_lt_b : !a_lt_b;
+    }
+
+    if (pick_a) {
+        a.width = result_w;
+        return sim_val_mask(a);
+    }
+    b.width = result_w;
+    return sim_val_mask(b);
+}
+
 SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
     if (!expr) return sim_val_all_x(1);
     PERF_COUNT(PERF_EVAL_EXPR);
@@ -219,9 +293,10 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         SimMemEntry *me = sim_ctx_lookup_mem(ctx, expr->u.mem_read.memory_name);
         if (!me) return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         SimValue addr = sim_eval_expr(ctx, expr->u.mem_read.address);
+        int idx = 0;
         if (sim_val_has_xz(addr)) return sim_val_all_x(me->word_width);
-        uint64_t idx = addr.val[0];
-        if (idx >= (uint64_t)me->depth) return sim_val_all_x(me->word_width);
+        if (sim_value_to_index(addr, &idx) != 0 || idx < 0 || idx >= me->depth)
+            return sim_val_all_x(me->word_width);
         return me->cells[idx];
     }
 
@@ -257,8 +332,9 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
     case EXPR_INTRINSIC_GBIT: {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         SimValue idx = sim_eval_expr(ctx, expr->u.intrinsic.index);
+        int bit = 0;
         if (sim_val_has_xz(idx)) return sim_val_all_x(1);
-        int bit = (int)(idx.val[0]);
+        if (sim_value_to_index(idx, &bit) != 0) return sim_val_zero(1);
         if (bit < 0 || bit >= src.width) return sim_val_zero(1);
         return sim_val_slice(src, bit, bit);
     }
@@ -266,26 +342,35 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         SimValue idx = sim_eval_expr(ctx, expr->u.intrinsic.index);
         SimValue val = sim_eval_expr(ctx, expr->u.intrinsic.value);
+        int bit = 0;
         if (sim_val_has_xz(idx)) return sim_val_all_x(src.width);
-        int bit = (int)(idx.val[0]);
+        if (sim_value_to_index(idx, &bit) != 0) return src;
         if (bit < 0 || bit >= src.width) return src;
-        int wi = bit / 64;
-        int bi = bit % 64;
-        uint64_t mask = (uint64_t)1 << bi;
-        src.val[wi] = (src.val[wi] & ~mask) | ((val.val[0] & 1) << bi);
-        src.xmask[wi] = (src.xmask[wi] & ~mask) | ((val.xmask[0] & 1) << bi);
-        src.zmask[wi] = (src.zmask[wi] & ~mask) | ((val.zmask[0] & 1) << bi);
+        {
+            int wi = bit / 64;
+            int bi = bit % 64;
+            uint64_t mask = (uint64_t)1 << bi;
+            SimValue one_bit = sim_val_slice(val, 0, 0);
+            src.val[wi] = (src.val[wi] & ~mask) |
+                          ((uint64_t)sim_val_get_bit(one_bit, 0) << bi);
+            src.xmask[wi] = (src.xmask[wi] & ~mask) |
+                            (((one_bit.xmask[0] & 1U) ? UINT64_C(1) : UINT64_C(0)) << bi);
+            src.zmask[wi] = (src.zmask[wi] & ~mask) |
+                            (((one_bit.zmask[0] & 1U) ? UINT64_C(1) : UINT64_C(0)) << bi);
+        }
         return src;
     }
     case EXPR_INTRINSIC_GSLICE: {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         SimValue idx = sim_eval_expr(ctx, expr->u.intrinsic.index);
         int ew = expr->u.intrinsic.element_width;
+        int elem_idx = 0;
         if (ew <= 0) ew = expr->width > 0 ? expr->width : 1;
         if (sim_val_has_xz(idx))
             return sim_val_all_x(ew);
         /* Index is an element index; multiply by element width for bit offset */
-        int lo = (int)(idx.val[0]) * ew;
+        if (sim_value_to_index(idx, &elem_idx) != 0) return sim_val_all_x(ew);
+        int lo = elem_idx * ew;
         int hi = lo + ew - 1;
         if (lo < 0 || hi >= src.width)
             return sim_val_all_x(ew);
@@ -295,8 +380,9 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         SimValue idx = sim_eval_expr(ctx, expr->u.intrinsic.index);
         SimValue val = sim_eval_expr(ctx, expr->u.intrinsic.value);
+        int lo = 0;
         if (sim_val_has_xz(idx)) return sim_val_all_x(src.width);
-        int lo = (int)(idx.val[0]);
+        if (sim_value_to_index(idx, &lo) != 0) return src;
         int ew = expr->u.intrinsic.element_width;
         int hi = lo + ew - 1;
         if (lo < 0 || hi >= src.width) return src;
@@ -317,20 +403,21 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         if (sim_val_has_xz(src)) return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        uint64_t result = 0;
+        int result = 0;
         for (int i = 0; i < src.width; i++) {
-            if (sim_val_get_bit(src, i)) result |= (uint64_t)i;
+            if (sim_val_get_bit(src, i)) result = i;
         }
-        return sim_val_from_uint(result, result_w);
+        return sim_value_from_index(result, result_w);
     }
 
     case EXPR_INTRINSIC_B2OH: {
         SimValue idx = sim_eval_expr(ctx, expr->u.intrinsic.source);
+        int bit = 0;
         if (sim_val_has_xz(idx)) return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        if (idx.val[0] < (uint64_t)result_w) {
+        if (sim_value_to_index(idx, &bit) == 0 && bit >= 0 && bit < result_w) {
             SimValue r = sim_val_zero(result_w);
-            sim_val_set_bit(&r, (int)idx.val[0], 1);
+            sim_val_set_bit(&r, bit, 1);
             return r;
         }
         return sim_val_zero(result_w);
@@ -340,22 +427,22 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         if (sim_val_has_xz(src)) return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        uint64_t result = 0;
+        int result = 0;
         for (int i = src.width - 1; i >= 0; i--) {
-            if (sim_val_get_bit(src, i)) { result = (uint64_t)i; break; }
+            if (sim_val_get_bit(src, i)) { result = i; break; }
         }
-        return sim_val_from_uint(result, result_w);
+        return sim_value_from_index(result, result_w);
     }
 
     case EXPR_INTRINSIC_LZC: {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         if (sim_val_has_xz(src)) return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        uint64_t count = (uint64_t)src.width;
+        int count = src.width;
         for (int i = src.width - 1; i >= 0; i--) {
-            if (sim_val_get_bit(src, i)) { count = (uint64_t)(src.width - 1 - i); break; }
+            if (sim_val_get_bit(src, i)) { count = src.width - 1 - i; break; }
         }
-        return sim_val_from_uint(count, result_w);
+        return sim_value_from_index(count, result_w);
     }
 
     case EXPR_INTRINSIC_USUB:
@@ -371,24 +458,7 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         if (sim_val_has_xz(src)) return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        int src_w = src.width > 0 ? src.width : 1;
-        /* Check sign bit */
-        int is_neg = sim_val_get_bit(src, src_w - 1);
-        uint64_t magnitude;
-        uint64_t overflow = 0;
-        if (is_neg) {
-            /* Two's complement negate in src_w+1 bits */
-            uint64_t extended = src.val[0];
-            uint64_t mask_full = (result_w >= 64) ? ~0ULL : ((1ULL << result_w) - 1);
-            magnitude = ((~extended) + 1) & mask_full;
-            /* Overflow when input is most-negative (e.g., 0x80 for 8-bit) */
-            uint64_t most_neg = (uint64_t)1 << (src_w - 1);
-            if (src.val[0] == most_neg) overflow = 1;
-        } else {
-            magnitude = src.val[0];
-        }
-        uint64_t result = (overflow << (result_w - 1)) | magnitude;
-        return sim_val_from_uint(result, result_w);
+        return sim_value_abs(src, result_w);
     }
 
     case EXPR_INTRINSIC_UMIN:
@@ -398,8 +468,12 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         if (sim_val_has_xz(a) || sim_val_has_xz(b))
             return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        bool pick_a = (expr->kind == EXPR_INTRINSIC_UMIN) ? (a.val[0] < b.val[0]) : (a.val[0] > b.val[0]);
-        return sim_val_from_uint(pick_a ? a.val[0] : b.val[0], result_w);
+        {
+            int a_lt_b = sim_val_is_true(sim_val_lt(a, b)) == 1;
+            SimValue chosen = ((expr->kind == EXPR_INTRINSIC_UMIN) ? a_lt_b : !a_lt_b) ? a : b;
+            chosen.width = result_w;
+            return sim_val_mask(chosen);
+        }
     }
 
     case EXPR_INTRINSIC_SMIN:
@@ -409,26 +483,20 @@ SimValue sim_eval_expr(SimContext *ctx, const IR_Expr *expr) {
         if (sim_val_has_xz(a) || sim_val_has_xz(b))
             return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        /* Sign-extend to 64 bits for comparison */
-        int wa = a.width > 0 ? a.width : 1;
-        int wb = b.width > 0 ? b.width : 1;
-        int64_t sa = (int64_t)a.val[0];
-        if (wa < 64 && ((a.val[0] >> (wa - 1)) & 1)) sa |= ~((int64_t)((1ULL << wa) - 1));
-        int64_t sb = (int64_t)b.val[0];
-        if (wb < 64 && ((b.val[0] >> (wb - 1)) & 1)) sb |= ~((int64_t)((1ULL << wb) - 1));
-        bool pick_a = (expr->kind == EXPR_INTRINSIC_SMIN) ? (sa < sb) : (sa > sb);
-        return sim_val_from_uint(pick_a ? a.val[0] : b.val[0], result_w);
+        return sim_value_signed_choice(a, b,
+                                       expr->kind == EXPR_INTRINSIC_SMIN,
+                                       result_w);
     }
 
     case EXPR_INTRINSIC_POPCOUNT: {
         SimValue src = sim_eval_expr(ctx, expr->u.intrinsic.source);
         if (sim_val_has_xz(src)) return sim_val_all_x(expr->width > 0 ? expr->width : 1);
         int result_w = expr->width > 0 ? expr->width : 1;
-        uint64_t count = 0;
+        int count = 0;
         for (int i = 0; i < src.width; i++) {
             if (sim_val_get_bit(src, i)) count++;
         }
-        return sim_val_from_uint(count, result_w);
+        return sim_value_from_index(count, result_w);
     }
 
     case EXPR_INTRINSIC_REVERSE: {

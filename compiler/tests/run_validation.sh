@@ -499,15 +499,138 @@ if [[ -d "${SIMULATION_DIR}" ]] && [[ -x "${JZ_HDL_BIN}" ]]; then
 
     for file in "${sim_files[@]}"; do
       rel_path="${file#${ROOT_DIR}/}"
+      expected_vcd="${file%.jz}.vcd"
+      tmp_waveform="${TMPDIR:-/tmp}/$(basename "${file%.jz}").$$.vcd"
 
-      if "${JZ_HDL_BIN}" --simulate "${file}" -o /dev/null >"${tmp_out}" 2>&1; then
-        echo "PASS ${rel_path}"
-        ((sim_pass++))
+      if "${JZ_HDL_BIN}" --simulate "${file}" -o "${tmp_waveform}" >"${tmp_out}" 2>&1; then
+        if [[ -f "${expected_vcd}" ]]; then
+          tmp_expected_norm="$(mktemp)"
+          tmp_actual_norm="$(mktemp)"
+          python3 - "${expected_vcd}" "${tmp_expected_norm}" <<'PY'
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+signal_order = []
+signal_values = {}
+snapshots = []
+current_time = None
+started = False
+
+
+def apply_change(line: str) -> None:
+    if not line:
+        return
+    if line[0] in "01xz":
+        ident = line[1:]
+    else:
+        parts = line.split(" ", 1)
+        if len(parts) != 2:
+            return
+        ident = parts[1]
+    if ident not in signal_values:
+        signal_order.append(ident)
+    signal_values[ident] = line
+
+
+with open(src, "r", encoding="utf-8") as f:
+    for raw in f:
+        line = raw.rstrip("\n")
+        if not started:
+            if line.startswith("#"):
+                started = True
+            else:
+                continue
+        if line.startswith("#"):
+            if current_time is not None:
+                snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+            current_time = line
+            continue
+        apply_change(line)
+
+if current_time is not None:
+    snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+
+last_values = None
+with open(dst, "w", encoding="utf-8") as out:
+    for time_line, values in snapshots:
+        if values != last_values:
+            out.write(time_line + "\n")
+            for value in values:
+                out.write(value + "\n")
+            last_values = values
+PY
+          python3 - "${tmp_waveform}" "${tmp_actual_norm}" <<'PY'
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+signal_order = []
+signal_values = {}
+snapshots = []
+current_time = None
+started = False
+
+
+def apply_change(line: str) -> None:
+    if not line:
+        return
+    if line[0] in "01xz":
+        ident = line[1:]
+    else:
+        parts = line.split(" ", 1)
+        if len(parts) != 2:
+            return
+        ident = parts[1]
+    if ident not in signal_values:
+        signal_order.append(ident)
+    signal_values[ident] = line
+
+
+with open(src, "r", encoding="utf-8") as f:
+    for raw in f:
+        line = raw.rstrip("\n")
+        if not started:
+            if line.startswith("#"):
+                started = True
+            else:
+                continue
+        if line.startswith("#"):
+            if current_time is not None:
+                snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+            current_time = line
+            continue
+        apply_change(line)
+
+if current_time is not None:
+    snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+
+last_values = None
+with open(dst, "w", encoding="utf-8") as out:
+    for time_line, values in snapshots:
+        if values != last_values:
+            out.write(time_line + "\n")
+            for value in values:
+                out.write(value + "\n")
+            last_values = values
+PY
+          if diff -u "${tmp_expected_norm}" "${tmp_actual_norm}" >/dev/null; then
+            echo "PASS ${rel_path}"
+            ((sim_pass++))
+          else
+            echo "FAIL ${rel_path} (waveform mismatch)"
+            diff -u "${tmp_expected_norm}" "${tmp_actual_norm}" || true
+            ((sim_fail++))
+          fi
+          rm -f "${tmp_expected_norm}" "${tmp_actual_norm}"
+        else
+          echo "PASS ${rel_path}"
+          ((sim_pass++))
+        fi
       else
         echo "FAIL ${rel_path}"
         cat "${tmp_out}"
         ((sim_fail++))
       fi
+      rm -f "${tmp_waveform}"
     done
 
     echo

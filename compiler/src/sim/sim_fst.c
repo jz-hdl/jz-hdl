@@ -58,7 +58,7 @@ typedef struct FSTSignal {
 typedef struct FSTChange {
     uint32_t time_index; /**< Index into the shared time table. */
     int sig_id;          /**< Signal identifier returned by `fst_add_signal()`. */
-    uint64_t value;      /**< Recorded signal value. */
+    SimValue value;      /**< Recorded signal value. */
 } FSTChange;
 
 /**
@@ -850,10 +850,9 @@ void fst_set_time(FSTWriter *w, uint64_t time_ps)
     w->time_count++;
 }
 
-void fst_dump_value(FSTWriter *w, int sig_id, uint64_t value, int width)
+void fst_dump_value(FSTWriter *w, int sig_id, SimValue value)
 {
     if (!w || !w->defs_ended || sig_id < 0 || sig_id >= w->num_signals) return;
-    (void)width;
     if (w->trace_limit_hit) return;
 
     if (w->time_count == 0) {
@@ -874,6 +873,7 @@ void fst_dump_value(FSTWriter *w, int sig_id, uint64_t value, int width)
     FSTChange *vc = &w->changes[w->num_changes++];
     vc->time_index = w->current_time_index;
     vc->sig_id = sig_id;
+    value.width = w->signals[sig_id].width;
     vc->value = value;
 }
 
@@ -1024,7 +1024,7 @@ static void write_vcdata_block(FSTWriter *w)
 
         if (width == 1) {
             /* 1-bit 2-state: (delta << 2) | enc; enc: 0→'0', 2→'1' */
-            uint64_t val = vc->value & 1;
+            uint64_t val = (uint64_t)sim_val_get_bit(vc->value, 0);
             uint64_t enc = ((uint64_t)delta << 2) | (val ? 2 : 0);
             buf_varint(&sig_vc[s], enc);
         } else {
@@ -1038,11 +1038,14 @@ static void write_vcdata_block(FSTWriter *w)
              */
             buf_varint(&sig_vc[s], ((uint64_t)delta << 1) | 0);
             int nbytes = (width + 7) / 8;
-            int shift = nbytes * 8 - width;
-            uint64_t packed = vc->value << shift;
-            for (int b = nbytes - 1; b >= 0; b--) {
-                buf_u8(&sig_vc[s],
-                       (uint8_t)((packed >> (b * 8)) & 0xFF));
+            for (int byte_idx = 0; byte_idx < nbytes; byte_idx++) {
+                uint8_t packed = 0;
+                for (int bit_idx = 0; bit_idx < 8; bit_idx++) {
+                    int logical_bit = width - 1 - (byte_idx * 8 + bit_idx);
+                    if (logical_bit >= 0 && sim_val_get_bit(vc->value, logical_bit))
+                        packed |= (uint8_t)(1U << (7 - bit_idx));
+                }
+                buf_u8(&sig_vc[s], packed);
             }
         }
     }
