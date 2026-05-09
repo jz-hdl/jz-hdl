@@ -10,6 +10,7 @@ The compiler enforces strict rules around clocks, resets, driver ownership, widt
 @module blinker
     PORT {
         IN  [1] clk;
+        IN  [1] reset;
         OUT [1] led;
     }
 
@@ -51,11 +52,13 @@ cmake -S compiler -B compiler/build
 cmake --build compiler/build
 ```
 
+On Unix-like single-config generators, the compiler is typically written to `compiler/build/jz-hdl`. On Windows multi-config generators such as Visual Studio, expect `compiler/build/<Config>/jz-hdl.exe` and pass `--config Release` or `--config Debug` to `cmake --build`.
+
 ## Usage
 
 ```bash
 $ ./jz-hdl
-Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--Eno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
@@ -104,6 +107,8 @@ The `examples/` directory contains complete projects ranging from simple counter
 ## Documentation
 
 Full documentation is available at [jz-hdl.github.io/jz-hdl](https://jz-hdl.github.io/jz-hdl/) and in the `docs/` directory, covering the language specification, type system, module system, memory semantics, simulation, and testbench authoring.
+
+The docs site also ships rendered PDF copies of the specifications from `docs/public/pdf/`. Regenerate them from the Markdown sources in `specification/` with the CMake `docs` target in `compiler/CMakeLists.txt` (requires `pandoc` and `xelatex`).
 
 ### Specification
 

@@ -331,14 +331,6 @@ int jz_cli_parse_options(JZCLIOptions *opts, int argc, char **argv) {
                 opts->group_overrides[opts->group_override_count].severity = JZ_SEVERITY_ERROR;
                 opts->group_override_count++;
             }
-        } else if (strncmp(arg, "--Wgroup=", 9) == 0) {
-            const char *group = arg + 9;
-            if (*group && opts->group_override_count < sizeof(opts->group_overrides) / sizeof(opts->group_overrides[0])) {
-                opts->group_overrides[opts->group_override_count].group = group;
-                opts->group_overrides[opts->group_override_count].enabled = 1;
-                opts->group_overrides[opts->group_override_count].severity = JZ_SEVERITY_WARNING;
-                opts->group_override_count++;
-            }
         } else if (strcmp(arg, "--allow-absolute-paths") == 0) {
             opts->allow_absolute_paths = 1;
         } else if (strcmp(arg, "--allow-traversal") == 0) {

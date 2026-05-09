@@ -28,7 +28,7 @@ export default defineConfig({
           { text: 'JZW File Format Specification', link: '/jz-hdl/pdf/jzw-specification.pdf', target: '_blank' },
         ]
       },
-      { text: 'GitHub', link: 'https://github.com/jz-hdl/jz-hdl' },
+      { text: 'GitHub', link: 'https://github.com/zaun/jz-hdl' },
     ],
 
     sidebar: [

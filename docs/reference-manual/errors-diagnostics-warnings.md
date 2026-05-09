@@ -36,7 +36,7 @@ Use `--lint-rules` to print every diagnostic rule ID, its severity, and a short 
 jz-hdl design.jz --lint-rules
 ```
 
-This is useful for discovering the exact rule group to reference when suppressing diagnostics with `--Wno-group` or `--Eno-group`, or when searching this page for details about a specific diagnostic.
+This is useful for discovering the exact rule group to reference when controlling diagnostics with `--Wno-group` or `--Eno-group`, or when searching this page for details about a specific diagnostic.
 
 ## Diagnostic Reference
 
