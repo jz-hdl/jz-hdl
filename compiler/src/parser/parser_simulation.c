@@ -333,19 +333,8 @@ static int parse_sim_tap_block_body(Parser *p, JZASTNode *parent)
             return -1;
         }
 
-        /* Build path text */
-        size_t buf_sz = 0;
-        for (size_t i = path_start; i < path_end; ++i) {
-            const JZToken *pt = &p->tokens[i];
-            if (pt->lexeme) buf_sz += strlen(pt->lexeme);
-        }
-        char *path_text = (char *)malloc(buf_sz + 1);
+        char *path_text = parser_join_token_lexemes_compact(p, path_start, path_end);
         if (!path_text) return -1;
-        path_text[0] = '\0';
-        for (size_t i = path_start; i < path_end; ++i) {
-            const JZToken *pt = &p->tokens[i];
-            if (pt->lexeme) strcat(path_text, pt->lexeme);
-        }
 
         JZASTNode *decl = jz_ast_new(JZ_AST_SIM_TAP_DECL, tap_loc);
         if (!decl) {
@@ -404,21 +393,8 @@ static JZASTNode *parse_sim_run(Parser *p)
     /* Build value text */
     char *val_text = NULL;
     if (val_start < val_end) {
-        size_t buf_sz = 0;
-        for (size_t i = val_start; i < val_end; ++i) {
-            const JZToken *vt = &p->tokens[i];
-            if (vt->lexeme) buf_sz += strlen(vt->lexeme) + 1;
-        }
-        if (buf_sz > 0) {
-            val_text = (char *)malloc(buf_sz + 1);
-            if (!val_text) return NULL;
-            val_text[0] = '\0';
-            for (size_t i = val_start; i < val_end; ++i) {
-                const JZToken *vt = &p->tokens[i];
-                if (!vt->lexeme) continue;
-                strcat(val_text, vt->lexeme);
-            }
-        }
+        val_text = parser_join_token_lexemes_compact(p, val_start, val_end);
+        if (!val_text) return NULL;
     }
 
     JZASTNode *node = jz_ast_new(JZ_AST_SIM_RUN, kw->loc);
@@ -842,21 +818,8 @@ static JZASTNode *parse_sim_run_cond(Parser *p, JZASTNodeType node_type)
     /* Build timeout value text */
     char *tval_text = NULL;
     if (tval_start < tval_end) {
-        size_t buf_sz = 0;
-        for (size_t i = tval_start; i < tval_end; ++i) {
-            const JZToken *vt = &p->tokens[i];
-            if (vt->lexeme) buf_sz += strlen(vt->lexeme) + 1;
-        }
-        if (buf_sz > 0) {
-            tval_text = (char *)malloc(buf_sz + 1);
-            if (!tval_text) { jz_ast_free(sig); jz_ast_free(val); return NULL; }
-            tval_text[0] = '\0';
-            for (size_t i = tval_start; i < tval_end; ++i) {
-                const JZToken *vt = &p->tokens[i];
-                if (!vt->lexeme) continue;
-                strcat(tval_text, vt->lexeme);
-            }
-        }
+        tval_text = parser_join_token_lexemes_compact(p, tval_start, tval_end);
+        if (!tval_text) { jz_ast_free(sig); jz_ast_free(val); return NULL; }
     }
 
     JZASTNode *node = jz_ast_new(node_type, kw->loc);
@@ -966,22 +929,8 @@ static int parse_sim_binding_list(Parser *p, JZASTNode *inst)
             size_t we = p->pos;
             advance(p);
             if (ws < we) {
-                size_t buf_sz = 0;
-                for (size_t i = ws; i < we; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                }
-                if (buf_sz > 0) {
-                    width_text = (char *)malloc(buf_sz + 1);
-                    if (!width_text) return -1;
-                    width_text[0] = '\0';
-                    for (size_t i = ws; i < we; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (!wt->lexeme) continue;
-                        strcat(width_text, wt->lexeme);
-                        strcat(width_text, " ");
-                    }
-                }
+                width_text = parser_join_token_lexemes_spaced(p, ws, we, 1);
+                if (!width_text) return -1;
             }
         }
 
@@ -1207,14 +1156,8 @@ JZASTNode *parse_simulation(Parser *p)
                             size_t ce = p->pos;
                             advance(p);
                             if (cs < ce) {
-                                size_t bsz = 0;
-                                for (size_t i = cs; i < ce; ++i) { if (p->tokens[i].lexeme) bsz += strlen(p->tokens[i].lexeme) + 1; }
-                                if (bsz > 0) {
-                                    count_text = (char *)malloc(bsz + 1);
-                                    if (!count_text) { jz_ast_free(wire_block); jz_ast_free(sim); return NULL; }
-                                    count_text[0] = '\0';
-                                    for (size_t i = cs; i < ce; ++i) { if (p->tokens[i].lexeme) strcat(count_text, p->tokens[i].lexeme); }
-                                }
+                                count_text = parser_join_token_lexemes_compact(p, cs, ce);
+                                if (!count_text) { jz_ast_free(wire_block); jz_ast_free(sim); return NULL; }
                             }
                         }
 
@@ -1262,20 +1205,10 @@ JZASTNode *parse_simulation(Parser *p)
                         size_t we = p->pos;
                         advance(p);
                         if (ws < we) {
-                            size_t bsz = 0;
-                            for (size_t i = ws; i < we; ++i) { if (p->tokens[i].lexeme) bsz += strlen(p->tokens[i].lexeme) + 1; }
-                            if (bsz > 0) {
-                                char *wtxt = (char *)malloc(bsz + 1);
-                                if (!wtxt) { jz_ast_free(wd); jz_ast_free(wire_block); jz_ast_free(sim); return NULL; }
-                                wtxt[0] = '\0';
-                                for (size_t i = ws; i < we; ++i) {
-                                    if (!p->tokens[i].lexeme) continue;
-                                    strcat(wtxt, p->tokens[i].lexeme);
-                                    strcat(wtxt, " ");
-                                }
-                                jz_ast_set_width(wd, wtxt);
-                                free(wtxt);
-                            }
+                            char *wtxt = parser_join_token_lexemes_spaced(p, ws, we, 1);
+                            if (!wtxt) { jz_ast_free(wd); jz_ast_free(wire_block); jz_ast_free(sim); return NULL; }
+                            jz_ast_set_width(wd, wtxt);
+                            free(wtxt);
                         }
                     }
 

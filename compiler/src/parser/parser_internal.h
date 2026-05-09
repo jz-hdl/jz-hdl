@@ -130,6 +130,73 @@ void parser_error_rule(const Parser *p, const char *rule_id);
 JZASTNode *make_raw_text_node(const Parser *p, size_t start, size_t end);
 
 /**
+ * @brief Deep-copy an AST subtree without a recursion-depth guard.
+ *
+ * @param src Root node to clone
+ * @return Newly allocated clone, or NULL on allocation failure
+ */
+JZASTNode *parser_clone_ast_tree(const JZASTNode *src);
+
+/**
+ * @brief Deep-copy an AST subtree while enforcing a recursion-depth limit.
+ *
+ * @param src           Root node to clone
+ * @param depth_counter Caller-owned recursion counter
+ * @param limit         Maximum permitted recursion depth
+ * @return Newly allocated clone, or NULL on allocation failure or depth overflow
+ */
+JZASTNode *parser_clone_ast_tree_checked(const JZASTNode *src,
+                                         unsigned *depth_counter,
+                                         unsigned limit);
+
+/**
+ * @brief Join token lexemes from a half-open range using spaces.
+ *
+ * @param p              Active parser
+ * @param start          Starting token index (inclusive)
+ * @param end            Ending token index (exclusive)
+ * @param trailing_space Non-zero to preserve a trailing space after each token
+ * @return Newly allocated string, an allocated empty string for empty ranges,
+ *         or NULL on allocation failure
+ */
+char *parser_join_token_lexemes_spaced(const Parser *p,
+                                       size_t start,
+                                       size_t end,
+                                       int trailing_space);
+
+/**
+ * @brief Join token lexemes from a half-open range without inserted spaces.
+ *
+ * @param p     Active parser
+ * @param start Starting token index (inclusive)
+ * @param end   Ending token index (exclusive)
+ * @return Newly allocated string, including an allocated empty string for
+ *         empty ranges, or NULL on allocation failure
+ */
+char *parser_join_token_lexemes_compact(const Parser *p,
+                                        size_t start,
+                                        size_t end);
+
+/**
+ * @brief Parse and assemble a qualified identifier-like name.
+ *
+ * Consumes a sequence matching `id(.id)*` under caller-selected token rules.
+ * The helper preserves the current parser behavior of consuming a trailing
+ * dot if present before the name ends.
+ *
+ * @param p                   Active parser
+ * @param allow_config        Non-zero to allow the CONFIG keyword as a name segment
+ * @param allow_decl_keywords Non-zero to allow declaration-context keywords as segments
+ * @param out_loc             Optional output for the location of the first segment
+ * @return Newly allocated assembled name, or NULL if no valid first segment
+ *         was present or on allocation failure
+ */
+char *parser_parse_qualified_name(Parser *p,
+                                  int allow_config,
+                                  int allow_decl_keywords,
+                                  JZLocation *out_loc);
+
+/**
  * @brief Determine whether a token may act as an identifier in declarations.
  *
  * This allows reserved keywords (e.g., IF, PORT, MODULE) to parse as

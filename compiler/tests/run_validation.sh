@@ -34,7 +34,7 @@ normalize_validation_output() {
   local src="$1"
   local dst="$2"
 
-  sed -E 's|^(VCD written to: ).*/compiler/tests/validation/([^/]+\.vcd)$|\1compiler/tests/validation/\2|' "${src}" > "${dst}"
+  sed -E 's|^(VCD written to: ).*/([^/]+\.vcd)$|\1compiler/tests/validation/\2|' "${src}" > "${dst}"
 }
 
 copy_generated_mem_sidecars() {
@@ -87,6 +87,7 @@ for file in "${validation_files[@]}"; do
 
   # Determine extra flags based on filename.
   extra_flags=()
+  tmp_waveform_dir=""
   case "$(basename "${file}")" in
     *_GND_*) extra_flags+=(--tristate-default=GND) ;;
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
@@ -126,7 +127,12 @@ for file in "${validation_files[@]}"; do
     *_SMODE_*) cmd_flags=(--simulate) ;;
   esac
   tmp_artifact=""
+  tmp_waveform=""
   case "$(basename "${file}")" in
+    *_SMODE_*)
+      tmp_waveform_dir="$(mktemp -d "${ROOT_DIR}/tests/.validation_waveform.XXXXXX")"
+      tmp_waveform="${tmp_waveform_dir}/$(basename "${base_no_ext}").vcd"
+      ;;
     CHIP_10_4_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
       cmd_flags=(--info --verilog)
       tmp_artifact="$(mktemp)"
@@ -143,6 +149,10 @@ for file in "${validation_files[@]}"; do
   if [[ -n "${tmp_artifact}" ]]; then
     "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_artifact}" "${input_file}" >"${tmp_out}" 2>&1 || true
     rm -f "${tmp_artifact}"
+  elif [[ -n "${tmp_waveform}" ]]; then
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_waveform}" "${input_file}" >"${tmp_out}" 2>&1 || true
+    rm -f "${tmp_waveform}"
+    rm -rf "${tmp_waveform_dir}"
   else
     "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} "${input_file}" >"${tmp_out}" 2>&1 || true
   fi

@@ -133,30 +133,229 @@ JZASTNode *make_raw_text_node(const Parser *p, size_t start, size_t end) {
     JZASTNode *node = jz_ast_new(JZ_AST_RAW_TEXT, loc);
     if (!node) return NULL;
 
-    size_t buf_sz = 0;
-    for (size_t i = start; i < end; ++i) {
-        const JZToken *t = &p->tokens[i];
-        if (t->lexeme) buf_sz += strlen(t->lexeme) + 1;
+    char *buf = parser_join_token_lexemes_spaced(p, start, end, 1);
+    if (!buf && start < end) {
+        jz_ast_free(node);
+        return NULL;
     }
-
-    if (buf_sz > 0) {
-        char *buf = (char *)malloc(buf_sz + 1);
-        if (!buf) {
-            jz_ast_free(node);
-            return NULL;
-        }
-        buf[0] = '\0';
-        for (size_t i = start; i < end; ++i) {
-            const JZToken *t = &p->tokens[i];
-            if (!t->lexeme) continue;
-            strcat(buf, t->lexeme);
-            strcat(buf, " ");
-        }
+    if (buf && buf[0] != '\0') {
         jz_ast_set_text(node, buf);
-        free(buf);
     }
+    free(buf);
 
     return node;
+}
+
+char *parser_join_token_lexemes_spaced(const Parser *p,
+                                       size_t start,
+                                       size_t end,
+                                       int trailing_space)
+{
+    size_t buf_sz = 0;
+
+    if (!p) return NULL;
+
+    for (size_t i = start; i < end; ++i) {
+        const JZToken *t = &p->tokens[i];
+        if (!t->lexeme) continue;
+        buf_sz += strlen(t->lexeme);
+        if (trailing_space || i + 1 < end) {
+            buf_sz += 1;
+        }
+    }
+
+    char *buf = (char *)malloc(buf_sz + 1);
+    if (!buf) return NULL;
+    buf[0] = '\0';
+
+    for (size_t i = start; i < end; ++i) {
+        const JZToken *t = &p->tokens[i];
+        if (!t->lexeme) continue;
+        strcat(buf, t->lexeme);
+        if (trailing_space || i + 1 < end) {
+            strcat(buf, " ");
+        }
+    }
+
+    return buf;
+}
+
+char *parser_join_token_lexemes_compact(const Parser *p,
+                                        size_t start,
+                                        size_t end)
+{
+    size_t buf_sz = 0;
+
+    if (!p) return NULL;
+
+    for (size_t i = start; i < end; ++i) {
+        const JZToken *t = &p->tokens[i];
+        if (!t->lexeme) continue;
+        buf_sz += strlen(t->lexeme);
+    }
+
+    char *buf = (char *)malloc(buf_sz + 1);
+    if (!buf) return NULL;
+    buf[0] = '\0';
+
+    for (size_t i = start; i < end; ++i) {
+        const JZToken *t = &p->tokens[i];
+        if (!t->lexeme) continue;
+        strcat(buf, t->lexeme);
+    }
+
+    return buf;
+}
+
+char *parser_parse_qualified_name(Parser *p,
+                                  int allow_config,
+                                  int allow_decl_keywords,
+                                  JZLocation *out_loc)
+{
+    char *buf = NULL;
+    size_t buf_sz = 0;
+
+    if (!p) return NULL;
+
+    for (;;) {
+        const JZToken *id = peek(p);
+        size_t len = 0;
+        size_t new_size = 0;
+        char *new_buf = NULL;
+        int accepts_segment = 0;
+
+        if (!id->lexeme) break;
+        if (allow_decl_keywords ? is_decl_identifier_token(id)
+                                : id->type == JZ_TOK_IDENTIFIER) {
+            accepts_segment = 1;
+        } else if (allow_config && id->type == JZ_TOK_KW_CONFIG) {
+            accepts_segment = 1;
+        }
+        if (!accepts_segment) break;
+
+        if (!buf && out_loc) {
+            *out_loc = id->loc;
+        }
+
+        len = strlen(id->lexeme);
+        if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
+            jz_size_add_checked(new_size, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
+        if (!new_buf) {
+            free(buf);
+            return NULL;
+        }
+        buf = new_buf;
+        memcpy(buf + buf_sz, id->lexeme, len);
+        buf_sz += len;
+        buf[buf_sz] = '\0';
+        advance(p);
+        if (!match(p, JZ_TOK_DOT)) {
+            break;
+        }
+        if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
+            free(buf);
+            return NULL;
+        }
+        new_buf = (char *)realloc(buf, new_size);
+        if (!new_buf) {
+            free(buf);
+            return NULL;
+        }
+        buf = new_buf;
+        buf[buf_sz++] = '.';
+        buf[buf_sz] = '\0';
+    }
+
+    return buf;
+}
+
+JZASTNode *parser_clone_ast_tree(const JZASTNode *src)
+{
+    if (!src) return NULL;
+
+    JZASTNode *copy = jz_ast_new(src->type, src->loc);
+    if (!copy) return NULL;
+
+    if (src->name) {
+        jz_ast_set_name(copy, src->name);
+    }
+    if (src->text) {
+        jz_ast_set_text(copy, src->text);
+    }
+    if (src->width) {
+        jz_ast_set_width(copy, src->width);
+    }
+    if (src->block_kind) {
+        jz_ast_set_block_kind(copy, src->block_kind);
+    }
+
+    for (size_t i = 0; i < src->child_count; ++i) {
+        JZASTNode *child_copy = parser_clone_ast_tree(src->children[i]);
+        if (!child_copy) {
+            jz_ast_free(copy);
+            return NULL;
+        }
+        if (jz_ast_add_child(copy, child_copy) != 0) {
+            jz_ast_free(child_copy);
+            jz_ast_free(copy);
+            return NULL;
+        }
+    }
+
+    return copy;
+}
+
+JZASTNode *parser_clone_ast_tree_checked(const JZASTNode *src,
+                                         unsigned *depth_counter,
+                                         unsigned limit)
+{
+    if (!src || !depth_counter) return NULL;
+    if (jz_depth_enter_checked(depth_counter, limit) != 0) {
+        return NULL;
+    }
+
+    JZASTNode *copy = jz_ast_new(src->type, src->loc);
+    if (!copy) {
+        jz_depth_leave(depth_counter);
+        return NULL;
+    }
+
+    if (src->name) {
+        jz_ast_set_name(copy, src->name);
+    }
+    if (src->text) {
+        jz_ast_set_text(copy, src->text);
+    }
+    if (src->width) {
+        jz_ast_set_width(copy, src->width);
+    }
+    if (src->block_kind) {
+        jz_ast_set_block_kind(copy, src->block_kind);
+    }
+
+    for (size_t i = 0; i < src->child_count; ++i) {
+        JZASTNode *child_copy = parser_clone_ast_tree_checked(src->children[i],
+                                                              depth_counter,
+                                                              limit);
+        if (!child_copy) {
+            jz_ast_free(copy);
+            jz_depth_leave(depth_counter);
+            return NULL;
+        }
+        if (jz_ast_add_child(copy, child_copy) != 0) {
+            jz_ast_free(child_copy);
+            jz_ast_free(copy);
+            jz_depth_leave(depth_counter);
+            return NULL;
+        }
+    }
+
+    jz_depth_leave(depth_counter);
+    return copy;
 }
 
 /**

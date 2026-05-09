@@ -446,27 +446,13 @@ JZASTNode *parse_block(Parser *p, const JZToken *block_kw, const char *kind, JZA
 
         size_t attr_end = p->pos - 1; /* index of ')' */
         if (attr_start < attr_end) {
-            size_t buf_sz = 0;
-            for (size_t i = attr_start; i < attr_end; ++i) {
-                const JZToken *at = &p->tokens[i];
-                if (at->lexeme) buf_sz += strlen(at->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, attr_start, attr_end, 1);
+            if (!buf) {
+                jz_ast_free(node);
+                return NULL;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(node);
-                    return NULL;
-                }
-                buf[0] = '\0';
-                for (size_t i = attr_start; i < attr_end; ++i) {
-                    const JZToken *at = &p->tokens[i];
-                    if (!at->lexeme) continue;
-                    strcat(buf, at->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_text(node, buf);
-                free(buf);
-            }
+            jz_ast_set_text(node, buf);
+            free(buf);
         }
     }
 
@@ -661,27 +647,13 @@ int parse_const_block_body(Parser *p, JZASTNode *parent) {
         jz_ast_set_name(decl, name_tok->lexeme);
 
         if (expr_start < expr_end) {
-            size_t buf_sz = 0;
-            for (size_t i = expr_start; i < expr_end; ++i) {
-                const JZToken *et = &p->tokens[i];
-                if (et->lexeme) buf_sz += strlen(et->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, expr_start, expr_end, 1);
+            if (!buf) {
+                jz_ast_free(decl);
+                return -1;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(decl);
-                    return -1;
-                }
-                buf[0] = '\0';
-                for (size_t i = expr_start; i < expr_end; ++i) {
-                    const JZToken *et = &p->tokens[i];
-                    if (!et->lexeme) continue;
-                    strcat(buf, et->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_text(decl, buf);
-                free(buf);
-            }
+            jz_ast_set_text(decl, buf);
+            free(buf);
         }
 
         if (jz_ast_add_child(parent, decl) != 0) {

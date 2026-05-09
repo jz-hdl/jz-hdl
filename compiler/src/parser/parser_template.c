@@ -68,27 +68,10 @@ JZASTNode *parse_scratch_decl(Parser *p) {
         advance(p);
     }
 
-    /* Build width string from tokens */
     size_t width_end = p->pos;
-    char *width_str = NULL;
-    size_t width_len = 0;
-    for (size_t i = width_start; i < width_end; i++) {
-        const JZToken *wt = &p->tokens[i];
-        if (wt->lexeme) {
-            size_t tl = strlen(wt->lexeme);
-            size_t new_size = 0;
-            char *nw = NULL;
-            if (jz_size_mul_add_checked(1, width_len, tl + 1, &new_size) != 0) {
-                free(width_str);
-                return NULL;
-            }
-            nw = (char *)realloc(width_str, new_size);
-            if (!nw) { free(width_str); return NULL; }
-            width_str = nw;
-            memcpy(width_str + width_len, wt->lexeme, tl);
-            width_len += tl;
-            width_str[width_len] = '\0';
-        }
+    char *width_str = parser_join_token_lexemes_compact(p, width_start, width_end);
+    if (!width_str && width_start < width_end) {
+        return NULL;
     }
 
     if (!match(p, JZ_TOK_RBRACKET)) {
@@ -351,26 +334,10 @@ JZASTNode *parse_apply_stmt(Parser *p) {
         }
 
         size_t count_end = p->pos;
-        char *count_str = NULL;
-        size_t count_len = 0;
-        for (size_t i = count_start; i < count_end; i++) {
-            const JZToken *ct = &p->tokens[i];
-            if (ct->lexeme) {
-                size_t tl = strlen(ct->lexeme);
-                size_t new_size = 0;
-                char *nc = NULL;
-                if (jz_size_mul_add_checked(1, count_len, tl + 1, &new_size) != 0) {
-                    free(count_str);
-                    jz_ast_free(apply);
-                    return NULL;
-                }
-                nc = (char *)realloc(count_str, new_size);
-                if (!nc) { free(count_str); jz_ast_free(apply); return NULL; }
-                count_str = nc;
-                memcpy(count_str + count_len, ct->lexeme, tl);
-                count_len += tl;
-                count_str[count_len] = '\0';
-            }
+        char *count_str = parser_join_token_lexemes_compact(p, count_start, count_end);
+        if (!count_str && count_start < count_end) {
+            jz_ast_free(apply);
+            return NULL;
         }
 
         if (!match(p, JZ_TOK_RBRACKET)) {

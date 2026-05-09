@@ -73,22 +73,8 @@ int parse_cdc_block_body(Parser *p, JZASTNode *parent) {
 
             char *stages = NULL;
             if (start < end) {
-                size_t buf_sz = 0;
-                for (size_t i = start; i < end; ++i) {
-                    const JZToken *nt = &p->tokens[i];
-                    if (nt->lexeme) buf_sz += strlen(nt->lexeme) + 1;
-                }
-                if (buf_sz > 0) {
-                    stages = (char *)malloc(buf_sz + 1);
-                    if (!stages) { jz_ast_free(decl); return -1; }
-                    stages[0] = '\0';
-                    for (size_t i = start; i < end; ++i) {
-                        const JZToken *nt = &p->tokens[i];
-                        if (!nt->lexeme) continue;
-                        strcat(stages, nt->lexeme);
-                        strcat(stages, " ");
-                    }
-                }
+                stages = parser_join_token_lexemes_spaced(p, start, end, 1);
+                if (!stages) { jz_ast_free(decl); return -1; }
             }
             if (stages) {
                 jz_ast_set_width(decl, stages); /* reuse width field for n_stages text */

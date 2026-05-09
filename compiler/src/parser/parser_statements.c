@@ -101,48 +101,7 @@ static JZASTNode *parse_lvalue_primary(Parser *p) {
      * KEYWORD_AS_IDENTIFIER precisely).
      */
     JZLocation loc = t->loc;
-    char *buf = NULL;
-    size_t buf_sz = 0;
-    for (;;) {
-        const JZToken *id = peek(p);
-        if ((!is_decl_identifier_token(id) && id->type != JZ_TOK_KW_CONFIG) ||
-            !id->lexeme) {
-            break;
-        }
-        size_t len = strlen(id->lexeme);
-        size_t new_size = 0;
-        char *new_buf = NULL;
-        if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
-            jz_size_add_checked(new_size, 2, &new_size) != 0) {
-            free(buf);
-            return NULL;
-        }
-        new_buf = (char *)realloc(buf, new_size);
-        if (!new_buf) {
-            free(buf);
-            return NULL;
-        }
-        buf = new_buf;
-        memcpy(buf + buf_sz, id->lexeme, len);
-        buf_sz += len;
-        buf[buf_sz] = '\0';
-        advance(p);
-        if (!match(p, JZ_TOK_DOT)) {
-            break;
-        }
-        if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
-            free(buf);
-            return NULL;
-        }
-        char *new_buf2 = (char *)realloc(buf, new_size);
-        if (!new_buf2) {
-            free(buf);
-            return NULL;
-        }
-        buf = new_buf2;
-        buf[buf_sz++] = '.';
-        buf[buf_sz] = '\0';
-    }
+    char *buf = parser_parse_qualified_name(p, 1, 1, &loc);
 
     if (!buf) {
         parser_error(p, "expected identifier in lvalue");

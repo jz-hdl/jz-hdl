@@ -91,24 +91,10 @@ int parse_mux_block_body(Parser *p, JZASTNode *parent) {
 
             char *width = NULL;
             if (start < end) {
-                size_t buf_sz = 0;
-                for (size_t i = start; i < end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                }
-                if (buf_sz > 0) {
-                    width = (char *)malloc(buf_sz + 1);
-                    if (!width) {
-                        jz_ast_free(mux);
-                        return -1;
-                    }
-                    width[0] = '\0';
-                    for (size_t i = start; i < end; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (!wt->lexeme) continue;
-                        strcat(width, wt->lexeme);
-                        strcat(width, " ");
-                    }
+                width = parser_join_token_lexemes_spaced(p, start, end, 1);
+                if (!width) {
+                    jz_ast_free(mux);
+                    return -1;
                 }
             }
             if (width) {

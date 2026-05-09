@@ -222,54 +222,26 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
 
         /* word_width into width field */
         if (word_start < word_end) {
-            size_t buf_sz = 0;
-            for (size_t i = word_start; i < word_end; ++i) {
-                const JZToken *wt = &p->tokens[i];
-                if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, word_start, word_end, 1);
+            if (!buf) {
+                jz_ast_free(init_expr);
+                jz_ast_free(mem);
+                return -1;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(init_expr);
-                    jz_ast_free(mem);
-                    return -1;
-                }
-                buf[0] = '\0';
-                for (size_t i = word_start; i < word_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (!wt->lexeme) continue;
-                    strcat(buf, wt->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_width(mem, buf);
-                free(buf);
-            }
+            jz_ast_set_width(mem, buf);
+            free(buf);
         }
 
         /* depth expression stored in text for now (no generic width slot left) */
         if (depth_start < depth_end) {
-            size_t buf_sz = 0;
-            for (size_t i = depth_start; i < depth_end; ++i) {
-                const JZToken *dt = &p->tokens[i];
-                if (dt->lexeme) buf_sz += strlen(dt->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, depth_start, depth_end, 1);
+            if (!buf) {
+                jz_ast_free(init_expr);
+                jz_ast_free(mem);
+                return -1;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(init_expr);
-                    jz_ast_free(mem);
-                    return -1;
-                }
-                buf[0] = '\0';
-                for (size_t i = depth_start; i < depth_end; ++i) {
-                    const JZToken *dt = &p->tokens[i];
-                    if (!dt->lexeme) continue;
-                    strcat(buf, dt->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_text(mem, buf);
-                free(buf);
-            }
+            jz_ast_set_text(mem, buf);
+            free(buf);
         }
 
         /* Attach the parsed initializer expression (literal or @file form) as

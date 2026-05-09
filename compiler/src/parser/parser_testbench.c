@@ -168,21 +168,8 @@ static int parse_tb_wire_block_body(Parser *p, JZASTNode *parent)
                 size_t ce = p->pos;
                 advance(p); /* consume ']' */
                 if (cs < ce) {
-                    size_t buf_sz = 0;
-                    for (size_t i = cs; i < ce; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                    }
-                    if (buf_sz > 0) {
-                        count_text = (char *)malloc(buf_sz + 1);
-                        if (!count_text) return -1;
-                        count_text[0] = '\0';
-                        for (size_t i = cs; i < ce; ++i) {
-                            const JZToken *wt = &p->tokens[i];
-                            if (!wt->lexeme) continue;
-                            strcat(count_text, wt->lexeme);
-                        }
-                    }
+                    count_text = parser_join_token_lexemes_compact(p, cs, ce);
+                    if (!count_text) return -1;
                 }
             }
 
@@ -246,27 +233,13 @@ static int parse_tb_wire_block_body(Parser *p, JZASTNode *parent)
             advance(p); /* consume ']' */
 
             if (width_start < width_end) {
-                size_t buf_sz = 0;
-                for (size_t i = width_start; i < width_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
+                char *width_text = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+                if (!width_text) {
+                    jz_ast_free(decl);
+                    return -1;
                 }
-                if (buf_sz > 0) {
-                    char *width_text = (char *)malloc(buf_sz + 1);
-                    if (!width_text) {
-                        jz_ast_free(decl);
-                        return -1;
-                    }
-                    width_text[0] = '\0';
-                    for (size_t i = width_start; i < width_end; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (!wt->lexeme) continue;
-                        strcat(width_text, wt->lexeme);
-                        strcat(width_text, " ");
-                    }
-                    jz_ast_set_width(decl, width_text);
-                    free(width_text);
-                }
+                jz_ast_set_width(decl, width_text);
+                free(width_text);
             }
         }
 
@@ -402,22 +375,8 @@ static JZASTNode *parse_tb_clock_adv(Parser *p)
     /* Build cycle count text */
     char *cycle_text = NULL;
     if (expr_start < expr_end) {
-        size_t buf_sz = 0;
-        for (size_t i = expr_start; i < expr_end; ++i) {
-            const JZToken *et = &p->tokens[i];
-            if (et->lexeme) buf_sz += strlen(et->lexeme) + 1;
-        }
-        if (buf_sz > 0) {
-            cycle_text = (char *)malloc(buf_sz + 1);
-            if (!cycle_text) return NULL;
-            cycle_text[0] = '\0';
-            for (size_t i = expr_start; i < expr_end; ++i) {
-                const JZToken *et = &p->tokens[i];
-                if (!et->lexeme) continue;
-                strcat(cycle_text, et->lexeme);
-                if (i + 1 < expr_end) strcat(cycle_text, " ");
-            }
-        }
+        cycle_text = parser_join_token_lexemes_spaced(p, expr_start, expr_end, 0);
+        if (!cycle_text) return NULL;
     }
 
     JZASTNode *node = jz_ast_new(JZ_AST_TB_CLOCK_ADV, kw->loc);
@@ -623,22 +582,8 @@ static int parse_tb_binding_list(Parser *p, JZASTNode *inst)
             advance(p); /* consume ']' */
 
             if (width_start < width_end) {
-                size_t buf_sz = 0;
-                for (size_t i = width_start; i < width_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                }
-                if (buf_sz > 0) {
-                    width_text = (char *)malloc(buf_sz + 1);
-                    if (!width_text) return -1;
-                    width_text[0] = '\0';
-                    for (size_t i = width_start; i < width_end; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (!wt->lexeme) continue;
-                        strcat(width_text, wt->lexeme);
-                        strcat(width_text, " ");
-                    }
-                }
+                width_text = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+                if (!width_text) return -1;
             }
         }
 
