@@ -295,12 +295,19 @@ def safe_name(text: str, fallback: str = "") -> str:
     return safe or fallback
 
 
+def resolve_output_dir(
+    config: PipelineConfig, args: argparse.Namespace
+) -> str:
+    output_dir = args.output_dir if args.output_dir is not None else config.output_dir
+    return repo_path(output_dir)
+
+
 def build_output_path(
-    config: PipelineConfig, fields: dict[str, Any]
+    config: PipelineConfig, args: argparse.Namespace, fields: dict[str, Any]
 ) -> str:
     output_format = config.targeting["output_filename"]
     filename = output_format["template"].format(**fields)
-    return os.path.join(config.output_dir, filename)
+    return os.path.join(resolve_output_dir(config, args), filename)
 
 
 def apply_common_filters(
@@ -422,6 +429,7 @@ def resolve_spec_targets(
     for heading in headings:
         output_path = build_output_path(
             config,
+            args,
             {
                 "section": heading.section,
                 "safe_title": safe_name(heading.title),
@@ -537,6 +545,7 @@ def resolve_source_shard_targets(
         first = os.path.splitext(os.path.basename(shard.paths[0]))[0]
         output_path = build_output_path(
             config,
+            args,
             {
                 "index": shard.index,
                 "safe_first_basename": safe_name(first, fallback="shard"),
@@ -574,7 +583,10 @@ def resolve_targets(
     group_type = config.targeting["group"]["type"]
 
     if discover_type == "singleton" and group_type == "singleton":
-        output_path = repo_path(config.targeting["output_path"])
+        output_path = os.path.join(
+            resolve_output_dir(config, args),
+            os.path.basename(config.targeting["output_path"]),
+        )
         label = config.targeting["label"]
         target = ResolvedTarget(
             label=label,
@@ -726,6 +738,7 @@ def run_pipeline(config: PipelineConfig, args: argparse.Namespace) -> int:
     step_names = [os.path.basename(step.path) for step in config.steps]
     print(f"Pipeline: {config.name}")
     print(f"CLI: {args.cli}")
+    print(f"Output dir: {resolve_output_dir(config, args)}")
     print(f"Steps: {' -> '.join(step_names)}")
 
     post_prompt_steps = expand_post_steps(config)
@@ -752,7 +765,7 @@ def run_pipeline(config: PipelineConfig, args: argparse.Namespace) -> int:
     for i, target in enumerate(targets, start=start_offset + 1):
         print(f"[{i}/{total_matched}] {target.label}")
         if not args.dry_run:
-            os.makedirs(config.output_dir, exist_ok=True)
+            os.makedirs(resolve_output_dir(config, args), exist_ok=True)
 
         passed = run_target_steps(
             config=config,
@@ -820,6 +833,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "Run a named pipeline with the shared pipeline runner. "
             "Pass the pipeline name last: audit, security, doxygen, or project_ready."
         ),
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Override the pipeline output directory for this run.",
     )
     parser.add_argument(
         "--filter",
