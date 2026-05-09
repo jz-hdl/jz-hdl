@@ -1,1 +1,3 @@
 
+=== @simulation PrintArgCountMatchSimDut ===
+VCD written to: compiler/tests/validation/SIM_4_8_SMODE_PRT_ARG_COUNT_MISMATCH-happy_path.vcd

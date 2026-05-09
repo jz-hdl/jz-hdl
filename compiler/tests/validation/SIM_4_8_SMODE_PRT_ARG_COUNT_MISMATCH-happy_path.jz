@@ -39,6 +39,6 @@
         flag [1] = flag;
     }
 
-    @print_if(flag, "tick=%tick count=%h flag=%b", count, flag)
+    @print_if(flag & 1'b0, "tick=%tick count=%h flag=%b", count, flag)
     @run(ns=10)
 @endsim
