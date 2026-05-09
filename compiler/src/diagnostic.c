@@ -472,23 +472,21 @@ void jz_diagnostic_apply_warning_policy(JZDiagnosticList *list,
 
     JZDiagnostic *diags = (JZDiagnostic *)list->buffer.data;
 
-    /* First, filter out diagnostics from disabled warning groups. Errors are
-     * never suppressed by this mechanism.
-     */
+    /* First, filter out diagnostics from disabled group/severity overrides. */
     if (policy->groups && policy->group_count > 0) {
         JZBuffer filtered = {0};
         for (size_t i = 0; i < count; ++i) {
             JZDiagnostic *d = &diags[i];
 
             int suppress = 0;
-            if (d->severity == JZ_SEVERITY_WARNING && d->code) {
+            if (d->code) {
                 const JZRuleInfo *rule = jz_rule_lookup(d->code);
                 if (rule && rule->group) {
                     for (size_t g = 0; g < policy->group_count; ++g) {
                         const JZWarningGroupOverride *ov = &policy->groups[g];
                         if (!ov->group) continue;
                         if (strcmp(ov->group, rule->group) == 0) {
-                            if (!ov->enabled) {
+                            if (ov->severity == d->severity && !ov->enabled) {
                                 suppress = 1;
                             }
                             break;

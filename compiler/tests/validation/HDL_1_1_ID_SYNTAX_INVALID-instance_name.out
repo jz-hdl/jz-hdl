@@ -1,2 +1,2 @@
 File: HDL_1_1_ID_SYNTAX_INVALID-instance_name.jz
-      35:5    error ID_SYNTAX_INVALID S1.1 Identifier exceeds 255 characters
+      35:5    error ID_SYNTAX_INVALID S1.1 Identifier violates syntax (must start with ASCII letter/underscore, continue with ASCII letters/digits/underscores, and be at most 255 characters)

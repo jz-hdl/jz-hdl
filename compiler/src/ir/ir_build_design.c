@@ -752,7 +752,7 @@ int jz_ir_build_design(JZASTNode *root,
 
     /* Build net graphs so that symbol.can_be_z is populated for each signal. */
     ir_t0 = clock();
-    sem_build_net_graphs(root, &module_scopes, &project_symbols, diagnostics);
+    sem_build_net_graphs(root, &module_scopes, &project_symbols, diagnostics, 0);
     if (jz_verbose) fprintf(stderr, "[verbose]   ir: net_graphs: %.1f ms\n",
                              (double)(clock() - ir_t0) / CLOCKS_PER_SEC * 1000.0);
 

@@ -88,12 +88,12 @@ int jz_cli_run_frontend(JZCompiler *compiler,
     JZASTNode *ast = jz_parse_file(filename, &tokens, &compiler->diagnostics);
     if (!ast) {
         /* If the parser did not emit any rule-based diagnostics, provide a
-         * generic fallback code so validation still has an anchor.
+         * generic registered fallback code so validation still has an anchor.
          */
         if (compiler->diagnostics.buffer.len == diag_before_parse) {
             JZLocation loc = { filename, 1, 1 };
             jz_diagnostic_report(&compiler->diagnostics, loc, JZ_SEVERITY_ERROR,
-                                 "PARSE000", "parsing failed");
+                                 "PARSE_SYNTAX_ERROR", "parsing failed");
         }
         jz_token_stream_free(&tokens);
         free(source);

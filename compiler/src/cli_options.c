@@ -135,7 +135,7 @@ static int parse_expansion_limits_arg(JZExpansionLimits *limits, const char *arg
 
 void jz_cli_print_usage(const char *prog) {
     fprintf(stderr,
-            "Usage: %s JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]\n"
+            "Usage: %s JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--Eno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]\n"
             "       %s JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]\n"
             "       %s JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]\n"
             "       %s JZ_FILE --alias-report [-o OUT_FILE]\n"
@@ -320,6 +320,15 @@ int jz_cli_parse_options(JZCLIOptions *opts, int argc, char **argv) {
             if (*group && opts->group_override_count < sizeof(opts->group_overrides) / sizeof(opts->group_overrides[0])) {
                 opts->group_overrides[opts->group_override_count].group = group;
                 opts->group_overrides[opts->group_override_count].enabled = 0;
+                opts->group_overrides[opts->group_override_count].severity = JZ_SEVERITY_WARNING;
+                opts->group_override_count++;
+            }
+        } else if (strncmp(arg, "--Eno-group=", 12) == 0) {
+            const char *group = arg + 12;
+            if (*group && opts->group_override_count < sizeof(opts->group_overrides) / sizeof(opts->group_overrides[0])) {
+                opts->group_overrides[opts->group_override_count].group = group;
+                opts->group_overrides[opts->group_override_count].enabled = 0;
+                opts->group_overrides[opts->group_override_count].severity = JZ_SEVERITY_ERROR;
                 opts->group_override_count++;
             }
         } else if (strncmp(arg, "--Wgroup=", 9) == 0) {
@@ -327,6 +336,7 @@ int jz_cli_parse_options(JZCLIOptions *opts, int argc, char **argv) {
             if (*group && opts->group_override_count < sizeof(opts->group_overrides) / sizeof(opts->group_overrides[0])) {
                 opts->group_overrides[opts->group_override_count].group = group;
                 opts->group_overrides[opts->group_override_count].enabled = 1;
+                opts->group_overrides[opts->group_override_count].severity = JZ_SEVERITY_WARNING;
                 opts->group_override_count++;
             }
         } else if (strcmp(arg, "--allow-absolute-paths") == 0) {

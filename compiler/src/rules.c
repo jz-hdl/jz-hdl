@@ -31,6 +31,7 @@ const JZRuleInfo jz_rule_table[] = {
     /* [PARSE] (done) */
     { "PARSE", "COMMENT_IN_TOKEN",                                  0, JZ_RULE_MODE_ERR, "S1.4 Comment appears inside a token (identifier/number/operator/literal)" },
     { "PARSE", "COMMENT_NESTED_BLOCK",                              0, JZ_RULE_MODE_ERR, "S1.4 Nested block comment `/* ... /* ... */ ... */` detected" },
+    { "PARSE", "PARSE_SYNTAX_ERROR",                                0, JZ_RULE_MODE_ERR, "Source text violates parser syntax and no more specific parse rule applies" },
     { "PARSE", "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S3.2 Expression nesting exceeds the compiler safety limit" },
     { "PARSE", "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 Statement nesting exceeds the compiler safety limit" },
     { "PARSE", "AST_DEPTH_LIMIT_EXCEEDED",                          0, JZ_RULE_MODE_ERR, "AST traversal exceeds the compiler safety limit" },
@@ -42,7 +43,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "PARSE", "LIT_INVALID_DIGIT_FOR_BASE",                        0, JZ_RULE_MODE_ERR, "S2.1 Literal contains digit not allowed for its base (b/d/h)" },
 
     /* [LEXICAL] (done) */
-    { "LEXICAL", "ID_SYNTAX_INVALID",                               1, JZ_RULE_MODE_ERR, "S1.1 Identifier exceeds 255 characters" },
+    { "LEXICAL", "ID_SYNTAX_INVALID",                               1, JZ_RULE_MODE_ERR, "S1.1 Identifier violates syntax (must start with ASCII letter/underscore, continue with ASCII letters/digits/underscores, and be at most 255 characters)" },
     { "LEXICAL", "ID_SINGLE_UNDERSCORE",                            0, JZ_RULE_MODE_ERR, "S1.1 Single underscore `_` used as regular identifier outside no-connect context" },
 
     /* [LITERALS_AND_TYPES] */
@@ -516,6 +517,10 @@ const JZRuleInfo jz_rule_table[] = {
     /* [SIMULATION] */
     { "SIMULATION", "SIM_WRONG_TOOL",             0, JZ_RULE_MODE_ERR, "File contains @simulation blocks; use --simulate to run simulations" },
     { "SIMULATION", "SIM_PROJECT_MIXED",          0, JZ_RULE_MODE_ERR, "SIM-020 A file may not contain both @project and @simulation" },
+    { "SIMULATION", "SIM_ALERT_MESSAGE_STRING_LITERAL_REQUIRED", 0, JZ_RULE_MODE_ERR, "SIM-021 @alert message argument must be a string literal" },
+    { "SIMULATION", "SIM_TRACE_STATE_ON_OR_OFF",  0, JZ_RULE_MODE_ERR, "SIM-022 @trace(state=...) requires state=on or state=off" },
+    { "SIMULATION", "SIM_SINGLE_MONITOR_BLOCK",   0, JZ_RULE_MODE_ERR, "SIM-023 Only one MONITOR block is permitted per @simulation" },
+    { "SIMULATION", "SIM_MONITOR_ALLOWED_DIRECTIVES_ONLY", 0, JZ_RULE_MODE_ERR, "SIM-024 MONITOR blocks may contain only @print_if, @mark_if, and @alert_if directives" },
 
     /* [SIMULATION_RUNTIME] */
     { "SIMULATION", "SIM_RUN_COND_TIMEOUT",         0, JZ_RULE_MODE_ERR, "SIM-030 @run_until/@run_while condition not met within timeout" },
@@ -525,6 +530,7 @@ const JZRuleInfo jz_rule_table[] = {
 
     /* [PRINT_DIRECTIVES] */
     { "PRINT_DIRECTIVES", "PRT_ARG_COUNT_MISMATCH", 0, JZ_RULE_MODE_ERR, "PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments" },
+    { "PRINT_DIRECTIVES", "PRT_FORMAT_STRING_LITERAL_REQUIRED", 0, JZ_RULE_MODE_ERR, "PRT-002 @print/@print_if format argument must be a string literal" },
 
     /* [REPEAT] */
     { "REPEAT", "RPT_COUNT_INVALID",              0, JZ_RULE_MODE_ERR, "RPT-001 @repeat requires a positive integer count" },

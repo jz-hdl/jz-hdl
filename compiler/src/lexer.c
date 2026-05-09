@@ -1015,7 +1015,7 @@ static void lex_one_token(LexerState *st) {
     default: {
         char err_msg[64];
         snprintf(err_msg, sizeof(err_msg), "unrecognized character '%c'", c);
-        lexer_report_parse_error(st, loc, "PARSE000", err_msg);
+        lexer_report_parse_error(st, loc, "ID_SYNTAX_INVALID", err_msg);
         st->pos++; st->column++;
         emit_token(st, JZ_TOK_OTHER, &c, 1, loc);
         break;

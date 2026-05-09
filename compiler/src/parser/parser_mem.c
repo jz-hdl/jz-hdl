@@ -42,13 +42,13 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
 
         const JZToken *name_tok = peek(p);
         if (!is_decl_identifier_token(name_tok)) {
-            parser_error(p, "expected memory name in MEM block");
+            parser_error_id_syntax_or_parse(p, "expected memory name in MEM block");
             return -1;
         }
         advance(p);
 
         if (!match(p, JZ_TOK_LBRACKET)) {
-            parser_error(p, "expected '[' after MEM name for word_width");
+            parser_error_id_syntax_or_parse(p, "expected '[' after MEM name for word_width");
             return -1;
         }
 
@@ -287,7 +287,7 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                  * Error-recovery for a very common mistake: using the read-port
                  * timing qualifiers on a write (IN) port, e.g. `IN wr ASYNC;`
                  * or `IN wr SYNC;`. Instead of treating this as a syntax error
-                 * (which would fall back to PARSE000), emit
+                 * (which would otherwise fall back to generic parse syntax), emit
                  * the MEM_INVALID_PORT_TYPE rule at the qualifier token and
                  * then continue parsing so the rest of the MEM block can still
                  * be analyzed.

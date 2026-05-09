@@ -1,0 +1,38 @@
+@project(CHIP="gw1nr-9-qn88-c6-i5") MEMORY_REPORT_fixture
+    @top Top {
+        IN  [1] clk = _;
+        IN  [5] addr = _;
+        IN  [32] wdata = _;
+        OUT [32] data = _;
+    }
+@endproj
+
+@module Top
+    PORT {
+        IN  [1] clk;
+        IN  [5] addr;
+        IN  [32] wdata;
+        OUT [32] data;
+    }
+
+    REGISTER {
+        r_data [32] = 32'h0000_0000;
+    }
+
+    MEM(type=BLOCK) {
+        block_mem [32] [32] = 32'h0000_0000 {
+            OUT rd SYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = r_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        block_mem.rd.addr <= addr;
+        r_data <= block_mem.rd.data;
+        block_mem.wr[addr] <= wdata;
+    }
+@endmod

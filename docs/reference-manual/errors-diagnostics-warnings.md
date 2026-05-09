@@ -24,7 +24,8 @@ Every diagnostic emitted by the JZ-HDL compiler has one of three severity levels
 | --- | --- |
 | `--info` | Show INFO-level diagnostics in addition to errors and warnings. Without this flag, only errors and warnings are displayed. |
 | `--warn-as-error` | Promote all warnings to errors. Useful for CI pipelines where you want zero tolerance for potential issues. |
-| `--Wno-group=NAME` | Suppress all diagnostics in the named group. For example, `--Wno-group=GENERAL_WARNINGS` silences unused register warnings, dead code warnings, etc. |
+| `--Wno-group=NAME` | Suppress WARNING-level diagnostics in the named group. For example, `--Wno-group=GENERAL_WARNINGS` silences unused register warnings, dead code warnings, etc. |
+| `--Eno-group=NAME` | Suppress ERROR-level diagnostics in the named group. |
 | `--color` | Force colored output. Errors appear in red, warnings in yellow, and info in blue. |
 
 ### Listing All Rules
@@ -35,7 +36,7 @@ Use `--lint-rules` to print every diagnostic rule ID, its severity, and a short 
 jz-hdl design.jz --lint-rules
 ```
 
-This is useful for discovering the exact rule ID to reference when suppressing diagnostics with `--Wno-group`, or when searching this page for details about a specific diagnostic.
+This is useful for discovering the exact rule group to reference when suppressing diagnostics with `--Wno-group` or `--Eno-group`, or when searching this page for details about a specific diagnostic.
 
 ## Diagnostic Reference
 
@@ -53,15 +54,20 @@ The sections below list all diagnostic rules organized by category. Each entry s
 - Cause: `/* ... /* ... */ ... */` — nested block comments are not supported.
 - Fix: Remove inner `/*` or close the outer block before starting another; use line comments instead.
 
+### PARSE.PARSE_SYNTAX_ERROR — Generic parse syntax error
+- Severity: ERROR
+- Cause: Source text violates parser syntax and no more specific parser rule applies.
+- Fix: Correct the malformed syntax or use the more specific rule diagnostics nearby to identify the broken construct.
+
 ### PARSE.DIRECTIVE_INVALID_CONTEXT — Directive used in invalid location
 - Severity: ERROR
 - Cause: Structural directives (@project, @module, @import, @new, @blackbox, @endproj, @endmod, etc.) placed where not allowed.
 - Fix: Place directives only in permitted locations per the spec (e.g., @import only immediately inside @project).
 
-### LEXICAL.ID_SYNTAX_INVALID — Identifier exceeds 255 characters
+### LEXICAL.ID_SYNTAX_INVALID — Identifier violates syntax
 - Severity: ERROR
-- Cause: Identifier length exceeds the 255-character maximum. Character-class and leading-digit violations are caught earlier by the lexer/parser as PARSE000.
-- Fix: Shorten the identifier to 255 characters or fewer.
+- Cause: Identifier is too long, starts with a digit, or contains characters outside `[A-Za-z0-9_]` after the first character.
+- Fix: Use an identifier that starts with an ASCII letter or underscore, continues with ASCII letters/digits/underscores, and is 255 characters or fewer.
 
 ### LEXICAL.ID_SINGLE_UNDERSCORE — Illegal use of single underscore
 - Severity: ERROR
@@ -87,6 +93,31 @@ The sections below list all diagnostic rules organized by category. Each entry s
 - Severity: ERROR
 - Cause: Literal contains a digit not valid for its base (e.g., `8'b102`).
 - Fix: Use valid digits for the base.
+
+### PRINT_DIRECTIVES.PRT_FORMAT_STRING_LITERAL_REQUIRED — Format argument must be a string literal
+- Severity: ERROR
+- Cause: `@print` or `@print_if` received a non-string first format argument.
+- Fix: Pass a string literal as the format argument.
+
+### SIMULATION.SIM_ALERT_MESSAGE_STRING_LITERAL_REQUIRED — Alert message must be a string literal
+- Severity: ERROR
+- Cause: `@alert` received a non-string message argument.
+- Fix: Pass a string literal after the color argument.
+
+### SIMULATION.SIM_TRACE_STATE_ON_OR_OFF — Trace state must be on or off
+- Severity: ERROR
+- Cause: `@trace(state=...)` used a value other than `on` or `off`.
+- Fix: Use `@trace(state=on)` or `@trace(state=off)`.
+
+### SIMULATION.SIM_SINGLE_MONITOR_BLOCK — Multiple MONITOR blocks
+- Severity: ERROR
+- Cause: More than one `MONITOR` block appears in the same `@simulation`.
+- Fix: Keep a single `MONITOR` block per simulation.
+
+### SIMULATION.SIM_MONITOR_ALLOWED_DIRECTIVES_ONLY — MONITOR contains a forbidden directive
+- Severity: ERROR
+- Cause: A `MONITOR` block contains something other than `@print_if`, `@mark_if`, or `@alert_if`.
+- Fix: Restrict `MONITOR` contents to the allowed directives.
 
 ### PARSE.INSTANCE_UNDEFINED_MODULE — Instantiation references non-existent module
 - Severity: ERROR

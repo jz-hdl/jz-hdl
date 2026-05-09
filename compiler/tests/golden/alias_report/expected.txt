@@ -1,0 +1,53 @@
+JZ-HDL Alias Report
+Input file: fixture.hdl
+
+Module: Top
+
+User-visible identifiers:  3
+Internal elaboration nodes:2
+Total identifiers:        5
+Total alias statements:   1
+Resolved physical nets:   1
+Tri-state nets:           0
+Extended-width aliases:   0
+
+PHYSICAL NET: NET_0000    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: fixture.hdl@10
+
+Members (Aliased Identifiers):
+    fixture.hdl@15: out == in
+
+Sinks:
+    fixture.hdl@15: out = in;
+
+Top-level binding:
+    PORT binding: IN in -> _
+
+------------------------------------------------------------
+IDENTIFIER INDEX
+------------------------------------------------------------
+in  -> NET_0000
+out  -> NET_0000
+
+------------------------------------------------------------
+HARDWARE SUMMARY
+------------------------------------------------------------
+- 0 clock domains
+- 0 registers
+- Alias net merges: present
+- Tri-state logic: none
+------------------------------------------------------------
+
+============================================================
+CROSS-MODULE SUMMARY
+============================================================
+Total modules analyzed: 1
+
+Module                 Nets Clocks   Regs Tri-St  Alias
+-------------------- ------ ------ ------ ------ ------
+Top                       1      0      0      0      1
+-------------------- ------ ------ ------ ------ ------
+TOTAL                     1      0      0      0      1
+============================================================

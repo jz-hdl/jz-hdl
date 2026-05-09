@@ -604,7 +604,8 @@ JZASTNode *parse_module_instantiation(Parser *p) {
     }
 
     /* INSTANCE_ARRAY_MULTI_DIMENSIONAL: if another '[' follows the first
-     * array dimension, report the semantic rule instead of generic PARSE000.
+     * array dimension, report the semantic rule instead of the generic
+     * parse-syntax fallback.
      */
     const JZToken *mod_name = peek(p);
     if (count_text && mod_name->type == JZ_TOK_LBRACKET) {
@@ -618,7 +619,7 @@ JZASTNode *parse_module_instantiation(Parser *p) {
     }
     if (!is_decl_identifier_token(mod_name)) {
         if (count_text) free(count_text);
-        parser_error(p, "expected module or blackbox name after instance name");
+        parser_error_id_syntax_or_parse(p, "expected module or blackbox name after instance name");
         return NULL;
     }
     advance(p);

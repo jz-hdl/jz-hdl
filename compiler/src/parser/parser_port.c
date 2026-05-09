@@ -181,7 +181,7 @@ int parse_port_block_body(Parser *p, JZASTNode *parent) {
             if (!is_decl_identifier_token(name_tok)) {
                 if (!saw_any_name) {
                     if (width_text) free(width_text);
-                    parser_error(p, "expected port name after width in PORT block");
+                    parser_error_id_syntax_or_parse(p, "expected port name after width in PORT block");
                     return -1;
                 }
                 break;

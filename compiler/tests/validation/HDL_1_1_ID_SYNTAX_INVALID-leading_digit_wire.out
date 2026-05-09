@@ -1,2 +1,2 @@
 File: HDL_1_1_ID_SYNTAX_INVALID-leading_digit_wire.jz
-      20:9    error PARSE000 parse error near token '3sig': expected wire name in WIRE block (orig: PARSE000)
+      20:9    error ID_SYNTAX_INVALID S1.1 Identifier violates syntax (must start with ASCII letter/underscore, continue with ASCII letters/digits/underscores, and be at most 255 characters)

@@ -3348,7 +3348,7 @@ int jz_sem_run(JZASTNode *root,
      * can attach project-level context such as CLOCKS/IN_PINS/MAP details.
      */
     st0 = clock();
-    sem_build_net_graphs(root, &module_scopes, &project_symbols, diagnostics);
+    sem_build_net_graphs(root, &module_scopes, &project_symbols, diagnostics, 1);
     if (verbose) fprintf(stderr, "[verbose]   sem: net_graphs: %.1f ms\n",
                          (double)(clock() - st0) / CLOCKS_PER_SEC * 1000.0);
 

@@ -1,0 +1,34 @@
+JZ-HDL Memory Report
+Input file: fixture.hdl
+Chip: GW1NR-9-QN88-C6-I5
+
+fixture.hdl@ 23 = BLOCK MEMORY 128 Bytes (block_mem)
+    Mode:
+    Requested | Semi-Dual Port
+    Matched   | Semi-Dual Port
+
+    Configuration:
+    Requested | 32 bit | 5 bit (32)
+    Matched   | 32 bit | 9 bit     
+    Matched   | 36 bit | 9 bit     
+
+
+Memory Summary
+--------------
+Block Memory:
+    Requested: 128 bytes
+    Max Available: 59904 bytes (26 blocks x 18 Kbits)
+    Used: 1 / 26 blocks (one per BLOCK MEMORY)
+
+Distributed Memory:
+    Requested: 0 bytes
+    Max Available: 2048 bytes
+    Used: 0 bytes
+
+SDRAM (on-chip):
+    Capacity: 8388608 bytes
+
+Flash (on-chip):
+    Capacity: 77824 bytes
+
+Errors: 0

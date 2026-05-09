@@ -41,13 +41,13 @@ int parse_register_block_body(Parser *p, JZASTNode *parent) {
 
         const JZToken *name_tok = peek(p);
         if (!is_decl_identifier_token(name_tok)) {
-            parser_error(p, "expected register name in REGISTER block");
+            parser_error_id_syntax_or_parse(p, "expected register name in REGISTER block");
             return -1;
         }
         advance(p);
 
         if (!match(p, JZ_TOK_LBRACKET)) {
-            parser_error(p, "expected '[' after register name");
+            parser_error_id_syntax_or_parse(p, "expected '[' after register name");
             return -1;
         }
 
@@ -165,13 +165,13 @@ int parse_latch_block_body(Parser *p, JZASTNode *parent) {
 
         const JZToken *name_tok = peek(p);
         if (!is_decl_identifier_token(name_tok)) {
-            parser_error(p, "expected latch name in LATCH block");
+            parser_error_id_syntax_or_parse(p, "expected latch name in LATCH block");
             return -1;
         }
         advance(p);
 
         if (!match(p, JZ_TOK_LBRACKET)) {
-            parser_error(p, "expected '[' after latch name");
+            parser_error_id_syntax_or_parse(p, "expected '[' after latch name");
             return -1;
         }
 

@@ -1,2 +1,2 @@
 File: SIM_4_14_SMODE_SINGLE_MONITOR_BLOCK-multiple_monitor_blocks.jz
-      45:5    error PARSE000 parse error near token 'MONITOR': only one MONITOR block is permitted per @simulation (orig: PARSE000)
+      45:5    error SIM_SINGLE_MONITOR_BLOCK SIM-023 Only one MONITOR block is permitted per @simulation

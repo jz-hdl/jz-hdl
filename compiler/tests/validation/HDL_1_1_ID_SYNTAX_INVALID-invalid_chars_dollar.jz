@@ -1,6 +1,6 @@
 // ID_SYNTAX_INVALID: Dollar sign in identifier violates the regex
 // ^[A-Za-z_][A-Za-z0-9_]{0,254}$.
-// The lexer reports unrecognized character '$' as a PARSE000 error.
+// The lexer reports unrecognized character '$' as ID_SYNTAX_INVALID.
 // This file tests the CONST declaration context.
 
 @project ID_SYNTAX_INVALID_invalid_chars_dollar

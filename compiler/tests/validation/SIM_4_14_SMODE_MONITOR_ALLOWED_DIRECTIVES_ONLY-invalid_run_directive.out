@@ -1,2 +1,2 @@
 File: SIM_4_14_SMODE_MONITOR_ALLOWED_DIRECTIVES_ONLY-invalid_run_directive.jz
-      43:9    error PARSE000 parse error near token '@run': only @print_if, @mark_if, and @alert_if are permitted inside MONITOR block (orig: PARSE000)
+      43:9    error SIM_MONITOR_ALLOWED_DIRECTIVES_ONLY SIM-024 MONITOR blocks may contain only @print_if, @mark_if, and @alert_if directives

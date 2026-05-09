@@ -87,7 +87,7 @@ _None._
 _None._
 
 ### Parser Recovery Findings (for next audit to log)
-_None. All 6 tests produced clean single-rule output with no cascading PARSE000 errors._
+_None. All 6 tests produced clean single-rule output with no cascading generic parse errors._
 
 **Note:** The @global test (`global_in_template.jz`) produces two TEMPLATE_FORBIDDEN_DIRECTIVE diagnostics — one at `@global` (line 17) and one at `@endglob` (line 19). This is correct behavior: both keywords are structural directives. The test still has a single trigger construct (one @global block).
 
@@ -129,7 +129,7 @@ _None. All 6 tests produced clean single-rule output with no cascading PARSE000 
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| TEMPLATE_APPLY_OUTSIDE_BLOCK | HDL_10_5_TEMPLATE_APPLY_OUTSIDE_BLOCK-apply_in_decl_block.jz | compiler-bug | @apply inside PORT/WIRE/REGISTER/CONST blocks produces PARSE000 ("expected ... in ... block") instead of TEMPLATE_APPLY_OUTSIDE_BLOCK. The parser rejects @apply as invalid syntax in declaration blocks before template validation runs. Tested all 4 block types — all produce PARSE000. The rule only fires at file scope and module scope. |
+| TEMPLATE_APPLY_OUTSIDE_BLOCK | HDL_10_5_TEMPLATE_APPLY_OUTSIDE_BLOCK-apply_in_decl_block.jz | compiler-bug | `@apply` inside `PORT`/`WIRE`/`REGISTER`/`CONST` blocks produces `PARSE_SYNTAX_ERROR` ("expected ... in ... block") instead of `TEMPLATE_APPLY_OUTSIDE_BLOCK`. The parser rejects `@apply` as invalid syntax in declaration blocks before template validation runs. Tested all 4 block types — all produce `PARSE_SYNTAX_ERROR`. The rule only fires at file scope and module scope. |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |
@@ -595,8 +595,8 @@ _no work: no missing contexts for this plan_
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
 | ID_SYNTAX_INVALID | HDL_1_1_ID_SYNTAX_INVALID-wire_name.jz | compiler-bug | ID_SYNTAX_INVALID does not fire for 256-char identifiers in WIRE declarations. Compiler emits only WARN_UNUSED_WIRE. The lexical length check appears to be skipped for wire name tokens. |
-| DIRECTIVE_INVALID_CONTEXT | HDL_4_1_DIRECTIVE_INVALID_CONTEXT-new_inside_block.jz | compiler-bug | @new inside ASYNCHRONOUS block emits PARSE000 ("expected identifier in assignment left-hand side") instead of DIRECTIVE_INVALID_CONTEXT. The structural-directive check does not cover block-level (ASYNCHRONOUS/SYNCHRONOUS) contexts. |
-| DIRECTIVE_INVALID_CONTEXT | HDL_4_1_DIRECTIVE_INVALID_CONTEXT-endmod_inside_block.jz | compiler-bug | @endmod inside ASYNCHRONOUS block emits PARSE000 ("expected identifier in assignment left-hand side") instead of DIRECTIVE_INVALID_CONTEXT. Same root cause as @new — block-level parser does not check for structural directives. |
+| DIRECTIVE_INVALID_CONTEXT | HDL_4_1_DIRECTIVE_INVALID_CONTEXT-new_inside_block.jz | compiler-bug | `@new` inside `ASYNCHRONOUS` block emits `PARSE_SYNTAX_ERROR` ("expected identifier in assignment left-hand side") instead of `DIRECTIVE_INVALID_CONTEXT`. The structural-directive check does not cover block-level (`ASYNCHRONOUS`/`SYNCHRONOUS`) contexts. |
+| DIRECTIVE_INVALID_CONTEXT | HDL_4_1_DIRECTIVE_INVALID_CONTEXT-endmod_inside_block.jz | compiler-bug | `@endmod` inside `ASYNCHRONOUS` block emits `PARSE_SYNTAX_ERROR` ("expected identifier in assignment left-hand side") instead of `DIRECTIVE_INVALID_CONTEXT`. Same root cause as `@new` — block-level parser does not check for structural directives. |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |
@@ -1298,8 +1298,8 @@ _None._
 |---------|----------------|----------|-------------|
 | CDC_DEST_ALIAS_DUP | HDL_4_12_CDC_DEST_ALIAS_DUP-conflict_with_wire.jz | compiler-bug | CDC_DEST_ALIAS_DUP does not fire when dest alias conflicts with a wire name; only ID_DUP_IN_MODULE fires. The rule fires correctly for register, port, const, and instance conflicts but not wire. |
 | CDC_DEST_ALIAS_DUP | HDL_4_12_CDC_DEST_ALIAS_DUP-conflict_with_alias.jz | compiler-bug | CDC_DEST_ALIAS_DUP does not fire when dest alias conflicts with another CDC dest alias; only ID_DUP_IN_MODULE fires. Two CDC entries with the same dest alias name should trigger CDC_DEST_ALIAS_DUP on the second entry. |
-| CDC_SOURCE_NOT_PLAIN_REG | HDL_4_12_CDC_SOURCE_NOT_PLAIN_REG-concat_source.jz | rule-not-fired | Parser intercepts concatenation syntax `{a, b}` as CDC source with PARSE000 before CDC_SOURCE_NOT_PLAIN_REG semantic check runs. The CDC parser expects a bare identifier token; `{` is not valid at that position. Rule is unreachable for concatenation context. |
-| CDC_SOURCE_NOT_PLAIN_REG | HDL_4_12_CDC_SOURCE_NOT_PLAIN_REG-expr_source.jz | rule-not-fired | Parser intercepts expression syntax `(a & b)` as CDC source with PARSE000 before CDC_SOURCE_NOT_PLAIN_REG semantic check runs. Same root cause as concat: CDC parser requires identifier token; `(` is rejected. Rule is only reachable via slice syntax (e.g., `reg[0:0]`). |
+| CDC_SOURCE_NOT_PLAIN_REG | HDL_4_12_CDC_SOURCE_NOT_PLAIN_REG-concat_source.jz | rule-not-fired | Parser intercepts concatenation syntax `{a, b}` as CDC source with `PARSE_SYNTAX_ERROR` before `CDC_SOURCE_NOT_PLAIN_REG` semantic check runs. The CDC parser expects a bare identifier token; `{` is not valid at that position. Rule is unreachable for concatenation context. |
+| CDC_SOURCE_NOT_PLAIN_REG | HDL_4_12_CDC_SOURCE_NOT_PLAIN_REG-expr_source.jz | rule-not-fired | Parser intercepts expression syntax `(a & b)` as CDC source with `PARSE_SYNTAX_ERROR` before `CDC_SOURCE_NOT_PLAIN_REG` semantic check runs. Same root cause as concat: CDC parser requires identifier token; `(` is rejected. Rule is only reachable via slice syntax (e.g., `reg[0:0]`). |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |
@@ -1704,7 +1704,7 @@ _no work: plan has no missing contexts (section exists but says "No issues flagg
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| ASYNC_INVALID_STATEMENT_TARGET | HDL_5_1_ASYNC_INVALID_STATEMENT_TARGET-const_and_func.jz | compiler-bug | Function call on LHS (e.g. `clog2(8) <= din;`) gets PARSE000 before semantic analysis; ASYNC_INVALID_STATEMENT_TARGET is unreachable for function-call-on-LHS context. Only CONST on LHS was testable. |
+| ASYNC_INVALID_STATEMENT_TARGET | HDL_5_1_ASYNC_INVALID_STATEMENT_TARGET-const_and_func.jz | compiler-bug | Function call on LHS (e.g. `clog2(8) <= din;`) gets `PARSE_SYNTAX_ERROR` before semantic analysis; `ASYNC_INVALID_STATEMENT_TARGET` is unreachable for function-call-on-LHS context. Only `CONST` on LHS was testable. |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |
@@ -2319,7 +2319,7 @@ _None._
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| MEM_INVALID_PORT_TYPE | HDL_7_1_MEM_INVALID_PORT_TYPE-unknown_keyword.jz | compiler-bug | Truly unknown keywords (e.g. `GARBAGE rd;`, `OUT rd BLAH;`) fire `PARSE000` instead of `MEM_INVALID_PORT_TYPE`. The parser catches unknown tokens before the semantic rule can fire. The rule only triggers for known-but-misplaced qualifiers (ASYNC on IN, SYNC on IN). |
+| MEM_INVALID_PORT_TYPE | HDL_7_1_MEM_INVALID_PORT_TYPE-unknown_keyword.jz | compiler-bug | Truly unknown keywords (e.g. `GARBAGE rd;`, `OUT rd BLAH;`) fire `PARSE_SYNTAX_ERROR` instead of `MEM_INVALID_PORT_TYPE`. The parser catches unknown tokens before the semantic rule can fire. The rule only triggers for known-but-misplaced qualifiers (`ASYNC` on `IN`, `SYNC` on `IN`). |
 
 ### Parser Recovery Findings (for next audit to log)
 _None._
@@ -2799,7 +2799,7 @@ _None._
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| DIRECTIVE_INVALID_CONTEXT | 9_3_DIRECTIVE_INVALID_CONTEXT-check_in_other_blocks.jz | compiler-bug | @check inside non-ASYNC/SYNC blocks (PORT, REGISTER, WIRE, CONST, MEM, LATCH, MUX, BUS, CDC) fires PARSE000 instead of DIRECTIVE_INVALID_CONTEXT. These blocks use specialized parsers that don't recognize directives; only the statement parser (used by ASYNC/SYNC) can detect and report DIRECTIVE_INVALID_CONTEXT. The audit bundled 9 missing contexts into one filename. All 9 exhibit the same behavior: PARSE000 fires, not the intended rule. |
+| DIRECTIVE_INVALID_CONTEXT | 9_3_DIRECTIVE_INVALID_CONTEXT-check_in_other_blocks.jz | compiler-bug | `@check` inside non-`ASYNC`/`SYNC` blocks (`PORT`, `REGISTER`, `WIRE`, `CONST`, `MEM`, `LATCH`, `MUX`, `BUS`, `CDC`) fires `PARSE_SYNTAX_ERROR` instead of `DIRECTIVE_INVALID_CONTEXT`. These blocks use specialized parsers that don't recognize directives; only the statement parser (used by `ASYNC`/`SYNC`) can detect and report `DIRECTIVE_INVALID_CONTEXT`. The audit bundled 9 missing contexts into one filename. All 9 exhibit the same behavior: `PARSE_SYNTAX_ERROR` fires, not the intended rule. |
 
 ### Parser Recovery Findings (for next audit to log)
 _None._
@@ -2918,7 +2918,7 @@ _None._
 ### Scaffolding or Compiler Bugs Found
 | Rule ID | File attempted | Category | Description |
 |---------|----------------|----------|-------------|
-| DIRECTIVE_INVALID_CONTEXT | 9_7_DIRECTIVE_INVALID_CONTEXT-check_in_cdc.jz | compiler-bug | @check inside CDC block emits PARSE000 ("expected CDC type BIT/BUS/FIFO") instead of DIRECTIVE_INVALID_CONTEXT. The CDC block parser does not recognize @check as a structural directive — it falls through to the CDC-type keyword expectation. The ASYNC and SYNC block parsers correctly emit DIRECTIVE_INVALID_CONTEXT for this case (see 9_3 tests). |
+| DIRECTIVE_INVALID_CONTEXT | 9_7_DIRECTIVE_INVALID_CONTEXT-check_in_cdc.jz | compiler-bug | `@check` inside `CDC` block emits `PARSE_SYNTAX_ERROR` ("expected CDC type BIT/BUS/FIFO") instead of `DIRECTIVE_INVALID_CONTEXT`. The `CDC` block parser does not recognize `@check` as a structural directive — it falls through to the CDC-type keyword expectation. The `ASYNC` and `SYNC` block parsers correctly emit `DIRECTIVE_INVALID_CONTEXT` for this case (see 9_3 tests). |
 
 ### Parser Recovery Findings (for next audit to log)
 | Rule ID | File | Description |

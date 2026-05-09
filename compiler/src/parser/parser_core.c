@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "parser_internal.h"
 #include "rules.h"
@@ -66,9 +67,7 @@ const JZToken *advance(Parser *p) {
 /**
  * @brief Emit a generic parse error at the current token location.
  *
- * This function reports a non-rule-based parse error directly to stderr.
- * It is intended for unrecoverable syntax errors where rule-based
- * diagnostics are not applicable.
+ * This function reports the generic registered parse-syntax fallback.
  *
  * @param p   Active parser
  * @param msg Human-readable error message
@@ -80,7 +79,7 @@ void parser_error(const Parser *p, const char *msg) {
         snprintf(buf, sizeof(buf), "parse error near token '%s': %s",
                  t->lexeme ? t->lexeme : "<eof>", msg);
         jz_diagnostic_report(p->diagnostics, t->loc, JZ_SEVERITY_ERROR,
-                             "PARSE000", buf);
+                             "PARSE_SYNTAX_ERROR", buf);
     } else {
         fprintf(stderr, "%s:%d:%d: parse error near token '%s': %s\n",
                 t->loc.filename ? t->loc.filename : "<input>",
@@ -108,6 +107,23 @@ void parser_error_rule(const Parser *p, const char *rule_id) {
                 t->loc.line, t->loc.column,
                 rule_id, msg);
     }
+}
+
+void parser_error_id_syntax_or_parse(const Parser *p, const char *msg)
+{
+    const JZToken *t = peek(p);
+    if (t && t->lexeme && t->lexeme[0] != '\0') {
+        unsigned char c = (unsigned char)t->lexeme[0];
+        if (isalnum(c) || c == '_' || c == '.' || c == '#' || c == '$' ||
+            c == '-' || c >= 0x80) {
+            parser_report_rule(p,
+                               t,
+                               "ID_SYNTAX_INVALID",
+                               "identifier violates syntax");
+            return;
+        }
+    }
+    parser_error(p, msg);
 }
 
 /**

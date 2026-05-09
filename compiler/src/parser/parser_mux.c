@@ -56,7 +56,7 @@ int parse_mux_block_body(Parser *p, JZASTNode *parent) {
 
         /* MUX identifier. */
         if (!is_decl_identifier_token(t) || !t->lexeme) {
-            parser_error(p, "expected MUX identifier");
+            parser_error_id_syntax_or_parse(p, "expected MUX identifier");
             return -1;
         }
         const JZToken *id_tok = t;
@@ -106,7 +106,7 @@ int parse_mux_block_body(Parser *p, JZASTNode *parent) {
         /* Mandatory '=' token. */
         if (!match(p, JZ_TOK_OP_ASSIGN)) {
             jz_ast_free(mux);
-            parser_error(p, "expected '=' in MUX declaration");
+            parser_error_id_syntax_or_parse(p, "expected '=' in MUX declaration");
             return -1;
         }
 

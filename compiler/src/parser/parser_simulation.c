@@ -445,7 +445,7 @@ JZASTNode *parse_print_directive(Parser *p, int is_print_if)
     /* Format string */
     const JZToken *fmt_tok = peek(p);
     if (fmt_tok->type != JZ_TOK_STRING || !fmt_tok->lexeme) {
-        parser_error(p, "expected format string in @print/@print_if");
+        parser_error_rule(p, "PRT_FORMAT_STRING_LITERAL_REQUIRED");
         jz_ast_free(node);
         return NULL;
     }
@@ -538,7 +538,7 @@ static JZASTNode *parse_sim_alert(Parser *p)
         advance(p); /* skip comma */
         const JZToken *msg_tok = peek(p);
         if (msg_tok->type != JZ_TOK_STRING) {
-            parser_error(p, "expected string literal for @alert message");
+            parser_error_rule(p, "SIM_ALERT_MESSAGE_STRING_LITERAL_REQUIRED");
             return NULL;
         }
         message = msg_tok->lexeme;
@@ -696,7 +696,7 @@ static JZASTNode *parse_sim_trace(Parser *p)
     if (!val_tok->lexeme ||
         (strcmp(val_tok->lexeme, "on") != 0 &&
          strcmp(val_tok->lexeme, "off") != 0)) {
-        parser_error(p, "expected 'on' or 'off' in @trace(state=...)");
+        parser_error_rule(p, "SIM_TRACE_STATE_ON_OR_OFF");
         return NULL;
     }
     const char *state_val = val_tok->lexeme;
@@ -1345,7 +1345,7 @@ JZASTNode *parse_simulation(Parser *p)
             jz_ast_add_child(sim, al);
         } else if (t->type == JZ_TOK_IDENTIFIER && t->lexeme && strcmp(t->lexeme, "MONITOR") == 0) {
             if (has_monitor) {
-                parser_error(p, "only one MONITOR block is permitted per @simulation");
+                parser_error_rule(p, "SIM_SINGLE_MONITOR_BLOCK");
                 jz_ast_free(sim);
                 return NULL;
             }
@@ -1388,7 +1388,7 @@ JZASTNode *parse_simulation(Parser *p)
                     if (!al) { jz_ast_free(mon_block); jz_ast_free(sim); return NULL; }
                     jz_ast_add_child(mon_block, al);
                 } else {
-                    parser_error(p, "only @print_if, @mark_if, and @alert_if are permitted inside MONITOR block");
+                    parser_error_rule(p, "SIM_MONITOR_ALLOWED_DIRECTIVES_ONLY");
                     jz_ast_free(mon_block);
                     jz_ast_free(sim);
                     return NULL;

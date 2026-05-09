@@ -61,6 +61,7 @@ int main(int argc, char **argv) {
         int chip_rc = 0;
         if (!opts.chip_info_id) {
             size_t count = jz_chip_builtin_count();
+            fprintf(chip_out, "JZ-HDL Chip Info\n\n");
             if (count == 0) {
                 fprintf(chip_out, "No built-in chips available.\n");
             } else {

@@ -1,2 +1,2 @@
 File: HDL_1_1_ID_SYNTAX_INVALID-invalid_chars_dollar.jz
-      21:12   error PARSE000 unrecognized character '$' (orig: PARSE000)
+      21:12   error ID_SYNTAX_INVALID S1.1 Identifier violates syntax (must start with ASCII letter/underscore, continue with ASCII letters/digits/underscores, and be at most 255 characters)

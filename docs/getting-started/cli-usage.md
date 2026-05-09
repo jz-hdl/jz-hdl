@@ -11,7 +11,7 @@ outline: deep
 ## Synopsis
 
 ```bash
-Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--Eno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
@@ -71,7 +71,8 @@ Path security options:
 | `--info` | Include informational diagnostics (not just warnings and errors). |
 | `--explain` | Print detailed explanation under each diagnostic. |
 | `--warn-as-error` | Treat all warnings as errors. |
-| `--Wno-group=NAME` | Suppress diagnostics in the named group. |
+| `--Wno-group=NAME` | Suppress WARNING-level diagnostics in the named group. |
+| `--Eno-group=NAME` | Suppress ERROR-level diagnostics in the named group. |
 
 ## Constraint file options (with `--verilog`)
 

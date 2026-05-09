@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdio.h>
-#include <time.h>
 
 #include "sem_driver.h"
 #include "sem.h"
@@ -21,13 +20,18 @@
  */
 
 static int g_alias_report_enabled = 0;
+static int g_alias_report_header_printed = 0;
 static FILE *g_alias_report_out = NULL;
-static char g_alias_report_generated[64];
-static const char *g_alias_report_version = NULL;
 static const char *g_alias_report_input = NULL;
 static JZDiagnosticList *g_alias_report_diagnostics = NULL;
 static unsigned g_alias_report_depth = 0;
 static int g_alias_report_depth_reported = 0;
+typedef struct {
+    const char *filename;
+    int line;
+    const char *name;
+} JZAliasSeenModule;
+static JZBuffer g_alias_report_seen_modules = {0}; /* Array of JZAliasSeenModule */
 
 /**
  * @struct JZAliasSummaryEntry
@@ -49,32 +53,18 @@ void jz_sem_enable_alias_report(FILE *out,
                                 const char *input_filename,
                                 JZDiagnosticList *diagnostics)
 {
+    (void)tool_version;
     g_alias_report_enabled = (out != NULL);
+    g_alias_report_header_printed = 0;
     g_alias_report_out = out;
-    g_alias_report_version = tool_version;
     g_alias_report_input = input_filename;
     g_alias_report_diagnostics = diagnostics;
     g_alias_report_depth = 0;
     g_alias_report_depth_reported = 0;
     jz_buf_free(&g_alias_summary);
     memset(&g_alias_summary, 0, sizeof(g_alias_summary));
-
-    time_t now = time(NULL);
-    struct tm tm_info;
-    if (localtime_r(&now, &tm_info) != NULL) {
-        if (strftime(g_alias_report_generated,
-                     sizeof(g_alias_report_generated),
-                     "%Y-%m-%d %H:%M %Z",
-                     &tm_info) == 0) {
-            snprintf(g_alias_report_generated,
-                     sizeof(g_alias_report_generated),
-                     "<unknown>");
-        }
-    } else {
-        snprintf(g_alias_report_generated,
-                 sizeof(g_alias_report_generated),
-                 "<unknown>");
-    }
+    jz_buf_free(&g_alias_report_seen_modules);
+    memset(&g_alias_report_seen_modules, 0, sizeof(g_alias_report_seen_modules));
 }
 
 static int alias_report_enter_depth(JZLocation loc)
@@ -739,6 +729,25 @@ void sem_emit_alias_report_for_module(const JZModuleScope *scope,
     g_alias_report_depth = 0;
     g_alias_report_depth_reported = 0;
 
+    const JZAliasSeenModule *seen =
+        (const JZAliasSeenModule *)g_alias_report_seen_modules.data;
+    size_t seen_count = g_alias_report_seen_modules.len / sizeof(JZAliasSeenModule);
+    for (size_t i = 0; i < seen_count; ++i) {
+        if (seen[i].line == scope->node->loc.line &&
+            seen[i].filename && scope->node->loc.filename &&
+            strcmp(seen[i].filename, scope->node->loc.filename) == 0 &&
+            seen[i].name && scope->name &&
+            strcmp(seen[i].name, scope->name) == 0) {
+            return;
+        }
+    }
+    JZAliasSeenModule seen_key = {
+        scope->node->loc.filename,
+        scope->node->loc.line,
+        scope->name
+    };
+    (void)jz_buf_append(&g_alias_report_seen_modules, &seen_key, sizeof(seen_key));
+
     FILE *out = g_alias_report_out;
 
     unsigned user_identifiers = 0;
@@ -819,8 +828,13 @@ void sem_emit_alias_report_for_module(const JZModuleScope *scope,
         }
     }
 
-    if (g_alias_report_input) {
-        fprintf(out, "Input file: %s\n", g_alias_report_input);
+    if (!g_alias_report_header_printed) {
+        fprintf(out, "JZ-HDL Alias Report\n");
+        if (g_alias_report_input) {
+            fprintf(out, "Input file: %s\n", g_alias_report_input);
+        }
+        fprintf(out, "\n");
+        g_alias_report_header_printed = 1;
     }
     fprintf(out, "Module: %s\n", scope->name ? scope->name : "<anonymous>");
     fprintf(out, "\n");
@@ -1369,12 +1383,14 @@ void sem_emit_alias_report_finalize(void)
 {
     if (!g_alias_report_enabled || !g_alias_report_out) {
         jz_buf_free(&g_alias_summary);
+        jz_buf_free(&g_alias_report_seen_modules);
         return;
     }
 
     size_t entry_count = g_alias_summary.len / sizeof(JZAliasSummaryEntry);
     if (entry_count == 0) {
         jz_buf_free(&g_alias_summary);
+        jz_buf_free(&g_alias_report_seen_modules);
         return;
     }
 
@@ -1425,4 +1441,5 @@ void sem_emit_alias_report_finalize(void)
     fprintf(out, "============================================================\n");
 
     jz_buf_free(&g_alias_summary);
+    jz_buf_free(&g_alias_report_seen_modules);
 }

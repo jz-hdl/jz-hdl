@@ -52,20 +52,21 @@ typedef struct JZDiagnosticList {
 
 /**
  * @struct JZWarningGroupOverride
- * @brief Per-group enable/disable override for warnings.
+ * @brief Per-group enable/disable override for one diagnostic severity.
  */
 typedef struct JZWarningGroupOverride {
-    const char *group;   /**< Rule group name (e.g., "GENERAL_WARNINGS"). */
-    int         enabled; /**< 0 = disable warnings in this group, 1 = enable. */
+    const char *group;    /**< Rule group name (e.g., "GENERAL_WARNINGS"). */
+    int         enabled;  /**< 0 = disable diagnostics in this group, 1 = enable. */
+    JZSeverity  severity; /**< Severity level affected by this override. */
 } JZWarningGroupOverride;
 
 /**
  * @struct JZWarningPolicy
- * @brief Policy controlling warning behavior for a compilation.
+ * @brief Policy controlling diagnostic filtering and warning promotion.
  */
 typedef struct JZWarningPolicy {
     int warn_as_error;                    /**< Non-zero to treat warnings as errors for exit status. */
-    const JZWarningGroupOverride *groups; /**< Optional array of group overrides (may be NULL). */
+    const JZWarningGroupOverride *groups; /**< Optional array of severity-specific group overrides (may be NULL). */
     size_t group_count;                   /**< Number of entries in the groups array. */
 } JZWarningPolicy;
 
@@ -129,7 +130,7 @@ int jz_diagnostic_report_rule_once(int *reported,
 /**
  * @brief Apply a warning policy to an existing diagnostic list.
  *
- * May drop diagnostics whose group is disabled, and/or promote
+ * May drop diagnostics whose group+severity pair is disabled, and/or promote
  * warnings to errors when warn_as_error is set.
  *
  * @param list   Diagnostic list to modify in place. Must not be NULL.

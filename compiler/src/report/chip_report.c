@@ -1261,6 +1261,7 @@ int jz_chip_print_info(const char *chip_id, FILE *out)
         (void)jz_json_token_to_string(json, &toks[desc_idx], chip_desc, sizeof(chip_desc));
     }
 
+    fprintf(out, "JZ-HDL Chip Info\n\n");
     for (int i = 0; i < 80; ++i) fputc('=', out);
     fputc('\n', out);
     fprintf(out, "  CHIP: %s\n", chip_name);

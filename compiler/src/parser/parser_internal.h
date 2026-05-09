@@ -108,13 +108,25 @@ void parser_error(const Parser *p, const char *msg);
 /**
  * @brief Report a parser error with a specific semantic rule ID.
  *
- * Like parser_error(), but uses the given rule_id instead of "PARSE000"
- * and looks up the description from rules.c.
+ * Like parser_error(), but uses the given rule_id instead of the generic
+ * parse fallback and looks up the description from rules.c.
  *
  * @param p       Active parser
  * @param rule_id Rule ID string (e.g. "PORT_MISSING_WIDTH")
  */
 void parser_error_rule(const Parser *p, const char *rule_id);
+
+/**
+ * @brief Emit ID_SYNTAX_INVALID when the current token looks like a malformed identifier.
+ *
+ * If the current token is a number, identifier fragment, or fallback token,
+ * this reports ID_SYNTAX_INVALID. Otherwise it emits the caller-provided
+ * generic parse error.
+ *
+ * @param p   Active parser
+ * @param msg Human-readable parse error message
+ */
+void parser_error_id_syntax_or_parse(const Parser *p, const char *msg);
 
 /**
  * @brief Construct a RAW_TEXT AST node from a token range.
