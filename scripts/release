@@ -22,6 +22,45 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="$REPO_ROOT/release"
 SYNC_VERSION="$REPO_ROOT/scripts/sync_version.py"
+TEMP_DIRS=()
+VERSION_FILES=(
+  "$REPO_ROOT/VERSION"
+  "$REPO_ROOT/compiler/include/version.h"
+  "$REPO_ROOT/vscode-ext/package.json"
+  "$REPO_ROOT/vscode-ext/package-lock.json"
+)
+
+cleanup_temp_dirs() {
+  local dir
+  for dir in "${TEMP_DIRS[@]}"; do
+    if [ -n "$dir" ] && [ -d "$dir" ]; then
+      rm -rf "$dir"
+    fi
+  done
+}
+
+rollback_version_bump() {
+  local files=()
+  local path
+
+  for path in "${VERSION_FILES[@]}" "$REPO_ROOT/specification"; do
+    if ! git -C "$REPO_ROOT" diff --quiet -- "$path"; then
+      files+=("$path")
+    fi
+  done
+
+  if [ ${#files[@]} -gt 0 ]; then
+    git -C "$REPO_ROOT" restore --source=HEAD -- "${files[@]}"
+  fi
+}
+
+abort_release() {
+  echo "Error: $1. Aborting release."
+  rollback_version_bump
+  exit 1
+}
+
+trap cleanup_temp_dirs EXIT
 
 # Ensure we're on a clean working tree
 if ! git -C "$REPO_ROOT" diff --quiet || ! git -C "$REPO_ROOT" diff --cached --quiet; then
@@ -43,7 +82,10 @@ python3 "$SYNC_VERSION" "$VERSION"
 echo "==> Building artifacts and running tests..."
 
 BUILD_DIR="$(mktemp -d)"
-VIEWER_SMOKE_PATH="$(mktemp -d)/release-viewer-smoke.jzw"
+TEMP_DIRS+=("$BUILD_DIR")
+VIEWER_SMOKE_DIR="$(mktemp -d)"
+TEMP_DIRS+=("$VIEWER_SMOKE_DIR")
+VIEWER_SMOKE_PATH="$VIEWER_SMOKE_DIR/release-viewer-smoke.jzw"
 JZ_HDL_BIN="$BUILD_DIR/compiler/jz-hdl"
 JZ_VIEWER_BIN="$BUILD_DIR/viewer/jz-viewer"
 cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
@@ -54,19 +96,12 @@ cmake --build "$BUILD_DIR" --parallel
 
 echo "==> Running CTest..."
 if ! ctest --test-dir "$BUILD_DIR" --output-on-failure; then
-  echo "Error: CTest tests failed. Aborting release."
-  rm -rf "$BUILD_DIR" "$(dirname "$VIEWER_SMOKE_PATH")"
-  # Undo version changes
-  git -C "$REPO_ROOT" checkout -- .
-  exit 1
+  abort_release "CTest tests failed"
 fi
 
 echo "==> Running validation tests..."
 if ! JZ_HDL_BIN="$JZ_HDL_BIN" bash "$REPO_ROOT/compiler/tests/run_validation.sh"; then
-  echo "Error: Validation tests failed. Aborting release."
-  rm -rf "$BUILD_DIR" "$(dirname "$VIEWER_SMOKE_PATH")"
-  git -C "$REPO_ROOT" checkout -- .
-  exit 1
+  abort_release "Validation tests failed"
 fi
 
 echo "==> Running viewer smoke test..."
@@ -117,8 +152,6 @@ cpack --config "$BUILD_DIR/CPackSourceConfig.cmake" -B "$RELEASE_DIR"
 # ---------------------------------------------------------------------------
 # 7. Done
 # ---------------------------------------------------------------------------
-rm -rf "$BUILD_DIR" "$(dirname "$VIEWER_SMOKE_PATH")"
-
 echo ""
 echo "Release v${VERSION} prepared:"
 find "$RELEASE_DIR" -maxdepth 1 -type f | sort | sed 's/^/  /'
