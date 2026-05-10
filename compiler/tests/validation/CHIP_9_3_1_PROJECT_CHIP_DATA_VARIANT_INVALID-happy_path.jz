@@ -1,0 +1,56 @@
+// PROJECT_CHIP_DATA_VARIANT_INVALID: valid built-in chip JSON variants should
+// compile without load-time variant diagnostics.
+// Exercises the iCE40 PLL pad + one-output variant on known-good chip data.
+
+@project(CHIP="ICE40UP-5K-SG48") PROJECT_CHIP_DATA_VARIANT_INVALID_happy_path
+    CLOCKS {
+        ref_clk = { period=83.33 };
+        pll_clk;
+    }
+
+    IN_PINS {
+        ref_clk = { standard=LVCMOS33 };
+    }
+
+    MAP {
+        ref_clk = 35;
+    }
+
+    CLOCK_GEN {
+        PLL {
+            IN REF_CLK ref_clk;
+            OUT PRIMARY pll_clk;
+            CONFIG {
+                DIVR = 0;
+                DIVF = 63;
+                DIVQ = 4;
+                FILTER_RANGE = 1;
+                PLLOUT_SELECT_P = GENCLK;
+            };
+        };
+    }
+
+    @top TopMod {
+        IN  [1] clk = pll_clk;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

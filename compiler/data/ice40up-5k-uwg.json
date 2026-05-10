@@ -582,7 +582,7 @@
   ],
   "differential": {
     "source": "iCE40 Technology Library, SB_IO; DS-ICE40-UltraPlus Section 4 (I/O)",
-    "type": "pseudo",
+    "type": "emulated",
     "io_type": "SB_LVCMOS",
     "output": {
       "serializer": [

@@ -1,0 +1,55 @@
+// CLOCK_GEN_PARAM_TYPE_MISMATCH: valid integer-valued CLOCK_GEN CONFIG params compile cleanly.
+// Exercises integer parameters with integer literals only, avoiding the decimal form
+// that owns CLOCK_GEN_PARAM_TYPE_MISMATCH.
+
+@project(CHIP="gw2ar-18-qn88-c8-i7") CLOCK_GEN_PARAM_TYPE_MISMATCH_happy_path
+    CLOCKS {
+        ref_clk = { period=10 };
+        pll_clk;
+    }
+
+    IN_PINS {
+        ref_clk = { standard=LVCMOS33 };
+    }
+
+    MAP {
+        ref_clk = 1;
+    }
+
+    CLOCK_GEN {
+        PLL {
+            IN REF_CLK ref_clk;
+            OUT BASE pll_clk;
+
+            CONFIG {
+                IDIV = 0;
+                FBDIV = 3;
+                ODIV = 2;
+            };
+        };
+    }
+
+    @top TopMod {
+        IN  [1] clk = pll_clk;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

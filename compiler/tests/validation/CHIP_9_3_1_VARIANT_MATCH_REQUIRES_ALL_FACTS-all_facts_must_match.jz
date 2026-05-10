@@ -1,0 +1,51 @@
+// VARIANT_MATCH_REQUIRES_ALL_FACTS: a clock_gen variant matches only when
+// every fact in its `when` object matches the elaborated unit facts.
+// Trigger 1 mismatches only output.count while input.REF_CLK.source still matches.
+
+@project(CHIP="CHIP_9_3_1_VARIANT_MATCH_REQUIRES_ALL_FACTS-all_facts_must_match") VARIANT_MATCH_REQUIRES_ALL_FACTS_all_facts_must_match
+    CLOCKS {
+        ref_clk = { period=10 };
+        buf_clk;
+    }
+
+    IN_PINS {
+        ref_clk = { standard=LVCMOS33 };
+    }
+
+    MAP {
+        ref_clk = 1;
+    }
+
+    CLOCK_GEN {
+        // Trigger 1: input.REF_CLK.source matches "pad", but output.count is 1
+        // and the chip variants only match output.count=2.
+        BUF {
+            IN REF_CLK ref_clk;
+            OUT BASE buf_clk;
+        };
+    }
+
+    @top TopMod {
+        IN  [1] clk = buf_clk;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

@@ -1,0 +1,19 @@
+// PROJECT_CHIP_DATA_INVALID: differential nested objects reject unknown keys.
+
+@project(CHIP="HDL_6_1_PROJECT_CHIP_DATA_INVALID-differential_unknown_key") PROJECT_CHIP_DATA_INVALID_differential_unknown_key
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

@@ -1,0 +1,56 @@
+// TB_SETUP_POSITION: each TEST must contain exactly one @setup, after @new.
+// Target diagnostic: TB_SETUP_POSITION.
+// Non-target diagnostics: none; each TEST keeps @new bindings and DUT structure valid.
+
+@module SetupPositionValidationDut
+    PORT {
+        IN  [1] data_in;
+        OUT [1] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out = data_in;
+    }
+@endmod
+
+@testbench SetupPositionValidationDut
+    WIRE {
+        data_in [1];
+        data_out [1];
+    }
+
+    TEST "setup before new is rejected" {
+        // Trigger 1: @setup appears before the DUT instantiation.
+        @setup {
+            data_in <= 1'b1;
+        }
+
+        @new dut SetupPositionValidationDut {
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+    }
+
+    TEST "missing setup is rejected" {
+        @new dut SetupPositionValidationDut {
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+    }
+
+    TEST "multiple setup blocks are rejected" {
+        @new dut SetupPositionValidationDut {
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+
+        @setup {
+            data_in <= 1'b0;
+        }
+
+        // Trigger 2: exactly one @setup is allowed per TEST.
+        @setup {
+            data_in <= 1'b1;
+        }
+    }
+@endtb

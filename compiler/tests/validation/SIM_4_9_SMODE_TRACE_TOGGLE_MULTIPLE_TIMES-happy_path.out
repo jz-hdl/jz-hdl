@@ -1,0 +1,3 @@
+
+=== @simulation TraceToggleMultipleTimesDut ===
+VCD written to: compiler/tests/validation/SIM_4_9_SMODE_TRACE_TOGGLE_MULTIPLE_TIMES-happy_path.vcd

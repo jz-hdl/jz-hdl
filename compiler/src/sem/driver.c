@@ -3278,15 +3278,25 @@ int jz_sem_run(JZASTNode *root,
                                                         root->loc,
                                                         detail,
                                                         "CHIP_JSON_NESTING_LIMIT_EXCEEDED",
-                                                        "CHIP_JSON_NESTING_LIMIT_EXCEEDED")) {
+                                                        "CHIP_JSON_NESTING_LIMIT_EXCEEDED") &&
+                    !sem_report_prefixed_chip_data_rule(diagnostics,
+                                                        root->loc,
+                                                        detail,
+                                                        "CHIP_CLOCK_GEN_VARIANT_INVALID",
+                                                        "PROJECT_CHIP_DATA_VARIANT_INVALID") &&
+                    !sem_report_prefixed_chip_data_rule(diagnostics,
+                                                        root->loc,
+                                                        detail,
+                                                        "CHIP_JSON_SCHEMA_INVALID",
+                                                        "PROJECT_CHIP_DATA_INVALID")) {
                     char msg[768];
                     snprintf(msg, sizeof(msg),
-                             "chip data for '%s' has invalid clock_gen variants\n"
+                             "chip data JSON for '%s' is invalid\n"
                              "%s",
                              root->text, detail);
                     sem_report_rule(diagnostics,
                                     root->loc,
-                                    "PROJECT_CHIP_DATA_VARIANT_INVALID",
+                                    "PROJECT_CHIP_DATA_INVALID",
                                     msg);
                 }
             } else {

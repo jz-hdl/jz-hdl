@@ -1,0 +1,38 @@
+// TB_MULTIPLE_NEW: each TEST must contain exactly one @new instantiation.
+// Target diagnostic: TB_MULTIPLE_NEW.
+// Non-target diagnostics: none; @setup placement and instance bindings are valid.
+
+@module MultipleNewValidationDut
+    PORT {
+        IN  [1] data_in;
+        OUT [1] data_out;
+    }
+
+    ASYNCHRONOUS {
+        data_out = data_in;
+    }
+@endmod
+
+@testbench MultipleNewValidationDut
+    WIRE {
+        data_in [1];
+        data_out [1];
+    }
+
+    TEST "multiple new directives are rejected" {
+        @new dut_a MultipleNewValidationDut {
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+
+        // Trigger 1: a second @new in the same TEST violates the one-instance rule.
+        @new dut_b MultipleNewValidationDut {
+            data_in [1] = data_in;
+            data_out [1] = data_out;
+        }
+
+        @setup {
+            data_in <= 1'b1;
+        }
+    }
+@endtb

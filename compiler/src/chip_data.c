@@ -79,6 +79,26 @@ static int jz_json_check_nesting_limit(const jsmntok_t *toks,
                                        int count,
                                        unsigned max_depth);
 
+static int jz_json_token_to_double(const char *json,
+                                   const jsmntok_t *tok,
+                                   double *out);
+
+static int jz_json_object_find(const char *json,
+                               const jsmntok_t *toks,
+                               int count,
+                               int obj_index,
+                               const char *key);
+
+int jz_json_skip(const jsmntok_t *toks, int count, int index);
+
+char *jz_json_token_strdup(const char *json, const jsmntok_t *tok);
+
+static int jz_chip_set_schema_error(const char *fmt, ...);
+
+static int jz_chip_validate_schema(const char *json,
+                                   const jsmntok_t *toks,
+                                   int count);
+
 /**
  * @brief Convert a JSON token to a chip-memory type.
  * @param json Backing JSON text.
@@ -110,6 +130,15 @@ static void jz_chip_set_error(const char *fmt, ...)
     va_end(ap);
 }
 
+static int jz_chip_set_schema_error(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(g_chip_last_error, sizeof(g_chip_last_error), fmt, ap);
+    va_end(ap);
+    return 0;
+}
+
 /**
  * @struct JZChipBuiltin
  * @brief One built-in chip-data payload compiled into the binary.
@@ -125,6 +154,7 @@ typedef struct JZChipBuiltin {
 #include "data/gw1nz-1-qn48-c6-i5.h"
 #include "data/gw2ar-18-qn88-c7-i6.h"
 #include "data/gw2ar-18-qn88-c8-i7.h"
+#include "data/gw5a-lv25-mg121-c1-i0.h"
 #include "data/ice40up-5k-sg.h"
 #include "data/ice40up-5k-uwg.h"
 #include "data/lfe5u-45f-6bg381.h"
@@ -135,6 +165,7 @@ static const JZChipBuiltin k_builtin_chips[] = {
     { "GW1NZ-1-QN48-C6-I5",  (const char *)gw1nz_1_qn48_c6_i5_json },
     { "GW2AR-18-QN88-C7-I6", (const char *)gw2ar_18_qn88_c7_i6_json },
     { "GW2AR-18-QN88-C8-I7", (const char *)gw2ar_18_qn88_c8_i7_json },
+    { "GW5A-LV25-MG121-C1-I0", (const char *)gw5a_lv25_mg121_c1_i0_json },
     { "ICE40UP-5K-SG48",     (const char *)ice40up_5k_sg_json },
     { "ICE40UP-5K-UWG30",    (const char *)ice40up_5k_uwg_json },
     { "LFE5U-45F-6BG381",    (const char *)lfe5u_45f_6bg381_json },
@@ -320,6 +351,182 @@ int jz_json_token_to_uint(const char *json, const jsmntok_t *tok, unsigned *out)
     if (!end || *end != '\0') return 0;
     if (v > 0xFFFFFFFFu) return 0;
     *out = (unsigned)v;
+    return 1;
+}
+
+static int jz_json_token_to_double(const char *json,
+                                   const jsmntok_t *tok,
+                                   double *out)
+{
+    if (!json || !tok || !out) return 0;
+    if (tok->type != JSMN_PRIMITIVE && tok->type != JSMN_STRING) return 0;
+    size_t len = (size_t)(tok->end - tok->start);
+    if (len == 0 || len > 63) return 0;
+    char buf[64];
+    memcpy(buf, json + tok->start, len);
+    buf[len] = '\0';
+    char *end = NULL;
+    double v = strtod(buf, &end);
+    if (!end || *end != '\0') return 0;
+    *out = v;
+    return 1;
+}
+
+static int jz_json_object_find(const char *json,
+                               const jsmntok_t *toks,
+                               int count,
+                               int obj_index,
+                               const char *key)
+{
+    if (!json || !toks || !key || obj_index < 0 || obj_index >= count) return -1;
+    if (toks[obj_index].type != JSMN_OBJECT) return -1;
+    int idx = obj_index + 1;
+    while (idx < count && toks[idx].start < toks[obj_index].end) {
+        const jsmntok_t *tok_key = &toks[idx++];
+        if (jz_json_token_eq(json, tok_key, key)) return idx;
+        idx = jz_json_skip(toks, count, idx);
+    }
+    return -1;
+}
+
+static int jz_chip_json_expect_type(const char *section,
+                                    const char *key,
+                                    const jsmntok_t *tok,
+                                    jsmntype_t type)
+{
+    if (tok && tok->type == type) return 1;
+    return jz_chip_set_schema_error(
+        "CHIP_JSON_SCHEMA_INVALID: %s%s%s must be %s",
+        section ? section : "value",
+        key ? "." : "",
+        key ? key : "",
+        type == JSMN_OBJECT ? "an object" :
+        type == JSMN_ARRAY ? "an array" :
+        type == JSMN_STRING ? "a string" : "a primitive");
+}
+
+static int jz_chip_json_validate_allowed_keys(const char *json,
+                                              const jsmntok_t *toks,
+                                              int count,
+                                              int obj_index,
+                                              const char *section,
+                                              const char *const *allowed,
+                                              size_t allowed_count)
+{
+    if (!jz_chip_json_expect_type(section, NULL, &toks[obj_index], JSMN_OBJECT)) return 0;
+    int idx = obj_index + 1;
+    while (idx < count && toks[idx].start < toks[obj_index].end) {
+        const jsmntok_t *key = &toks[idx++];
+        size_t i = 0;
+        int ok = 0;
+        for (; i < allowed_count; ++i) {
+            if (jz_json_token_eq(json, key, allowed[i])) {
+                ok = 1;
+                break;
+            }
+        }
+        if (!ok) {
+            size_t len = (size_t)(key->end - key->start);
+            return jz_chip_set_schema_error(
+                "CHIP_JSON_SCHEMA_INVALID: %s has unknown key '%.*s'",
+                section ? section : "object",
+                (int)len,
+                json + key->start);
+        }
+        idx = jz_json_skip(toks, count, idx);
+    }
+    return 1;
+}
+
+static int jz_chip_json_require_member(const char *json,
+                                       const jsmntok_t *toks,
+                                       int count,
+                                       int obj_index,
+                                       const char *section,
+                                       const char *key,
+                                       jsmntype_t type,
+                                       int *out_index)
+{
+    int idx = jz_json_object_find(json, toks, count, obj_index, key);
+    if (idx < 0) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: %s missing required key '%s'",
+            section, key);
+    }
+    if (!jz_chip_json_expect_type(section, key, &toks[idx], type)) return 0;
+    if (out_index) *out_index = idx;
+    return 1;
+}
+
+static int jz_chip_json_optional_member(const char *json,
+                                        const jsmntok_t *toks,
+                                        int count,
+                                        int obj_index,
+                                        const char *section,
+                                        const char *key,
+                                        jsmntype_t type,
+                                        int *out_index)
+{
+    int idx = jz_json_object_find(json, toks, count, obj_index, key);
+    if (out_index) *out_index = idx;
+    if (idx < 0) return 1;
+    return jz_chip_json_expect_type(section, key, &toks[idx], type);
+}
+
+static int jz_chip_json_require_uint(const char *json,
+                                     const jsmntok_t *toks,
+                                     int count,
+                                     int obj_index,
+                                     const char *section,
+                                     const char *key)
+{
+    int idx = -1;
+    unsigned value = 0;
+    if (!jz_chip_json_require_member(json, toks, count, obj_index, section, key,
+                                     JSMN_PRIMITIVE, &idx)) return 0;
+    if (!jz_json_token_to_uint(json, &toks[idx], &value)) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: %s.%s must be an integer",
+            section, key);
+    }
+    return 1;
+}
+
+static int jz_chip_json_require_number(const char *json,
+                                       const jsmntok_t *toks,
+                                       int count,
+                                       int obj_index,
+                                       const char *section,
+                                       const char *key)
+{
+    int idx = -1;
+    double value = 0.0;
+    if (!jz_chip_json_require_member(json, toks, count, obj_index, section, key,
+                                     JSMN_PRIMITIVE, &idx)) return 0;
+    if (!jz_json_token_to_double(json, &toks[idx], &value)) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: %s.%s must be numeric",
+            section, key);
+    }
+    return 1;
+}
+
+static int jz_chip_json_require_bool(const char *json,
+                                     const jsmntok_t *toks,
+                                     int count,
+                                     int obj_index,
+                                     const char *section,
+                                     const char *key)
+{
+    int idx = -1;
+    int value = 0;
+    if (!jz_chip_json_require_member(json, toks, count, obj_index, section, key,
+                                     JSMN_PRIMITIVE, &idx)) return 0;
+    if (!jz_json_token_to_bool(json, &toks[idx], &value)) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: %s.%s must be boolean",
+            section, key);
+    }
     return 1;
 }
 
@@ -574,6 +781,701 @@ static void jz_chip_parse_modes_array(const char *json,
         }
         idx = jz_json_skip(toks, count, idx);
     }
+}
+
+static int jz_chip_validate_width_depth_array(const char *json,
+                                              const jsmntok_t *toks,
+                                              int count,
+                                              int array_idx,
+                                              const char *section)
+{
+    if (!jz_chip_json_expect_type(section, NULL, &toks[array_idx], JSMN_ARRAY)) return 0;
+    int cur = array_idx + 1;
+    while (cur < count && toks[cur].start < toks[array_idx].end) {
+        static const char *const k_cfg_keys[] = { "width", "depth" };
+        if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, section,
+                                                k_cfg_keys, 2)) return 0;
+        if (!jz_chip_json_require_uint(json, toks, count, cur, section, "width")) return 0;
+        if (!jz_chip_json_require_uint(json, toks, count, cur, section, "depth")) return 0;
+        cur = jz_json_skip(toks, count, cur);
+    }
+    return 1;
+}
+
+static int jz_chip_validate_memory_section(const char *json,
+                                           const jsmntok_t *toks,
+                                           int count,
+                                           int memory_idx)
+{
+    if (!jz_chip_json_expect_type("memory", NULL, &toks[memory_idx], JSMN_ARRAY)) return 0;
+    int cur = memory_idx + 1;
+    while (cur < count && toks[cur].start < toks[memory_idx].end) {
+        int type_idx = -1;
+        char *type = NULL;
+        const char *section = "memory[]";
+        if (!jz_chip_json_expect_type(section, NULL, &toks[cur], JSMN_OBJECT)) return 0;
+        if (!jz_chip_json_require_member(json, toks, count, cur, section, "type",
+                                         JSMN_STRING, &type_idx)) return 0;
+        if (!jz_chip_json_require_member(json, toks, count, cur, section, "source",
+                                         JSMN_STRING, NULL)) return 0;
+        type = jz_json_token_strdup(json, &toks[type_idx]);
+        if (!type) return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: memory[].type could not be read");
+        if (strcmp(type, "SDRAM") == 0) {
+            static const char *const k_keys[] = {
+                "type", "source", "capacity_mbits", "bus_width", "max_freq_mhz"
+            };
+            if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, section,
+                                                    k_keys, 5) ||
+                !jz_chip_json_require_uint(json, toks, count, cur, section, "capacity_mbits") ||
+                !jz_chip_json_require_uint(json, toks, count, cur, section, "bus_width") ||
+                !jz_chip_json_require_number(json, toks, count, cur, section, "max_freq_mhz")) {
+                free(type);
+                return 0;
+            }
+        } else if (strcmp(type, "DISTRIBUTED") == 0) {
+            int cfg_idx = -1;
+            static const char *const k_keys[] = {
+                "type", "source", "description", "total_bits", "r_ports", "w_ports",
+                "configurations"
+            };
+            if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, section,
+                                                    k_keys, 7) ||
+                !jz_chip_json_require_member(json, toks, count, cur, section, "description",
+                                             JSMN_STRING, NULL) ||
+                !jz_chip_json_require_uint(json, toks, count, cur, section, "total_bits") ||
+                !jz_chip_json_require_uint(json, toks, count, cur, section, "r_ports") ||
+                !jz_chip_json_require_uint(json, toks, count, cur, section, "w_ports") ||
+                !jz_chip_json_require_member(json, toks, count, cur, section, "configurations",
+                                             JSMN_ARRAY, &cfg_idx) ||
+                !jz_chip_validate_width_depth_array(json, toks, count, cfg_idx,
+                                                   "memory[].configurations")) {
+                free(type);
+                return 0;
+            }
+        } else if (strcmp(type, "BLOCK") == 0 || strcmp(type, "SPRAM") == 0 ||
+                   strcmp(type, "FLASH") == 0) {
+            int modes_idx = -1;
+            static const char *const k_keys[] = {
+                "type", "source", "description", "quantity", "bits_per_block",
+                "total_bits", "max_freq_mhz", "note", "modes"
+            };
+            if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, section,
+                                                    k_keys, 9) ||
+                !jz_chip_json_require_member(json, toks, count, cur, section, "description",
+                                             JSMN_STRING, NULL) ||
+                !jz_chip_json_require_uint(json, toks, count, cur, section, "quantity") ||
+                !jz_chip_json_optional_member(json, toks, count, cur, section, "bits_per_block",
+                                              JSMN_PRIMITIVE, NULL) ||
+                !jz_chip_json_require_uint(json, toks, count, cur, section, "total_bits") ||
+                !jz_chip_json_optional_member(json, toks, count, cur, section, "max_freq_mhz",
+                                              JSMN_PRIMITIVE, NULL) ||
+                !jz_chip_json_optional_member(json, toks, count, cur, section, "note",
+                                              JSMN_STRING, NULL) ||
+                !jz_chip_json_require_member(json, toks, count, cur, section, "modes",
+                                             JSMN_ARRAY, &modes_idx)) {
+                free(type);
+                return 0;
+            }
+            int mode_cur = modes_idx + 1;
+            while (mode_cur < count && toks[mode_cur].start < toks[modes_idx].end) {
+                int ports_idx = -1;
+                int cfg_idx = -1;
+                static const char *const k_mode_keys[] = {
+                    "name", "description", "ports", "configurations"
+                };
+                if (!jz_chip_json_validate_allowed_keys(json, toks, count, mode_cur,
+                                                        "memory[].modes[]",
+                                                        k_mode_keys, 4) ||
+                    !jz_chip_json_require_member(json, toks, count, mode_cur,
+                                                 "memory[].modes[]", "name",
+                                                 JSMN_STRING, NULL) ||
+                    !jz_chip_json_optional_member(json, toks, count, mode_cur,
+                                                  "memory[].modes[]", "description",
+                                                  JSMN_STRING, NULL) ||
+                    !jz_chip_json_require_member(json, toks, count, mode_cur,
+                                                 "memory[].modes[]", "ports",
+                                                 JSMN_ARRAY, &ports_idx) ||
+                    !jz_chip_json_require_member(json, toks, count, mode_cur,
+                                                 "memory[].modes[]", "configurations",
+                                                 JSMN_ARRAY, &cfg_idx)) {
+                    free(type);
+                    return 0;
+                }
+                int port_cur = ports_idx + 1;
+                while (port_cur < count && toks[port_cur].start < toks[ports_idx].end) {
+                    static const char *const k_port_keys[] = { "id", "read", "write" };
+                    if (!jz_chip_json_validate_allowed_keys(json, toks, count, port_cur,
+                                                            "memory[].modes[].ports[]",
+                                                            k_port_keys, 3) ||
+                        !jz_chip_json_require_member(json, toks, count, port_cur,
+                                                     "memory[].modes[].ports[]", "id",
+                                                     JSMN_STRING, NULL) ||
+                        !jz_chip_json_require_bool(json, toks, count, port_cur,
+                                                   "memory[].modes[].ports[]", "read") ||
+                        !jz_chip_json_require_bool(json, toks, count, port_cur,
+                                                   "memory[].modes[].ports[]", "write")) {
+                        free(type);
+                        return 0;
+                    }
+                    port_cur = jz_json_skip(toks, count, port_cur);
+                }
+                if (!jz_chip_validate_width_depth_array(json, toks, count, cfg_idx,
+                                                       "memory[].modes[].configurations")) {
+                    free(type);
+                    return 0;
+                }
+                mode_cur = jz_json_skip(toks, count, mode_cur);
+            }
+        } else {
+            free(type);
+            return jz_chip_set_schema_error(
+                "CHIP_JSON_SCHEMA_INVALID: memory[].type '%.*s' is unsupported",
+                toks[type_idx].end - toks[type_idx].start,
+                json + toks[type_idx].start);
+        }
+        free(type);
+        cur = jz_json_skip(toks, count, cur);
+    }
+    return 1;
+}
+
+static int jz_chip_validate_latches_section(const char *json,
+                                            const jsmntok_t *toks,
+                                            int count,
+                                            int latches_idx)
+{
+    if (!jz_chip_json_expect_type("latches", NULL, &toks[latches_idx], JSMN_OBJECT)) return 0;
+    if (!jz_chip_json_require_member(json, toks, count, latches_idx, "latches",
+                                     "source", JSMN_STRING, NULL)) return 0;
+    int cur = latches_idx + 1;
+    while (cur < count && toks[cur].start < toks[latches_idx].end) {
+        const jsmntok_t *key = &toks[cur++];
+        if (jz_json_token_eq(json, key, "source")) {
+            cur = jz_json_skip(toks, count, cur);
+            continue;
+        }
+        static const char *const k_block_keys[] = { "description", "D", "SR", "modes", "note" };
+        if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur,
+                                                "latches.<block>", k_block_keys, 5) ||
+            !jz_chip_json_require_member(json, toks, count, cur, "latches.<block>",
+                                         "description", JSMN_STRING, NULL) ||
+            !jz_chip_json_require_bool(json, toks, count, cur, "latches.<block>", "D") ||
+            !jz_chip_json_require_bool(json, toks, count, cur, "latches.<block>", "SR") ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "latches.<block>",
+                                          "modes", JSMN_ARRAY, NULL) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "latches.<block>",
+                                          "note", JSMN_STRING, NULL)) return 0;
+        cur = jz_json_skip(toks, count, cur);
+    }
+    return 1;
+}
+
+static int jz_chip_validate_dsp_section(const char *json,
+                                        const jsmntok_t *toks,
+                                        int count,
+                                        int dsp_idx)
+{
+    if (!jz_chip_json_expect_type("dsp", NULL, &toks[dsp_idx], JSMN_OBJECT)) return 0;
+    if (!jz_chip_json_require_member(json, toks, count, dsp_idx, "dsp",
+                                     "source", JSMN_STRING, NULL) ||
+        !jz_chip_json_require_member(json, toks, count, dsp_idx, "dsp",
+                                     "description", JSMN_STRING, NULL)) return 0;
+    int cur = dsp_idx + 1;
+    while (cur < count && toks[cur].start < toks[dsp_idx].end) {
+        const jsmntok_t *key = &toks[cur++];
+        if (jz_json_token_eq(json, key, "source") || jz_json_token_eq(json, key, "description")) {
+            cur = jz_json_skip(toks, count, cur);
+            continue;
+        }
+        static const char *const k_dsp_keys[] = { "quantity", "description" };
+        if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, "dsp.<entry>",
+                                                k_dsp_keys, 2) ||
+            !jz_chip_json_require_uint(json, toks, count, cur, "dsp.<entry>", "quantity") ||
+            !jz_chip_json_require_member(json, toks, count, cur, "dsp.<entry>",
+                                         "description", JSMN_STRING, NULL)) return 0;
+        cur = jz_json_skip(toks, count, cur);
+    }
+    return 1;
+}
+
+static int jz_chip_validate_clock_gen_map(const char *json,
+                                          const jsmntok_t *toks,
+                                          int count,
+                                          int map_idx,
+                                          const char *section)
+{
+    (void)json;
+    if (!jz_chip_json_expect_type(section, "map", &toks[map_idx], JSMN_OBJECT)) return 0;
+    int cur = map_idx + 1;
+    while (cur < count && toks[cur].start < toks[map_idx].end) {
+        cur++;
+        int arr_idx = cur;
+        if (!jz_chip_json_expect_type(section, "map.<backend>", &toks[arr_idx], JSMN_ARRAY)) return 0;
+        int inner = arr_idx + 1;
+        while (inner < count && toks[inner].start < toks[arr_idx].end) {
+            if (toks[inner].type != JSMN_STRING) {
+                return jz_chip_set_schema_error(
+                    "CHIP_JSON_SCHEMA_INVALID: %s.map backend templates must be string arrays",
+                    section);
+            }
+            inner = jz_json_skip(toks, count, inner);
+        }
+        cur = jz_json_skip(toks, count, cur);
+    }
+    return 1;
+}
+
+static int jz_chip_validate_clock_gen_section(const char *json,
+                                              const jsmntok_t *toks,
+                                              int count,
+                                              int clock_gen_idx)
+{
+    if (!jz_chip_json_expect_type("clock_gen", NULL, &toks[clock_gen_idx], JSMN_ARRAY)) return 0;
+    int cur = clock_gen_idx + 1;
+    while (cur < count && toks[cur].start < toks[clock_gen_idx].end) {
+        int map_idx = -1;
+        int variants_idx = -1;
+        int params_idx = -1;
+        int outputs_idx = -1;
+        int inputs_idx = -1;
+        int derived_idx = -1;
+        int constraints_idx = -1;
+        static const char *const k_cg_keys[] = {
+            "type", "source", "description", "count", "mode", "chaining",
+            "pad_exclusive", "feedback_wire", "map", "variants", "parameters",
+            "outputs", "inputs", "derived", "constraints"
+        };
+        if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, "clock_gen[]",
+                                                k_cg_keys, 15) ||
+            !jz_chip_json_require_member(json, toks, count, cur, "clock_gen[]", "type",
+                                         JSMN_STRING, NULL) ||
+            !jz_chip_json_require_member(json, toks, count, cur, "clock_gen[]", "source",
+                                         JSMN_STRING, NULL) ||
+            !jz_chip_json_require_member(json, toks, count, cur, "clock_gen[]", "description",
+                                         JSMN_STRING, NULL) ||
+            !jz_chip_json_require_uint(json, toks, count, cur, "clock_gen[]", "count") ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "mode",
+                                          JSMN_STRING, NULL) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "chaining",
+                                          JSMN_PRIMITIVE, NULL) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "pad_exclusive",
+                                          JSMN_PRIMITIVE, NULL) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "feedback_wire",
+                                          JSMN_STRING, NULL) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "map",
+                                          JSMN_OBJECT, &map_idx) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "variants",
+                                          JSMN_ARRAY, &variants_idx) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "parameters",
+                                          JSMN_OBJECT, &params_idx) ||
+            !jz_chip_json_require_member(json, toks, count, cur, "clock_gen[]", "outputs",
+                                         JSMN_OBJECT, &outputs_idx) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "inputs",
+                                          JSMN_OBJECT, &inputs_idx) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "derived",
+                                          JSMN_OBJECT, &derived_idx) ||
+            !jz_chip_json_optional_member(json, toks, count, cur, "clock_gen[]", "constraints",
+                                          JSMN_ARRAY, &constraints_idx)) return 0;
+        if ((map_idx >= 0) == (variants_idx >= 0)) {
+            return jz_chip_set_schema_error(
+                "CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen entry must contain exactly one of 'map' or 'variants'");
+        }
+        if (map_idx >= 0 && !jz_chip_validate_clock_gen_map(json, toks, count, map_idx,
+                                                            "clock_gen[]")) return 0;
+        if (variants_idx >= 0) {
+            int vcur = variants_idx + 1;
+            while (vcur < count && toks[vcur].start < toks[variants_idx].end) {
+                int when_idx = -1;
+                int vmap_idx = -1;
+                static const char *const k_variant_keys[] = { "when", "map" };
+                if (!jz_chip_json_validate_allowed_keys(json, toks, count, vcur,
+                                                        "clock_gen[].variants[]",
+                                                        k_variant_keys, 2) ||
+                    !jz_chip_json_require_member(json, toks, count, vcur,
+                                                 "clock_gen[].variants[]", "when",
+                                                 JSMN_OBJECT, &when_idx) ||
+                    !jz_chip_json_require_member(json, toks, count, vcur,
+                                                 "clock_gen[].variants[]", "map",
+                                                 JSMN_OBJECT, &vmap_idx) ||
+                    !jz_chip_validate_clock_gen_map(json, toks, count, vmap_idx,
+                                                    "clock_gen[].variants[]")) return 0;
+                vcur = jz_json_skip(toks, count, vcur);
+            }
+        }
+        if (params_idx >= 0) {
+            int pcur = params_idx + 1;
+            while (pcur < count && toks[pcur].start < toks[params_idx].end) {
+                pcur++;
+                static const char *const k_param_keys[] = {
+                    "description", "type", "default", "min", "max", "valid"
+                };
+                if (!jz_chip_json_validate_allowed_keys(json, toks, count, pcur,
+                                                        "clock_gen[].parameters.<param>",
+                                                        k_param_keys, 6) ||
+                    !jz_chip_json_require_member(json, toks, count, pcur,
+                                                 "clock_gen[].parameters.<param>", "description",
+                                                 JSMN_STRING, NULL) ||
+                    !jz_chip_json_require_member(json, toks, count, pcur,
+                                                 "clock_gen[].parameters.<param>", "type",
+                                                 JSMN_STRING, NULL) ||
+                    jz_json_object_find(json, toks, count, pcur, "default") < 0) {
+                    return jz_chip_set_schema_error(
+                        "CHIP_JSON_SCHEMA_INVALID: clock_gen[].parameters.<param> missing required key 'default'");
+                }
+                pcur = jz_json_skip(toks, count, pcur);
+            }
+        }
+        int ocur = outputs_idx + 1;
+        while (ocur < count && toks[ocur].start < toks[outputs_idx].end) {
+            ocur++;
+            static const char *const k_freq_keys[] = { "description", "expr" };
+            static const char *const k_out_keys[] = {
+                "description", "port", "is_clock", "frequency_mhz", "phase_deg"
+            };
+            int freq_idx = -1;
+            int phase_idx = -1;
+            if (!jz_chip_json_validate_allowed_keys(json, toks, count, ocur,
+                                                    "clock_gen[].outputs.<output>",
+                                                    k_out_keys, 5) ||
+                !jz_chip_json_optional_member(json, toks, count, ocur,
+                                              "clock_gen[].outputs.<output>", "description",
+                                              JSMN_STRING, NULL) ||
+                !jz_chip_json_require_member(json, toks, count, ocur,
+                                             "clock_gen[].outputs.<output>", "port",
+                                             JSMN_STRING, NULL) ||
+                !jz_chip_json_require_bool(json, toks, count, ocur,
+                                           "clock_gen[].outputs.<output>", "is_clock") ||
+                !jz_chip_json_optional_member(json, toks, count, ocur,
+                                              "clock_gen[].outputs.<output>", "frequency_mhz",
+                                              JSMN_OBJECT, &freq_idx) ||
+                !jz_chip_json_optional_member(json, toks, count, ocur,
+                                              "clock_gen[].outputs.<output>", "phase_deg",
+                                              JSMN_OBJECT, &phase_idx)) return 0;
+            if (freq_idx >= 0 &&
+                (!jz_chip_json_validate_allowed_keys(json, toks, count, freq_idx,
+                                                     "clock_gen[].outputs.<output>.frequency_mhz",
+                                                     k_freq_keys, 2) ||
+                 !jz_chip_json_require_member(json, toks, count, freq_idx,
+                                              "clock_gen[].outputs.<output>.frequency_mhz",
+                                              "expr", JSMN_STRING, NULL))) return 0;
+            if (phase_idx >= 0 &&
+                (!jz_chip_json_validate_allowed_keys(json, toks, count, phase_idx,
+                                                     "clock_gen[].outputs.<output>.phase_deg",
+                                                     k_freq_keys, 2) ||
+                 !jz_chip_json_require_member(json, toks, count, phase_idx,
+                                              "clock_gen[].outputs.<output>.phase_deg",
+                                              "expr", JSMN_STRING, NULL))) return 0;
+            ocur = jz_json_skip(toks, count, ocur);
+        }
+        if (inputs_idx >= 0) {
+            int icur = inputs_idx + 1;
+            while (icur < count && toks[icur].start < toks[inputs_idx].end) {
+                icur++;
+                static const char *const k_input_keys[] = {
+                    "description", "required", "default", "width", "requires_period",
+                    "min_mhz", "max_mhz"
+                };
+                if (!jz_chip_json_validate_allowed_keys(json, toks, count, icur,
+                                                        "clock_gen[].inputs.<input>",
+                                                        k_input_keys, 7) ||
+                    !jz_chip_json_require_member(json, toks, count, icur,
+                                                 "clock_gen[].inputs.<input>", "description",
+                                                 JSMN_STRING, NULL) ||
+                    !jz_chip_json_optional_member(json, toks, count, icur,
+                                                  "clock_gen[].inputs.<input>", "required",
+                                                  JSMN_PRIMITIVE, NULL) ||
+                    !jz_chip_json_optional_member(json, toks, count, icur,
+                                                  "clock_gen[].inputs.<input>", "default",
+                                                  JSMN_STRING, NULL) ||
+                    !jz_chip_json_optional_member(json, toks, count, icur,
+                                                  "clock_gen[].inputs.<input>", "width",
+                                                  JSMN_PRIMITIVE, NULL) ||
+                    !jz_chip_json_optional_member(json, toks, count, icur,
+                                                  "clock_gen[].inputs.<input>", "requires_period",
+                                                  JSMN_PRIMITIVE, NULL) ||
+                    !jz_chip_json_optional_member(json, toks, count, icur,
+                                                  "clock_gen[].inputs.<input>", "min_mhz",
+                                                  JSMN_PRIMITIVE, NULL) ||
+                    !jz_chip_json_optional_member(json, toks, count, icur,
+                                                  "clock_gen[].inputs.<input>", "max_mhz",
+                                                  JSMN_PRIMITIVE, NULL)) return 0;
+                icur = jz_json_skip(toks, count, icur);
+            }
+        }
+        if (derived_idx >= 0) {
+            int dcur = derived_idx + 1;
+            while (dcur < count && toks[dcur].start < toks[derived_idx].end) {
+                dcur++;
+                static const char *const k_derived_keys[] = { "description", "expr", "min", "max" };
+                if (!jz_chip_json_validate_allowed_keys(json, toks, count, dcur,
+                                                        "clock_gen[].derived.<name>",
+                                                        k_derived_keys, 4) ||
+                    !jz_chip_json_require_member(json, toks, count, dcur,
+                                                 "clock_gen[].derived.<name>", "expr",
+                                                 JSMN_STRING, NULL)) return 0;
+                dcur = jz_json_skip(toks, count, dcur);
+            }
+        }
+        if (constraints_idx >= 0) {
+            int ccur = constraints_idx + 1;
+            while (ccur < count && toks[ccur].start < toks[constraints_idx].end) {
+                static const char *const k_constraint_keys[] = { "description", "rule" };
+                if (!jz_chip_json_validate_allowed_keys(json, toks, count, ccur,
+                                                        "clock_gen[].constraints[]",
+                                                        k_constraint_keys, 2) ||
+                    !jz_chip_json_require_member(json, toks, count, ccur,
+                                                 "clock_gen[].constraints[]", "description",
+                                                 JSMN_STRING, NULL) ||
+                    !jz_chip_json_require_member(json, toks, count, ccur,
+                                                 "clock_gen[].constraints[]", "rule",
+                                                 JSMN_STRING, NULL)) return 0;
+                ccur = jz_json_skip(toks, count, ccur);
+            }
+        }
+        cur = jz_json_skip(toks, count, cur);
+    }
+    return 1;
+}
+
+static int jz_chip_validate_diff_primitive(const char *json,
+                                           const jsmntok_t *toks,
+                                           int count,
+                                           int obj_idx,
+                                           const char *section,
+                                           int require_ratio)
+{
+    static const char *const k_keys[] = { "description", "ratio", "required_clocks", "map" };
+    int map_idx = -1;
+    int clocks_idx = -1;
+    if (!jz_chip_json_validate_allowed_keys(json, toks, count, obj_idx, section,
+                                            k_keys, 4) ||
+        !jz_chip_json_require_member(json, toks, count, obj_idx, section, "description",
+                                     JSMN_STRING, NULL) ||
+        !jz_chip_json_require_member(json, toks, count, obj_idx, section, "map",
+                                     JSMN_OBJECT, &map_idx) ||
+        !jz_chip_validate_clock_gen_map(json, toks, count, map_idx, section)) return 0;
+    if (require_ratio) {
+        if (!jz_chip_json_require_uint(json, toks, count, obj_idx, section, "ratio") ||
+            !jz_chip_json_require_member(json, toks, count, obj_idx, section,
+                                         "required_clocks", JSMN_ARRAY, &clocks_idx)) return 0;
+        int ccur = clocks_idx + 1;
+        while (ccur < count && toks[ccur].start < toks[clocks_idx].end) {
+            if (!(jz_json_token_eq(json, &toks[ccur], "fclk") ||
+                  jz_json_token_eq(json, &toks[ccur], "pclk") ||
+                  jz_json_token_eq(json, &toks[ccur], "reset"))) {
+                return jz_chip_set_schema_error(
+                    "CHIP_JSON_SCHEMA_INVALID: %s.required_clocks contains an unknown value",
+                    section);
+            }
+            ccur = jz_json_skip(toks, count, ccur);
+        }
+    }
+    return 1;
+}
+
+static int jz_chip_validate_differential_section(const char *json,
+                                                 const jsmntok_t *toks,
+                                                 int count,
+                                                 int diff_idx)
+{
+    static const char *const k_top_keys[] = {
+        "source", "type", "io_type", "output", "input", "clock"
+    };
+    int type_idx = -1;
+    int output_idx = -1;
+    int input_idx = -1;
+    int clock_idx = -1;
+    if (!jz_chip_json_validate_allowed_keys(json, toks, count, diff_idx, "differential",
+                                            k_top_keys, 6) ||
+        !jz_chip_json_require_member(json, toks, count, diff_idx, "differential", "source",
+                                     JSMN_STRING, NULL) ||
+        !jz_chip_json_require_member(json, toks, count, diff_idx, "differential", "type",
+                                     JSMN_STRING, &type_idx) ||
+        !jz_chip_json_require_member(json, toks, count, diff_idx, "differential", "io_type",
+                                     JSMN_STRING, NULL) ||
+        !jz_chip_json_optional_member(json, toks, count, diff_idx, "differential", "output",
+                                      JSMN_OBJECT, &output_idx) ||
+        !jz_chip_json_optional_member(json, toks, count, diff_idx, "differential", "input",
+                                      JSMN_OBJECT, &input_idx) ||
+        !jz_chip_json_optional_member(json, toks, count, diff_idx, "differential", "clock",
+                                      JSMN_OBJECT, &clock_idx)) return 0;
+    if (!(jz_json_token_eq(json, &toks[type_idx], "true") ||
+          jz_json_token_eq(json, &toks[type_idx], "emulated"))) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: differential.type must be 'true' or 'emulated'");
+    }
+    if (output_idx < 0 && input_idx < 0) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: differential must contain 'output' and/or 'input'");
+    }
+    {
+        static const char *const k_output_keys[] = { "buffer", "serializer" };
+        static const char *const k_input_keys[] = { "buffer", "deserializer" };
+        int buf_idx = -1, ser_idx = -1, deser_idx = -1;
+        if (output_idx >= 0 &&
+            (!jz_chip_json_validate_allowed_keys(json, toks, count, output_idx,
+                                                "differential.output", k_output_keys, 2) ||
+            !jz_chip_json_optional_member(json, toks, count, output_idx, "differential.output",
+                                          "buffer", JSMN_OBJECT, &buf_idx) ||
+            !jz_chip_json_optional_member(json, toks, count, output_idx, "differential.output",
+                                          "serializer", JSMN_ARRAY, &ser_idx))) return 0;
+        if (output_idx >= 0 && buf_idx < 0 && ser_idx < 0) {
+            return jz_chip_set_schema_error(
+                "CHIP_JSON_SCHEMA_INVALID: differential.output must contain 'buffer' and/or 'serializer'");
+        }
+        if (buf_idx >= 0 &&
+            !jz_chip_validate_diff_primitive(json, toks, count, buf_idx,
+                                             "differential.output.buffer", 0)) return 0;
+        if (ser_idx >= 0) {
+            int cur = ser_idx + 1;
+            while (cur < count && toks[cur].start < toks[ser_idx].end) {
+                if (!jz_chip_validate_diff_primitive(json, toks, count, cur,
+                                                     "differential.output.serializer[]", 1)) {
+                    return 0;
+                }
+                cur = jz_json_skip(toks, count, cur);
+            }
+        }
+        buf_idx = -1;
+        if (input_idx >= 0 &&
+            (!jz_chip_json_validate_allowed_keys(json, toks, count, input_idx,
+                                                "differential.input", k_input_keys, 2) ||
+            !jz_chip_json_optional_member(json, toks, count, input_idx, "differential.input",
+                                          "buffer", JSMN_OBJECT, &buf_idx) ||
+            !jz_chip_json_optional_member(json, toks, count, input_idx, "differential.input",
+                                          "deserializer", JSMN_ARRAY, &deser_idx))) return 0;
+        if (input_idx >= 0 && buf_idx < 0 && deser_idx < 0) {
+            return jz_chip_set_schema_error(
+                "CHIP_JSON_SCHEMA_INVALID: differential.input must contain 'buffer' and/or 'deserializer'");
+        }
+        if (buf_idx >= 0 &&
+            !jz_chip_validate_diff_primitive(json, toks, count, buf_idx,
+                                             "differential.input.buffer", 0)) return 0;
+        if (deser_idx >= 0) {
+            int cur = deser_idx + 1;
+            while (cur < count && toks[cur].start < toks[deser_idx].end) {
+                if (!jz_chip_validate_diff_primitive(json, toks, count, cur,
+                                                     "differential.input.deserializer[]", 1)) {
+                    return 0;
+                }
+                cur = jz_json_skip(toks, count, cur);
+            }
+        }
+        if (clock_idx >= 0) {
+            static const char *const k_clock_keys[] = { "buffer" };
+            if (!jz_chip_json_validate_allowed_keys(json, toks, count, clock_idx,
+                                                    "differential.clock", k_clock_keys, 1) ||
+                !jz_chip_json_require_member(json, toks, count, clock_idx, "differential.clock",
+                                             "buffer", JSMN_OBJECT, &buf_idx) ||
+                !jz_chip_validate_diff_primitive(json, toks, count, buf_idx,
+                                                 "differential.clock.buffer", 0)) return 0;
+        }
+    }
+    return 1;
+}
+
+static int jz_chip_validate_schema(const char *json,
+                                   const jsmntok_t *toks,
+                                   int count)
+{
+    static const char *const k_top_keys[] = {
+        "chipid", "description", "boards", "resources", "latches", "dsp",
+        "memory", "clock_gen", "differential", "fixed_pins"
+    };
+    int boards_idx = -1;
+    int resources_idx = -1;
+    int latches_idx = -1;
+    int dsp_idx = -1;
+    int memory_idx = -1;
+    int clock_gen_idx = -1;
+    int diff_idx = -1;
+    int fixed_pins_idx = -1;
+    if (count < 1 || toks[0].type != JSMN_OBJECT) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: top-level chip JSON must be an object");
+    }
+    if (!jz_chip_json_validate_allowed_keys(json, toks, count, 0, "chip JSON",
+                                            k_top_keys, 10) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "chipid",
+                                     JSMN_STRING, NULL) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "description",
+                                     JSMN_STRING, NULL) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "boards",
+                                     JSMN_ARRAY, &boards_idx) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "resources",
+                                     JSMN_OBJECT, &resources_idx) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "latches",
+                                     JSMN_OBJECT, &latches_idx) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "dsp",
+                                     JSMN_OBJECT, &dsp_idx) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "memory",
+                                     JSMN_ARRAY, &memory_idx) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "clock_gen",
+                                     JSMN_ARRAY, &clock_gen_idx) ||
+        !jz_chip_json_optional_member(json, toks, count, 0, "chip JSON", "differential",
+                                      JSMN_OBJECT, &diff_idx) ||
+        !jz_chip_json_require_member(json, toks, count, 0, "chip JSON", "fixed_pins",
+                                     JSMN_ARRAY, &fixed_pins_idx)) return 0;
+    {
+        int cur = boards_idx + 1;
+        while (cur < count && toks[cur].start < toks[boards_idx].end) {
+            static const char *const k_board_keys[] = { "name", "url" };
+            if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, "boards[]",
+                                                    k_board_keys, 2) ||
+                !jz_chip_json_require_member(json, toks, count, cur, "boards[]", "name",
+                                             JSMN_STRING, NULL) ||
+                !jz_chip_json_require_member(json, toks, count, cur, "boards[]", "url",
+                                             JSMN_STRING, NULL)) return 0;
+            cur = jz_json_skip(toks, count, cur);
+        }
+    }
+    {
+        int cur = resources_idx + 1;
+        while (cur < count && toks[cur].start < toks[resources_idx].end) {
+            const jsmntok_t *key = &toks[cur++];
+            const char *p = json + key->start;
+            for (int i = key->start; i < key->end; ++i) {
+                char ch = json[i];
+                if (!(isupper((unsigned char)ch) || isdigit((unsigned char)ch) || ch == '_')) {
+                    return jz_chip_set_schema_error(
+                        "CHIP_JSON_SCHEMA_INVALID: resources key '%.*s' must be uppercase identifier text",
+                        key->end - key->start, p);
+                }
+            }
+            if (!jz_json_token_to_uint(json, &toks[cur], &(unsigned){0})) {
+                return jz_chip_set_schema_error(
+                    "CHIP_JSON_SCHEMA_INVALID: resources values must be integers");
+            }
+            cur = jz_json_skip(toks, count, cur);
+        }
+    }
+    if (!jz_chip_validate_latches_section(json, toks, count, latches_idx) ||
+        !jz_chip_validate_dsp_section(json, toks, count, dsp_idx) ||
+        !jz_chip_validate_memory_section(json, toks, count, memory_idx) ||
+        !jz_chip_validate_clock_gen_section(json, toks, count, clock_gen_idx)) return 0;
+    if (diff_idx >= 0 &&
+        !jz_chip_validate_differential_section(json, toks, count, diff_idx)) return 0;
+    {
+        int cur = fixed_pins_idx + 1;
+        while (cur < count && toks[cur].start < toks[fixed_pins_idx].end) {
+            static const char *const k_pin_keys[] = { "pad", "name", "pin", "ball", "note" };
+            if (!jz_chip_json_validate_allowed_keys(json, toks, count, cur, "fixed_pins[]",
+                                                    k_pin_keys, 5) ||
+                !jz_chip_json_require_member(json, toks, count, cur, "fixed_pins[]", "pad",
+                                             JSMN_STRING, NULL) ||
+                !jz_chip_json_require_member(json, toks, count, cur, "fixed_pins[]", "name",
+                                             JSMN_STRING, NULL) ||
+                !jz_chip_json_optional_member(json, toks, count, cur, "fixed_pins[]", "pin",
+                                              JSMN_PRIMITIVE, NULL) ||
+                !jz_chip_json_optional_member(json, toks, count, cur, "fixed_pins[]", "ball",
+                                              JSMN_STRING, NULL) ||
+                !jz_chip_json_require_member(json, toks, count, cur, "fixed_pins[]", "note",
+                                             JSMN_STRING, NULL)) return 0;
+            cur = jz_json_skip(toks, count, cur);
+        }
+    }
+    return 1;
 }
 
 static int jz_chip_parse_memory_object(const char *json,
@@ -1105,27 +2007,27 @@ static int jz_chip_parse_variant_fact(const char *json,
         /* find ".source" suffix */
         const char *dot = (const char *)memchr(kstr + 6, '.', klen - 6);
         if (!dot) {
-            jz_chip_set_error("clock_gen '%s': malformed variant fact key '%.*s'",
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': malformed variant fact key '%.*s'",
                               cg_type ? cg_type : "?", (int)klen, kstr);
             return 0;
         }
         size_t name_len = (size_t)(dot - (kstr + 6));
         size_t tail_len = klen - 6 - name_len;
         if (tail_len != 7 || strncmp(dot, ".source", 7) != 0) {
-            jz_chip_set_error("clock_gen '%s': unknown variant fact key '%.*s' "
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': unknown variant fact key '%.*s' "
                               "(expected 'input.<NAME>.source')",
                               cg_type ? cg_type : "?", (int)klen, kstr);
             return 0;
         }
         if (name_len == 0) {
-            jz_chip_set_error("clock_gen '%s': empty input name in variant fact key",
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': empty input name in variant fact key",
                               cg_type ? cg_type : "?");
             return 0;
         }
 
         /* Value must be a string "pad" or "fabric" (or "" for unwired). */
         if (val->type != JSMN_STRING) {
-            jz_chip_set_error("clock_gen '%s': variant fact '%.*s' value must be a string",
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variant fact '%.*s' value must be a string",
                               cg_type ? cg_type : "?", (int)klen, kstr);
             return 0;
         }
@@ -1134,7 +2036,7 @@ static int jz_chip_parse_variant_fact(const char *json,
         if (!(vlen == 3 && strncmp(vstr, "pad", 3) == 0) &&
             !(vlen == 6 && strncmp(vstr, "fabric", 6) == 0) &&
             !(vlen == 0)) {
-            jz_chip_set_error("clock_gen '%s': variant fact '%.*s' value must be "
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variant fact '%.*s' value must be "
                               "\"pad\", \"fabric\", or \"\" (got \"%.*s\")",
                               cg_type ? cg_type : "?", (int)klen, kstr,
                               (int)vlen, vstr);
@@ -1163,13 +2065,13 @@ static int jz_chip_parse_variant_fact(const char *json,
     /* Match "output.count" */
     if (klen == 12 && strncmp(kstr, "output.count", 12) == 0) {
         if (val->type != JSMN_PRIMITIVE) {
-            jz_chip_set_error("clock_gen '%s': variant fact 'output.count' must be an integer",
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variant fact 'output.count' must be an integer",
                               cg_type ? cg_type : "?");
             return 0;
         }
         unsigned u = 0;
         if (!jz_json_token_to_uint(json, val, &u)) {
-            jz_chip_set_error("clock_gen '%s': variant fact 'output.count' is not a valid integer",
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variant fact 'output.count' is not a valid integer",
                               cg_type ? cg_type : "?");
             return 0;
         }
@@ -1178,7 +2080,7 @@ static int jz_chip_parse_variant_fact(const char *json,
         return 1;
     }
 
-    jz_chip_set_error("clock_gen '%s': unknown variant fact key '%.*s' "
+    jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': unknown variant fact key '%.*s' "
                       "(expected 'input.<NAME>.source' or 'output.count')",
                       cg_type ? cg_type : "?", (int)klen, kstr);
     return 0;
@@ -1215,7 +2117,7 @@ static int jz_chip_parse_clock_gen_variant(const char *json,
     memset(out_v, 0, sizeof(*out_v));
     const jsmntok_t *obj = &toks[obj_idx];
     if (obj->type != JSMN_OBJECT) {
-        jz_chip_set_error("clock_gen '%s': variants[] entry must be an object",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variants[] entry must be an object",
                           cg_type ? cg_type : "?");
         return 0;
     }
@@ -1234,12 +2136,12 @@ static int jz_chip_parse_clock_gen_variant(const char *json,
     }
 
     if (when_idx < 0 || toks[when_idx].type != JSMN_OBJECT) {
-        jz_chip_set_error("clock_gen '%s': variants[] entry missing or non-object 'when'",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variants[] entry missing or non-object 'when'",
                           cg_type ? cg_type : "?");
         return 0;
     }
     if (map_idx < 0 || toks[map_idx].type != JSMN_OBJECT) {
-        jz_chip_set_error("clock_gen '%s': variants[] entry missing or non-object 'map'",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variants[] entry missing or non-object 'map'",
                           cg_type ? cg_type : "?");
         return 0;
     }
@@ -1263,7 +2165,7 @@ static int jz_chip_parse_clock_gen_variant(const char *json,
     /* Parse `map` templates. */
     jz_chip_parse_clock_gen_map_into(json, toks, count, map_idx, &out_v->maps);
     if (out_v->maps.len == 0) {
-        jz_chip_set_error("clock_gen '%s': variants[] entry has empty 'map'",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variants[] entry has empty 'map'",
                           cg_type ? cg_type : "?");
         jz_chip_clock_gen_variant_free(out_v);
         return 0;
@@ -1282,7 +2184,7 @@ static int jz_chip_parse_clock_gen_variants(const char *json,
     if (arr_idx < 0 || arr_idx >= count) return 0;
     const jsmntok_t *arr = &toks[arr_idx];
     if (arr->type != JSMN_ARRAY) {
-        jz_chip_set_error("clock_gen '%s': 'variants' must be an array",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': 'variants' must be an array",
                           cg_type ? cg_type : "?");
         return 0;
     }
@@ -1298,7 +2200,7 @@ static int jz_chip_parse_clock_gen_variants(const char *json,
     }
 
     if (cg->variants.len == 0) {
-        jz_chip_set_error("clock_gen '%s': 'variants' array is empty",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': 'variants' array is empty",
                           cg_type ? cg_type : "?");
         return 0;
     }
@@ -1492,7 +2394,7 @@ static int variant_validate_coverage(const JZChipClockGen *cg)
     VariantAxis *axes = NULL;
     size_t axis_count = 0;
     if (!variant_build_axes(cg, &axes, &axis_count)) {
-        jz_chip_set_error("clock_gen '%s': out of memory validating variants",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': out of memory validating variants",
                           cg->type ? cg->type : "?");
         return 0;
     }
@@ -1500,7 +2402,7 @@ static int variant_validate_coverage(const JZChipClockGen *cg)
         /* No axes and there are variants: at most one variant allowed. */
         size_t vc = cg->variants.len / sizeof(JZChipClockGenVariant);
         if (vc > 1) {
-            jz_chip_set_error("clock_gen '%s': multiple variants with no 'when' facts",
+            jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': multiple variants with no 'when' facts",
                               cg->type ? cg->type : "?");
             variant_axes_free(axes, axis_count);
             return 0;
@@ -1516,7 +2418,7 @@ static int variant_validate_coverage(const JZChipClockGen *cg)
             if (jz_size_mul_checked(tuple_count, axes[ai].val_count, &tuple_count) != 0 ||
                 tuple_count > jz_input_limit_value(JZ_LIMIT_CHIP_VARIANT_TUPLES)) {
                 jz_chip_set_error(
-                    "clock_gen '%s': variant coverage tuple count exceeds the safety limit of %u combinations",
+                    "CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variant coverage tuple count exceeds the safety limit of %u combinations",
                     cg->type ? cg->type : "?",
                     (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_VARIANT_TUPLES));
                 variant_axes_free(axes, axis_count);
@@ -1527,7 +2429,7 @@ static int variant_validate_coverage(const JZChipClockGen *cg)
 
     size_t *idx = (size_t *)calloc(axis_count, sizeof(size_t));
     if (!idx) {
-        jz_chip_set_error("clock_gen '%s': out of memory validating variants",
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': out of memory validating variants",
                           cg->type ? cg->type : "?");
         variant_axes_free(axes, axis_count);
         return 0;
@@ -1566,11 +2468,11 @@ static int variant_validate_coverage(const JZChipClockGen *cg)
             }
             if (matches == 0) {
                 jz_chip_set_error(
-                    "clock_gen '%s': variants not exhaustive; no variant matches { %s }",
+                    "CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variants not exhaustive; no variant matches { %s }",
                     cg->type ? cg->type : "?", buf);
             } else {
                 jz_chip_set_error(
-                    "clock_gen '%s': variants not disjoint; %d variants match { %s }",
+                    "CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': variants not disjoint; %d variants match { %s }",
                     cg->type ? cg->type : "?", matches, buf);
             }
             ok = 0;
@@ -1670,14 +2572,14 @@ static int jz_chip_parse_clock_gen_object(const char *json,
 
     /* Enforce mutual exclusion of `map` and `variants`. Exactly one required. */
     if (type && map_idx >= 0 && variants_idx >= 0) {
-        jz_chip_set_error("clock_gen '%s': both 'map' and 'variants' are present; "
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': both 'map' and 'variants' are present; "
                           "use exactly one (S9.3)", type);
         if (err) *err = 1;
         free(type); free(mode); free(feedback_wire);
         return jz_json_skip(toks, count, obj_index);
     }
     if (type && map_idx < 0 && variants_idx < 0) {
-        jz_chip_set_error("clock_gen '%s': neither 'map' nor 'variants' is present; "
+        jz_chip_set_error("CHIP_CLOCK_GEN_VARIANT_INVALID: clock_gen '%s': neither 'map' nor 'variants' is present; "
                           "one is required (S9.3)", type);
         if (err) *err = 1;
         free(type); free(mode); free(feedback_wire);
@@ -2367,6 +3269,13 @@ JZChipLoadStatus jz_chip_data_load(const char *chip_id,
                                     (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_NESTING_DEPTH)) != 0) {
         jz_chip_set_error("CHIP_JSON_NESTING_LIMIT_EXCEEDED: chip JSON nesting exceeds the safety limit of %u level(s)",
                           (unsigned)jz_input_limit_value(JZ_LIMIT_CHIP_JSON_NESTING_DEPTH));
+        free(toks);
+        free(json);
+        jz_chip_data_free(out);
+        return JZ_CHIP_LOAD_JSON_ERROR;
+    }
+
+    if (!jz_chip_validate_schema(json_source, toks, tok_count)) {
         free(toks);
         free(json);
         jz_chip_data_free(out);

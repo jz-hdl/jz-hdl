@@ -1,0 +1,68 @@
+// DOUBLE_TYPED_PARAMS_ACCEPT_INTEGER_AND_DECIMAL: double-typed CLOCK_GEN parameters
+// accept both integer and decimal numeric forms.
+
+@project(CHIP="xc7a35t-2fgg484") DOUBLE_TYPED_PARAMS_ACCEPT_INTEGER_AND_DECIMAL_happy_path
+    CLOCKS {
+        ref_clk = { period=10 };
+        int_form_clk;
+        decimal_form_clk;
+    }
+
+    IN_PINS {
+        ref_clk = { standard=LVCMOS33 };
+    }
+
+    MAP {
+        ref_clk = E3;
+    }
+
+    CLOCK_GEN {
+        PLL2 {
+            IN REF_CLK ref_clk;
+            OUT BASE int_form_clk;
+
+            CONFIG {
+                // Valid: double-typed parameters supplied as integer literals.
+                DIVCLK_DIVIDE = 1;
+                CLKFBOUT_MULT_F = 8;
+                CLKOUT0_DIVIDE_F = 8;
+            };
+        };
+
+        PLL2 {
+            IN REF_CLK ref_clk;
+            OUT BASE decimal_form_clk;
+
+            CONFIG {
+                // Valid: the same double-typed parameters supplied as decimals.
+                DIVCLK_DIVIDE = 1;
+                CLKFBOUT_MULT_F = 8.125;
+                CLKOUT0_DIVIDE_F = 8.125;
+            };
+        };
+    }
+
+    @top TopMod {
+        IN  [1] clk = ref_clk;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

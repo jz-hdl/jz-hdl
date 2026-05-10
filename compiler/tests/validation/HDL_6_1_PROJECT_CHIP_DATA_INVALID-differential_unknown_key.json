@@ -1,0 +1,80 @@
+{
+  "chipid": "HDL_6_1_PROJECT_CHIP_DATA_INVALID-differential_unknown_key",
+  "description": "Unknown key inside differential.output.",
+  "boards": [],
+  "resources": {
+    "LUT4": 1,
+    "DFF": 1
+  },
+  "latches": {
+    "source": "DS",
+    "FAB": {
+      "description": "Fabric latch support",
+      "D": false,
+      "SR": false
+    }
+  },
+  "dsp": {
+    "source": "DS",
+    "description": "No DSP blocks"
+  },
+  "memory": [
+    {
+      "type": "DISTRIBUTED",
+      "source": "DS",
+      "description": "Tiny distributed memory",
+      "total_bits": 16,
+      "r_ports": 1,
+      "w_ports": 1,
+      "configurations": [
+        { "width": 1, "depth": 16 }
+      ]
+    }
+  ],
+  "clock_gen": [
+    {
+      "type": "osc",
+      "source": "DS",
+      "description": "Internal oscillator",
+      "count": 1,
+      "map": {
+        "verilog-2005": [ "OSC u_osc();\n" ],
+        "rtlil": [ "cell \\OSC u_osc\nend\n" ]
+      },
+      "parameters": {},
+      "outputs": {
+        "BASE": {
+          "description": "Primary oscillator output",
+          "port": "OSCOUT",
+          "is_clock": true,
+          "frequency_mhz": { "expr": "250.0" }
+        }
+      }
+    }
+  ],
+  "differential": {
+    "source": "DS",
+    "type": "emulated",
+    "io_type": "LVDS25",
+    "output": {
+      "buffer": {
+        "description": "Output differential buffer",
+        "map": {
+          "verilog-2005": [ "OBUFDS u_buf();\n" ]
+        }
+      },
+      "mystery": {
+        "description": "Unexpected nested object"
+      }
+    },
+    "input": {
+      "buffer": {
+        "description": "Input differential buffer",
+        "map": {
+          "verilog-2005": [ "IBUFDS u_buf();\n" ]
+        }
+      }
+    }
+  },
+  "fixed_pins": []
+}

@@ -1,0 +1,44 @@
+// INPUT_TYPE_FACT_RESERVED_NOT_IMPLEMENTED: input.<NAME>.type is reserved and
+// must not be accepted as a variant fact key in chip JSON.
+
+@project(CHIP="CHIP_9_3_1_INPUT_TYPE_FACT_RESERVED_NOT_IMPLEMENTED-reserved_input_type") INPUT_TYPE_FACT_RESERVED_NOT_IMPLEMENTED_reserved_input_type
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module Helper
+    PORT {
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    ASYNCHRONOUS {
+        dout = din;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    @new inst_h Helper {
+        IN  [1] din = r;
+        OUT [1] dout = _;
+    };
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

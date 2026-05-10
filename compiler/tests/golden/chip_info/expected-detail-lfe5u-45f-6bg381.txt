@@ -1,0 +1,176 @@
+JZ-HDL Chip Info
+
+================================================================================
+  CHIP: LFE5U-45F-6BG381
+  Primitives available on the Lattice ECP5 LFE5U-45F in BG381 (381-ball caBGA) package, speed grade -6.
+================================================================================
+
+--- Resources ------------------------------------------------------------------
+
+  LUT4        44000
+  DFF         44000
+  IOB         203
+  LVDS_PAIRS  64
+  GSR         1
+
+--- Latches --------------------------------------------------------------------
+
+  FAB  D: No   SR: No   (PFU storage elements are strictly edge-triggered registers.)
+  IOB  D: Yes  SR: No   (PIO register can be configured as a transparent latch.)
+
+--- DSP ------------------------------------------------------------------------
+
+  MULT18X18     72  (18x18 bit multiplier (two per DSP slice))
+  MULT9X9       144  (9x9 bit multiplier (four per DSP slice))
+  ALU54         36  (54-bit ALU (one per DSP slice))
+
+--- Memory ---------------------------------------------------------------------
+
+  DISTRIBUTED
+  359.4 Kbits total | 1 read port, 1 write port
+
+  Width | Depth
+  ------|------
+      1 | 359424
+      2 | 179712
+      4 | 89856
+      8 | 44928
+     16 | 22464
+
+  BLOCK
+  1990.7 Kbits total | 108 blocks x 18 Kbits | Max 200 MHz
+
+  Single Port (1R/1W)  True Dual Port (2R/2W)  Pseudo-Dual Port (1R/1W)
+  Width | Depth        Width | Depth           Width | Depth           
+  ------|------        ------|------           ------|------           
+      1 | 16384            1 | 16384               1 | 16384           
+      2 |  8192            2 |  8192               2 |  8192           
+      4 |  4096            4 |  4096               4 |  4096           
+      9 |  2048            9 |  2048               9 |  2048           
+     18 |  1024           18 |  1024              18 |  1024           
+     36 |   512                                   36 |   512           
+
+  Read Only Memory
+  Width | Depth   
+  ------|------   
+      1 | 16384   
+      2 |  8192   
+      4 |  4096   
+      9 |  2048   
+     18 |  1024   
+     36 |   512   
+
+--- Clock Generation -----------------------------------------------------------
+
+  CLOCK BUFFER (BUF)
+  56 BUFs available | Mode: global
+
+  BUF Inputs
+Input   | Width | Requires Period | Description                                                     
+--------|-------|-----------------|-----------------------------------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the buffer                             
+CE      | 1     |                 | Clock enable (active-high). When deasserted, output is held low.
+
+  BUF Outputs
+Output | Type  | Frequency Formula            | Description                                   
+-------|-------|------------------------------|-----------------------------------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) | Buffered clock output on primary clock network
+
+
+  INTERNAL OSCILLATOR (OSC)
+  1 OSC available
+
+  OSC Inputs
+Input   | Width | Requires Period | Description                    
+--------|-------|-----------------|--------------------------------
+REF_CLK |       |                 | OSC has no external clock input
+
+  Configurable Parameters
+Parameter | Range/Valid | Description                                                                                         
+----------|-------------|-----------------------------------------------------------------------------------------------------
+DIV       | 2 - 240     | Oscillator divider. Output frequency = ~580 MHz / DIV. Common values: DIV=10 -> 62.0 MHz, DIV=15 -> 
+                          38.8 MHz, DIV=30 -> 19.4 MHz, DIV=60 -> 9.7 MHz, DIV=120 -> 4.8 MHz, DIV=240 -> 2.4 MHz.            
+
+  OSC Outputs
+Output | Type  | Frequency Formula | Description               
+-------|-------|-------------------|---------------------------
+BASE   | clock | 580.0 / DIV       | Internal oscillator output
+
+
+  PHASE-LOCKED LOOP (PLL)
+  4 PLLs available | Max VCO: 400-800 MHz | Chaining: Not supported
+
+  PLL Inputs
+Input   | Width | Requires Period | Description                            
+--------|-------|-----------------|----------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the PLL (CLKI)
+
+  Configurable Parameters
+Parameter  | Range/Valid | Description                              
+-----------|-------------|------------------------------------------
+CLKI_DIV   | 1 - 128     | Input clock divider (1-128)              
+CLKFB_DIV  | 1 - 128     | Feedback divider / VCO multiplier (1-128)
+CLKOP_DIV  | 1 - 128     | Primary output divider (1-128)           
+CLKOS_DIV  | 1 - 128     | Secondary output divider (1-128)         
+CLKOS2_DIV | 1 - 128     | Tertiary output divider (1-128)          
+CLKOS3_DIV | 1 - 128     | Quaternary output divider (1-128)        
+
+  PLL Outputs
+Output | Type   | Frequency Formula | Description                                
+-------|--------|-------------------|--------------------------------------------
+BASE   | clock  | FVCO / CLKOP_DIV  | Primary PLL output (CLKOP)                 
+CLKOS  | clock  | FVCO / CLKOS_DIV  | Secondary PLL output                       
+CLKOS2 | clock  | FVCO / CLKOS2_DIV | Tertiary PLL output                        
+CLKOS3 | clock  | FVCO / CLKOS3_DIV | Quaternary PLL output                      
+LOCK   | signal |                   | PLL lock indicator, high when PLL is locked
+
+  Derived Values
+Name | Min | Max | Formula                                             | Description                                       
+-----|-----|-----|-----------------------------------------------------|---------------------------------------------------
+FVCO | 400 | 800 | (1000.0 / REF_CLK_period_ns) * CLKFB_DIV / CLKI_DIV | Internal VCO frequency: fIN * CLKFB_DIV / CLKI_DIV
+
+  Constraints
+  FVCO range check
+  output frequency range check
+
+
+--- Differential I/O -----------------------------------------------------------
+
+  Type:     True LVDS
+  IO Type:  LVDS25
+  Output:   LVDS differential output buffer (emulated via LVDS25E)
+  Serializer: 2:1 (2:1 output DDR serializer)
+                requires: pclk, reset
+  Serializer: 4:1 (4:1 output DDR serializer with 2x gearing)
+                requires: fclk, pclk, reset
+  Serializer: 7:1 (7:1 LVDS output DDR serializer)
+                requires: fclk, pclk, reset
+  Input:    LVDS differential input buffer
+  Deserializer: 1:2 (1:2 input DDR deserializer)
+                requires: pclk, reset
+  Deserializer: 1:4 (1:4 input DDR deserializer with 2x gearing)
+                requires: fclk, pclk, reset
+  Deserializer: 1:7 (1:7 LVDS input DDR deserializer)
+                requires: fclk, pclk, reset
+
+--- Fixed Pins (11) ------------------------------------------------------------
+
+Pad      | Name     | Note
+---------+----------+------------------------------------
+TDI      | TDI      | JTAG test data in
+TDO      | TDO      | JTAG test data out
+TCK      | TCK      | JTAG test clock
+TMS      | TMS      | JTAG test mode select
+PROGRAMN | PROGRAMN | Active-low program initiation
+INITN    | INITN    | Active-low initialization indicator
+DONE     | DONE     | Configuration done indicator
+CCLK     | CCLK     | Configuration clock
+CFG0     | CFG0     | Configuration mode select 0
+CFG1     | CFG1     | Configuration mode select 1
+CFG2     | CFG2     | Configuration mode select 2
+
+--- Example Boards (1) ---------------------------------------------------------
+
+  Colorlight i9
+    https://www.colorlight.net/colorlight-i9-led-receiving-card
+

@@ -1,0 +1,4 @@
+File: TB_6_1_TMODE_TB_SETUP_POSITION-sequencing_and_count.jz
+      24:9    error TB_SETUP_POSITION TB-005 @setup must appear exactly once per TEST, after @new, before other directives
+      34:5    error TB_SETUP_POSITION TB-005 @setup must appear exactly once per TEST, after @new, before other directives
+      41:5    error TB_SETUP_POSITION TB-005 @setup must appear exactly once per TEST, after @new, before other directives

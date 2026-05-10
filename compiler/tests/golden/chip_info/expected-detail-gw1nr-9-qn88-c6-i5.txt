@@ -1,0 +1,255 @@
+JZ-HDL Chip Info
+
+================================================================================
+  CHIP: GW1NR-9-QN88-C6-I5
+  Primitives available on the GW1NR-9-QN88-C6/I5 device.
+================================================================================
+
+--- Resources ------------------------------------------------------------------
+
+  LUT4        8640
+  DFF         6480
+  ALU         6480
+  IOB         71
+  LVDS_PAIRS  19
+  GSR         1
+
+--- Latches --------------------------------------------------------------------
+
+  FAB  D: Yes  SR: No   (CFU REG elements can be configured as D latches. GW1NR-2 Table 1-1 explicitly lists 288 latches (2304 total - 2016 FF). Same CFU architecture (LUT+REG/SREG) across GW1NR family. See UG288 Gowin CFU User Guide for details.)
+  IOB  D: Yes  SR: No   (Registers in I/O logic can be programmed as latches.)
+
+--- DSP ------------------------------------------------------------------------
+
+  MULT18X18     20  (18x18 bit multiplier)
+  MULT9X9       40  (9x9 bit multiplier)
+  ALU54D        10  (54-bit ALU for DSP accumulation)
+
+--- Memory ---------------------------------------------------------------------
+
+  SDRAM
+  64 Mbits | 16-bit bus | Max 200 MHz
+
+  DISTRIBUTED
+  16.4 Kbits total | 1 read port, 1 write port
+
+  Width | Depth
+  ------|------
+      1 | 16384
+      2 | 8192
+      4 | 4096
+      8 | 2048
+     16 | 1024
+
+  BLOCK (BSRAM)
+  479.2 Kbits total | 26 blocks x 18 Kbits | Max 190 MHz
+
+  Single Port (1R/1W)  Dual Port (2R/2W)  Semi-Dual Port (1R/1W)
+  Width | Depth        Width | Depth      Width | Depth         
+  ------|------        ------|------      ------|------         
+      4 |  4096            4 |  4096          4 |  4096         
+      8 |  2048            8 |  2048          8 |  2048         
+     16 |  1024           16 |  1024         16 |  1024         
+     32 |   512            9 |  2048         32 |   512         
+      9 |  2048           18 |  1024          9 |  2048         
+     18 |  1024                              18 |  1024         
+     36 |   512                              36 |   512         
+
+  Read Only Memory
+  Width | Depth   
+  ------|------   
+      4 |  4096   
+      8 |  2048   
+     16 |  1024   
+     32 |   512   
+      9 |  2048   
+     18 |  1024   
+     36 |   512   
+
+  FLASH
+  622.6 Kbits total | 1 block
+
+  Read Only    
+  Width | Depth
+  ------|------
+     32 | 19456
+
+--- Clock Generation -----------------------------------------------------------
+
+  CLOCK BUFFER (BUF)
+  24 BUFs available | Mode: global
+
+  BUF Inputs
+Input   | Width | Requires Period | Description                                                     
+--------|-------|-----------------|-----------------------------------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the buffer                             
+CE      | 1     |                 | Clock enable (active-high). When deasserted, output is held low.
+
+  BUF Outputs
+Output | Type  | Frequency Formula            | Description                            
+-------|-------|------------------------------|----------------------------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) | Buffered clock output on global network
+
+
+  CLOCK BUFFER (BUF2)
+  8 BUF2s available | Mode: local
+
+  BUF2 Inputs
+Input   | Width | Requires Period | Description                                                     
+--------|-------|-----------------|-----------------------------------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the buffer                             
+CE      | 1     |                 | Clock enable (active-low). When asserted low, output is enabled.
+
+  BUF2 Outputs
+Output | Type  | Frequency Formula            | Description                          
+-------|-------|------------------------------|--------------------------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) | Buffered clock output on HCLK network
+
+
+  CLOCK DIVIDER (CLKDIV)
+  8 CLKDIVs available | Mode: local
+
+  CLKDIV Inputs
+Input   | Width | Requires Period | Description                               
+--------|-------|-----------------|-------------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the clock divider
+
+  Configurable Parameters
+Parameter | Range/Valid     | Description         
+----------|-----------------|---------------------
+DIV_MODE  | 2, 3.5, 4, 5, 8 | Clock division ratio
+
+  CLKDIV Outputs
+Output | Type  | Frequency Formula                       | Description         
+-------|-------|-----------------------------------------|---------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) / DIV_MODE | Divided clock output
+
+
+  INTERNAL OSCILLATOR (OSC)
+  1 OSC available
+
+  OSC Inputs
+Input   | Width | Requires Period | Description                    
+--------|-------|-----------------|--------------------------------
+REF_CLK |       |                 | OSC has no external clock input
+
+  Configurable Parameters
+Parameter | Range/Valid         | Description                                                  
+----------|---------------------|--------------------------------------------------------------
+DIV       | 2 - 128 (64 values) | Oscillator divider. Base frequency is ~250MHz divided by DIV.
+
+  OSC Outputs
+Output | Type  | Frequency Formula | Description
+-------|-------|-------------------|------------
+BASE   | clock | 250.0 / DIV       |            
+
+
+  PHASE-LOCKED LOOP (PLL)
+  2 PLLs available | Max VCO: 400-1200 MHz | Chaining: Not supported
+
+  PLL Inputs
+Input   | Width | Requires Period | Description                     
+--------|-------|-----------------|---------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the PLL
+
+  Configurable Parameters
+Parameter   | Range/Valid         | Description                                            
+------------|---------------------|--------------------------------------------------------
+IDIV        | 0 - 63              | Input clock divider select (actual divider = IDIV + 1) 
+FBDIV       | 0 - 63              | Feedback divider select (actual multiplier = FBDIV + 1)
+ODIV        | 2 - 128 (11 values) | Output divider select (used directly)                  
+PHASESEL    | 0 - 7               | Phase tap (0-315\u00b0 in 45\u00b0 steps)              
+CLKOUTD_DIV | 2 - 128             | Post-divider for DIV output                            
+
+  PLL Outputs
+Output | Type   | Frequency Formula           | Description                                     
+-------|--------|-----------------------------|-------------------------------------------------
+BASE   | clock  | FVCO / ODIV                 | Primary output                                  
+PHASE  | clock  | FVCO / ODIV                 | Primary output, Phase shifted. Requires PHASESEL
+DIV    | clock  | (FVCO / ODIV) / CLKOUTD_DIV | Divided PLL output, Requires CLKOUTD_DIV        
+DIV3   | clock  | (FVCO / ODIV) / 3           | Fixed divide-by-3 PLL output                    
+LOCK   | signal |                             | PLL lock indicator, high when PLL is locked     
+
+  Derived Values
+Name     | Min | Max  | Formula                                                        | Description                                                                    
+---------|-----|------|----------------------------------------------------------------|--------------------------------------------------------------------------------
+FVCO     | 400 | 1200 | (1000.0 / REF_CLK_period_ns) * (FBDIV + 1) * ODIV / (IDIV + 1) | Internal Voltage-Controlled Oscillator Frequency                               
+PSDA_SEL | N/A | N/A  | toString(PHASESEL * 2, BIN, 4)                                 | String representation of the binary number for PHASESEL ex: \"0001\", \"1100\".
+
+  Constraints
+  PHASE output requires PHASESEL
+  DIV output requires CLKOUTD_DIV
+
+
+--- Differential I/O -----------------------------------------------------------
+
+  Type:     Emulated LVDS
+  IO Type:  LVCMOS33D
+  Output:   Emulated LVDS differential output buffer
+  Serializer: 4:1 (4:1 output serializer for LVDS)
+                requires: fclk, pclk, reset
+  Serializer: 8:1 (8:1 output serializer for LVDS)
+                requires: fclk, pclk, reset
+  Serializer: 10:1 (10:1 output serializer for TMDS/LVDS)
+                requires: fclk, pclk, reset
+  Serializer: 16:1 (16:1 output serializer for LVDS)
+                requires: fclk, pclk, reset
+  Input:    Emulated LVDS differential input buffer
+  Deserializer: 1:4 (1:4 input deserializer for LVDS)
+                requires: fclk, pclk, reset
+  Deserializer: 1:8 (1:8 input deserializer for LVDS)
+                requires: fclk, pclk, reset
+  Deserializer: 1:10 (1:10 input deserializer for TMDS/LVDS)
+                requires: fclk, pclk, reset
+  Deserializer: 1:16 (1:16 input deserializer for LVDS)
+                requires: fclk, pclk, reset
+
+--- Fixed Pins (39) ------------------------------------------------------------
+
+Pad        | Name             | Pin | Note
+-----------+------------------+-----+-------------------------------------
+IOL14A     | DONE             | 10  | Configuration done indicator
+R1C4_IOB   | O_sdram_clk      |     | Embedded SDRAM clock
+R1C9_IOA   | O_sdram_cke      |     | Embedded SDRAM clock enable
+R1C35_IOB  | O_sdram_cs_n     |     | Embedded SDRAM chip select
+R1C40_IOB  | O_sdram_cas_n    |     | Embedded SDRAM column address strobe
+R1C40_IOA  | O_sdram_ras_n    |     | Embedded SDRAM row address strobe
+R1C44_IOA  | O_sdram_wen_n    |     | Embedded SDRAM write enable
+R1C44_IOB  | O_sdram_dqm[0]   |     | Embedded SDRAM data mask
+R1C4_IOA   | O_sdram_dqm[1]   |     | Embedded SDRAM data mask
+R1C31_IOA  | O_sdram_addr[0]  |     | Embedded SDRAM address
+R1C28_IOA  | O_sdram_addr[1]  |     | Embedded SDRAM address
+R1C27_IOA  | O_sdram_addr[2]  |     | Embedded SDRAM address
+R1C26_IOA  | O_sdram_addr[3]  |     | Embedded SDRAM address
+R1C22_IOB  | O_sdram_addr[4]  |     | Embedded SDRAM address
+R1C21_IOB  | O_sdram_addr[5]  |     | Embedded SDRAM address
+R1C18_IOB  | O_sdram_addr[6]  |     | Embedded SDRAM address
+R1C18_IOA  | O_sdram_addr[7]  |     | Embedded SDRAM address
+R1C14_IOB  | O_sdram_addr[8]  |     | Embedded SDRAM address
+R1C14_IOA  | O_sdram_addr[9]  |     | Embedded SDRAM address
+R1C31_IOB  | O_sdram_addr[10] |     | Embedded SDRAM address
+R1C9_IOB   | O_sdram_addr[11] |     | Embedded SDRAM address
+R1C35_IOA  | O_sdram_ba[0]    |     | Embedded SDRAM bank address
+R1C32_IOA  | O_sdram_ba[1]    |     | Embedded SDRAM bank address
+R29C26_IOA | IO_sdram_dq[0]   |     | Embedded SDRAM data
+R29C27_IOA | IO_sdram_dq[1]   |     | Embedded SDRAM data
+R29C35_IOA | IO_sdram_dq[2]   |     | Embedded SDRAM data
+R29C36_IOA | IO_sdram_dq[3]   |     | Embedded SDRAM data
+R29C37_IOA | IO_sdram_dq[4]   |     | Embedded SDRAM data
+R29C38_IOA | IO_sdram_dq[5]   |     | Embedded SDRAM data
+R29C39_IOA | IO_sdram_dq[6]   |     | Embedded SDRAM data
+R29C40_IOA | IO_sdram_dq[7]   |     | Embedded SDRAM data
+R29C16_IOB | IO_sdram_dq[8]   |     | Embedded SDRAM data
+R29C17_IOB | IO_sdram_dq[9]   |     | Embedded SDRAM data
+R29C18_IOA | IO_sdram_dq[10]  |     | Embedded SDRAM data
+R29C18_IOB | IO_sdram_dq[11]  |     | Embedded SDRAM data
+R29C19_IOB | IO_sdram_dq[12]  |     | Embedded SDRAM data
+R29C20_IOB | IO_sdram_dq[13]  |     | Embedded SDRAM data
+R29C21_IOB | IO_sdram_dq[14]  |     | Embedded SDRAM data
+R29C22_IOB | IO_sdram_dq[15]  |     | Embedded SDRAM data
+
+--- Example Boards (1) ---------------------------------------------------------
+
+  Tang Nano 9k
+    https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html
+
