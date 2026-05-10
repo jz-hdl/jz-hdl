@@ -28,7 +28,7 @@ Work through the `### Issues` section of the audit file **one issue at a time, i
    ```
 7. **Next issue.** Move to the next unhandled issue and repeat.
 
-If an issue is unclear, wrong, not validation-fixture work, or blocked by compiler/spec behavior, append a note to `audit/runner.log`, mark the issue with the correct `[ISSUE-<kind>]` prefix, and continue.
+If an issue is unclear, wrong, not validation-fixture work, or blocked by compiler/spec behavior, append a note to `<RUNNER_LOG>`, mark the issue with the correct `[ISSUE-<kind>]` prefix, and continue.
 
 Issue-line prefixes:
 
@@ -36,13 +36,13 @@ Issue-line prefixes:
 - `[ISSUE-SPEC]` — the specification is missing, contradictory, or wrong
 - `[ISSUE-TEST]` — the audit issue, validation fixture, expected output, ownership, context list, or coverage data is wrong or cannot be isolated
 
-Each `audit/runner.log` note must start with exactly one issue type:
+Each `<RUNNER_LOG>` note must start with exactly one issue type:
 
 - `[COMPILER-BUG]`
 - `[SPECIFICATION-BUG]`
 - `[TEST-ISSUE]`
 
-`audit/runner.log` is **append-only**. Never clear it, delete it, truncate it, replace it, or rewrite prior content. You may only append new notes to the end of the existing file.
+`<RUNNER_LOG>` is **append-only**. Never clear it, delete it, truncate it, replace it, or rewrite prior content. You may only append new notes to the end of the existing file.
 
 ## Actionability Review
 
@@ -90,7 +90,7 @@ Classify it as follows:
 Some audit items bundle multiple problems together. Handle them explicitly:
 
 - If an issue mixes a **real compiler bug** with **impossible validation asks**, do **not** paper over it with extra fixtures
-- Append a note to `audit/runner.log` explaining which part is a compiler bug and which part is non-actionable audit noise
+- Append a note to `<RUNNER_LOG>` explaining which part is a compiler bug and which part is non-actionable audit noise
 - Mark the issue `[ISSUE-TEST]` and continue
 
 ### Missing-context issues
@@ -325,7 +325,7 @@ Before marking an issue done, verify:
 - **One issue at a time.** Do not batch fixes. Fix, verify, mark, then move to the next.
 - **Triage before authoring.** Every issue must pass the Actionability Review before you write or edit a validation fixture.
 - **Do not modify the requirements table.** Only modify issue lines by prepending `[DONE]`, `[ISSUE-TEST]`, `[ISSUE-COMPILER]`, or `[ISSUE-SPEC]`.
-- **Do not skip unresolved issues silently.** If an issue cannot be fixed, append a note to `audit/runner.log`, mark the issue with the correct `[ISSUE-<kind>]` prefix, and continue.
-- **`audit/runner.log` is append-only.** Never clear, delete, truncate, overwrite, recreate, or otherwise remove existing content from `audit/runner.log`.
+- **Do not skip unresolved issues silently.** If an issue cannot be fixed, append a note to `<RUNNER_LOG>`, mark the issue with the correct `[ISSUE-<kind>]` prefix, and continue.
+- **`<RUNNER_LOG>` is append-only.** Never clear, delete, truncate, overwrite, recreate, or otherwise remove existing content from `<RUNNER_LOG>`.
 - **Resumable.** Issues already marked `[DONE]` or `[ISSUE-...]` are skipped, so this prompt can be re-run to continue after interruption.
 - **Do not modify or delete existing test files** unless the issue specifically requires extending an existing test to add missing contexts or items.

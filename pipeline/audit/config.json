@@ -5,7 +5,15 @@
   "output_dir": "audit",
   "placeholders": {
     "target": "<SPEC_SECTION_TARGET>",
-    "output_file": "<OUTPUT_FILE>"
+    "output_file": "<OUTPUT_FILE>",
+    "runner_log": "<RUNNER_LOG>",
+    "todo_file": "<TODO_FILE>",
+    "output_glob": "<OUTPUT_GLOB>"
+  },
+  "post_prompt_vars": {
+    "runner_log": "{output_dir}/runner.log",
+    "todo_file": "{output_dir}/todo.md",
+    "output_glob": "{output_dir}/*.md"
   },
   "options": [
     "filter",

@@ -6,7 +6,13 @@
   "placeholders": {
     "target": "<SECURITY_REVIEW_TARGET>",
     "files": "<SECURITY_FILE_LIST>",
-    "output_file": "<OUTPUT_FILE>"
+    "output_file": "<OUTPUT_FILE>",
+    "todo_file": "<TODO_FILE>",
+    "output_glob": "<OUTPUT_GLOB>"
+  },
+  "post_prompt_vars": {
+    "todo_file": "{output_dir}/todo.md",
+    "output_glob": "{output_dir}/*.md"
   },
   "options": [
     "filter",
