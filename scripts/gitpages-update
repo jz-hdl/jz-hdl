@@ -8,6 +8,20 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOCS_DIR="$REPO_ROOT/docs"
 DIST_DIR="$DOCS_DIR/.vitepress/dist"
+COMPILER_BUILD_DIR="$(mktemp -d)"
+
+cleanup() {
+  rm -rf "$COMPILER_BUILD_DIR"
+  if [ -n "${TMPDIR:-}" ]; then
+    rm -rf "$TMPDIR"
+  fi
+}
+
+trap cleanup EXIT
+
+echo "==> Building specification PDFs..."
+cmake -S "$REPO_ROOT/compiler" -B "$COMPILER_BUILD_DIR"
+cmake --build "$COMPILER_BUILD_DIR" --target docs
 
 echo "==> Installing dependencies..."
 (cd "$DOCS_DIR" && npm install)
@@ -20,6 +34,11 @@ if [ ! -d "$DIST_DIR" ]; then
   exit 1
 fi
 
+echo "==> Staging specification PDFs into site output..."
+mkdir -p "$DIST_DIR/pdf"
+find "$DIST_DIR/pdf" -type f -name '*.pdf' -delete
+cp "$COMPILER_BUILD_DIR"/*.pdf "$DIST_DIR/pdf/"
+
 echo "==> Deploying to gh-pages..."
 
 # Get the remote URL
@@ -27,7 +46,6 @@ REMOTE_URL="$(git -C "$REPO_ROOT" remote get-url origin)"
 
 # Work in a temporary clone to avoid touching the working repo
 TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
 
 # Clone just the gh-pages branch (shallow), or init a new repo if it doesn't exist
 if git ls-remote --heads "$REMOTE_URL" gh-pages | grep -q gh-pages; then

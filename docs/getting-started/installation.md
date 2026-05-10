@@ -77,7 +77,7 @@ If you built with a multi-config generator, replace `compiler/build/jz-hdl` with
 
 ## Regenerating the specification PDFs
 
-The website ships PDF copies of the specifications from `docs/public/pdf/`, but the authoritative sources live in `specification/*.md`.
+The website ships PDF copies of the specifications, but the authoritative sources live in `specification/*.md`.
 
 The existing regeneration path is defined in `compiler/CMakeLists.txt` as the `docs` target. It requires `pandoc` and a XeLaTeX installation with the needed LaTeX packages.
 
@@ -94,4 +94,4 @@ That target rebuilds:
 - `chip-info-specification.pdf`
 - `jzw-specification.pdf`
 
-and copies the generated PDFs into `docs/public/pdf/`.
+The generated PDFs are written to the compiler build directory. `scripts/gitpages-update` rebuilds them and stages them into the published site output under `/pdf/` during docs deployment.

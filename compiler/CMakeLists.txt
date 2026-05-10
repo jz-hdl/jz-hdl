@@ -311,22 +311,9 @@ if(PANDOC_EXECUTABLE)
         list(APPEND PDF_OUTPUTS "${OUT_PDF}")
     endforeach()
 
-    # 3. Copy built PDFs to the docs site public directory
-    set(DOCS_PUBLIC_PDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../docs/public/pdf")
-    set(PDF_COPY_COMMANDS "")
-    foreach(DOC_NAME ${DOC_FILES})
-        list(APPEND PDF_COPY_COMMANDS
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_BINARY_DIR}/${DOC_NAME}.pdf"
-                "${DOCS_PUBLIC_PDF_DIR}/${DOC_NAME}.pdf"
-        )
-    endforeach()
-
-    # 4. Create one top-level target to build all docs and copy to site
-    add_custom_target(docs ALL
+    add_custom_target(docs
         DEPENDS ${PDF_OUTPUTS}
-        ${PDF_COPY_COMMANDS}
-        COMMENT "Copying PDFs to docs/public/pdf/"
+        COMMENT "Building specification PDFs in the build tree"
     )
 
 else()

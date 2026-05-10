@@ -108,7 +108,7 @@ The `examples/` directory contains complete projects ranging from simple counter
 
 Full documentation is available at [jz-hdl.github.io/jz-hdl](https://jz-hdl.github.io/jz-hdl/) and in the `docs/` directory, covering the language specification, type system, module system, memory semantics, simulation, and testbench authoring.
 
-The docs site also ships rendered PDF copies of the specifications from `docs/public/pdf/`. Regenerate them from the Markdown sources in `specification/` with the CMake `docs` target in `compiler/CMakeLists.txt` (requires `pandoc` and `xelatex`).
+The docs site also ships rendered PDF copies of the specifications. Regenerate them from the Markdown sources in `specification/` with the CMake `docs` target in `compiler/CMakeLists.txt` (requires `pandoc` and `xelatex`); the PDFs are written to the compiler build directory and staged into the published site by `scripts/gitpages-update`.
 
 ### Specification
 
