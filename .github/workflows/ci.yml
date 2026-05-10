@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  compiler-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,13 +19,42 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure
-        run: cmake -S compiler -B compiler/build -DBUILD_TESTING=ON -DJZ_HDL_WERROR=ON
+        run: cmake -S compiler -B compiler/build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON
 
       - name: Build
-        run: cmake --build compiler/build
+        run: cmake --build compiler/build --parallel
 
       - name: Unit tests (CTest)
         run: ctest --test-dir compiler/build --output-on-failure
 
       - name: Validation and golden tests
         run: bash compiler/tests/run_validation.sh
+
+  viewer-smoke:
+    name: Viewer smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure compiler
+        run: cmake -S compiler -B compiler/build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON
+
+      - name: Build compiler
+        run: cmake --build compiler/build --parallel
+
+      - name: Configure viewer
+        run: cmake -S viewer -B viewer/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build viewer
+        run: cmake --build viewer/build --parallel
+
+      - name: Generate JZW trace
+        run: ./compiler/build/jz-hdl --simulate compiler/tests/golden/sim_select_annotations/test.jz --jzw -o "${{ runner.temp }}/viewer-smoke.jzw"
+
+      - name: Validate JZW trace in viewer
+        run: ./viewer/build/jz-viewer --validate "${{ runner.temp }}/viewer-smoke.jzw"

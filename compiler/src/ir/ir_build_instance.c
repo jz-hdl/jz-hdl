@@ -1082,8 +1082,9 @@ int ir_build_instances_for_module(const JZModuleScope *scope,
     }
     memset(instances, 0, sizeof(IR_Instance) * (size_t)instance_count);
 
+    int instance_capacity = (int)instance_count;
     int inst_index = 0;
-    for (int ai = 0; ai < active_inst_node_count && (size_t)inst_index < instance_count; ++ai) {
+    for (int ai = 0; ai < active_inst_node_count && inst_index < instance_capacity; ++ai) {
         JZASTNode *inst_node = active_inst_nodes[ai];
         if (!inst_node || inst_node->type != JZ_AST_MODULE_INSTANCE) {
             continue;
@@ -1625,7 +1626,7 @@ int ir_build_instances_for_module(const JZModuleScope *scope,
 
         /* Finally, materialize one IR_Instance per array element, copying the
          * shared connection template and assigning distinct instance names. */
-        for (unsigned elem = 0; elem < array_count && inst_index < instance_count; ++elem) {
+        for (unsigned elem = 0; elem < array_count && inst_index < instance_capacity; ++elem) {
             IR_Instance *ir_inst = &instances[inst_index];
             ir_inst->id = inst_index;
 

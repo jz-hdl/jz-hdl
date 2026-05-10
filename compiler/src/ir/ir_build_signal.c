@@ -369,6 +369,8 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
      * high value to avoid collisions.
      */
     int next_synthetic_id = 100000;
+    int signal_capacity = (int)count;
+    int bus_map_capacity = (int)bus_map_count;
     int idx = 0;
     int bus_map_idx = 0;
 
@@ -417,7 +419,7 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
                             !sig_decl->name) {
                             continue;
                         }
-                        if (idx >= count) {
+                        if (idx >= signal_capacity) {
                             break;
                         }
 
@@ -462,7 +464,7 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
                         }
 
                         /* Record in bus signal mapping. */
-                        if (bus_map && bus_map_idx < bus_map_count) {
+                        if (bus_map && bus_map_idx < bus_map_capacity) {
                             IR_BusSignalMapping *m = &bus_map[bus_map_idx++];
                             m->bus_port_name = ir_strdup_arena(arena, port_name);
                             m->signal_name = ir_strdup_arena(arena, sig_decl->name);
@@ -480,7 +482,7 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
             }
 
             /* Regular port (non-BUS). */
-            if (idx >= count) {
+            if (idx >= signal_capacity) {
                 break;
             }
             IR_Signal *sig = &signals[idx++];
@@ -520,7 +522,7 @@ int ir_build_signals_for_module(const JZModuleScope *scope,
             sym->kind != JZ_SYM_LATCH) {
             continue;
         }
-        if (idx >= count) {
+        if (idx >= signal_capacity) {
             break;
         }
 

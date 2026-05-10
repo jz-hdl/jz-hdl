@@ -65,18 +65,23 @@ sed -i '' \
   "$REPO_ROOT/vscode-ext/package-lock.json"
 
 # ---------------------------------------------------------------------------
-# 2. Build (includes PDFs) and test
+# 2. Build and test
 # ---------------------------------------------------------------------------
-echo "==> Building compiler, PDFs, and running tests..."
+echo "==> Building compiler and running tests..."
 
 BUILD_DIR="$(mktemp -d)"
-cmake -S "$REPO_ROOT/compiler" -B "$BUILD_DIR" -DBUILD_TESTING=ON
-cmake --build "$BUILD_DIR"
+VIEWER_BUILD_DIR="$(mktemp -d)"
+VIEWER_SMOKE_PATH="$(mktemp -d)/release-viewer-smoke.jzw"
+cmake -S "$REPO_ROOT/compiler" -B "$BUILD_DIR" \
+  -DBUILD_TESTING=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DJZ_HDL_WERROR=ON
+cmake --build "$BUILD_DIR" --parallel
 
 echo "==> Running CTest..."
 if ! ctest --test-dir "$BUILD_DIR" --output-on-failure; then
   echo "Error: CTest tests failed. Aborting release."
-  rm -rf "$BUILD_DIR"
+  rm -rf "$BUILD_DIR" "$VIEWER_BUILD_DIR" "$(dirname "$VIEWER_SMOKE_PATH")"
   # Undo version changes
   git -C "$REPO_ROOT" checkout -- .
   exit 1
@@ -85,36 +90,50 @@ fi
 echo "==> Running validation tests..."
 if ! JZ_HDL_BIN="$BUILD_DIR/jz-hdl" bash "$REPO_ROOT/compiler/tests/run_validation.sh"; then
   echo "Error: Validation tests failed. Aborting release."
-  rm -rf "$BUILD_DIR"
+  rm -rf "$BUILD_DIR" "$VIEWER_BUILD_DIR" "$(dirname "$VIEWER_SMOKE_PATH")"
   git -C "$REPO_ROOT" checkout -- .
   exit 1
 fi
 
-rm -rf "$BUILD_DIR"
+echo "==> Building viewer..."
+cmake -S "$REPO_ROOT/viewer" -B "$VIEWER_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$VIEWER_BUILD_DIR" --parallel
+
+echo "==> Running viewer smoke test..."
+"$BUILD_DIR/jz-hdl" --simulate \
+  "$REPO_ROOT/compiler/tests/golden/sim_select_annotations/test.jz" \
+  --jzw \
+  -o "$VIEWER_SMOKE_PATH"
+"$VIEWER_BUILD_DIR/jz-viewer" --validate "$VIEWER_SMOKE_PATH"
 
 # ---------------------------------------------------------------------------
-# 3. Commit version bump and updated PDFs
+# 3. Build PDFs for release artifacts
 # ---------------------------------------------------------------------------
-echo "==> Committing version bump and PDFs..."
+echo "==> Building specification PDFs..."
+cmake --build "$BUILD_DIR" --target docs
+
+# ---------------------------------------------------------------------------
+# 4. Commit version bump
+# ---------------------------------------------------------------------------
+echo "==> Committing version bump..."
 
 git -C "$REPO_ROOT" add \
   compiler/CMakeLists.txt \
   compiler/include/version.h \
   specification/ \
-  docs/public/pdf/ \
   vscode-ext/package.json \
   vscode-ext/package-lock.json
 
 git -C "$REPO_ROOT" commit -m "Bump version to ${VERSION}"
 
 # ---------------------------------------------------------------------------
-# 4. Tag the release
+# 5. Tag the release
 # ---------------------------------------------------------------------------
 echo "==> Tagging v${VERSION}..."
 git -C "$REPO_ROOT" tag -a "v${VERSION}" -m "Release v${VERSION}"
 
 # ---------------------------------------------------------------------------
-# 5. Build source tarball
+# 6. Build source tarball
 # ---------------------------------------------------------------------------
 echo "==> Building source tarball..."
 mkdir -p "$RELEASE_DIR"
@@ -126,13 +145,13 @@ git -C "$REPO_ROOT" archive \
   "v${VERSION}" -- compiler/
 
 # ---------------------------------------------------------------------------
-# 6. Build PDF tarball from committed PDFs
+# 7. Build PDF tarball from generated PDFs
 # ---------------------------------------------------------------------------
 echo "==> Building PDF tarball..."
 
 PDF_STAGING="$(mktemp -d)/jz-hdl-${VERSION}-docs"
 mkdir -p "$PDF_STAGING"
-cp "$REPO_ROOT"/docs/public/pdf/*.pdf "$PDF_STAGING/"
+cp "$BUILD_DIR"/*.pdf "$PDF_STAGING/"
 
 tar -czf "$RELEASE_DIR/jz-hdl-${VERSION}-docs.tar.gz" \
   -C "$(dirname "$PDF_STAGING")" \
@@ -141,7 +160,7 @@ tar -czf "$RELEASE_DIR/jz-hdl-${VERSION}-docs.tar.gz" \
 rm -rf "$(dirname "$PDF_STAGING")"
 
 # ---------------------------------------------------------------------------
-# 7. Build VS Code extension tarball
+# 8. Build VS Code extension tarball
 # ---------------------------------------------------------------------------
 echo "==> Building VS Code extension tarball..."
 
@@ -152,7 +171,7 @@ git -C "$REPO_ROOT" archive \
   "v${VERSION}" -- vscode-ext/
 
 # ---------------------------------------------------------------------------
-# 8. Build viewer tarball
+# 9. Build viewer tarball
 # ---------------------------------------------------------------------------
 echo "==> Building viewer tarball..."
 
@@ -163,8 +182,10 @@ git -C "$REPO_ROOT" archive \
   "v${VERSION}" -- viewer/
 
 # ---------------------------------------------------------------------------
-# Done
+# 10. Done
 # ---------------------------------------------------------------------------
+rm -rf "$BUILD_DIR" "$VIEWER_BUILD_DIR" "$(dirname "$VIEWER_SMOKE_PATH")"
+
 echo ""
 echo "Release v${VERSION} prepared:"
 echo "  $RELEASE_DIR/jz-hdl-${VERSION}-source.tar.gz"
