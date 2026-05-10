@@ -1,0 +1,2 @@
+File: JZW_5_3_SMODE_SELECT_SIGNAL_IN_SCOPE-unknown_signal.jz
+      38:5    error SIM_SELECT_SIGNAL_IN_SCOPE SIM-026 @select signal must resolve to a declared simulation WIRE, CLOCK, or TAP

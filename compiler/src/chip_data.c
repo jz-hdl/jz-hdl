@@ -511,6 +511,29 @@ static int jz_chip_json_require_number(const char *json,
     return 1;
 }
 
+static int jz_chip_json_require_string_or_number(const char *json,
+                                                 const jsmntok_t *toks,
+                                                 int count,
+                                                 int obj_index,
+                                                 const char *section,
+                                                 const char *key,
+                                                 int *out_index)
+{
+    int idx = jz_json_object_find(json, toks, count, obj_index, key);
+    if (idx < 0) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: %s missing required key '%s'",
+            section, key);
+    }
+    if (toks[idx].type != JSMN_STRING && toks[idx].type != JSMN_PRIMITIVE) {
+        return jz_chip_set_schema_error(
+            "CHIP_JSON_SCHEMA_INVALID: %s.%s must be a string or numeric primitive",
+            section, key);
+    }
+    if (out_index) *out_index = idx;
+    return 1;
+}
+
 static int jz_chip_json_require_bool(const char *json,
                                      const jsmntok_t *toks,
                                      int count,
@@ -1119,9 +1142,16 @@ static int jz_chip_validate_clock_gen_section(const char *json,
                     !jz_chip_json_require_member(json, toks, count, pcur,
                                                  "clock_gen[].parameters.<param>", "type",
                                                  JSMN_STRING, NULL) ||
-                    jz_json_object_find(json, toks, count, pcur, "default") < 0) {
+                    !jz_chip_json_require_string_or_number(
+                        json, toks, count, pcur,
+                        "clock_gen[].parameters.<param>", "default", NULL)) {
+                    return 0;
+                }
+                if (jz_json_object_find(json, toks, count, pcur, "valid") >= 0 &&
+                    (jz_json_object_find(json, toks, count, pcur, "min") >= 0 ||
+                     jz_json_object_find(json, toks, count, pcur, "max") >= 0)) {
                     return jz_chip_set_schema_error(
-                        "CHIP_JSON_SCHEMA_INVALID: clock_gen[].parameters.<param> missing required key 'default'");
+                        "CHIP_JSON_SCHEMA_INVALID: clock_gen[].parameters.<param> must use either min/max or valid, not both");
                 }
                 pcur = jz_json_skip(toks, count, pcur);
             }
@@ -2660,6 +2690,12 @@ static int jz_chip_parse_clock_gen_object(const char *json,
                         } else if (jz_json_token_eq(json, rk, "default")) {
                             inp.default_value = jz_json_token_strdup(json, rv);
                             if (inp.default_value) inp.required = 0;
+                        } else if (jz_json_token_eq(json, rk, "width")) {
+                            unsigned v = 0;
+                            if (jz_json_token_to_uint(json, rv, &v)) {
+                                inp.width = v;
+                                inp.has_width = 1;
+                            }
                         }
                         ri = jz_json_skip(toks, count, ri);
                     }

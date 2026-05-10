@@ -1,0 +1,19 @@
+// PROJECT_CHIP_DATA_INVALID: clock_gen parameters must not mix min/max with valid.
+
+@project(CHIP="HDL_6_1_PROJECT_CHIP_DATA_INVALID-clock_gen_param_range_and_valid") PROJECT_CHIP_DATA_INVALID_clock_gen_param_range_and_valid
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

@@ -1,0 +1,2 @@
+File: JZW_5_3_SMODE_SELECT_CHAIN_REQUIRES_RUN-invalid_terminator.jz
+      39:5    error SIM_SELECT_CHAIN_REQUIRES_RUN SIM-025 @select must be followed by another @select, @run, @run_until, or @run_while; a select chain must terminate in a run directive

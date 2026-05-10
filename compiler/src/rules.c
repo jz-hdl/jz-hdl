@@ -361,6 +361,7 @@ const JZRuleInfo jz_rule_table[] = {
     /* [CLOCK_GEN_RULES] */
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_NOT_DECLARED",           0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input clock not declared in CLOCKS block" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_NO_PERIOD",              0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input clock must have a period declared in CLOCKS block" },
+    { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_WIDTH_MISMATCH",         0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input signal width does not match chip-defined input width" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_FREQ_OUT_OF_RANGE",     0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input frequency outside chip's supported reference clock range" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_OUTPUT_INVALID_SELECTOR",      0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN output selector not valid for this generator type" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_OUT_NOT_CLOCK",                0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN OUT used for non-clock output; use WIRE instead" },
@@ -521,6 +522,8 @@ const JZRuleInfo jz_rule_table[] = {
     { "SIMULATION", "SIM_TRACE_STATE_ON_OR_OFF",  0, JZ_RULE_MODE_ERR, "SIM-022 @trace(state=...) requires state=on or state=off" },
     { "SIMULATION", "SIM_SINGLE_MONITOR_BLOCK",   0, JZ_RULE_MODE_ERR, "SIM-023 Only one MONITOR block is permitted per @simulation" },
     { "SIMULATION", "SIM_MONITOR_ALLOWED_DIRECTIVES_ONLY", 0, JZ_RULE_MODE_ERR, "SIM-024 MONITOR blocks may contain only @print_if, @mark_if, and @alert_if directives" },
+    { "SIMULATION", "SIM_SELECT_CHAIN_REQUIRES_RUN", 0, JZ_RULE_MODE_ERR, "SIM-025 @select must be followed by another @select, @run, @run_until, or @run_while; a select chain must terminate in a run directive" },
+    { "SIMULATION", "SIM_SELECT_SIGNAL_IN_SCOPE", 0, JZ_RULE_MODE_ERR, "SIM-026 @select signal must resolve to a declared simulation WIRE, CLOCK, or TAP" },
 
     /* [SIMULATION_RUNTIME] */
     { "SIMULATION", "SIM_RUN_COND_TIMEOUT",         0, JZ_RULE_MODE_ERR, "SIM-030 @run_until/@run_while condition not met within timeout" },

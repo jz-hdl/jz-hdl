@@ -2634,6 +2634,21 @@ int main(int argc, char **argv)
                             ImVec2(clip_x1, y + row_height),
                             IM_COL32(50, 50, 50, 255), 1.0f);
 
+                for (const auto &ann : jzw.annotations) {
+                    if (ann.type != "select" || ann.signal_id != sig.id || ann.end_time <= ann.time) {
+                        continue;
+                    }
+                    float sx0 = wpos.x + (float)((ann.time - scroll_ps) / ps_per_px);
+                    float sx1 = wpos.x + (float)((ann.end_time - scroll_ps) / ps_per_px);
+                    float left = std::max(sx0, clip_x0);
+                    float right = std::min(sx1, clip_x1);
+                    if (left < right) {
+                        ImU32 base = annotation_color(ann.color);
+                        ImU32 fill = (base & 0x00FFFFFFu) | (ImU32(48) << 24);
+                        dl->AddRectFilled(ImVec2(left, y), ImVec2(right, y + row_height), fill);
+                    }
+                }
+
                 /* Highlight row being dragged */
                 if (dragging_signal && drag_src_idx == (int)i) {
                     dl->AddRectFilled(ImVec2(clip_x0, y), ImVec2(clip_x1, y + row_height),
@@ -2661,6 +2676,21 @@ int main(int argc, char **argv)
                         dl->AddLine(ImVec2(clip_x0, bit_y + row_height),
                                     ImVec2(clip_x1, bit_y + row_height),
                                     IM_COL32(40, 40, 40, 255), 1.0f);
+
+                        for (const auto &ann : jzw.annotations) {
+                            if (ann.type != "select" || ann.signal_id != sig.id || ann.end_time <= ann.time) {
+                                continue;
+                            }
+                            float sx0 = wpos.x + (float)((ann.time - scroll_ps) / ps_per_px);
+                            float sx1 = wpos.x + (float)((ann.end_time - scroll_ps) / ps_per_px);
+                            float left = std::max(sx0, clip_x0);
+                            float right = std::min(sx1, clip_x1);
+                            if (left < right) {
+                                ImU32 base = annotation_color(ann.color);
+                                ImU32 fill = (base & 0x00FFFFFFu) | (ImU32(32) << 24);
+                                dl->AddRectFilled(ImVec2(left, bit_y), ImVec2(right, bit_y + row_height), fill);
+                            }
+                        }
 
                         /* Create a virtual 1-bit signal for this bit */
                         Signal bit_sig = sig;

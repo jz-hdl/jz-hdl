@@ -52,6 +52,10 @@ static int sem_is_valid_diff_clock_ref(JZASTNode *project,
 static int sem_is_valid_diff_reset_ref(JZASTNode *project,
                                        const JZBuffer *project_symbols,
                                        const char *name);
+static int sem_extract_attr(const char *attrs, const char *key,
+                            char *out, size_t out_sz);
+static unsigned sem_project_signal_effective_width(const JZBuffer *project_symbols,
+                                                   const char *name);
 
 /**
  * @brief Parse the `period` and `edge` attributes of a clock declaration.
@@ -113,6 +117,47 @@ static int sem_clock_parse_attrs(const char *attrs,
         }
     }
     return 1;
+}
+
+static unsigned sem_project_signal_effective_width(const JZBuffer *project_symbols,
+                                                   const char *name)
+{
+    const JZSymbol *clk_sym = project_lookup(project_symbols, name, JZ_SYM_CLOCK);
+    const JZSymbol *pin_sym = project_lookup(project_symbols, name, JZ_SYM_PIN);
+    unsigned width = 1;
+
+    if (clk_sym && clk_sym->node && clk_sym->node->width) {
+        unsigned clock_width = 0;
+        if (eval_simple_positive_decl_int(clk_sym->node->width, &clock_width) == 1 &&
+            clock_width > 0) {
+            width = clock_width;
+        }
+    }
+
+    if (pin_sym && pin_sym->node) {
+        unsigned pin_width = width;
+        if (pin_sym->node->width) {
+            unsigned parsed_width = 0;
+            if (eval_simple_positive_decl_int(pin_sym->node->width, &parsed_width) == 1 &&
+                parsed_width > 0) {
+                pin_width = parsed_width;
+            }
+        }
+        if (pin_sym->node->text) {
+            char attr_width[32];
+            if (sem_extract_attr(pin_sym->node->text, "width",
+                                 attr_width, sizeof(attr_width))) {
+                unsigned diff_width = 0;
+                if (eval_simple_positive_decl_int(attr_width, &diff_width) == 1 &&
+                    diff_width > 0) {
+                    pin_width = diff_width;
+                }
+            }
+        }
+        width = pin_width;
+    }
+
+    return width;
 }
 
 void sem_check_project_clocks(JZASTNode *project,
@@ -598,6 +643,23 @@ void sem_check_project_clock_gen(JZASTNode *project,
                                         "CLOCK_GEN_INPUT_NOT_DECLARED",
                                         "CLOCK_GEN input clock not declared in CLOCKS block");
                         continue;
+                    }
+
+                    if (chip_input && chip_input->has_width) {
+                        unsigned signal_width =
+                            sem_project_signal_effective_width(project_symbols, in_clk);
+                        if (signal_width != chip_input->width) {
+                            char msg[256];
+                            snprintf(msg, sizeof(msg),
+                                     "CLOCK_GEN input '%s' requires width %u, got %u from '%s'",
+                                     in_selector ? in_selector : "?",
+                                     chip_input->width,
+                                     signal_width,
+                                     in_clk);
+                            sem_report_rule(diagnostics, elem->loc,
+                                            "CLOCK_GEN_INPUT_WIDTH_MISMATCH", msg);
+                            continue;
+                        }
                     }
 
                     /* Check if input is an output of a prior unit. Chained inputs

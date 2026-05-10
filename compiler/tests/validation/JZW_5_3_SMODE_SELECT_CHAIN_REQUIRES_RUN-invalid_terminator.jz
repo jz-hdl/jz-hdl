@@ -1,0 +1,41 @@
+// SELECT_CHAIN_REQUIRES_RUN: a select chain must terminate in @run, @run_until, or @run_while.
+// Fixture plan: keep the simulation structurally valid, then place @mark after
+// @select so the select chain emits only the chain-termination diagnostic.
+
+@module SelectChainRequiresRunDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation SelectChainRequiresRunDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut SelectChainRequiresRunDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @select(data, YELLOW)
+    @mark(BLUE)
+    @run(ns=10)
+@endsim

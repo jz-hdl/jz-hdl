@@ -306,18 +306,19 @@ Creates a global annotation of type `mark` at the current simulation time. Marks
 @select(<signal>, <color>)
 ```
 
-Creates a range annotation of type `select` that highlights a signal for the duration of the next `@run` directive. The annotation's `time` is the current simulation time, and `end_time` is the simulation time after the following `@run` completes.
+Creates a range annotation of type `select` that highlights a signal for the duration of the next `@run` directive. The annotation's `time` is the current simulation time, and `end_time` is the simulation time after the following `@run` completes. Multiple consecutive `@select` directives are allowed before that run; each creates its own range annotation over the same upcoming run window.
 
 - `<signal>` is a testbench `WIRE` identifier or hierarchical signal reference.
 - `<color>` is a color name (Section 5.4).
 - The `signal_id` is set to the referenced signal's ID.
-- `@select` must be immediately followed by a `@run`, `@run_until`, or `@run_while` directive. A compile error is reported if `@select` is followed by any other directive.
+- `@select` must be followed by either another `@select` or by a `@run`, `@run_until`, or `@run_while` directive. A compile error is reported if a `@select` chain is followed by any other directive.
 
 **Example:**
 ```text
 @select(data_out, YELLOW)
+@select(status, CYAN)
 @run(ns=100)
-// Highlights data_out for the 100ns window
+// Highlights data_out and status for the same 100ns window
 ```
 
 ### 5.4 Trace Annotations
@@ -358,7 +359,7 @@ Color names are case-insensitive in source but stored as uppercase in the databa
 | :--- | :--- |
 | ANN-001 | `@alert` must appear at the top level of a `@simulation` block (not inside `@setup`, `@update`, or `@new`). |
 | ANN-002 | `@mark` must appear at the top level of a `@simulation` block (not inside `@setup`, `@update`, or `@new`). |
-| ANN-003 | `@select` must be immediately followed by `@run`, `@run_until`, or `@run_while`. |
+| ANN-003 | `@select` must be followed by another `@select`, `@run`, `@run_until`, or `@run_while`; the chain must terminate in a run directive. |
 | ANN-004 | `@alert` condition must reference a signal in scope (declared in `WIRE`, `CLOCK`, or `TAP`). |
 | ANN-005 | `@select` signal must reference a signal in scope (declared in `WIRE`, `CLOCK`, or `TAP`). |
 | ANN-006 | Color name must be one of the predefined names (Section 5.4). |

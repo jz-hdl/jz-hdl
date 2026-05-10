@@ -2247,6 +2247,51 @@ struct SimTap {
     const char *full_path;  /**< Fully qualified tap path from the AST. */
 };
 
+typedef struct SimPendingSelect {
+    int wave_id;           /**< Waveform signal identifier to highlight. */
+    const char *color;     /**< Annotation color name. */
+} SimPendingSelect;
+
+static int sim_resolve_select_wave_id(SimTestState *ts,
+                                      const char *path,
+                                      int *wave_ids,
+                                      SimTap *taps,
+                                      int num_taps)
+{
+    if (!ts || !path) return -1;
+
+    if (!strchr(path, '.')) {
+        int wire_idx = find_tb_wire(ts, path);
+        if (wire_idx >= 0 && wave_ids) {
+            return wave_ids[wire_idx];
+        }
+    }
+
+    for (int i = 0; i < num_taps; ++i) {
+        if (taps[i].full_path && strcmp(taps[i].full_path, path) == 0) {
+            return taps[i].wave_id;
+        }
+    }
+
+    return -1;
+}
+
+static void sim_emit_pending_selects(SimWaveWriter *wave,
+                                     SimPendingSelect *pending,
+                                     int pending_count,
+                                     uint64_t start_time_ps,
+                                     uint64_t end_time_ps)
+{
+    if (!wave || !pending || pending_count <= 0) return;
+
+    for (int i = 0; i < pending_count; ++i) {
+        if (pending[i].wave_id < 0) continue;
+        sim_wave_add_annotation(wave, start_time_ps, "select",
+                                pending[i].wave_id, NULL,
+                                pending[i].color, end_time_ps);
+    }
+}
+
 static void wave_dump_all(SimWaveWriter *wave, SimTestState *ts, int *wave_ids,
                            SimTap *taps, int num_taps) {
     for (int i = 0; i < ts->num_tb_wires; i++) {
@@ -2645,6 +2690,9 @@ static int sim_run_simulation(const JZASTNode *root,
     const JZASTNode **monitor_nodes = NULL;
     int num_monitors = 0;
     int cap_monitors = 0;
+    SimPendingSelect *pending_selects = NULL;
+    int num_pending_selects = 0;
+    int cap_pending_selects = 0;
 
     /* Walk simulation body sequentially (skip the @setup we already ran) */
     int setup_done = 0;
@@ -2680,6 +2728,7 @@ static int sim_run_simulation(const JZASTNode *root,
         } else if (child->type == JZ_AST_SIM_RUN) {
             /* @run: advance time */
             uint64_t duration_ps;
+            uint64_t run_start_ps = current_time_ps;
             if (child->text && strcmp(child->text, "ticks") == 0) {
                 uint64_t raw = run_to_ps(child);
                 duration_ps = raw * tick_ps;
@@ -2803,10 +2852,14 @@ static int sim_run_simulation(const JZASTNode *root,
                     }
                 }
             }
+            sim_emit_pending_selects(wave, pending_selects, num_pending_selects,
+                                     run_start_ps, current_time_ps);
+            num_pending_selects = 0;
         } else if (child->type == JZ_AST_SIM_RUN_UNTIL ||
                    child->type == JZ_AST_SIM_RUN_WHILE) {
             /* @run_until / @run_while: advance time with condition check */
             int is_until = (child->type == JZ_AST_SIM_RUN_UNTIL);
+            uint64_t run_start_ps = current_time_ps;
 
             /* Parse timeout duration */
             uint64_t timeout_ps;
@@ -2975,6 +3028,9 @@ static int sim_run_simulation(const JZASTNode *root,
                 ts.num_failed++;
                 ts.runtime_error = 1;
             }
+            sim_emit_pending_selects(wave, pending_selects, num_pending_selects,
+                                     run_start_ps, current_time_ps);
+            num_pending_selects = 0;
         } else if (child->type == JZ_AST_PRINT ||
                    child->type == JZ_AST_PRINT_IF) {
             ts.current_time_ps = current_time_ps;
@@ -3002,6 +3058,30 @@ static int sim_run_simulation(const JZASTNode *root,
             }
 
             trace_enabled = new_state;
+
+        } else if (child->type == JZ_AST_SIM_SELECT) {
+            if (num_pending_selects >= cap_pending_selects) {
+                int new_cap = (cap_pending_selects == 0) ? 4 : cap_pending_selects * 2;
+                size_t new_bytes = 0;
+                SimPendingSelect *new_pending = NULL;
+                if (new_cap <= num_pending_selects ||
+                    jz_size_mul_checked((size_t)new_cap, sizeof(SimPendingSelect), &new_bytes) != 0) {
+                    fprintf(stderr, "error: select directive count exceeds supported size\n");
+                    goto cleanup_monitors;
+                }
+                new_pending = (SimPendingSelect *)realloc(pending_selects, new_bytes);
+                if (!new_pending) {
+                    fprintf(stderr, "error: failed to grow select directive table\n");
+                    goto cleanup_monitors;
+                }
+                pending_selects = new_pending;
+                cap_pending_selects = new_cap;
+            }
+
+            pending_selects[num_pending_selects].color = child->text;
+            pending_selects[num_pending_selects].wave_id =
+                sim_resolve_select_wave_id(&ts, child->name, wave_ids, sim_taps, num_sim_taps);
+            num_pending_selects++;
 
         } else if (child->type == JZ_AST_SIM_MARK) {
             /* @mark: write a mark annotation at current time */
@@ -3155,11 +3235,13 @@ static int sim_run_simulation(const JZASTNode *root,
     /* Cleanup */
     free(wave_ids);
     free(sim_taps);
+    free(pending_selects);
     free((void *)monitor_nodes);
     sim_wave_close(wave);
     goto cleanup_dut;
 
 cleanup_monitors:
+    free(pending_selects);
     free((void *)monitor_nodes);
 
 cleanup_wave_taps:

@@ -1,0 +1,43 @@
+// Golden test: chained @select directives emit signal-scoped JZW range annotations.
+
+@module SimSelectAnnotationsDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation SimSelectAnnotationsDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    TAP {
+        dut.state;
+    }
+
+    @new dut SimSelectAnnotationsDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @select(data, YELLOW)
+    @select(dut.state, CYAN)
+    @run(ns=10)
+@endsim

@@ -168,6 +168,7 @@ typedef enum JZTokenType {
     JZ_TOK_KW_PRINT,     /**< \@print */
     JZ_TOK_KW_PRINT_IF,  /**< \@print_if */
     JZ_TOK_KW_TRACE,     /**< \@trace */
+    JZ_TOK_KW_SIM_SELECT,/**< \@select */
     JZ_TOK_KW_MARK,      /**< \@mark */
     JZ_TOK_KW_MARK_IF,   /**< \@mark_if */
     JZ_TOK_KW_ALERT,     /**< \@alert */

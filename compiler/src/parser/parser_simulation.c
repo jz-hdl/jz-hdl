@@ -96,6 +96,7 @@ static JZASTNode *parse_sim_alert_if(Parser *p);
  * @return Simulation trace AST node, or NULL on error
  */
 static JZASTNode *parse_sim_trace(Parser *p);
+static JZASTNode *parse_sim_select(Parser *p);
 
 /**
  * @brief Parse a conditional simulation run directive.
@@ -131,6 +132,8 @@ static JZASTNode *parse_sim_instantiation(Parser *p);
  * @return 0 on success, -1 on error
  */
 static int parse_sim_stimulus_body(Parser *p, JZASTNode *parent);
+static int sim_select_target_in_scope(const JZASTNode *sim, const char *path);
+static int sim_validate_selects(Parser *p, JZASTNode *sim);
 
 static int append_bounded_text(char *buf,
                                size_t buf_size,
@@ -712,6 +715,111 @@ static JZASTNode *parse_sim_trace(Parser *p)
     return node;
 }
 
+static JZASTNode *parse_sim_select(Parser *p)
+{
+    const JZToken *kw = &p->tokens[p->pos - 1];
+
+    if (!match(p, JZ_TOK_LPAREN)) {
+        parser_error(p, "expected '(' after @select");
+        return NULL;
+    }
+
+    if (!is_decl_identifier_token(peek(p))) {
+        parser_error(p, "expected signal name in @select");
+        return NULL;
+    }
+
+    size_t path_start = p->pos;
+    advance(p);
+    while (peek(p)->type == JZ_TOK_DOT) {
+        advance(p);
+        if (!is_decl_identifier_token(peek(p))) {
+            parser_error(p, "expected identifier after '.' in @select signal path");
+            return NULL;
+        }
+        advance(p);
+    }
+    size_t path_end = p->pos;
+
+    if (!match(p, JZ_TOK_COMMA)) {
+        parser_error(p, "expected ',' after @select signal");
+        return NULL;
+    }
+
+    const JZToken *color_tok = peek(p);
+    if (color_tok->type != JZ_TOK_IDENTIFIER) {
+        parser_error(p, "expected color name in @select");
+        return NULL;
+    }
+    const char *color = color_tok->lexeme;
+    advance(p);
+
+    if (!match(p, JZ_TOK_RPAREN)) {
+        parser_error(p, "expected ')' after @select(...)");
+        return NULL;
+    }
+
+    char *path_text = parser_join_token_lexemes_compact(p, path_start, path_end);
+    if (!path_text) return NULL;
+
+    JZASTNode *node = jz_ast_new(JZ_AST_SIM_SELECT, kw->loc);
+    if (!node) {
+        free(path_text);
+        return NULL;
+    }
+    jz_ast_set_name(node, path_text);
+    jz_ast_set_text(node, color);
+    free(path_text);
+    return node;
+}
+
+static int sim_select_target_in_scope(const JZASTNode *sim, const char *path)
+{
+    if (!sim || !path) return 0;
+
+    for (size_t i = 0; i < sim->child_count; ++i) {
+        const JZASTNode *child = sim->children[i];
+        if (!child) continue;
+
+        if (child->type != JZ_AST_TB_WIRE_BLOCK &&
+            child->type != JZ_AST_SIM_CLOCK_BLOCK &&
+            child->type != JZ_AST_SIM_TAP_BLOCK) {
+            continue;
+        }
+
+        for (size_t j = 0; j < child->child_count; ++j) {
+            const JZASTNode *decl = child->children[j];
+            if (decl && decl->name && strcmp(decl->name, path) == 0) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int sim_validate_selects(Parser *p, JZASTNode *sim)
+{
+    if (!p || !sim) return -1;
+
+    for (size_t i = 0; i < sim->child_count; ++i) {
+        JZASTNode *child = sim->children[i];
+        if (!child || child->type != JZ_AST_SIM_SELECT) continue;
+        if (!sim_select_target_in_scope(sim, child->name)) {
+            const JZToken fake = {
+                .type = JZ_TOK_KW_SIM_SELECT,
+                .loc = child->loc,
+                .lexeme = "@select",
+            };
+            parser_report_rule(p, &fake, "SIM_SELECT_SIGNAL_IN_SCOPE",
+                               "@select signal must resolve to a declared simulation WIRE, CLOCK, or TAP");
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 static JZASTNode *parse_sim_run_cond(Parser *p, JZASTNodeType node_type)
 {
     const JZToken *kw = &p->tokens[p->pos - 1]; /* keyword already consumed */
@@ -1085,11 +1193,23 @@ JZASTNode *parse_simulation(Parser *p)
     jz_ast_set_name(sim, mod_name->lexeme);
 
     int has_monitor = 0;
+    int pending_select_chain = 0;
 
     /* Parse body until @endsim */
     while (peek(p)->type != JZ_TOK_EOF &&
            peek(p)->type != JZ_TOK_KW_ENDSIM) {
         const JZToken *t = peek(p);
+
+        if (pending_select_chain > 0 &&
+            t->type != JZ_TOK_KW_SIM_SELECT &&
+            t->type != JZ_TOK_KW_RUN &&
+            t->type != JZ_TOK_KW_RUN_UNTIL &&
+            t->type != JZ_TOK_KW_RUN_WHILE) {
+            parser_report_rule(p, t, "SIM_SELECT_CHAIN_REQUIRES_RUN",
+                               "@select must be followed by another @select, @run, @run_until, or @run_while");
+            jz_ast_free(sim);
+            return NULL;
+        }
 
         if (t->type == JZ_TOK_IDENTIFIER && t->lexeme && strcmp(t->lexeme, "CLOCK") == 0) {
             advance(p);
@@ -1298,16 +1418,19 @@ JZASTNode *parse_simulation(Parser *p)
             JZASTNode *run = parse_sim_run(p);
             if (!run) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, run);
+            pending_select_chain = 0;
         } else if (t->type == JZ_TOK_KW_RUN_UNTIL) {
             advance(p);
             JZASTNode *ru = parse_sim_run_cond(p, JZ_AST_SIM_RUN_UNTIL);
             if (!ru) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, ru);
+            pending_select_chain = 0;
         } else if (t->type == JZ_TOK_KW_RUN_WHILE) {
             advance(p);
             JZASTNode *rw = parse_sim_run_cond(p, JZ_AST_SIM_RUN_WHILE);
             if (!rw) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, rw);
+            pending_select_chain = 0;
         } else if (t->type == JZ_TOK_KW_PRINT) {
             advance(p);
             JZASTNode *pr = parse_print_directive(p, 0);
@@ -1323,6 +1446,12 @@ JZASTNode *parse_simulation(Parser *p)
             JZASTNode *tr = parse_sim_trace(p);
             if (!tr) { jz_ast_free(sim); return NULL; }
             jz_ast_add_child(sim, tr);
+        } else if (t->type == JZ_TOK_KW_SIM_SELECT) {
+            advance(p);
+            JZASTNode *sel = parse_sim_select(p);
+            if (!sel) { jz_ast_free(sim); return NULL; }
+            jz_ast_add_child(sim, sel);
+            pending_select_chain++;
         } else if (t->type == JZ_TOK_KW_MARK) {
             advance(p);
             JZASTNode *mk = parse_sim_mark(p);
@@ -1404,6 +1533,18 @@ JZASTNode *parse_simulation(Parser *p)
 
     if (!match(p, JZ_TOK_KW_ENDSIM)) {
         parser_error(p, "missing @endsim for simulation block");
+        jz_ast_free(sim);
+        return NULL;
+    }
+
+    if (pending_select_chain > 0) {
+        parser_report_rule(p, peek(p), "SIM_SELECT_CHAIN_REQUIRES_RUN",
+                           "@select must be followed by another @select, @run, @run_until, or @run_while");
+        jz_ast_free(sim);
+        return NULL;
+    }
+
+    if (sim_validate_selects(p, sim) != 0) {
         jz_ast_free(sim);
         return NULL;
     }
