@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.16)
-
-project(jz_viewer VERSION 0.1.0 LANGUAGES C CXX)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    message(FATAL_ERROR "Configure from the repository root: cmake -S . -B build")
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,22 +19,6 @@ set(SDL_TESTS OFF CACHE BOOL "" FORCE)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL3)
-
-# ---- SQLite3 ----
-FetchContent_Declare(
-    sqlite3
-    URL https://www.sqlite.org/2025/sqlite-amalgamation-3490100.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
-FetchContent_MakeAvailable(sqlite3)
-
-add_library(sqlite3_lib STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
-target_include_directories(sqlite3_lib PUBLIC ${sqlite3_SOURCE_DIR})
-target_compile_options(sqlite3_lib PRIVATE -w)
-find_package(Threads)
-if(Threads_FOUND)
-    target_link_libraries(sqlite3_lib PUBLIC Threads::Threads)
-endif()
 
 # ---- Dear ImGui (no CMakeLists.txt — we build it ourselves) ----
 FetchContent_Declare(
@@ -67,4 +51,10 @@ add_executable(jz-viewer
     src/main.cpp
 )
 
-target_link_libraries(jz-viewer PRIVATE imgui_lib SDL3::SDL3-static sqlite3_lib)
+target_link_libraries(jz-viewer PRIVATE imgui_lib SDL3::SDL3-static jz_sqlite3_lib)
+
+include(GNUInstallDirs)
+install(TARGETS jz-viewer
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT Viewer
+)

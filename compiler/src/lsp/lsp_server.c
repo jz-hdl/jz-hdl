@@ -24,6 +24,7 @@
 #include "path_security.h"
 #include "ir_builder.h"
 #include "ir.h"
+#include "version.h"
 
 #include "util.h"
 
@@ -811,7 +812,7 @@ static void handle_initialize(const char *msg, int id, LspDocStore *store) {
             "},"
             "\"serverInfo\":{"
                 "\"name\":\"jz-hdl-lsp\","
-                "\"version\":\"0.1.0\""
+                "\"version\":\"" JZ_HDL_VERSION_STRING "\""
             "}"
         "}";
 

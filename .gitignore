@@ -10,3 +10,4 @@ __pycache__/
 /audit-*/
 /security-audit/
 /doxygen-audit/
+/build/

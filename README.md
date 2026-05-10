@@ -42,17 +42,17 @@ The compiler enforces strict rules around clocks, resets, driver ownership, widt
 
 ## Building
 
-Requires CMake and a C99 compiler.
+Requires CMake, a C99 compiler for the compiler, and a C++17 compiler for the viewer.
 
 ```bash
 # Configure
-cmake -S compiler -B compiler/build
+cmake -S . -B build
 
-# Build
-cmake --build compiler/build
+# Build compiler + viewer
+cmake --build build
 ```
 
-On Unix-like single-config generators, the compiler is typically written to `compiler/build/jz-hdl`. On Windows multi-config generators such as Visual Studio, expect `compiler/build/<Config>/jz-hdl.exe` and pass `--config Release` or `--config Debug` to `cmake --build`.
+On Unix-like single-config generators, the compiler is typically written to `build/compiler/jz-hdl` and the viewer to `build/viewer/jz-viewer`. On Windows multi-config generators such as Visual Studio, expect `build/compiler/<Config>/jz-hdl.exe` and `build/viewer/<Config>/jz-viewer.exe`, and pass `--config Release` or `--config Debug` to `cmake --build`.
 
 ## Usage
 
@@ -96,8 +96,8 @@ Path security options:
 bash compiler/tests/run_validation.sh
 
 # Run CTest suite
-cmake -S compiler -B compiler/build -DBUILD_TESTING=ON
-ctest --test-dir compiler/build
+cmake -S . -B build -DBUILD_TESTING=ON
+ctest --test-dir build
 ```
 
 ## Examples
@@ -108,7 +108,7 @@ The `examples/` directory contains complete projects ranging from simple counter
 
 Full documentation is available at [jz-hdl.github.io/jz-hdl](https://jz-hdl.github.io/jz-hdl/) and in the `docs/` directory, covering the language specification, type system, module system, memory semantics, simulation, and testbench authoring.
 
-The docs site also ships rendered PDF copies of the specifications. Regenerate them from the Markdown sources in `specification/` with the CMake `docs` target in `compiler/CMakeLists.txt` (requires `pandoc` and `xelatex`); the PDFs are written to the compiler build directory and staged into the published site by `scripts/gitpages-update`.
+The docs site also ships rendered PDF copies of the specifications. Regenerate them from the Markdown sources in `specification/` with the root CMake `docs` target (requires `pandoc` and `xelatex`); the PDFs are written to `build/specification/` and staged into the published site by `scripts/gitpages-update`.
 
 ### Specification
 

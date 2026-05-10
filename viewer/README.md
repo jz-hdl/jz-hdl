@@ -8,19 +8,18 @@ to it and watch waveforms stream in.
 
 ## Build
 
-The `CMakeLists.txt` fetches all dependencies via `FetchContent`:
+The root CMake build fetches bundled dependencies via `FetchContent`:
 
 - **SDL3** (`release-3.2.14`, static)
-- **SQLite3** (amalgamation `3.49.01`, built as `sqlite3_lib`)
+- **SQLite3** (amalgamation `3.49.01`, built as shared target `jz_sqlite3_lib`)
 - **Dear ImGui** (`v1.91.8-docking`) with the SDL3 + SDLRenderer3 backends
 
 ```sh
-cd viewer
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-The resulting binary is `viewer/build/jz-viewer`.
+The resulting binary is `build/viewer/jz-viewer`.
 
 Requires a C++17 compiler and CMake >= 3.16. No system packages are required
 beyond the normal build toolchain.
@@ -45,7 +44,7 @@ Example using an in-tree test artifact:
 
 ```sh
 jz-hdl --simulate compiler/tests/validation/some_sim.jz --jzw -o /tmp/out.jzw
-viewer/build/jz-viewer /tmp/out.jzw
+build/viewer/jz-viewer /tmp/out.jzw
 ```
 
 ### Live reload

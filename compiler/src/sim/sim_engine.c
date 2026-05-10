@@ -17,6 +17,7 @@
 #include "sim_value.h"
 #include "../../include/ast.h"
 #include "../../include/ir.h"
+#include "version.h"
 
 #include "sim_perf.h"
 
@@ -2503,7 +2504,7 @@ static int sim_run_simulation(const JZASTNode *root,
         strftime(date_buf, sizeof(date_buf), "%Y-%m-%dT%H:%M:%SZ", tm_info);
         sim_wave_set_meta(wave, "date", date_buf);
         sim_wave_set_meta(wave, "source_file", filename ? filename : "");
-        sim_wave_set_meta(wave, "compiler_version", "0.1.0");
+        sim_wave_set_meta(wave, "compiler_version", JZ_HDL_VERSION_STRING);
         snprintf(buf, sizeof(buf), "0x%08X", seed);
         sim_wave_set_meta(wave, "seed", buf);
         snprintf(buf, sizeof(buf), "%llu", (unsigned long long)tick_ps);

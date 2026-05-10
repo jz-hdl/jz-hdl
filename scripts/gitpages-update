@@ -3,15 +3,26 @@ set -euo pipefail
 
 # Build the VitePress docs site and deploy to the gh-pages branch.
 # Uses a temporary clone so the working repo is never modified.
-# Usage: scripts/gitpages-update
+# Usage: scripts/gitpages-update [--dry-run]
+
+DRY_RUN=0
+if [ "${1:-}" = "--dry-run" ]; then
+  DRY_RUN=1
+  shift
+fi
+
+if [ $# -ne 0 ]; then
+  echo "Usage: $0 [--dry-run]"
+  exit 1
+fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOCS_DIR="$REPO_ROOT/docs"
 DIST_DIR="$DOCS_DIR/.vitepress/dist"
-COMPILER_BUILD_DIR="$(mktemp -d)"
+BUILD_DIR="$(mktemp -d)"
 
 cleanup() {
-  rm -rf "$COMPILER_BUILD_DIR"
+  rm -rf "$BUILD_DIR"
   if [ -n "${TMPDIR:-}" ]; then
     rm -rf "$TMPDIR"
   fi
@@ -20,8 +31,8 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> Building specification PDFs..."
-cmake -S "$REPO_ROOT/compiler" -B "$COMPILER_BUILD_DIR"
-cmake --build "$COMPILER_BUILD_DIR" --target docs
+cmake -S "$REPO_ROOT" -B "$BUILD_DIR"
+cmake --build "$BUILD_DIR" --target docs
 
 echo "==> Installing dependencies..."
 (cd "$DOCS_DIR" && npm install)
@@ -37,7 +48,7 @@ fi
 echo "==> Staging specification PDFs into site output..."
 mkdir -p "$DIST_DIR/pdf"
 find "$DIST_DIR/pdf" -type f -name '*.pdf' -delete
-cp "$COMPILER_BUILD_DIR"/*.pdf "$DIST_DIR/pdf/"
+cp "$BUILD_DIR/specification"/*.pdf "$DIST_DIR/pdf/"
 
 echo "==> Deploying to gh-pages..."
 
@@ -72,8 +83,12 @@ if git -C "$TMPDIR/deploy" diff --cached --quiet; then
   echo "No changes to deploy."
 else
   git -C "$TMPDIR/deploy" commit -m "Deploy docs to GitHub Pages"
-  git -C "$TMPDIR/deploy" push origin gh-pages
-  echo "==> Deployed successfully."
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "==> Dry run complete. Skipping push to gh-pages."
+  else
+    git -C "$TMPDIR/deploy" push origin gh-pages
+    echo "==> Deployed successfully."
+  fi
 fi
 
 echo "==> Done."
