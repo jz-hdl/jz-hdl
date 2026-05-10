@@ -2,7 +2,7 @@
 
 .DEFAULT_GOAL := help
 
-JZ_HDL := ../../compiler/build/jz-hdl
+JZ_HDL := ../../build/compiler/jz-hdl
 PYTHON3 := $(shell which python3)
 YOSYS := yosys
 PNR ?= nextpnr-himbaechel

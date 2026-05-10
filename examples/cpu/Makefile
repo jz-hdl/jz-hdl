@@ -1,6 +1,6 @@
 .PHONY: check tang_nano_9k tang_nano_20k build synthesis load clean
 
-JZ_HDL := ../../compiler/build/jz-hdl
+JZ_HDL := ../../build/compiler/jz-hdl
 PYTHON3 := $(shell which python3)
 GOWIN_PATH := $(shell dirname $(shell command -v gowin_pack))
 YOSYS := yosys
