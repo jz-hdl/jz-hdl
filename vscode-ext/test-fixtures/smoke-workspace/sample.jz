@@ -1,0 +1,7 @@
+project Smoke;
+
+module smoke (
+    out led
+) {
+    led = 1'b1;
+}

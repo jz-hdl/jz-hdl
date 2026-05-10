@@ -54,6 +54,16 @@ for spec in "$REPO_ROOT"/specification/*.md; do
   sed -i '' "s/Version: [0-9][0-9.]*/Version: ${VERSION}/" "$spec"
 done
 
+# VS Code extension package metadata
+sed -i '' \
+  -e "0,/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/s//\"version\": \"${VERSION}\"/" \
+  "$REPO_ROOT/vscode-ext/package.json"
+
+sed -i '' \
+  -e "1,/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/s//\"version\": \"${VERSION}\"/" \
+  -e "1,/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/s//\"version\": \"${VERSION}\"/" \
+  "$REPO_ROOT/vscode-ext/package-lock.json"
+
 # ---------------------------------------------------------------------------
 # 2. Build (includes PDFs) and test
 # ---------------------------------------------------------------------------
@@ -91,7 +101,9 @@ git -C "$REPO_ROOT" add \
   compiler/CMakeLists.txt \
   compiler/include/version.h \
   specification/ \
-  docs/public/pdf/
+  docs/public/pdf/ \
+  vscode-ext/package.json \
+  vscode-ext/package-lock.json
 
 git -C "$REPO_ROOT" commit -m "Bump version to ${VERSION}"
 

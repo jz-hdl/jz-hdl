@@ -8,9 +8,11 @@ import {
 
 let client: LanguageClient | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
+let errorReporter: (message: string) => Thenable<string | undefined> | undefined =
+    (message) => vscode.window.showErrorMessage(message);
 
-/** Last project info received per URI, used by the picker. */
-let lastProjectInfo: ProjectInfoParams | undefined;
+/** Last project info received per URI, used by the picker and status bar. */
+const projectInfoByUri = new Map<string, ProjectInfoParams>();
 
 interface ProjectEntry {
     file: string;
@@ -24,6 +26,14 @@ interface ProjectInfoParams {
     activeIndex: number;
 }
 
+interface ExtensionTestApi {
+    restartClientForTests(): Promise<void>;
+    setErrorReporterForTests(
+        reporter: (message: string) => Thenable<string | undefined> | undefined
+    ): void;
+    resetErrorReporterForTests(): void;
+}
+
 function getServerCommand(): string {
     const config = vscode.workspace.getConfiguration('jz-hdl');
     const binaryPath = config.get<string>('binaryPath', '');
@@ -35,11 +45,36 @@ function isLspEnabled(): boolean {
     return config.get<boolean>('lsp.enabled', true);
 }
 
-function updateStatusBar(params: ProjectInfoParams): void {
+function isJzDocument(document: vscode.TextDocument): boolean {
+    return document.languageId === 'jz-hdl';
+}
+
+function getProjectInfoForEditor(
+    editor: vscode.TextEditor | undefined
+): ProjectInfoParams | undefined {
+    if (!editor || !isJzDocument(editor.document)) {
+        return undefined;
+    }
+
+    return projectInfoByUri.get(editor.document.uri.toString());
+}
+
+function renderStatusBarForEditor(editor: vscode.TextEditor | undefined): void {
     if (!statusBarItem) return;
 
-    // Store for the picker command.
-    lastProjectInfo = params;
+    if (!editor || !isJzDocument(editor.document)) {
+        statusBarItem.hide();
+        return;
+    }
+
+    const params = getProjectInfoForEditor(editor);
+    if (!params) {
+        statusBarItem.text = "$(circuit-board) ...";
+        statusBarItem.tooltip = "Waiting for JZ-HDL project discovery";
+        statusBarItem.command = undefined;
+        statusBarItem.show();
+        return;
+    }
 
     if (params.projects.length === 0) {
         statusBarItem.text = "$(circuit-board) No Project";
@@ -94,16 +129,19 @@ function updateStatusBar(params: ProjectInfoParams): void {
 }
 
 async function showProjectPicker(): Promise<void> {
-    if (!lastProjectInfo || lastProjectInfo.projects.length === 0) {
+    const editor = vscode.window.activeTextEditor;
+    const projectInfo = getProjectInfoForEditor(editor);
+
+    if (!projectInfo || projectInfo.projects.length === 0) {
         vscode.window.showInformationMessage('No JZ-HDL projects discovered.');
         return;
     }
 
-    const items = lastProjectInfo.projects.map((p, i) => {
+    const items = projectInfo.projects.map((p, i) => {
         const name = p.name !== '-' ? p.name : '?';
         const chip = p.chip !== '-' ? p.chip : 'no chip';
         const basename = path.basename(p.file);
-        const active = i === lastProjectInfo!.activeIndex ? ' $(check)' : '';
+        const active = i === projectInfo.activeIndex ? ' $(check)' : '';
         return {
             label: `${name}${active}`,
             description: `[${chip}]`,
@@ -121,7 +159,7 @@ async function showProjectPicker(): Promise<void> {
 
     // Send the selection to the LSP server.
     client.sendNotification('jz-hdl/selectProject', {
-        uri: lastProjectInfo.uri,
+        uri: projectInfo.uri,
         projectFile: picked.projectFile,
     });
 }
@@ -141,7 +179,7 @@ async function startClient(): Promise<void> {
     const config = vscode.workspace.getConfiguration('jz-hdl');
 
     const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'jz-hdl' }],
+        documentSelector: [{ language: 'jz-hdl' }],
         initializationOptions: {
             hover: {
                 clocks: config.get<boolean>('hover.clocks', true),
@@ -162,11 +200,14 @@ async function startClient(): Promise<void> {
 
         // Listen for project info notifications from the server.
         client.onNotification('jz-hdl/projectInfo', (params: ProjectInfoParams) => {
-            updateStatusBar(params);
+            projectInfoByUri.set(params.uri, params);
+            if (vscode.window.activeTextEditor?.document.uri.toString() === params.uri) {
+                renderStatusBarForEditor(vscode.window.activeTextEditor);
+            }
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(
+        void errorReporter(
             `Failed to start JZ-HDL language server: ${message}. ` +
             `Check that the jz-hdl binary is installed and accessible.`
         );
@@ -179,9 +220,12 @@ async function stopClient(): Promise<void> {
         await client.stop();
         client = undefined;
     }
+
+    projectInfoByUri.clear();
+    renderStatusBarForEditor(vscode.window.activeTextEditor);
 }
 
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export async function activate(context: vscode.ExtensionContext): Promise<ExtensionTestApi> {
     // Register the project picker command.
     context.subscriptions.push(
         vscode.commands.registerCommand('jz-hdl.selectProject', showProjectPicker)
@@ -197,19 +241,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Show/hide based on active editor language.
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor((editor) => {
-            if (editor && editor.document.languageId === 'jz-hdl') {
-                statusBarItem?.show();
-            } else {
-                statusBarItem?.hide();
-            }
+            renderStatusBarForEditor(editor);
         })
     );
 
-    // Show for the initial editor if it's a .jz file.
-    if (vscode.window.activeTextEditor?.document.languageId === 'jz-hdl') {
-        statusBarItem.text = "$(circuit-board) ...";
-        statusBarItem.show();
-    }
+    context.subscriptions.push(
+        vscode.workspace.onDidCloseTextDocument((document) => {
+            projectInfoByUri.delete(document.uri.toString());
+        })
+    );
+
+    renderStatusBarForEditor(vscode.window.activeTextEditor);
 
     if (isLspEnabled()) {
         await startClient();
@@ -231,6 +273,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         })
     );
+
+    return {
+        async restartClientForTests(): Promise<void> {
+            await stopClient();
+            if (isLspEnabled()) {
+                await startClient();
+            }
+        },
+        setErrorReporterForTests(
+            reporter: (message: string) => Thenable<string | undefined> | undefined
+        ): void {
+            errorReporter = reporter;
+        },
+        resetErrorReporterForTests(): void {
+            errorReporter = (message) => vscode.window.showErrorMessage(message);
+        },
+    };
 }
 
 export async function deactivate(): Promise<void> {
