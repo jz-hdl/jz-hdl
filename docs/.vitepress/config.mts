@@ -21,11 +21,11 @@ export default defineConfig({
       {
         text: 'Specifications',
         items: [
-          { text: 'JZ-HDL Specification', link: '/jz-hdl/pdf/jz-hdl-specification.pdf', target: '_blank' },
-          { text: 'Simulation Specification', link: '/jz-hdl/pdf/simulation-specification.pdf', target: '_blank' },
-          { text: 'Testbench Specification', link: '/jz-hdl/pdf/testbench-specification.pdf', target: '_blank' },
-          { text: 'Chip Info Specification', link: '/jz-hdl/pdf/chip-info-specification.pdf', target: '_blank' },
-          { text: 'JZW File Format Specification', link: '/jz-hdl/pdf/jzw-specification.pdf', target: '_blank' },
+          { text: 'JZ-HDL Specification', link: '/pdf/jz-hdl-specification.pdf', target: '_blank' },
+          { text: 'Simulation Specification', link: '/pdf/simulation-specification.pdf', target: '_blank' },
+          { text: 'Testbench Specification', link: '/pdf/testbench-specification.pdf', target: '_blank' },
+          { text: 'Chip Info Specification', link: '/pdf/chip-info-specification.pdf', target: '_blank' },
+          { text: 'JZW File Format Specification', link: '/pdf/jzw-specification.pdf', target: '_blank' },
         ]
       },
       { text: 'GitHub', link: 'https://github.com/zaun/jz-hdl' },
@@ -80,11 +80,11 @@ export default defineConfig({
       }, {
         text: 'Specifications (PDF)',
         items: [
-          { text: 'JZ-HDL Specification', link: '/jz-hdl/pdf/jz-hdl-specification.pdf', target: '_blank' },
-          { text: 'Simulation Specification', link: '/jz-hdl/pdf/simulation-specification.pdf', target: '_blank' },
-          { text: 'Testbench Specification', link: '/jz-hdl/pdf/testbench-specification.pdf', target: '_blank' },
-          { text: 'Chip Info Specification', link: '/jz-hdl/pdf/chip-info-specification.pdf', target: '_blank' },
-          { text: 'JZW File Format Specification', link: '/jz-hdl/pdf/jzw-specification.pdf', target: '_blank' },
+          { text: 'JZ-HDL Specification', link: '/pdf/jz-hdl-specification.pdf', target: '_blank' },
+          { text: 'Simulation Specification', link: '/pdf/simulation-specification.pdf', target: '_blank' },
+          { text: 'Testbench Specification', link: '/pdf/testbench-specification.pdf', target: '_blank' },
+          { text: 'Chip Info Specification', link: '/pdf/chip-info-specification.pdf', target: '_blank' },
+          { text: 'JZW File Format Specification', link: '/pdf/jzw-specification.pdf', target: '_blank' },
         ]
       }, {
         text: 'Examples',

@@ -43,7 +43,21 @@ def main() -> int:
     for spec_path in (repo_root / "specification").glob("*.md"):
         text = spec_path.read_text(encoding="utf-8")
         updated = re.sub(r"Version: [0-9][0-9.]*", f"Version: {version}", text)
+        updated = re.sub(
+            r"compiler version string \(e\.g\., `\d+\.\d+\.\d+`\)",
+            f"compiler version string (e.g., `{version}`)",
+            updated,
+        )
         spec_path.write_text(updated, encoding="utf-8")
+
+    cli_usage_path = repo_root / "docs" / "getting-started" / "cli-usage.md"
+    cli_usage = cli_usage_path.read_text(encoding="utf-8")
+    cli_usage = re.sub(
+        r"Version \d+\.\d+\.\d+ \(abc1234\)",
+        f"Version {version} (abc1234)",
+        cli_usage,
+    )
+    cli_usage_path.write_text(cli_usage, encoding="utf-8")
 
     package_json_path = repo_root / "vscode-ext" / "package.json"
     package_json = json.loads(package_json_path.read_text(encoding="utf-8"))

@@ -60,7 +60,7 @@ Path security options:
 | `--lint-rules` | List all diagnostic rule IDs and their descriptions. |
 | `--lsp` | Start the Language Server Protocol server (stdio transport). See [Editor Integration](#editor-integration). |
 | `--help` | Print usage information. |
-| `--version` | Print the compiler version and git commit (e.g., `Version 0.1.0 (abc1234)`). |
+| `--version` | Print the compiler version and git commit (e.g., `Version 0.1.8 (abc1234)`). |
 
 ## Common options
 
@@ -220,10 +220,10 @@ A VS Code extension is included in the `vscode-ext/` directory. To install:
 ```bash
 cd vscode-ext
 npm install
-npm run compile
+npm run package:vsix
 ```
 
-Then in VS Code: **Extensions** → **...** → **Install from VSIX** or use **Developer: Install Extension from Location** and select the `vscode-ext/` directory.
+Then in VS Code: **Extensions** → **...** → **Install from VSIX** and select `vscode-ext/build/jz-hdl.vsix`.
 
 #### Settings
 

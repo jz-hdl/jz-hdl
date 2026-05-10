@@ -2,7 +2,7 @@
     "name": "jz-hdl",
     "displayName": "JZ-HDL",
     "description": "Language support for JZ-HDL hardware correctness language",
-    "version": "0.1.0",
+    "version": "0.1.8",
     "publisher": "jz-hdl",
     "license": "MIT",
     "engines": {

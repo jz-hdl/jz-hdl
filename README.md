@@ -139,7 +139,7 @@ The `vscode-ext/` directory contains a VS Code extension providing:
 ```bash
 cd vscode-ext
 npm install
-npm run compile
+npm run package:vsix
 ```
 
-Then in VS Code: **Extensions** → **...** → **Install from VSIX** or use **Developer: Install Extension from Location** and select the `vscode-ext/` directory.
+Then in VS Code: **Extensions** → **...** → **Install from VSIX** and select `vscode-ext/build/jz-hdl.vsix`.

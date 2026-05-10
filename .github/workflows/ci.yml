@@ -30,6 +30,25 @@ jobs:
       - name: Validation and golden tests
         run: JZ_HDL_BIN="$GITHUB_WORKSPACE/build/compiler/jz-hdl" bash compiler/tests/run_validation.sh
 
+  docs-site:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PDF toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-latex-extra
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build and verify docs site
+        run: ./scripts/build-docs-site
+
   viewer-smoke:
     name: Viewer smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

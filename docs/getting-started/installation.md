@@ -104,3 +104,11 @@ That target rebuilds:
 - `jzw-specification.pdf`
 
 The generated PDFs are written to `build/specification/`. `scripts/gitpages-update` rebuilds them and stages them into the published site output under `/pdf/` during docs deployment.
+
+For a full release-style docs verification, run:
+
+```bash
+scripts/build-docs-site
+```
+
+That command rebuilds the specification PDFs, stages them into the site source, runs the VitePress build, and verifies the published `/pdf/` artifacts exist in the final site output.

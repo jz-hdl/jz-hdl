@@ -26,6 +26,7 @@ TEMP_DIRS=()
 VERSION_FILES=(
   "$REPO_ROOT/VERSION"
   "$REPO_ROOT/compiler/include/version.h"
+  "$REPO_ROOT/docs/getting-started/cli-usage.md"
   "$REPO_ROOT/vscode-ext/package.json"
   "$REPO_ROOT/vscode-ext/package-lock.json"
 )
@@ -112,10 +113,10 @@ echo "==> Running viewer smoke test..."
 "$JZ_VIEWER_BIN" --validate "$VIEWER_SMOKE_PATH"
 
 # ---------------------------------------------------------------------------
-# 3. Build PDFs for release artifacts
+# 3. Build docs site and PDFs for release artifacts
 # ---------------------------------------------------------------------------
-echo "==> Building specification PDFs..."
-cmake --build "$BUILD_DIR" --target docs
+echo "==> Building and verifying docs site..."
+"$REPO_ROOT/scripts/build-docs-site" --build-dir "$BUILD_DIR"
 
 # ---------------------------------------------------------------------------
 # 4. Commit version bump
@@ -127,6 +128,7 @@ git -C "$REPO_ROOT" add \
   VERSION \
   compiler/CMakeLists.txt \
   compiler/include/version.h \
+  docs/getting-started/cli-usage.md \
   scripts/sync_version.py \
   specification/ \
   vscode-ext/package.json \
