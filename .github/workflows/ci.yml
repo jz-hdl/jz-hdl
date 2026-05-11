@@ -97,7 +97,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure
+      - name: Configure (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON -DSDL_UNIX_CONSOLE_BUILD=ON
+
+      - name: Configure (macOS)
+        if: matrix.os == 'macos-latest'
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON
 
       - name: Build compiler and viewer
