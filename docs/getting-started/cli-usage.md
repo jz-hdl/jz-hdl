@@ -225,6 +225,8 @@ npm run package:vsix
 
 Then in VS Code: **Extensions** → **...** → **Install from VSIX** and select `vscode-ext/build/jz-hdl.vsix`.
 
+The generated `.vsix` file is build output and should not be checked into the repository.
+
 #### Settings
 
 | Setting | Default | Description |

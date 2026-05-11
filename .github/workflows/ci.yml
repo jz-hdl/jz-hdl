@@ -31,23 +31,52 @@ jobs:
         run: JZ_HDL_BIN="$GITHUB_WORKSPACE/build/compiler/jz-hdl" bash compiler/tests/run_validation.sh
 
   docs-site:
+    name: Docs site
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
 
       - name: Install PDF toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-latex-extra
 
+      - name: Build and verify docs site
+        run: ./scripts/build-docs-site
+
+  vscode-extension:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vscode-ext/package-lock.json
 
-      - name: Build and verify docs site
-        run: ./scripts/build-docs-site
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: vscode-ext
+
+      - name: Compile extension
+        run: npm run compile
+        working-directory: vscode-ext
+
+      - name: Run extension smoke test
+        run: npm run smoke
+        working-directory: vscode-ext
 
   viewer-smoke:
     name: Viewer smoke (${{ matrix.os }})

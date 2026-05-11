@@ -112,6 +112,14 @@ echo "==> Running viewer smoke test..."
   -o "$VIEWER_SMOKE_PATH"
 "$JZ_VIEWER_BIN" --validate "$VIEWER_SMOKE_PATH"
 
+echo "==> Building and smoke-testing VS Code extension..."
+(
+  cd "$REPO_ROOT/vscode-ext"
+  npm ci
+  npm run compile
+  npm run smoke
+)
+
 # ---------------------------------------------------------------------------
 # 3. Build docs site and PDFs for release artifacts
 # ---------------------------------------------------------------------------

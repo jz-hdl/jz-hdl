@@ -112,3 +112,14 @@ scripts/build-docs-site
 ```
 
 That command rebuilds the specification PDFs, stages them into the site source, runs the VitePress build, and verifies the published `/pdf/` artifacts exist in the final site output.
+
+For the editor tooling release gate, also run:
+
+```bash
+cd vscode-ext
+npm ci
+npm run compile
+npm run smoke
+```
+
+For `1.0.0`, example synthesis remains a broader pre-release or nightly compatibility sweep rather than a required per-PR gate. Use `scripts/run_examples.sh` when you want to regenerate `examples/status.md` and audit the wider example matrix.

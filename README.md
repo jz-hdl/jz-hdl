@@ -98,7 +98,18 @@ bash compiler/tests/run_validation.sh
 # Run CTest suite
 cmake -S . -B build -DBUILD_TESTING=ON
 ctest --test-dir build
+
+# Build and verify the published docs site
+scripts/build-docs-site
+
+# Compile and smoke-test the VS Code extension
+cd vscode-ext
+npm ci
+npm run compile
+npm run smoke
 ```
+
+Release gating for `1.0.0` treats compiler tests, viewer smoke, docs build, and VS Code extension compile/smoke as required automation. Example synthesis remains a broader compatibility sweep driven by `scripts/run_examples.sh`; it is useful for nightly or pre-release verification, but it is not a required per-PR gate.
 
 ## Examples
 
@@ -143,3 +154,5 @@ npm run package:vsix
 ```
 
 Then in VS Code: **Extensions** → **...** → **Install from VSIX** and select `vscode-ext/build/jz-hdl.vsix`.
+
+The generated `.vsix` file is a build artifact under `vscode-ext/build/`, not a checked-in source artifact.

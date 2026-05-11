@@ -11,3 +11,7 @@ __pycache__/
 /security-audit/
 /doxygen-audit/
 /build/
+/docs/node_modules/
+/docs/.vitepress/dist/
+/vscode-ext/build/
+/vscode-ext/out/
