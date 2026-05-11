@@ -74,9 +74,17 @@ jobs:
         run: npm run compile
         working-directory: vscode-ext
 
+      - name: Configure compiler
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON
+
+      - name: Build compiler
+        run: cmake --build build --parallel --target jz-hdl
+
       - name: Run extension smoke test
         run: npm run smoke
         working-directory: vscode-ext
+        env:
+          JZ_HDL_BINARY: ${{ github.workspace }}/build/compiler/jz-hdl
 
   viewer-smoke:
     name: Viewer smoke (${{ matrix.os }})

@@ -1,0 +1,14 @@
+@project DIAGNOSTICS_PROJECT
+    @top BrokenTop {
+        OUT [1] q = _;
+    }
+@endproj
+
+@module BrokenTop
+    PORT {
+        OUT [1] q;
+    }
+    ASYNCHRONOUS {
+        q = missing_sig;
+    }
+@endmod

@@ -839,22 +839,35 @@ int lsp_discover_projects(const char *filepath,
 }
 
 int lsp_find_project_for_file(const LspProjectList *projects,
-                              const char *filepath)
+                              const char *filepath,
+                              size_t *out_match_count)
 {
     if (!projects || !filepath || projects->count == 0) return -1;
 
     char canonical[2048];
+    size_t match_count = 0;
+    int match_index = -1;
     canonicalize_path(filepath, canonical, sizeof(canonical));
 
     /* If there's only one project, use it without checking imports. */
-    if (projects->count == 1) return 0;
+    if (projects->count == 1) {
+        if (out_match_count) *out_match_count = 1;
+        return 0;
+    }
 
     /* Check which project(s) import this file. */
     for (size_t i = 0; i < projects->count; i++) {
         if (project_imports_file(projects->entries[i].file, canonical)) {
-            return (int)i;
+            if (match_count == 0) {
+                match_index = (int)i;
+            }
+            match_count++;
         }
     }
+
+    if (out_match_count) *out_match_count = match_count;
+    if (match_count == 1) return match_index;
+    if (match_count > 1) return -2;
 
     /* No project imports this file — could be a standalone file. */
     return -1;

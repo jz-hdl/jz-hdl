@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
 import {
     LanguageClient,
@@ -8,11 +9,26 @@ import {
 
 let client: LanguageClient | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
-let errorReporter: (message: string) => Thenable<string | undefined> | undefined =
-    (message) => vscode.window.showErrorMessage(message);
+type UserMessageKind = 'error' | 'warning' | 'info';
+type ProjectSelectionState = 'active' | 'ambiguous' | 'not-found' | 'not-imported';
+
+let messageReporter: (
+    kind: UserMessageKind,
+    message: string
+) => Thenable<string | undefined> | undefined = (kind, message) => {
+    switch (kind) {
+    case 'warning':
+        return vscode.window.showWarningMessage(message);
+    case 'info':
+        return vscode.window.showInformationMessage(message);
+    default:
+        return vscode.window.showErrorMessage(message);
+    }
+};
 
 /** Last project info received per URI, used by the picker and status bar. */
 const projectInfoByUri = new Map<string, ProjectInfoParams>();
+const reportedProjectStateByUri = new Map<string, string>();
 
 interface ProjectEntry {
     file: string;
@@ -24,14 +40,21 @@ interface ProjectInfoParams {
     uri: string;
     projects: ProjectEntry[];
     activeIndex: number;
+    selectionState: ProjectSelectionState;
+    message: string;
 }
 
 interface ExtensionTestApi {
     restartClientForTests(): Promise<void>;
-    setErrorReporterForTests(
-        reporter: (message: string) => Thenable<string | undefined> | undefined
+    setMessageReporterForTests(
+        reporter: (
+            kind: UserMessageKind,
+            message: string
+        ) => Thenable<string | undefined> | undefined
     ): void;
-    resetErrorReporterForTests(): void;
+    resetMessageReporterForTests(): void;
+    getProjectInfoForUriForTests(uri: string): ProjectInfoParams | undefined;
+    selectProjectForTests(uri: string, projectFile: string): void;
 }
 
 function getServerCommand(): string {
@@ -43,6 +66,101 @@ function getServerCommand(): string {
 function isLspEnabled(): boolean {
     const config = vscode.workspace.getConfiguration('jz-hdl');
     return config.get<boolean>('lsp.enabled', true);
+}
+
+function showUserMessage(
+    kind: UserMessageKind,
+    message: string
+): Thenable<string | undefined> | undefined {
+    return messageReporter(kind, message);
+}
+
+function getProjectStateKey(params: ProjectInfoParams): string {
+    return `${params.selectionState}:${params.message}`;
+}
+
+function describeProjectState(params: ProjectInfoParams): string {
+    if (params.message) {
+        return params.message;
+    }
+    switch (params.selectionState) {
+    case 'ambiguous':
+        return 'Ambiguous project selection. Select the intended project.';
+    case 'not-imported':
+        return 'Project discovery found projects, but none import this file.';
+    case 'not-found':
+        return 'Project discovery failed: no JZ-HDL project files were found for this file.';
+    default:
+        return '';
+    }
+}
+
+function reportProjectState(params: ProjectInfoParams): void {
+    if (params.selectionState === 'active') {
+        reportedProjectStateByUri.delete(params.uri);
+        return;
+    }
+
+    const activeUri = vscode.window.activeTextEditor?.document.uri.toString();
+    if (activeUri !== params.uri) {
+        return;
+    }
+
+    const stateKey = getProjectStateKey(params);
+    if (reportedProjectStateByUri.get(params.uri) === stateKey) {
+        return;
+    }
+    reportedProjectStateByUri.set(params.uri, stateKey);
+
+    const detail = describeProjectState(params);
+    if (!detail) {
+        return;
+    }
+
+    if (params.selectionState === 'not-found') {
+        void showUserMessage('warning', detail);
+        return;
+    }
+
+    void showUserMessage('warning', detail);
+}
+
+function validateConfiguredBinaryPath(binaryPath: string): string | undefined {
+    const resolved = path.resolve(binaryPath);
+
+    if (!fs.existsSync(resolved)) {
+        return `JZ-HDL LSP startup failed: configured binary not found at "${resolved}". Set jz-hdl.binaryPath to the compiler binary or clear it to use PATH.`;
+    }
+
+    let stat: fs.Stats;
+    try {
+        stat = fs.statSync(resolved);
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        return `JZ-HDL LSP startup failed: could not inspect configured binary "${resolved}": ${detail}`;
+    }
+
+    if (!stat.isFile()) {
+        return `JZ-HDL LSP startup failed: configured binary path "${resolved}" is not a file. Point jz-hdl.binaryPath to the jz-hdl compiler binary.`;
+    }
+
+    if (process.platform !== 'win32') {
+        try {
+            fs.accessSync(resolved, fs.constants.X_OK);
+        } catch {
+            return `JZ-HDL LSP startup failed: configured binary "${resolved}" is not executable. Point jz-hdl.binaryPath to the jz-hdl compiler binary.`;
+        }
+    }
+
+    return undefined;
+}
+
+function getServerStartupError(command: string, configured: boolean, detail: string): string {
+    if (configured) {
+        return `JZ-HDL LSP startup failed: could not launch configured binary "${command}". ${detail}`;
+    }
+
+    return `JZ-HDL LSP startup failed: could not launch "jz-hdl" from PATH. ${detail} Install jz-hdl or set jz-hdl.binaryPath to the compiler binary.`;
 }
 
 function isJzDocument(document: vscode.TextDocument): boolean {
@@ -76,27 +194,25 @@ function renderStatusBarForEditor(editor: vscode.TextEditor | undefined): void {
         return;
     }
 
-    if (params.projects.length === 0) {
+    if (params.selectionState === 'not-found') {
         statusBarItem.text = "$(circuit-board) No Project";
-        statusBarItem.tooltip = "No JZ-HDL project file found";
+        statusBarItem.tooltip = describeProjectState(params);
         statusBarItem.command = undefined;
         statusBarItem.show();
         return;
     }
 
-    if (params.projects.length === 1 &&
-        (params.activeIndex < 0 || params.activeIndex >= params.projects.length)) {
-        // One project exists but doesn't import this file.
+    if (params.selectionState === 'not-imported') {
         statusBarItem.text = "$(circuit-board) No Project";
-        statusBarItem.tooltip = "Project found but does not import this file";
+        statusBarItem.tooltip = describeProjectState(params);
         statusBarItem.command = 'jz-hdl.selectProject';
         statusBarItem.show();
         return;
     }
 
-    if (params.activeIndex < 0 || params.activeIndex >= params.projects.length) {
-        statusBarItem.text = "$(circuit-board) No Project";
-        statusBarItem.tooltip = `${params.projects.length} project(s) found but none imports this file\nClick to select`;
+    if (params.selectionState === 'ambiguous') {
+        statusBarItem.text = "$(circuit-board) Select Project";
+        statusBarItem.tooltip = describeProjectState(params);
         statusBarItem.command = 'jz-hdl.selectProject';
         statusBarItem.show();
         return;
@@ -133,7 +249,10 @@ async function showProjectPicker(): Promise<void> {
     const projectInfo = getProjectInfoForEditor(editor);
 
     if (!projectInfo || projectInfo.projects.length === 0) {
-        vscode.window.showInformationMessage('No JZ-HDL projects discovered.');
+        void showUserMessage(
+            'warning',
+            projectInfo ? describeProjectState(projectInfo) : 'No JZ-HDL projects discovered.'
+        );
         return;
     }
 
@@ -169,7 +288,22 @@ async function startClient(): Promise<void> {
         return;
     }
 
-    const command = getServerCommand();
+    const configuredBinaryPath = vscode.workspace
+        .getConfiguration('jz-hdl')
+        .get<string>('binaryPath', '')
+        .trim();
+    const hasConfiguredBinaryPath = configuredBinaryPath.length > 0;
+    const command = hasConfiguredBinaryPath
+        ? path.resolve(configuredBinaryPath)
+        : getServerCommand();
+
+    if (hasConfiguredBinaryPath) {
+        const validationMessage = validateConfiguredBinaryPath(configuredBinaryPath);
+        if (validationMessage) {
+            void showUserMessage('error', validationMessage);
+            return;
+        }
+    }
 
     const serverOptions: ServerOptions = {
         command: command,
@@ -201,15 +335,16 @@ async function startClient(): Promise<void> {
         // Listen for project info notifications from the server.
         client.onNotification('jz-hdl/projectInfo', (params: ProjectInfoParams) => {
             projectInfoByUri.set(params.uri, params);
+            reportProjectState(params);
             if (vscode.window.activeTextEditor?.document.uri.toString() === params.uri) {
                 renderStatusBarForEditor(vscode.window.activeTextEditor);
             }
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        void errorReporter(
-            `Failed to start JZ-HDL language server: ${message}. ` +
-            `Check that the jz-hdl binary is installed and accessible.`
+        void showUserMessage(
+            'error',
+            getServerStartupError(command, hasConfiguredBinaryPath, message)
         );
         client = undefined;
     }
@@ -222,6 +357,7 @@ async function stopClient(): Promise<void> {
     }
 
     projectInfoByUri.clear();
+    reportedProjectStateByUri.clear();
     renderStatusBarForEditor(vscode.window.activeTextEditor);
 }
 
@@ -248,6 +384,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     context.subscriptions.push(
         vscode.workspace.onDidCloseTextDocument((document) => {
             projectInfoByUri.delete(document.uri.toString());
+            reportedProjectStateByUri.delete(document.uri.toString());
         })
     );
 
@@ -281,13 +418,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
                 await startClient();
             }
         },
-        setErrorReporterForTests(
-            reporter: (message: string) => Thenable<string | undefined> | undefined
+        setMessageReporterForTests(
+            reporter: (
+                kind: UserMessageKind,
+                message: string
+            ) => Thenable<string | undefined> | undefined
         ): void {
-            errorReporter = reporter;
+            messageReporter = reporter;
         },
-        resetErrorReporterForTests(): void {
-            errorReporter = (message) => vscode.window.showErrorMessage(message);
+        resetMessageReporterForTests(): void {
+            messageReporter = (kind, message) => {
+                switch (kind) {
+                case 'warning':
+                    return vscode.window.showWarningMessage(message);
+                case 'info':
+                    return vscode.window.showInformationMessage(message);
+                default:
+                    return vscode.window.showErrorMessage(message);
+                }
+            };
+        },
+        getProjectInfoForUriForTests(uri: string): ProjectInfoParams | undefined {
+            return projectInfoByUri.get(uri);
+        },
+        selectProjectForTests(uri: string, projectFile: string): void {
+            if (!client) {
+                return;
+            }
+            client.sendNotification('jz-hdl/selectProject', { uri, projectFile });
         },
     };
 }

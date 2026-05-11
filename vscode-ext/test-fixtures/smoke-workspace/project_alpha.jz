@@ -1,0 +1,15 @@
+@project PROJECT_ALPHA
+    @import "shared/shared_module.jz";
+    @top AlphaTop {
+        OUT [1] q = _;
+    }
+@endproj
+
+@module AlphaTop
+    PORT {
+        OUT [1] q;
+    }
+    ASYNCHRONOUS {
+        q = 1'b0;
+    }
+@endmod

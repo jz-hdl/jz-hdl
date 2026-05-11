@@ -241,12 +241,16 @@ int lsp_discover_projects(const char *filepath,
  * Scans each project file's @import directives to see which one
  * references the given filepath.
  *
- * @param projects  List of discovered projects.
- * @param filepath  Absolute path to the source file being edited.
- * @return Index into projects->entries, or -1 if none imports the file.
+ * @param projects          List of discovered projects.
+ * @param filepath          Absolute path to the source file being edited.
+ * @param out_match_count   Optional pointer that receives the number of
+ *                          matching projects.
+ * @return Index into projects->entries when exactly one project imports the
+ *         file, -1 if none import it, or -2 if multiple projects import it.
  */
 int lsp_find_project_for_file(const LspProjectList *projects,
-                              const char *filepath);
+                              const char *filepath,
+                              size_t *out_match_count);
 
 /* ------------------------------------------------------------------ */
 /*  URI helpers                                                       */

@@ -10,6 +10,7 @@ const {
 const extensionRoot = path.resolve(__dirname, '..');
 const extensionTestsPath = path.join(extensionRoot, 'out', 'test', 'suite', 'index.js');
 const vsixPath = path.join(extensionRoot, 'build', 'jz-hdl.vsix');
+const smokeWorkspacePath = path.join(extensionRoot, 'test-fixtures', 'smoke-workspace');
 
 function runCommand(command, args, options = {}) {
   const result = cp.spawnSync(command, args, {
@@ -53,6 +54,7 @@ async function main() {
       `--extensionDevelopmentPath=${extensionRoot}`,
       `--extensionTestsPath=${extensionTestsPath}`,
       '--disable-extensions',
+      smokeWorkspacePath,
     ]);
   } finally {
     fs.rmSync(userDataDir, { recursive: true, force: true });
