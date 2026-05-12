@@ -9,6 +9,8 @@ on:
 jobs:
   compiler-test:
     runs-on: ubuntu-latest
+    env:
+      SDL_UNIX_CONSOLE_BUILD: ON
 
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +21,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure
-        run: cmake -S . -B build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON
+        run: cmake -S . -B build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON -DSDL_UNIX_CONSOLE_BUILD=${SDL_UNIX_CONSOLE_BUILD}
 
       - name: Build
         run: cmake --build build --parallel
@@ -33,6 +35,8 @@ jobs:
   docs-site:
     name: Docs site
     runs-on: ubuntu-latest
+    env:
+      SDL_UNIX_CONSOLE_BUILD: ON
 
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +45,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: docs/package-lock.json
 
       - name: Install PDF toolchain
         run: |
@@ -55,6 +57,8 @@ jobs:
   vscode-extension:
     name: VS Code extension
     runs-on: ubuntu-latest
+    env:
+      SDL_UNIX_CONSOLE_BUILD: ON
 
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +79,7 @@ jobs:
         working-directory: vscode-ext
 
       - name: Configure compiler
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON -DSDL_UNIX_CONSOLE_BUILD=${SDL_UNIX_CONSOLE_BUILD}
 
       - name: Build compiler
         run: cmake --build build --parallel --target jz-hdl
