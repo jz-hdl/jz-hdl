@@ -1,5 +1,5 @@
 File: HDL_1_5_GND_PARTIAL_DRIVE_WITH_Z-happy_path.jz
-      21:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      21:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default
       34:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC
       35:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC
       36:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC

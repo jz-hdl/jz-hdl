@@ -1,2 +1,2 @@
 File: TB_7_4_RPT_EXPANDED_SIZE_LIMIT_EXCEEDED-expanded_size_limit.jz
-      18:1    error RPT_EXPANDED_SIZE_LIMIT_EXCEEDED RPT-004 @repeat expansion exceeds the configured expanded-size limit
+      18:1    error RPT_EXPANDED_SIZE_LIMIT_EXCEEDED S7.4/S4.6 RPT-004 @repeat expansion exceeds the configured expanded-size limit

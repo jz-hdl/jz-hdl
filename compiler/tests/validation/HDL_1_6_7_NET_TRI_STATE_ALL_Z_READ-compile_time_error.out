@@ -1,3 +1,3 @@
 File: HDL_1_6_7_NET_TRI_STATE_ALL_Z_READ-compile_time_error.jz
-      50:9    warn  WARN_INTERNAL_TRISTATE S11 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC
+      50:9    warn  WARN_INTERNAL_TRISTATE S11.1/S11.7.2 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC
       65:9    error NET_TRI_STATE_ALL_Z_READ S4.10 All drivers assign `z` (tri-state) but signal is read; at least one driver must provide a value

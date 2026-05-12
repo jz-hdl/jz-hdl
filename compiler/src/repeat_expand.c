@@ -490,7 +490,7 @@ static int expand_region(const char *start,
             if (p >= frame->region_end || !isdigit((unsigned char)*p)) {
                 report_repeat_rule(ctx, repeat_at,
                                    "RPT_COUNT_INVALID",
-                                   "RPT-001 @repeat requires a positive integer count");
+                                   "S7.4/S4.6 RPT-001 @repeat requires a positive integer count");
                 repeat_frame_stack_free(&stack);
                 return 1;
             }
@@ -512,7 +512,7 @@ static int expand_region(const char *start,
             if (count == 0) {
                 report_repeat_rule(ctx, repeat_at,
                                    "RPT_COUNT_INVALID",
-                                   "RPT-001 @repeat count must be a positive integer");
+                                   "S7.4/S4.6 RPT-001 @repeat requires a positive integer count");
                 repeat_frame_stack_free(&stack);
                 return 1;
             }
