@@ -149,7 +149,11 @@ static void ir_trim_copy(const char *src, char *dst, size_t dst_size)
     if (len >= dst_size) {
         len = dst_size - 1u;
     }
-    memcpy(dst, start, len);
+    /* Some callers trim in place after stripping a prefix (for example "~KEY[0]").
+     * Allow overlapping source/destination ranges so that platform-specific
+     * memcpy behavior cannot corrupt pin names during top-binding lowering.
+     */
+    memmove(dst, start, len);
     dst[len] = '\0';
 }
 
