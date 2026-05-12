@@ -1,0 +1,60 @@
+{
+  "chipid": "CHIP_9_3_1_INPUT_TYPE_FACT_RESERVED_NOT_IMPLEMENTED-reserved_input_type",
+  "description": "Reserved input type fact must be rejected.",
+  "boards": [],
+  "resources": {},
+  "latches": {
+    "source": "DS",
+    "FAB": {
+      "description": "Fabric latch support",
+      "D": false,
+      "SR": false
+    }
+  },
+  "dsp": {
+    "source": "DS",
+    "description": "No DSP blocks"
+  },
+  "memory": [],
+  "clock_gen": [
+    {
+      "type": "pll",
+      "source": "DS-ICE40-UltraPlus, Section: PLL",
+      "description": "PLL with reserved input type fact in variant when-clause",
+      "count": 1,
+      "chaining": false,
+      "pad_exclusive": true,
+      "inputs": {
+        "REF_CLK": {
+          "description": "Reference clock input to the PLL",
+          "required": true,
+          "width": 1,
+          "requires_period": true,
+          "min_mhz": 10,
+          "max_mhz": 133
+        }
+      },
+      "parameters": {},
+      "outputs": {
+        "PRIMARY": {
+          "description": "Primary PLL output",
+          "port": "PLLOUTGLOBAL",
+          "is_clock": true
+        }
+      },
+      "variants": [
+        {
+          "when": {
+            "input.REF_CLK.type": "osc"
+          },
+          "map": {
+            "verilog-2005": [
+              "SB_PLL40_PAD u_pll ( .PACKAGEPIN(%%REF_CLK%%), .PLLOUTGLOBAL(%%PRIMARY%%) );\n"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "fixed_pins": []
+}

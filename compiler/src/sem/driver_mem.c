@@ -800,49 +800,48 @@ static void sem_check_mem_file_init(JZASTNode *mem,
     if (!mem || !init_expr || !init_expr->text || !diagnostics) return;
 
     /* Validate the @file() path against security policy. */
-    char base_dir[512];
+    char base_dir[4096];
     sem_base_dir_from_filename_resolved(mem->loc.filename,
                                         base_dir,
                                         sizeof(base_dir));
 
-    char *validated = jz_path_validate(init_expr->text,
-                                        base_dir[0] ? base_dir : NULL,
-                                        init_expr->loc,
-                                        diagnostics);
-    char fullpath[512];
+    char *validated = NULL;
     size_t file_size = 0;
-    if (validated) {
-        snprintf(fullpath, sizeof(fullpath), "%s", validated);
-        free(validated);
-    } else {
+    FILE *fp = jz_path_open_validated_read(init_expr->text,
+                                           base_dir[0] ? base_dir : NULL,
+                                           init_expr->loc,
+                                           diagnostics,
+                                           &validated);
+    if (!validated) {
         /* Path validation failed; diagnostic already emitted. */
         return;
     }
+    if (!fp) {
+        char msg[600];
+        snprintf(msg, sizeof(msg),
+                 "MEM init file not found or not readable: %s", validated);
+        sem_report_rule(diagnostics,
+                        init_expr->loc,
+                        "MEM_INIT_FILE_NOT_FOUND",
+                        msg);
+        free(validated);
+        return;
+    }
 
-    if (jz_get_file_size(fullpath, &file_size) == 0 &&
+    if (jz_get_fp_size(fp, &file_size) == 0 &&
         file_size > jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES)) {
         char msg[640];
         snprintf(msg, sizeof(msg),
                  "MEM init file '%s' is %zu byte(s), exceeding the compiler safety limit of %u byte(s)",
-                 fullpath,
+                 validated,
                  file_size,
                  (unsigned)jz_input_limit_value(JZ_LIMIT_MEM_INIT_FILE_BYTES));
         sem_report_rule(diagnostics,
                         init_expr->loc,
                         "MEM_INIT_FILE_HARD_LIMIT_EXCEEDED",
                         msg);
-        return;
-    }
-
-    FILE *fp = fopen(fullpath, "rb");
-    if (!fp) {
-        char msg[600];
-        snprintf(msg, sizeof(msg),
-                 "MEM init file not found or not readable: %s", fullpath);
-        sem_report_rule(diagnostics,
-                        init_expr->loc,
-                        "MEM_INIT_FILE_NOT_FOUND",
-                        msg);
+        fclose(fp);
+        free(validated);
         return;
     }
 
@@ -942,6 +941,7 @@ static void sem_check_mem_file_init(JZASTNode *mem,
     unsigned long long capacity_bits =
         (unsigned long long)word_w * (unsigned long long)depth;
     if (capacity_bits == 0) {
+        free(validated);
         return;
     }
 
@@ -962,6 +962,7 @@ static void sem_check_mem_file_init(JZASTNode *mem,
                         "MEM_WARN_PARTIAL_INIT",
                         msg);
     }
+    free(validated);
 }
 
 /* Given a qualified name "mem.port" or "mem.port.<field>", locate the
@@ -2451,6 +2452,10 @@ typedef struct JZModuleInstanceCount {
     unsigned    count;       /**< Total number of instances in the project graph. */
 } JZModuleInstanceCount;
 
+typedef struct JZModuleVisitFrame {
+    const char *module_name;
+} JZModuleVisitFrame;
+
 /* Recursively accumulate instance counts starting from a given module.
  * Each entry in `counts` stores the total number of times a module is
  * instantiated across the design hierarchy.  `multiplier` is the number
@@ -2461,9 +2466,29 @@ static void mem_res_count_instances(JZASTNode *project,
                                      unsigned multiplier,
                                      const JZBuffer *module_scopes,
                                      const JZBuffer *project_symbols,
-                                     JZBuffer *counts)
+                                     JZBuffer *counts,
+                                     JZBuffer *active_path)
 {
     if (!module_name || !project || !counts) return;
+
+    if (active_path) {
+        size_t active_count = active_path->len / sizeof(JZModuleVisitFrame);
+        JZModuleVisitFrame *frames = (JZModuleVisitFrame *)active_path->data;
+        for (size_t i = 0; i < active_count; ++i) {
+            if (frames[i].module_name &&
+                strcmp(frames[i].module_name, module_name) == 0) {
+                return;
+            }
+        }
+
+        {
+            JZModuleVisitFrame frame;
+            frame.module_name = module_name;
+            if (jz_buf_append(active_path, &frame, sizeof(frame)) != 0) {
+                return;
+            }
+        }
+    }
 
     /* Find the module AST node. */
     JZASTNode *mod = NULL;
@@ -2475,7 +2500,12 @@ static void mem_res_count_instances(JZASTNode *project,
             break;
         }
     }
-    if (!mod) return;
+    if (!mod) {
+        if (active_path && active_path->len >= sizeof(JZModuleVisitFrame)) {
+            active_path->len -= sizeof(JZModuleVisitFrame);
+        }
+        return;
+    }
 
     /* Add/update the count for this module. */
     size_t n = counts->len / sizeof(JZModuleInstanceCount);
@@ -2528,7 +2558,8 @@ static void mem_res_count_instances(JZASTNode *project,
             }
             mem_res_count_instances(project, child->text,
                                      multiplier * array_count,
-                                     module_scopes, project_symbols, counts);
+                                     module_scopes, project_symbols,
+                                     counts, active_path);
         } else if (child->type == JZ_AST_FEATURE_GUARD) {
             /* Walk branches of FEATURE_GUARD for instances. */
             for (size_t bi = 1; bi < child->child_count; ++bi) {
@@ -2551,11 +2582,16 @@ static void mem_res_count_instances(JZASTNode *project,
                         }
                         mem_res_count_instances(project, bchild->text,
                                                  multiplier * array_count,
-                                                 module_scopes, project_symbols, counts);
+                                                 module_scopes, project_symbols,
+                                                 counts, active_path);
                     }
                 }
             }
         }
+    }
+
+    if (active_path && active_path->len >= sizeof(JZModuleVisitFrame)) {
+        active_path->len -= sizeof(JZModuleVisitFrame);
     }
 }
 
@@ -2576,8 +2612,11 @@ void sem_check_project_mem_resources(JZASTNode *project,
 
     /* Build instance count map from @top downward. */
     JZBuffer counts = {0};
+    JZBuffer active_path = {0};
     mem_res_count_instances(project, top_new->name, 1,
-                             module_scopes, project_symbols, &counts);
+                             module_scopes, project_symbols,
+                             &counts, &active_path);
+    jz_buf_free(&active_path);
 
     /* Accumulate total BLOCK count and DISTRIBUTED bits. */
     unsigned total_block_count = 0;

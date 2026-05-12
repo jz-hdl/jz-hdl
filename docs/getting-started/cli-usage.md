@@ -11,7 +11,7 @@ outline: deep
 ## Synopsis
 
 ```bash
-Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [-o OUT_FILE]
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--Eno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
@@ -19,13 +19,22 @@ Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] 
        ./jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ast [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]
-       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX]
-       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX]
+       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX] [--jitter=CLOCK:PS] [--drift=CLOCK:PPM] [--tristate-default=GND|VCC]
        ./jz-hdl --chip-info [CHIP_ID] [-o OUT_FILE]
        ./jz-hdl --lint-rules
        ./jz-hdl --lsp
        ./jz-hdl --help
        ./jz-hdl --version
+
+Simulation timing options:
+  --jitter=CLOCK:PS       Add peak-to-peak clock jitter in picoseconds (may repeat)
+  --drift=CLOCK:PPM       Add maximum clock drift in parts per million (may repeat)
+
+Expansion safety options:
+  --expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>
+                           Override hard expansion limits (defaults: repeat-count=1024,
+                           repeat-bytes=1048576, apply-count=1024, apply-growth=4096)
 
 Path security options:
   --sandbox-root=<dir>     Add permitted root directory for file access
@@ -51,7 +60,7 @@ Path security options:
 | `--lint-rules` | List all diagnostic rule IDs and their descriptions. |
 | `--lsp` | Start the Language Server Protocol server (stdio transport). See [Editor Integration](#editor-integration). |
 | `--help` | Print usage information. |
-| `--version` | Print the compiler version and git commit (e.g., `Version 0.1.0 (abc1234)`). |
+| `--version` | Print the compiler version and git commit (e.g., `Version 0.1.8 (abc1234)`). |
 
 ## Common options
 
@@ -62,7 +71,8 @@ Path security options:
 | `--info` | Include informational diagnostics (not just warnings and errors). |
 | `--explain` | Print detailed explanation under each diagnostic. |
 | `--warn-as-error` | Treat all warnings as errors. |
-| `--Wno-group=NAME` | Suppress diagnostics in the named group. |
+| `--Wno-group=NAME` | Suppress WARNING-level diagnostics in the named group. |
+| `--Eno-group=NAME` | Suppress ERROR-level diagnostics in the named group. |
 
 ## Constraint file options (with `--verilog`)
 
@@ -83,14 +93,22 @@ Path security options:
 
 By default, the compiler restricts all file paths to be within the directory containing the input file. See [Path Security](/reference-manual/formal-reference/projects#path-security-sandbox) for details.
 
-## Tristate default (with `--verilog`, `--rtlil`, or `--ir`)
+## Tristate default
 
 | Option | Description |
 | --- | --- |
 | `--tristate-default=GND` | Convert internal tri-state nets to priority muxes with GND default. |
 | `--tristate-default=VCC` | Convert internal tri-state nets to priority muxes with VCC default. |
 
+This option is accepted with `--lint`, `--verilog`, `--rtlil`, `--ir`, `--test`, and `--simulate`. It is rejected with `--ast`.
+
 See [Tristate Default](../reference-manual/tristate-default.md) for details.
+
+## Expansion safety options
+
+| Option | Description |
+| --- | --- |
+| `--expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>` | Override the hard expansion safety limits for `@repeat` and template `@apply`. Defaults: `repeat-count=1024`, `repeat-bytes=1048576`, `apply-count=1024`, `apply-growth=4096`. |
 
 ## Testbench options (with `--test`)
 
@@ -112,10 +130,12 @@ See [Tristate Default](../reference-manual/tristate-default.md) for details.
 
 | Option | Description |
 | --- | --- |
-| `-o WAVEFORM_FILE` | Output waveform file path. Default: `<input_basename>.vcd`. |
+| `-o WAVEFORM_FILE` | Output waveform file path. Default: `<input_basename>.vcd`, or the selected format's extension when `--fst` or `--jzw` is specified. |
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format. |
 | `--jzw` | Force JZW output format (SQLite-based). |
+| `--jitter=<clock>:<ps>` | Add peak-to-peak clock jitter in picoseconds. May be specified multiple times. |
+| `--drift=<clock>:<ppm>` | Add maximum clock drift in parts per million. May be specified multiple times. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 | `--seed=0xHEX` | 32-bit hex seed for register/memory randomization. Default: `0xDEADBEEF`. |
 
@@ -170,6 +190,13 @@ jz-hdl sim_fifo.jz --simulate
 # Run simulation with explicit output path
 jz-hdl sim_fifo.jz --simulate -o fifo_waves.vcd
 
+# Run simulation in FST or JZW format
+jz-hdl sim_fifo.jz --simulate --fst
+jz-hdl sim_fifo.jz --simulate --jzw
+
+# Run simulation with clock jitter and drift
+jz-hdl sim_fifo.jz --simulate --jitter=clk:200 --drift=clk:50
+
 # Run simulation with verbose output and fixed seed
 jz-hdl sim_fifo.jz --simulate --verbose --seed=0x1234
 
@@ -193,10 +220,12 @@ A VS Code extension is included in the `vscode-ext/` directory. To install:
 ```bash
 cd vscode-ext
 npm install
-npm run compile
+npm run package:vsix
 ```
 
-Then in VS Code: **Extensions** → **...** → **Install from VSIX** or use **Developer: Install Extension from Location** and select the `vscode-ext/` directory.
+Then in VS Code: **Extensions** → **...** → **Install from VSIX** and select `vscode-ext/build/jz-hdl.vsix`.
+
+The generated `.vsix` file is build output and should not be checked into the repository.
 
 #### Settings
 

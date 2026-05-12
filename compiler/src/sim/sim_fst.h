@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
+#include "sim_value.h"
 
 /**
  * @brief Opaque writer for FST waveform output.
@@ -62,10 +63,9 @@ void fst_set_time(FSTWriter *w, uint64_t time_ps);
  *
  * @param w      FST writer.
  * @param sig_id Signal ID returned by fst_add_signal().
- * @param value  Signal value (up to 64 bits).
- * @param width  Signal width.
+ * @param value  Full simulator value.
  */
-void fst_dump_value(FSTWriter *w, int sig_id, uint64_t value, int width);
+void fst_dump_value(FSTWriter *w, int sig_id, SimValue value);
 
 /**
  * @brief Close the FST file and free resources.

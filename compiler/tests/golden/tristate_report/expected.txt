@@ -1,0 +1,47 @@
+JZ-HDL Tri-State Resolution Report
+Input file: fixture.hdl
+
+Legend
+------
+Can produce Z: Driver can output high-impedance (tri-state)
+Can produce non-Z: Driver can output logic 0 or 1
+E0, E1, ...: Driver conditions (guards)
+G: Globally operator from temporal logic, globally true (at all times)
+AT_MOST_ONE: At most one driver active per execution path
+EXACTLY_ONE: Exactly one driver active per execution path (no floating nets)
+
+Module: Top
+
+Summary
+-------
+fixture.hdl@16: bus, Possible Drivers: 4, Result: PROVEN
+
+bus Details
+------------------
+Width: 8
+Declared at: fixture.hdl@16
+Drivers:
+    fixture.hdl@22: E0 := (sel)
+        Can produce Z: no, Can produce non-Z: yes
+        Code: bus <= data_a;
+    fixture.hdl@23: E1 := (sel)
+        Can produce Z: yes, Can produce non-Z: no
+        Code: bus <= 8'bzzzz_zzzz;
+    fixture.hdl@25: E2 := (!(sel))
+        Can produce Z: yes, Can produce non-Z: no
+        Code: bus <= 8'bzzzz_zzzz;
+    fixture.hdl@26: E3 := (!(sel))
+        Can produce Z: no, Can produce non-Z: yes
+        Code: bus <= data_b;
+
+Proof Obligations:
+    AT_MOST_ONE: G !(E0 && E1) AND G !(E0 && E2) AND G !(E0 && E3) AND G !(E1 && E2) AND G !(E1 && E3) AND G !(E2 && E3)
+    EXACTLY_ONE: G (E0 || E1 || E2 || E3) AND AT_MOST_ONE
+
+Result: PROVEN
+    Reason: Drivers are in complementary IF/ELSE branches
+
+
+Overall Summary
+---------------
+bus, Possible Drivers: 4, Result: PROVEN

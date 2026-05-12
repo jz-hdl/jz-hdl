@@ -1,0 +1,35 @@
+// Golden test: oversized RTLIL memory init emission is rejected before explosion.
+
+@project RTLIL_MEMORY_INIT_LIMIT
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [19] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] rdata = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [19] addr;
+        IN  [8] wdata;
+        OUT [8] rdata;
+    }
+
+    MEM {
+        huge_mem [8] [500000] = @file("huge_init.bin") {
+            OUT rd SYNC;
+            IN  wr;
+        };
+    }
+
+    ASYNCHRONOUS {
+        rdata = huge_mem.rd.data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        huge_mem.rd.addr <= addr;
+        huge_mem.wr[addr] <= wdata;
+    }
+@endmod

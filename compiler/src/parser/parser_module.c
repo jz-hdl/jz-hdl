@@ -32,7 +32,7 @@ JZASTNode *parse_module(Parser *p) {
 
     const JZToken *name_tok = peek(p);
     if (!is_decl_identifier_token(name_tok)) {
-        parser_error(p, "expected identifier after @module");
+        parser_error_id_syntax_or_parse(p, "expected identifier after @module");
         return NULL;
     }
     advance(p);

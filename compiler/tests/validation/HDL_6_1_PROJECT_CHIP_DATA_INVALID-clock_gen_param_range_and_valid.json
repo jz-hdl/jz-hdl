@@ -1,0 +1,65 @@
+{
+  "chipid": "HDL_6_1_PROJECT_CHIP_DATA_INVALID-clock_gen_param_range_and_valid",
+  "description": "Invalid clock_gen parameter mixing range and enumeration.",
+  "boards": [],
+  "resources": {
+    "LUT4": 1,
+    "DFF": 1
+  },
+  "latches": {
+    "source": "DS",
+    "FAB": {
+      "description": "Fabric latch support",
+      "D": false,
+      "SR": false
+    }
+  },
+  "dsp": {
+    "source": "DS",
+    "description": "No DSP blocks"
+  },
+  "memory": [
+    {
+      "type": "DISTRIBUTED",
+      "source": "DS",
+      "description": "Tiny distributed memory",
+      "total_bits": 16,
+      "r_ports": 1,
+      "w_ports": 1,
+      "configurations": [
+        { "width": 1, "depth": 16 }
+      ]
+    }
+  ],
+  "clock_gen": [
+    {
+      "type": "osc",
+      "source": "DS",
+      "description": "Internal oscillator",
+      "count": 1,
+      "map": {
+        "verilog-2005": [ "OSC u_osc();\n" ],
+        "rtlil": [ "cell \\OSC u_osc\nend\n" ]
+      },
+      "parameters": {
+        "DIV": {
+          "description": "Divider setting",
+          "type": "int",
+          "default": 1,
+          "min": 0,
+          "max": 3,
+          "valid": [ 0, 1, 2, 3 ]
+        }
+      },
+      "outputs": {
+        "BASE": {
+          "description": "Primary oscillator output",
+          "port": "OSCOUT",
+          "is_clock": true,
+          "frequency_mhz": { "expr": "250.0" }
+        }
+      }
+    }
+  ],
+  "fixed_pins": []
+}

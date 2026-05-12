@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdio.h>
-#include <time.h>
 
 #include "sem_driver.h"
 #include "sem.h"
@@ -23,9 +22,13 @@
 static int g_tristate_report_enabled = 0;
 static int g_tristate_report_header_printed = 0;
 static FILE *g_tristate_report_out = NULL;
-static char g_tristate_report_generated[64];
-static const char *g_tristate_report_version = NULL;
 static const char *g_tristate_report_input = NULL;
+typedef struct {
+    const char *filename;
+    int line;
+    const char *name;
+} JZTristateSeenModule;
+static JZBuffer g_tristate_report_seen_modules = {0}; /* Array of JZTristateSeenModule */
 
 /**
  * @struct JZTristateSummaryEntry
@@ -44,31 +47,16 @@ void jz_sem_enable_tristate_report(FILE *out,
                                    const char *input_filename,
                                    JZDiagnosticList *diagnostics)
 {
+    (void)tool_version;
     (void)diagnostics;
     g_tristate_report_enabled = (out != NULL);
     g_tristate_report_header_printed = 0;
     g_tristate_report_out = out;
-    g_tristate_report_version = tool_version;
     g_tristate_report_input = input_filename;
     jz_buf_free(&g_tristate_summary);
     memset(&g_tristate_summary, 0, sizeof(g_tristate_summary));
-
-    time_t now = time(NULL);
-    struct tm tm_info;
-    if (localtime_r(&now, &tm_info) != NULL) {
-        if (strftime(g_tristate_report_generated,
-                     sizeof(g_tristate_report_generated),
-                     "%Y-%m-%d %H:%M %Z",
-                     &tm_info) == 0) {
-            snprintf(g_tristate_report_generated,
-                     sizeof(g_tristate_report_generated),
-                     "<unknown>");
-        }
-    } else {
-        snprintf(g_tristate_report_generated,
-                 sizeof(g_tristate_report_generated),
-                 "<unknown>");
-    }
+    jz_buf_free(&g_tristate_report_seen_modules);
+    memset(&g_tristate_report_seen_modules, 0, sizeof(g_tristate_report_seen_modules));
 }
 
 /* -------------------------------------------------------------------------
@@ -144,6 +132,25 @@ void sem_emit_tristate_report_for_module(const JZModuleScope *scope,
     if (!g_tristate_report_enabled || !g_tristate_report_out || !scope || !scope->node) {
         return;
     }
+
+    const JZTristateSeenModule *seen =
+        (const JZTristateSeenModule *)g_tristate_report_seen_modules.data;
+    size_t seen_count = g_tristate_report_seen_modules.len / sizeof(JZTristateSeenModule);
+    for (size_t i = 0; i < seen_count; ++i) {
+        if (seen[i].line == scope->node->loc.line &&
+            seen[i].filename && scope->node->loc.filename &&
+            strcmp(seen[i].filename, scope->node->loc.filename) == 0 &&
+            seen[i].name && scope->name &&
+            strcmp(seen[i].name, scope->name) == 0) {
+            return;
+        }
+    }
+    JZTristateSeenModule seen_key = {
+        scope->node->loc.filename,
+        scope->node->loc.line,
+        scope->name
+    };
+    (void)jz_buf_append(&g_tristate_report_seen_modules, &seen_key, sizeof(seen_key));
 
     FILE *out = g_tristate_report_out;
 
@@ -303,9 +310,9 @@ void sem_emit_tristate_report_for_module(const JZModuleScope *scope,
     /* Print top-level header once. */
     if (!g_tristate_report_header_printed) {
         fprintf(out, "JZ-HDL Tri-State Resolution Report\n");
-        fprintf(out, "Version: %s\n",
-                g_tristate_report_version ? g_tristate_report_version : "(unknown)");
-        fprintf(out, "Generated: %s\n", g_tristate_report_generated);
+        if (g_tristate_report_input) {
+            fprintf(out, "Input file: %s\n", g_tristate_report_input);
+        }
         fprintf(out, "\n");
         fprintf(out, "Legend\n");
         fprintf(out, "------\n");
@@ -320,9 +327,6 @@ void sem_emit_tristate_report_for_module(const JZModuleScope *scope,
 
     /* Print per-module header. */
     fprintf(out, "\n");
-    if (g_tristate_report_input) {
-        fprintf(out, "Input file: %s\n", g_tristate_report_input);
-    }
     fprintf(out, "Module: %s\n", scope->name ? scope->name : "<anonymous>");
     fprintf(out, "\n");
 
@@ -542,12 +546,14 @@ void sem_emit_tristate_report_finalize(void)
 {
     if (!g_tristate_report_enabled || !g_tristate_report_out) {
         jz_buf_free(&g_tristate_summary);
+        jz_buf_free(&g_tristate_report_seen_modules);
         return;
     }
 
     size_t entry_count = g_tristate_summary.len / sizeof(JZTristateSummaryEntry);
     if (entry_count == 0) {
         jz_buf_free(&g_tristate_summary);
+        jz_buf_free(&g_tristate_report_seen_modules);
         return;
     }
 
@@ -569,4 +575,5 @@ void sem_emit_tristate_report_finalize(void)
     }
 
     jz_buf_free(&g_tristate_summary);
+    jz_buf_free(&g_tristate_report_seen_modules);
 }

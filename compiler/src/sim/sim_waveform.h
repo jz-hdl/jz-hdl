@@ -7,6 +7,7 @@
 #define JZ_SIM_WAVEFORM_H
 
 #include <stdint.h>
+#include "sim_value.h"
 
 /**
  * @enum SimWaveFormat
@@ -88,11 +89,9 @@ void sim_wave_set_time(SimWaveWriter *w, uint64_t time_ps);
  * @brief Emit a value change for one signal.
  * @param w Waveform writer.
  * @param sig_id Signal identifier returned by sim_wave_add_signal().
- * @param value Packed signal value.
- * @param width Signal width in bits.
+ * @param value Full simulator value to encode.
  */
-void sim_wave_dump_value(SimWaveWriter *w, int sig_id, uint64_t value,
-                         int width);
+void sim_wave_dump_value(SimWaveWriter *w, int sig_id, SimValue value);
 
 /**
  * @brief Record an annotation event for backends that support annotations.

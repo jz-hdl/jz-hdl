@@ -149,7 +149,11 @@ static void ir_trim_copy(const char *src, char *dst, size_t dst_size)
     if (len >= dst_size) {
         len = dst_size - 1u;
     }
-    memcpy(dst, start, len);
+    /* Some callers trim in place after stripping a prefix (for example "~KEY[0]").
+     * Allow overlapping source/destination ranges so that platform-specific
+     * memcpy behavior cannot corrupt pin names during top-binding lowering.
+     */
+    memmove(dst, start, len);
     dst[len] = '\0';
 }
 
@@ -571,10 +575,18 @@ static double ir_cgen_eval_shift(const char **pp, IRCGenEvalCtx *ctx)
         if ((*pp)[0] == '<' && (*pp)[1] == '<') {
             *pp += 2;
             double right = ir_cgen_eval_add(pp, ctx);
+            if (right < 0.0 || right >= 63.0) {
+                ctx->ok = 0;
+                return 0.0;
+            }
             left = (double)((long long)left << (int)right);
         } else if ((*pp)[0] == '>' && (*pp)[1] == '>') {
             *pp += 2;
             double right = ir_cgen_eval_add(pp, ctx);
+            if (right < 0.0 || right >= 63.0) {
+                ctx->ok = 0;
+                return 0.0;
+            }
             left = (double)((long long)left >> (int)right);
         } else break;
     }
@@ -744,7 +756,7 @@ int jz_ir_build_design(JZASTNode *root,
 
     /* Build net graphs so that symbol.can_be_z is populated for each signal. */
     ir_t0 = clock();
-    sem_build_net_graphs(root, &module_scopes, &project_symbols, diagnostics);
+    sem_build_net_graphs(root, &module_scopes, &project_symbols, diagnostics, 0);
     if (jz_verbose) fprintf(stderr, "[verbose]   ir: net_graphs: %.1f ms\n",
                              (double)(clock() - ir_t0) / CLOCKS_PER_SEC * 1000.0);
 
@@ -892,6 +904,7 @@ int jz_ir_build_design(JZASTNode *root,
                                             mod->id,
                                             arena,
                                             &project_symbols,
+                                            diagnostics,
                                             &mod->signals,
                                             &mod->num_signals,
                                             &bus_map,
@@ -940,6 +953,7 @@ int jz_ir_build_design(JZASTNode *root,
             if (ir_build_instance_port_mappings(scope,
                                                  &project_symbols,
                                                  arena,
+                                                 diagnostics,
                                                  &bus_map,
                                                  &bus_map_count) != 0) {
                 goto ir_fail;
@@ -1013,6 +1027,7 @@ int jz_ir_build_design(JZASTNode *root,
                                               scopes,
                                               scope_count,
                                               &project_symbols,
+                                              diagnostics,
                                               specs,
                                               spec_count,
                                               design->modules,

@@ -14,54 +14,6 @@
 #include "sim_jzw.h"
 #include "sqlite3.h"
 
-/* ---- Private declarations ---- */
-
-/**
- * @brief Read the current monotonic time in milliseconds.
- *
- * @return Current monotonic timestamp in milliseconds.
- */
-static uint64_t jzw_now_ms(void);
-
-/**
- * @brief Execute a SQL statement and print any SQLite error.
- *
- * @param w JZW writer that owns the SQLite database handle.
- * @param sql SQL statement to execute.
- * @return `0` on success, or `-1` on SQLite failure.
- */
-static int jzw_exec(JZWWriter *w, const char *sql);
-
-/**
- * @brief Begin a batched SQLite transaction if one is not already open.
- *
- * @param w JZW writer that owns the SQLite database handle.
- */
-static void jzw_begin(JZWWriter *w);
-
-/**
- * @brief Commit the active SQLite transaction and reset batch counters.
- *
- * @param w JZW writer that owns the SQLite database handle.
- */
-static void jzw_commit(JZWWriter *w);
-
-/**
- * @brief Flush the current batch when size or elapsed time thresholds are met.
- *
- * @param w JZW writer that owns the SQLite database handle.
- */
-static void jzw_maybe_commit(JZWWriter *w);
-
-/**
- * @brief Format a 64-bit value as a fixed-width binary string.
- *
- * @param value Value to encode.
- * @param width Number of bits to emit.
- * @return Heap-allocated binary string, or `NULL` on allocation failure.
- */
-static char *value_to_binstr(uint64_t value, int width);
-
 static uint64_t jzw_now_ms(void)
 {
     struct timespec ts;
@@ -77,9 +29,9 @@ static uint64_t jzw_now_ms(void)
  * @brief Cached metadata for one tracked JZW signal.
  */
 typedef struct {
-    int width;           /**< Signal width in bits. */
-    uint64_t last_value; /**< Most recently stored numeric value. */
-    int has_value;       /**< Non-zero once at least one value has been written. */
+    int width;          /**< Signal width in bits. */
+    SimValue last_value;/**< Most recently stored value. */
+    int has_value;      /**< Non-zero once at least one value has been written. */
 } JZWSignal;
 
 /**
@@ -141,21 +93,6 @@ static void jzw_maybe_commit(JZWWriter *w)
             w->last_flush_ms = now;
         }
     }
-}
-
-static char *value_to_binstr(uint64_t value, int width)
-{
-    size_t width_u = width > 0 ? (size_t)width : 1;
-    char *buf = malloc(width_u + 1);
-    if (!buf) return NULL;
-
-    for (size_t i = 0; i < width_u; i++) {
-        size_t bit = width_u - 1 - i;
-        int set = (bit < 64U) ? (int)((value >> bit) & 1U) : 0;
-        buf[i] = set ? '1' : '0';
-    }
-    buf[width_u] = '\0';
-    return buf;
 }
 
 /* ---- Public API ---- */
@@ -331,7 +268,7 @@ int jzw_add_signal(JZWWriter *w, const char *scope, const char *name,
     sqlite3_finalize(stmt);
 
     w->signals[idx].width = width;
-    w->signals[idx].last_value = 0;
+    w->signals[idx].last_value = sim_val_zero(width);
     w->signals[idx].has_value = 0;
 
     w->num_signals++;
@@ -369,26 +306,23 @@ void jzw_set_time(JZWWriter *w, uint64_t time_ps)
     }
 }
 
-void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width)
+void jzw_dump_value(JZWWriter *w, int sig_id, SimValue value)
 {
     if (!w || !w->defs_ended || sig_id < 0 || sig_id >= w->num_signals) return;
 
     JZWSignal *sig = &w->signals[sig_id];
+    char buf[SIM_VAL_WORDS * 64 + 1];
 
     /* Change-only storage: skip if value unchanged (except at time 0) */
-    if (sig->has_value && value == sig->last_value && w->current_time != 0) {
+    value.width = sig->width;
+    value = sim_val_mask(value);
+    if (sig->has_value && sim_val_equal(value, sig->last_value) && w->current_time != 0) {
         return;
     }
 
     sig->last_value = value;
     sig->has_value = 1;
-
-    /* Format value as binary string */
-    char *buf = value_to_binstr(value, width);
-    if (!buf) {
-        fprintf(stderr, "JZW: failed to allocate value buffer for width %d\n", width);
-        return;
-    }
+    sim_val_to_bin(value, buf, sizeof(buf));
 
     if (!w->in_transaction) {
         jzw_begin(w);
@@ -399,7 +333,6 @@ void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width)
     sqlite3_bind_int(w->insert_change, 2, sig_id + 1); /* 1-based */
     sqlite3_bind_text(w->insert_change, 3, buf, -1, SQLITE_TRANSIENT);
     sqlite3_step(w->insert_change);
-    free(buf);
 
     w->batch_count++;
     jzw_maybe_commit(w);

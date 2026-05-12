@@ -4,7 +4,7 @@
   }
 
   IN_PINS {
-    sys_clk = { standard=LVCMOS33, drive=8 };
+    sys_clk = { standard=LVCMOS33 };
   }
 
   // Define physical pins with tri-state capability

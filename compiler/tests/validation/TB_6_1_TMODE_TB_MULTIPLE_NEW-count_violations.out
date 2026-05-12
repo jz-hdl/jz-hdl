@@ -1,0 +1,2 @@
+File: TB_6_1_TMODE_TB_MULTIPLE_NEW-count_violations.jz
+      22:5    error TB_MULTIPLE_NEW TB-013 Each TEST must contain exactly one @new instantiation

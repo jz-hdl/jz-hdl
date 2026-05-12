@@ -1,6 +1,6 @@
 // ID_SYNTAX_INVALID: Character-class violation in instance-name context.
 // Hyphen in an instance name; the lexer splits it into separate tokens,
-// causing a PARSE000 parser error.
+// causing an ID_SYNTAX_INVALID diagnostic.
 
 @project ID_SYNTAX_INVALID_invalid_chars_instance
     @top TopMod {

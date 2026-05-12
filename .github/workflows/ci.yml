@@ -7,8 +7,10 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  compiler-test:
     runs-on: ubuntu-latest
+    env:
+      SDL_UNIX_CONSOLE_BUILD: ON
 
     steps:
       - uses: actions/checkout@v4
@@ -19,13 +21,99 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure
-        run: cmake -S compiler -B compiler/build -DBUILD_TESTING=ON -DJZ_HDL_WERROR=ON
+        run: cmake -S . -B build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON -DSDL_UNIX_CONSOLE_BUILD=${SDL_UNIX_CONSOLE_BUILD}
 
       - name: Build
-        run: cmake --build compiler/build
+        run: cmake --build build --parallel
 
       - name: Unit tests (CTest)
-        run: ctest --test-dir compiler/build --output-on-failure
+        run: ctest --test-dir build --output-on-failure
 
       - name: Validation and golden tests
-        run: bash compiler/tests/run_validation.sh
+        run: JZ_HDL_BIN="$GITHUB_WORKSPACE/build/compiler/jz-hdl" bash compiler/tests/run_validation.sh
+
+  docs-site:
+    name: Docs site
+    runs-on: ubuntu-latest
+    env:
+      SDL_UNIX_CONSOLE_BUILD: ON
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install PDF toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-latex-extra
+
+      - name: Build and verify docs site
+        run: ./scripts/build-docs-site
+
+  vscode-extension:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    env:
+      SDL_UNIX_CONSOLE_BUILD: ON
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vscode-ext/package-lock.json
+
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: vscode-ext
+
+      - name: Compile extension
+        run: npm run compile
+        working-directory: vscode-ext
+
+      - name: Configure compiler
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON -DSDL_UNIX_CONSOLE_BUILD=${SDL_UNIX_CONSOLE_BUILD}
+
+      - name: Build compiler
+        run: cmake --build build --parallel --target jz-hdl
+
+      - name: Run extension smoke test
+        run: npm run smoke
+        working-directory: vscode-ext
+        env:
+          JZ_HDL_BINARY: ${{ github.workspace }}/build/compiler/jz-hdl
+
+  viewer-smoke:
+    name: Viewer smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON -DSDL_UNIX_CONSOLE_BUILD=ON
+
+      - name: Configure (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJZ_HDL_WERROR=ON
+
+      - name: Build compiler and viewer
+        run: cmake --build build --parallel --target jz-hdl jz-viewer
+
+      - name: Generate JZW trace
+        run: ./build/compiler/jz-hdl --simulate compiler/tests/golden/sim_select_annotations/test.jz --jzw -o "${{ runner.temp }}/viewer-smoke.jzw"
+
+      - name: Validate JZW trace in viewer
+        run: ./build/viewer/jz-viewer --validate "${{ runner.temp }}/viewer-smoke.jzw"

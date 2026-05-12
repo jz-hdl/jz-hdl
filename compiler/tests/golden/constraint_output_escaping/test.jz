@@ -1,0 +1,44 @@
+// Golden test: constraint backends must quote emitted Tcl metadata consistently.
+
+@project(CHIP="ICE40UP-5K-UWG30") CONSTRAINT_OUTPUT_ESCAPING
+    CLOCKS {
+        SCLK = { period=20.0 };
+    }
+
+    IN_PINS {
+        SCLK = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        LED = { standard=LVCMOS33, drive=8 };
+    }
+
+    MAP {
+        SCLK = 4;
+        LED = 15;
+    }
+
+    @top TopMod {
+        IN  [1] clk = SCLK;
+        OUT [1] led = LED;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] led;
+    }
+
+    REGISTER {
+        r [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        led = r;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        r <= ~r;
+    }
+@endmod

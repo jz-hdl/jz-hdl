@@ -1,6 +1,4 @@
 ---
-mainfont: "Helvetica Neue"
-monofont: "Menlo"
 title: "JZ-HDL WAVEFORM FORMAT SPECIFICATION (JZW)"
 subtitle: "State: Beta — Version: 0.1.9"
 toc: true
@@ -30,7 +28,7 @@ This specification defines the **JZW (JZ-HDL Waveform)** file format, a SQLite-b
 
 **Relationship to VCD and FST:**
 
-JZW does not replace VCD or FST output. The simulator supports all three formats via CLI flags (`--vcd`, `--fst`, `--jzw`). VCD and FST remain available for interoperability with third-party tools (e.g., GTKWave).
+JZW does not replace VCD or FST output. The simulator supports all three formats via CLI flags (`--vcd`, `--fst`, `--jzw`), with one output format selected per simulation run. VCD and FST remain available for interoperability with third-party tools (e.g., GTKWave).
 
 ---
 
@@ -85,7 +83,7 @@ The `meta` table stores key-value pairs describing the simulation context. The f
 | `sim_end_time` | Yes | Simulation end time in picoseconds. Written when the simulation completes. If the simulation is still running or was aborted, this key may be absent. |
 | `date` | Yes | ISO 8601 date-time when the simulation was run (e.g., `2026-03-09T14:30:00Z`). |
 | `source_file` | Yes | Path to the JZ-HDL source file that was simulated. |
-| `compiler_version` | Yes | JZ-HDL compiler version string (e.g., `0.1.0`). |
+| `compiler_version` | Yes | JZ-HDL compiler version string (e.g., `0.1.8`). |
 | `seed` | Yes | Simulation seed in hexadecimal (e.g., `0xDEADBEEF`). |
 | `tick_ps` | Yes | Tick resolution in picoseconds (the GCD of all clock half-periods). |
 | `module_name` | Yes | Name of the top-level module under simulation. |
@@ -306,18 +304,19 @@ Creates a global annotation of type `mark` at the current simulation time. Marks
 @select(<signal>, <color>)
 ```
 
-Creates a range annotation of type `select` that highlights a signal for the duration of the next `@run` directive. The annotation's `time` is the current simulation time, and `end_time` is the simulation time after the following `@run` completes.
+Creates a range annotation of type `select` that highlights a signal for the duration of the next `@run` directive. The annotation's `time` is the current simulation time, and `end_time` is the simulation time after the following `@run` completes. Multiple consecutive `@select` directives are allowed before that run; each creates its own range annotation over the same upcoming run window.
 
 - `<signal>` is a testbench `WIRE` identifier or hierarchical signal reference.
 - `<color>` is a color name (Section 5.4).
 - The `signal_id` is set to the referenced signal's ID.
-- `@select` must be immediately followed by a `@run`, `@run_until`, or `@run_while` directive. A compile error is reported if `@select` is followed by any other directive.
+- `@select` must be followed by either another `@select` or by a `@run`, `@run_until`, or `@run_while` directive. A compile error is reported if a `@select` chain is followed by any other directive.
 
 **Example:**
 ```text
 @select(data_out, YELLOW)
+@select(status, CYAN)
 @run(ns=100)
-// Highlights data_out for the 100ns window
+// Highlights data_out and status for the same 100ns window
 ```
 
 ### 5.4 Trace Annotations
@@ -358,7 +357,7 @@ Color names are case-insensitive in source but stored as uppercase in the databa
 | :--- | :--- |
 | ANN-001 | `@alert` must appear at the top level of a `@simulation` block (not inside `@setup`, `@update`, or `@new`). |
 | ANN-002 | `@mark` must appear at the top level of a `@simulation` block (not inside `@setup`, `@update`, or `@new`). |
-| ANN-003 | `@select` must be immediately followed by `@run`, `@run_until`, or `@run_while`. |
+| ANN-003 | `@select` must be followed by another `@select`, `@run`, `@run_until`, or `@run_while`; the chain must terminate in a run directive. |
 | ANN-004 | `@alert` condition must reference a signal in scope (declared in `WIRE`, `CLOCK`, or `TAP`). |
 | ANN-005 | `@select` signal must reference a signal in scope (declared in `WIRE`, `CLOCK`, or `TAP`). |
 | ANN-006 | Color name must be one of the predefined names (Section 5.4). |
@@ -393,15 +392,11 @@ PRAGMA temp_store = MEMORY;
 ### 7.1 Output Format Selection
 
 ```bash
-jz-hdl --simulate sim_file.jz --jzw               # produces sim_file.jzw
+jz-hdl --simulate sim_file.jz --jzw                # produces sim_file.jzw
 jz-hdl --simulate sim_file.jz --jzw -o output.jzw  # explicit output path
 ```
 
-The `--jzw` flag may be combined with `--vcd` or `--fst` to produce multiple output formats simultaneously:
-
-```bash
-jz-hdl --simulate sim_file.jz --vcd --jzw          # produces both .vcd and .jzw
-```
+Format flags are mutually exclusive; each simulation run produces exactly one waveform output format.
 
 If no format flag is specified, the default output format is VCD (unchanged from the Simulation Specification).
 

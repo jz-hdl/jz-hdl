@@ -1,0 +1,163 @@
+JZ-HDL Chip Info
+
+================================================================================
+  CHIP: GW5A-LV25-MG121-C1-I0
+  Primitives available on the GW5A-LV25-MG121-C1/I0 device (Arora V family, 25K LUT4s).
+================================================================================
+
+--- Resources ------------------------------------------------------------------
+
+  LUT4        23040
+  DFF         23040
+  IOB         82
+  LVDS_PAIRS  36
+  GSR         1
+
+--- Latches --------------------------------------------------------------------
+
+  FAB  D: Yes  SR: No   (CFU REG elements can be configured as D latches. Arora V supports only DLCE and DLPE latch primitives (2 variants). See UG303 Arora V CFU User Guide Section 3.5.)
+  IOB  D: Yes  SR: No   (I/O register elements can be configured as latches.)
+
+--- DSP ------------------------------------------------------------------------
+
+  MULT27X18     28  (27x18 bit multiplier (M0 multiplier in each DSP block))
+  MULT12X12     56  (12x12 bit multiplier (M0 can be configured as 12x12, plus M1 is fixed 12x12; 2 per DSP block))
+  ALU48D        28  (48-bit four-input ALU for DSP accumulation)
+
+--- Memory ---------------------------------------------------------------------
+
+  DISTRIBUTED
+  184.3 Kbits total | 1 read port, 1 write port
+
+  Width | Depth
+  ------|------
+      1 | 184320
+      2 | 92160
+      4 | 46080
+      8 | 23040
+     16 | 11520
+
+  BLOCK (BSRAM)
+  1032.2 Kbits total | 56 blocks x 18 Kbits
+
+  Single Port (1R/1W)  Dual Port (2R/2W)  Semi-Dual Port (1R/1W)
+  Width | Depth        Width | Depth      Width | Depth         
+  ------|------        ------|------      ------|------         
+      1 | 16384            1 | 16384          1 | 16384         
+      2 |  8192            2 |  8192          2 |  8192         
+      4 |  4096            4 |  4096          4 |  4096         
+      8 |  2048            8 |  2048          8 |  2048         
+     16 |  1024           16 |  1024         16 |  1024         
+      9 |  2048            9 |  2048         32 |   512         
+     18 |  1024           18 |  1024          9 |  2048         
+                                             18 |  1024         
+                                             36 |   512         
+
+  Read Only Memory
+  Width | Depth   
+  ------|------   
+      1 | 16384   
+      2 |  8192   
+      4 |  4096   
+      8 |  2048   
+     16 |  1024   
+     32 |   512   
+      9 |  2048   
+     18 |  1024   
+     36 |   512   
+
+--- Clock Generation -----------------------------------------------------------
+
+  CLOCK DIVIDER (CLKDIV)
+  8 CLKDIVs available | Mode: local
+
+  CLKDIV Inputs
+Input   | Width | Requires Period | Description                          
+--------|-------|-----------------|--------------------------------------
+REF_CLK | 1     | yes             | High-speed clock input to the divider
+
+  Configurable Parameters
+Parameter | Range/Valid      | Description         
+----------|------------------|---------------------
+DIV_MODE  | 1 - 8 (9 values) | Clock division ratio
+
+  CLKDIV Outputs
+Output | Type  | Frequency Formula                       | Description         
+-------|-------|-----------------------------------------|---------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) / DIV_MODE | Divided clock output
+
+
+  CLOCK DIVIDER (CLKDIV2)
+  16 CLKDIV2s available
+
+  CLKDIV2 Inputs
+Input   | Width | Requires Period | Description                          
+--------|-------|-----------------|--------------------------------------
+REF_CLK | 1     | yes             | High-speed clock input to the divider
+
+  CLKDIV2 Outputs
+Output | Type  | Frequency Formula                | Description              
+-------|-------|----------------------------------|--------------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) / 2 | Divided-by-2 clock output
+
+
+  INTERNAL OSCILLATOR (OSC)
+  1 OSC available
+
+  OSC Inputs
+Input   | Width | Requires Period | Description                    
+--------|-------|-----------------|--------------------------------
+REF_CLK |       |                 | OSC has no external clock input
+
+  Configurable Parameters
+Parameter | Range/Valid         | Description                                                                                 
+----------|---------------------|---------------------------------------------------------------------------------------------
+FREQ_DIV  | 2 - 126 (64 values) | Oscillator divider. Base frequency is ~210MHz divided by FREQ_DIV. fout = 210MHz / FREQ_DIV.
+
+  OSC Outputs
+Output | Type  | Frequency Formula | Description
+-------|-------|-------------------|------------
+BASE   | clock | 210.0 / FREQ_DIV  |            
+
+
+  PHASE-LOCKED LOOP (PLL)
+  6 PLLs available | Max VCO: 700-1400 MHz | Chaining: Not supported
+
+  PLL Inputs
+Input   | Width | Requires Period | Description                     
+--------|-------|-----------------|---------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the PLL
+
+  Configurable Parameters
+Parameter | Range/Valid | Description                                                                                     
+----------|-------------|-------------------------------------------------------------------------------------------------
+IDIV      | 1 - 64      | Input clock divider (IDIV_SEL). Divides CLKIN before phase detector. Actual division = IDIV_SEL.
+FBDIV     | 1 - 64      | Feedback divider (FBDIV_SEL). Controls feedback path division. Actual division = FBDIV_SEL.     
+MDIV      | 2 - 128     | VCO multiplier (MDIV_SEL). FVCO = FCLKIN * MDIV / IDIV. Actual value = MDIV_SEL.                
+ODIV0     | 1 - 128     | Channel 0 output divider (ODIV0_SEL). FOUT0 = FVCO / ODIV0.                                     
+ODIV1     | 1 - 128     | Channel 1 output divider (ODIV1_SEL). FOUT1 = FVCO / ODIV1.                                     
+ODIV2     | 1 - 128     | Channel 2 output divider (ODIV2_SEL).                                                           
+ODIV3     | 1 - 128     | Channel 3 output divider (ODIV3_SEL).                                                           
+ODIV4     | 1 - 128     | Channel 4 output divider (ODIV4_SEL).                                                           
+ODIV5     | 1 - 128     | Channel 5 output divider (ODIV5_SEL).                                                           
+ODIV6     | 1 - 128     | Channel 6 output divider (ODIV6_SEL).                                                           
+
+  PLL Outputs
+Output | Type   | Frequency Formula | Description                    
+-------|--------|-------------------|--------------------------------
+BASE   | clock  | FVCO / ODIV0      | Primary PLL output (CLKOUT0)   
+LOCK   | signal |                   | PLL lock indicator (1 = locked)
+
+  Derived Values
+Name | Min | Max  | Formula                                    | Description           
+-----|-----|------|--------------------------------------------|-----------------------
+FVCO | 700 | 1400 | (1000.0 / REF_CLK_period_ns) * MDIV / IDIV | Internal VCO frequency
+
+  Constraints
+
+
+--- Example Boards (1) ---------------------------------------------------------
+
+  Tang Primer 25K
+    https://wiki.sipeed.com/hardware/en/tang/tang-primer-25k/tang-primer-25k.html
+

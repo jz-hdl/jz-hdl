@@ -1,7 +1,7 @@
 // ID_SYNTAX_INVALID: Non-ASCII character in identifier violates the regex
 // ^[A-Za-z_][A-Za-z0-9_]{0,254}$.
 // The lexer does not recognize non-ASCII bytes and reports them via
-// PARSE000 "unrecognized character". The identifier "caf" is valid;
+// ID_SYNTAX_INVALID "unrecognized character". The identifier "caf" is valid;
 // the non-ASCII bytes are rejected separately.
 // This file tests the WIRE declaration context with UTF-8 e-acute.
 

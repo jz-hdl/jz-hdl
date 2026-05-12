@@ -1,0 +1,67 @@
+{
+  "chipid": "CHIP_9_3_1_VARIANT_MATCH_REQUIRES_ALL_FACTS-all_facts_must_match",
+  "description": "Variants require every when-fact to match, including output.count.",
+  "boards": [],
+  "resources": {},
+  "latches": {
+    "source": "DS",
+    "FAB": {
+      "description": "Fabric latch support",
+      "D": false,
+      "SR": false
+    }
+  },
+  "dsp": {
+    "source": "DS",
+    "description": "No DSP blocks"
+  },
+  "memory": [],
+  "clock_gen": [
+    {
+      "type": "buf",
+      "source": "DS Section 9.3.1",
+      "description": "Variant-dispatched clock buffer",
+      "count": 1,
+      "variants": [
+        {
+          "when": {
+            "input.REF_CLK.source": "pad",
+            "output.count": 2
+          },
+          "map": {
+            "verilog-2005": [
+              "BUF_PAD_2 %%BASE%%"
+            ]
+          }
+        },
+        {
+          "when": {
+            "input.REF_CLK.source": "fabric",
+            "output.count": 2
+          },
+          "map": {
+            "verilog-2005": [
+              "BUF_FABRIC_2 %%BASE%%"
+            ]
+          }
+        }
+      ],
+      "parameters": {},
+      "inputs": {
+        "REF_CLK": {
+          "description": "Reference clock input",
+          "required": true,
+          "requires_period": true
+        }
+      },
+      "outputs": {
+        "BASE": {
+          "description": "Buffered clock output",
+          "port": "BASE",
+          "is_clock": true
+        }
+      }
+    }
+  ],
+  "fixed_pins": []
+}

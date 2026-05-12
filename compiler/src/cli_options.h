@@ -47,7 +47,7 @@ typedef struct JZCLIOptions {
     int test_seed_set;                           /**< Non-zero when `test_seed` came from the command line. */
     const char *sandbox_roots[16];              /**< Additional permitted filesystem roots. */
     size_t sandbox_root_count;                   /**< Number of valid entries in `sandbox_roots`. */
-    JZWarningGroupOverride group_overrides[16];  /**< Explicit warning-group enable or disable overrides. */
+    JZWarningGroupOverride group_overrides[16];  /**< Explicit diagnostic-group suppression overrides. */
     size_t group_override_count;                 /**< Number of valid entries in `group_overrides`. */
     SimJitterConfig jitter_configs[16];          /**< Parsed clock-jitter simulation overrides. */
     int num_jitter;                              /**< Number of valid jitter entries. */

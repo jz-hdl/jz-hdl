@@ -2,7 +2,7 @@
     "name": "jz-hdl",
     "displayName": "JZ-HDL",
     "description": "Language support for JZ-HDL hardware correctness language",
-    "version": "0.1.0",
+    "version": "0.1.8",
     "publisher": "jz-hdl",
     "license": "MIT",
     "engines": {
@@ -12,7 +12,8 @@
         "Programming Languages"
     ],
     "activationEvents": [
-        "onLanguage:jz-hdl"
+        "onLanguage:jz-hdl",
+        "workspaceContains:**/*.jz"
     ],
     "main": "./out/extension.js",
     "contributes": {
@@ -71,9 +72,14 @@
     "scripts": {
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./"
+        "watch": "tsc -watch -p ./",
+        "package:vsix": "vsce package --no-dependencies --out build/jz-hdl.vsix",
+        "smoke": "node ./scripts/smoke-test.js",
+        "test": "npm run compile && npm run smoke"
     },
     "devDependencies": {
+        "@vscode/test-electron": "^2.5.2",
+        "@vscode/vsce": "^3.9.1",
         "@types/node": "^18.0.0",
         "@types/vscode": "^1.80.0",
         "typescript": "^5.0.0"

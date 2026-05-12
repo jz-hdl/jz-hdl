@@ -1,0 +1,194 @@
+JZ-HDL Chip Info
+
+================================================================================
+  CHIP: XC7A35T-2FGG484
+  Primitives available on the AMD/Xilinx Artix-7 XC7A35T in FGG484 (484-ball BGA) package, speed grade -2.
+================================================================================
+
+--- Resources ------------------------------------------------------------------
+
+  LUT6        20800
+  DFF         41600
+  IOB         250
+  DIFF_PAIRS  100
+  GSR         1
+
+--- Latches --------------------------------------------------------------------
+
+  FAB  D: Yes  SR: No   (Four of eight flip-flops per slice (one per LUT) can be configured as level-sensitive latches. Only SLICEL and SLICEM slices support this.)
+  IOB  D: Yes  SR: No   (I/O register elements can be configured as transparent latches.)
+
+--- DSP ------------------------------------------------------------------------
+
+  DSP48E1       90  (25x18 two's complement multiplier with 48-bit accumulator, pre-adder, and ALU)
+
+--- Memory ---------------------------------------------------------------------
+
+  DISTRIBUTED
+  409.6 Kbits total | 1 read port, 1 write port
+
+  Width | Depth
+  ------|------
+      1 | 409600
+      2 | 204800
+      4 | 102400
+      8 | 51200
+     16 | 25600
+
+  BLOCK
+  1843.2 Kbits total | 50 blocks x 36 Kbits | Max 460 MHz
+
+  Single Port (1R/1W)  True Dual Port (2R/2W)  Simple Dual Port (1R/1W)
+  Width | Depth        Width | Depth           Width | Depth           
+  ------|------        ------|------           ------|------           
+      1 | 32768            1 | 32768               1 | 32768           
+      2 | 16384            2 | 16384               2 | 16384           
+      4 |  8192            4 |  8192               4 |  8192           
+      9 |  4096            9 |  4096               9 |  4096           
+     18 |  2048           18 |  2048              18 |  2048           
+     36 |  1024           36 |  1024              36 |  1024           
+                                                  72 |   512           
+
+  Read Only Memory
+  Width | Depth   
+  ------|------   
+      1 | 32768   
+      2 | 16384   
+      4 |  8192   
+      9 |  4096   
+     18 |  2048   
+     36 |  1024   
+
+--- Clock Generation -----------------------------------------------------------
+
+  CLOCK BUFFER (BUF)
+  32 BUFs available | Mode: global
+
+  BUF Inputs
+Input   | Width | Requires Period | Description                        
+--------|-------|-----------------|------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the buffer
+
+  BUF Outputs
+Output | Type  | Frequency Formula            | Description                                  
+-------|-------|------------------------------|----------------------------------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) | Buffered clock output on global clock network
+
+
+  PHASE-LOCKED LOOP (PLL)
+  5 PLLs available | Max VCO: 800-1600 MHz | Chaining: Supported
+
+  PLL Inputs
+Input   | Width | Requires Period | Description                              
+--------|-------|-----------------|------------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the PLL (CLKIN1)
+
+  Configurable Parameters
+Parameter      | Range/Valid | Description                               
+---------------|-------------|-------------------------------------------
+DIVCLK_DIVIDE  | 1 - 56      | Input clock divider D (1-56)              
+CLKFBOUT_MULT  | 2 - 64      | Feedback multiplier M (2-64, integer only)
+CLKOUT0_DIVIDE | 1 - 128     | Primary output divider O0 (1-128)         
+CLKOUT1_DIVIDE | 1 - 128     | Secondary output divider O1 (1-128)       
+CLKOUT2_DIVIDE | 1 - 128     | Tertiary output divider O2 (1-128)        
+CLKOUT3_DIVIDE | 1 - 128     | Quaternary output divider O3 (1-128)      
+CLKOUT4_DIVIDE | 1 - 128     | Output divider O4 (1-128)                 
+CLKOUT5_DIVIDE | 1 - 128     | Output divider O5 (1-128)                 
+
+  PLL Outputs
+Output  | Type   | Frequency Formula     | Description                                
+--------|--------|-----------------------|--------------------------------------------
+BASE    | clock  | FVCO / CLKOUT0_DIVIDE | Primary PLL output (CLKOUT0)               
+CLKOUT1 | clock  | FVCO / CLKOUT1_DIVIDE | Secondary PLL output                       
+CLKOUT2 | clock  | FVCO / CLKOUT2_DIVIDE | Tertiary PLL output                        
+CLKOUT3 | clock  | FVCO / CLKOUT3_DIVIDE | Quaternary PLL output                      
+CLKOUT4 | clock  | FVCO / CLKOUT4_DIVIDE | PLL output 4                               
+CLKOUT5 | clock  | FVCO / CLKOUT5_DIVIDE | PLL output 5                               
+LOCK    | signal |                       | PLL lock indicator, high when PLL is locked
+
+  Derived Values
+Name | Min | Max  | Formula                                                      | Description                                                    
+-----|-----|------|--------------------------------------------------------------|----------------------------------------------------------------
+FVCO | 800 | 1600 | (1000.0 / REF_CLK_period_ns) * CLKFBOUT_MULT / DIVCLK_DIVIDE | Internal VCO frequency: F_CLKIN * CLKFBOUT_MULT / DIVCLK_DIVIDE
+
+  Constraints
+  FVCO range check
+  output frequency range check
+
+
+  PHASE-LOCKED LOOP (PLL2)
+  5 PLL2s available | Max VCO: 600-1440 MHz | Chaining: Supported
+
+  PLL2 Inputs
+Input   | Width | Requires Period | Description                               
+--------|-------|-----------------|-------------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the MMCM (CLKIN1)
+
+  Configurable Parameters
+Parameter        | Range/Valid | Description                                                         
+-----------------|-------------|---------------------------------------------------------------------
+DIVCLK_DIVIDE    | 1 - 106     | Input clock divider D (1-106)                                       
+CLKFBOUT_MULT_F  | 2 - 64      | Feedback multiplier M (2.000-64.000, fractional in 0.125 steps)     
+CLKOUT0_DIVIDE_F | 1 - 128     | Primary output divider O0 (1.000-128.000, fractional in 0.125 steps)
+CLKOUT1_DIVIDE   | 1 - 128     | Secondary output divider O1 (1-128)                                 
+CLKOUT2_DIVIDE   | 1 - 128     | Tertiary output divider O2 (1-128)                                  
+CLKOUT3_DIVIDE   | 1 - 128     | Quaternary output divider O3 (1-128)                                
+CLKOUT4_DIVIDE   | 1 - 128     | Output divider O4 (1-128)                                           
+CLKOUT5_DIVIDE   | 1 - 128     | Output divider O5 (1-128)                                           
+CLKOUT6_DIVIDE   | 1 - 128     | Output divider O6 (1-128)                                           
+
+  PLL2 Outputs
+Output  | Type   | Frequency Formula       | Description                                  
+--------|--------|-------------------------|----------------------------------------------
+BASE    | clock  | FVCO / CLKOUT0_DIVIDE_F | Primary MMCM output (CLKOUT0)                
+CLKOUT1 | clock  | FVCO / CLKOUT1_DIVIDE   | Secondary MMCM output                        
+CLKOUT2 | clock  | FVCO / CLKOUT2_DIVIDE   | Tertiary MMCM output                         
+CLKOUT3 | clock  | FVCO / CLKOUT3_DIVIDE   | Quaternary MMCM output                       
+CLKOUT4 | clock  | FVCO / CLKOUT4_DIVIDE   | MMCM output 4                                
+CLKOUT5 | clock  | FVCO / CLKOUT5_DIVIDE   | MMCM output 5                                
+CLKOUT6 | clock  | FVCO / CLKOUT6_DIVIDE   | MMCM output 6                                
+LOCK    | signal |                         | MMCM lock indicator, high when MMCM is locked
+
+  Derived Values
+Name | Min | Max  | Formula                                                        | Description                                                      
+-----|-----|------|----------------------------------------------------------------|------------------------------------------------------------------
+FVCO | 600 | 1440 | (1000.0 / REF_CLK_period_ns) * CLKFBOUT_MULT_F / DIVCLK_DIVIDE | Internal VCO frequency: F_CLKIN * CLKFBOUT_MULT_F / DIVCLK_DIVIDE
+
+  Constraints
+  FVCO range check
+  output frequency range check
+
+
+--- Differential I/O -----------------------------------------------------------
+
+  Type:     True LVDS
+  IO Type:  LVDS_25
+  Output:   LVDS_25 differential output buffer (OBUFDS)
+  Serializer: 4:1 (4:1 output serializer (OSERDESE2) for LVDS/TMDS output)
+                requires: fclk, pclk, reset
+  Serializer: 6:1 (6:1 output serializer (OSERDESE2) for LVDS/TMDS output)
+                requires: fclk, pclk, reset
+  Serializer: 8:1 (8:1 output serializer (OSERDESE2) for LVDS/TMDS output)
+                requires: fclk, pclk, reset
+  Serializer: 10:1 (10:1 output serializer (OSERDESE2 master+slave cascade) for LVDS/TMDS output)
+                requires: fclk, pclk, reset
+  Serializer: 14:1 (14:1 output serializer (OSERDESE2 master+slave cascade) for LVDS/TMDS output)
+                requires: fclk, pclk, reset
+  Input:    LVDS_25 differential input buffer (IBUFDS)
+  Deserializer: 1:4 (1:4 input deserializer (ISERDESE2) for LVDS/TMDS input)
+                requires: fclk, pclk, reset
+  Deserializer: 1:6 (1:6 input deserializer (ISERDESE2) for LVDS/TMDS input)
+                requires: fclk, pclk, reset
+  Deserializer: 1:8 (1:8 input deserializer (ISERDESE2) for LVDS/TMDS input)
+                requires: fclk, pclk, reset
+  Deserializer: 1:10 (1:10 input deserializer (ISERDESE2 master+slave cascade) for LVDS/TMDS input)
+                requires: fclk, pclk, reset
+  Deserializer: 1:14 (1:14 input deserializer (ISERDESE2 master+slave cascade) for LVDS/TMDS input)
+                requires: fclk, pclk, reset
+  Clock:    LVDS_25 differential clock input buffer (IBUFDS + BUFG) \u2014 routes to global clock network via clock-capable input
+
+--- Example Boards (1) ---------------------------------------------------------
+
+  PA35T-EDU Development Board
+    https://www.en.puzhi.com/Product/AMD-FPGA-Development-Board/Artix-7/PA35T-EDU.html
+

@@ -1,0 +1,2 @@
+File: CHIP_9_1_CLOCK_GEN_EXACTLY_ONE_OF_MAP_OR_VARIANTS-both_map_and_variants.jz
+       5:1    error PROJECT_CHIP_DATA_VARIANT_INVALID S9.3 Chip JSON clock_gen variants are invalid (parse error, not exhaustive, or not disjoint)

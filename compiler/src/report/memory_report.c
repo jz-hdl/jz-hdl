@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <limits.h>
 #include <stdint.h>
 
@@ -56,8 +55,6 @@ typedef struct JZChipMemInfo {
 
 static int g_mem_report_enabled = 0;
 static FILE *g_mem_report_out = NULL;
-static char g_mem_report_generated[64];
-static const char *g_mem_report_version = NULL;
 static const char *g_mem_report_input = NULL;
 
 void jz_sem_enable_memory_report(FILE *out,
@@ -65,28 +62,11 @@ void jz_sem_enable_memory_report(FILE *out,
                                  const char *input_filename,
                                  JZDiagnosticList *diagnostics)
 {
+    (void)tool_version;
     (void)diagnostics;
     g_mem_report_enabled = (out != NULL);
     g_mem_report_out = out;
-    g_mem_report_version = tool_version;
     g_mem_report_input = input_filename;
-
-    time_t now = time(NULL);
-    struct tm tm_info;
-    if (localtime_r(&now, &tm_info) != NULL) {
-        if (strftime(g_mem_report_generated,
-                     sizeof(g_mem_report_generated),
-                     "%Y-%m-%d %H:%M %Z",
-                     &tm_info) == 0) {
-            snprintf(g_mem_report_generated,
-                     sizeof(g_mem_report_generated),
-                     "<unknown>");
-        }
-    } else {
-        snprintf(g_mem_report_generated,
-                 sizeof(g_mem_report_generated),
-                 "<unknown>");
-    }
 }
 
 static char *jz_strdup_lower(const char *s)
@@ -719,8 +699,6 @@ void sem_emit_memory_report(JZASTNode *root,
         return;
     }
 
-    (void)g_mem_report_version;
-    (void)g_mem_report_generated;
     (void)chip;
     if (!input_filename && g_mem_report_input) {
         input_filename = g_mem_report_input;
@@ -769,9 +747,8 @@ void sem_emit_memory_report(JZASTNode *root,
         }
     }
 
-    fprintf(out, "Memory Report\n");
-    fprintf(out, "-------------\n");
-    fprintf(out, "Project: %s\n", input_filename ? input_filename : "(unknown)");
+    fprintf(out, "JZ-HDL Memory Report\n");
+    fprintf(out, "Input file: %s\n", input_filename ? input_filename : "(unknown)");
     if (chip_id_buf[0]) {
         fprintf(out, "Chip: %s\n\n", chip_id_buf);
     } else if (chip_id) {

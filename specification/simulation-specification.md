@@ -1,6 +1,4 @@
 ---
-mainfont: "Helvetica Neue"
-monofont: "Menlo"
 title: "JZ-HDL SIMULATION SPECIFICATION"
 subtitle: "State: Beta — Version: 0.1.9"
 toc: true
@@ -18,7 +16,7 @@ header-includes:
 
 This specification defines the `@simulation` construct for JZ-HDL. While `@testbench` provides strictly manual, cycle-stepped control for functional verification, `@simulation` provides a **time-based, multi-clock continuous simulation environment**.
 
-In a `@simulation`, clocks run automatically in the background based on their defined periods. The simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (e.g., VCD/FST) at each clock event.
+In a `@simulation`, clocks run automatically in the background based on their defined periods. The simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (`VCD`, `FST`, or `JZW`) at each clock event.
 
 **Relationship to `@testbench`:**
 
@@ -639,6 +637,7 @@ jz-hdl --simulate sim_file.jz --jitter=clk:200       # 200ps p-p jitter on clk
 jz-hdl --simulate sim_file.jz --jitter=clk_wr:200 --jitter=clk_rd:500
 jz-hdl --simulate sim_file.jz --drift=clk:50            # ±50 ppm crystal tolerance
 jz-hdl --simulate sim_file.jz --jitter=clk:200 --drift=clk:50  # jitter + drift
+jz-hdl --simulate sim_file.jz --tristate-default=GND
 ```
 
 ### 5.2 Flags
@@ -646,12 +645,14 @@ jz-hdl --simulate sim_file.jz --jitter=clk:200 --drift=clk:50  # jitter + drift
 | Flag | Description |
 |---|---|
 | `--simulate` | Run all `@simulation` blocks in the file. |
-| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`. |
+| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`, or the selected format's extension when `--fst` or `--jzw` is specified. |
 | `--seed=0x<hex>` | 32-bit seed for register randomization. Default: `0xDEADBEEF`. |
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format. |
+| `--jzw` | Force JZW output format (SQLite-based). |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ps>` is the peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times for different clocks. See Section 2.2.1. |
 | `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<clock>` is the clock name declared in the simulation's `CLOCK` block. `<ppm>` is the maximum drift in parts per million. The actual drift is selected from a Gaussian distribution (σ = ppm/3, clamped at ±ppm) at simulation start. May be specified multiple times for different clocks. See Section 2.2.2. |
+| `--tristate-default=GND|VCC` | Apply internal tri-state lowering before simulation, using the selected default when all drivers release. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 
 ---

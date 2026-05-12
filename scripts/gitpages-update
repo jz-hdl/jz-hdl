@@ -3,59 +3,75 @@ set -euo pipefail
 
 # Build the VitePress docs site and deploy to the gh-pages branch.
 # Uses a temporary clone so the working repo is never modified.
-# Usage: scripts/gitpages-update
+# Usage: scripts/gitpages-update [--dry-run]
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DOCS_DIR="$REPO_ROOT/docs"
-DIST_DIR="$DOCS_DIR/.vitepress/dist"
+DRY_RUN=0
+if [ "${1:-}" = "--dry-run" ]; then
+  DRY_RUN=1
+  shift
+fi
 
-echo "==> Installing dependencies..."
-(cd "$DOCS_DIR" && npm install)
-
-echo "==> Building site..."
-(cd "$DOCS_DIR" && npm run build)
-
-if [ ! -d "$DIST_DIR" ]; then
-  echo "Error: Build output not found at $DIST_DIR"
+if [ $# -ne 0 ]; then
+  echo "Usage: $0 [--dry-run]"
   exit 1
 fi
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DIST_DIR="$(mktemp -d)"
+TEMP_DIRS=("$DIST_DIR")
+
+cleanup() {
+  local dir
+  for dir in "${TEMP_DIRS[@]}"; do
+    if [ -n "$dir" ] && [ -d "$dir" ]; then
+      rm -rf "$dir"
+    fi
+  done
+}
+
+trap cleanup EXIT
+
+echo "==> Building and verifying docs site..."
+"$REPO_ROOT/scripts/build-docs-site" --site-out "$DIST_DIR"
 
 echo "==> Deploying to gh-pages..."
 
 # Get the remote URL
 REMOTE_URL="$(git -C "$REPO_ROOT" remote get-url origin)"
 
-# Work in a temporary clone to avoid touching the working repo
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
-
 # Clone just the gh-pages branch (shallow), or init a new repo if it doesn't exist
+DEPLOY_DIR="$(mktemp -d)"
+TEMP_DIRS+=("$DEPLOY_DIR")
+
 if git ls-remote --heads "$REMOTE_URL" gh-pages | grep -q gh-pages; then
-  git clone --depth 1 --branch gh-pages "$REMOTE_URL" "$TMPDIR/deploy"
+  git clone --depth 1 --branch gh-pages "$REMOTE_URL" "$DEPLOY_DIR"
 else
-  mkdir "$TMPDIR/deploy"
-  git -C "$TMPDIR/deploy" init
-  git -C "$TMPDIR/deploy" checkout --orphan gh-pages
-  git -C "$TMPDIR/deploy" remote add origin "$REMOTE_URL"
+  git -C "$DEPLOY_DIR" init
+  git -C "$DEPLOY_DIR" checkout --orphan gh-pages
+  git -C "$DEPLOY_DIR" remote add origin "$REMOTE_URL"
 fi
 
 # Remove old site contents (but keep .git)
-find "$TMPDIR/deploy" -maxdepth 1 ! -name '.git' ! -path "$TMPDIR/deploy" -exec rm -rf {} +
+find "$DEPLOY_DIR" -maxdepth 1 ! -name '.git' ! -path "$DEPLOY_DIR" -exec rm -rf {} +
 
 # Copy built site
-cp -r "$DIST_DIR"/. "$TMPDIR/deploy"
+cp -R "$DIST_DIR"/. "$DEPLOY_DIR"
 
 # Add .nojekyll to bypass Jekyll processing on GitHub Pages
-touch "$TMPDIR/deploy/.nojekyll"
+touch "$DEPLOY_DIR/.nojekyll"
 
 # Commit and push
-git -C "$TMPDIR/deploy" add -A
-if git -C "$TMPDIR/deploy" diff --cached --quiet; then
+git -C "$DEPLOY_DIR" add -A
+if git -C "$DEPLOY_DIR" diff --cached --quiet; then
   echo "No changes to deploy."
 else
-  git -C "$TMPDIR/deploy" commit -m "Deploy docs to GitHub Pages"
-  git -C "$TMPDIR/deploy" push origin gh-pages
-  echo "==> Deployed successfully."
+  git -C "$DEPLOY_DIR" commit -m "Deploy docs to GitHub Pages"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "==> Dry run complete. Skipping push to gh-pages."
+  else
+    git -C "$DEPLOY_DIR" push origin gh-pages
+    echo "==> Deployed successfully."
+  fi
 fi
 
 echo "==> Done."

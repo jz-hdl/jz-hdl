@@ -25,13 +25,6 @@
 static unsigned g_parser_expr_depth = 0;
 
 /**
- * @brief Deep-copy an expression subtree.
- * @param src Expression node to clone.
- * @return Cloned tree or NULL on allocation failure.
- */
-static JZASTNode *clone_expr_tree(const JZASTNode *src);
-
-/**
  * @brief Parse postfix indexing, slicing, and indexed-member expressions.
  * @param p Active parser.
  * @return Parsed expression node or NULL on failure.
@@ -142,39 +135,6 @@ static JZASTNode *parse_ternary_expr(Parser *p);
  * @param p Active parser
  * @return Expression AST node, or NULL on error
  */
-static JZASTNode *clone_expr_tree(const JZASTNode *src) {
-    if (!src) return NULL;
-    JZASTNode *copy = jz_ast_new(src->type, src->loc);
-    if (!copy) return NULL;
-
-    if (src->name) {
-        jz_ast_set_name(copy, src->name);
-    }
-    if (src->text) {
-        jz_ast_set_text(copy, src->text);
-    }
-    if (src->width) {
-        jz_ast_set_width(copy, src->width);
-    }
-    if (src->block_kind) {
-        jz_ast_set_block_kind(copy, src->block_kind);
-    }
-
-    for (size_t i = 0; i < src->child_count; ++i) {
-        JZASTNode *child_copy = clone_expr_tree(src->children[i]);
-        if (!child_copy) {
-            jz_ast_free(copy);
-            return NULL;
-        }
-        if (jz_ast_add_child(copy, child_copy) != 0) {
-            jz_ast_free(child_copy);
-            jz_ast_free(copy);
-            return NULL;
-        }
-    }
-    return copy;
-}
-
 static JZASTNode *parse_postfix_expr(Parser *p) {
     JZASTNode *expr = parse_primary_expr(p);
     if (!expr) return NULL;
@@ -270,7 +230,7 @@ static JZASTNode *parse_postfix_expr(Parser *p) {
         if (!is_slice) {
             /* Single index [idx] -> treat as [idx:idx] but with two distinct nodes
              * so that AST ownership remains tree-shaped (no shared children). */
-            lsb = clone_expr_tree(msb);
+            lsb = parser_clone_ast_tree(msb);
             if (!lsb) {
                 jz_ast_free(expr);
                 jz_ast_free(msb);
@@ -1071,49 +1031,7 @@ JZASTNode *parse_primary_expr(Parser *p) {
          * identifier or the CONFIG keyword (for CONFIG.<name> usage).
          */
         JZLocation loc = t->loc;
-        char *buf = NULL;
-        size_t buf_sz = 0;
-        for (;;) {
-            const JZToken *id = peek(p);
-            if ((!is_decl_identifier_token(id) && id->type != JZ_TOK_KW_CONFIG) ||
-                !id->lexeme) {
-                break;
-            }
-            size_t len = strlen(id->lexeme);
-            size_t new_size = 0;
-            char *new_buf = NULL;
-            if (jz_size_add_checked(buf_sz, len, &new_size) != 0 ||
-                jz_size_add_checked(new_size, 2, &new_size) != 0) {
-                free(buf);
-                return NULL;
-            }
-            new_buf = (char *)realloc(buf, new_size);
-            if (!new_buf) {
-                free(buf);
-                return NULL;
-            }
-            buf = new_buf;
-            memcpy(buf + buf_sz, id->lexeme, len);
-            buf_sz += len;
-            buf[buf_sz] = '\0';
-            advance(p);
-            if (!match(p, JZ_TOK_DOT)) {
-                break;
-            }
-            /* append '.' */
-            if (jz_size_add_checked(buf_sz, 2, &new_size) != 0) {
-                free(buf);
-                return NULL;
-            }
-            new_buf = (char *)realloc(buf, new_size);
-            if (!new_buf) {
-                free(buf);
-                return NULL;
-            }
-            buf = new_buf;
-            buf[buf_sz++] = '.';
-            buf[buf_sz] = '\0';
-        }
+        char *buf = parser_parse_qualified_name(p, 1, 1, &loc);
 
         if (!buf) {
             parser_error(p, "expected identifier");

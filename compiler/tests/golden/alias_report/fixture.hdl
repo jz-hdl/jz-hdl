@@ -1,0 +1,17 @@
+@project ALIAS_REPORT_fixture
+    @top Top {
+        IN  [1] in = _;
+        OUT [1] out = _;
+    }
+@endproj
+
+@module Top
+    PORT {
+        IN  [1] in;
+        OUT [1] out;
+    }
+
+    ASYNCHRONOUS {
+        out = in;
+    }
+@endmod

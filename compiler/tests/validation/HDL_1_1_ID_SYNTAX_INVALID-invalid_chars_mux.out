@@ -1,2 +1,2 @@
 File: HDL_1_1_ID_SYNTAX_INVALID-invalid_chars_mux.jz
-      24:11   error PARSE000 parse error near token '-': expected '=' in MUX declaration (orig: PARSE000)
+      24:11   error ID_SYNTAX_INVALID S1.1 Identifier violates syntax (must start with ASCII letter/underscore, continue with ASCII letters/digits/underscores, and be at most 255 characters)

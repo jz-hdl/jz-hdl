@@ -108,7 +108,7 @@
       "clock_gens": [
       ],
       "pins": [
-        { "id": 0, "name": "sys_clk", "kind": "IN", "width": 1, "standard": "LVCMOS33", "drive_ma": 8, "drive": 8, "mode": "SINGLE", "term": false, "pull": "NONE" },
+        { "id": 0, "name": "sys_clk", "kind": "IN", "width": 1, "standard": "LVCMOS33", "drive_ma": -1, "drive": -1, "mode": "SINGLE", "term": false, "pull": "NONE" },
         { "id": 1, "name": "ext_data_bus", "kind": "INOUT", "width": 8, "standard": "LVCMOS33", "drive_ma": 8, "drive": 8, "mode": "SINGLE", "term": false, "pull": "NONE" }
       ],
       "mappings": [

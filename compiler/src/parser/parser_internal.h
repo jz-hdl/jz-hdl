@@ -108,13 +108,25 @@ void parser_error(const Parser *p, const char *msg);
 /**
  * @brief Report a parser error with a specific semantic rule ID.
  *
- * Like parser_error(), but uses the given rule_id instead of "PARSE000"
- * and looks up the description from rules.c.
+ * Like parser_error(), but uses the given rule_id instead of the generic
+ * parse fallback and looks up the description from rules.c.
  *
  * @param p       Active parser
  * @param rule_id Rule ID string (e.g. "PORT_MISSING_WIDTH")
  */
 void parser_error_rule(const Parser *p, const char *rule_id);
+
+/**
+ * @brief Emit ID_SYNTAX_INVALID when the current token looks like a malformed identifier.
+ *
+ * If the current token is a number, identifier fragment, or fallback token,
+ * this reports ID_SYNTAX_INVALID. Otherwise it emits the caller-provided
+ * generic parse error.
+ *
+ * @param p   Active parser
+ * @param msg Human-readable parse error message
+ */
+void parser_error_id_syntax_or_parse(const Parser *p, const char *msg);
 
 /**
  * @brief Construct a RAW_TEXT AST node from a token range.
@@ -128,6 +140,73 @@ void parser_error_rule(const Parser *p, const char *rule_id);
  * @return Newly allocated RAW_TEXT AST node, or NULL on failure
  */
 JZASTNode *make_raw_text_node(const Parser *p, size_t start, size_t end);
+
+/**
+ * @brief Deep-copy an AST subtree without a recursion-depth guard.
+ *
+ * @param src Root node to clone
+ * @return Newly allocated clone, or NULL on allocation failure
+ */
+JZASTNode *parser_clone_ast_tree(const JZASTNode *src);
+
+/**
+ * @brief Deep-copy an AST subtree while enforcing a recursion-depth limit.
+ *
+ * @param src           Root node to clone
+ * @param depth_counter Caller-owned recursion counter
+ * @param limit         Maximum permitted recursion depth
+ * @return Newly allocated clone, or NULL on allocation failure or depth overflow
+ */
+JZASTNode *parser_clone_ast_tree_checked(const JZASTNode *src,
+                                         unsigned *depth_counter,
+                                         unsigned limit);
+
+/**
+ * @brief Join token lexemes from a half-open range using spaces.
+ *
+ * @param p              Active parser
+ * @param start          Starting token index (inclusive)
+ * @param end            Ending token index (exclusive)
+ * @param trailing_space Non-zero to preserve a trailing space after each token
+ * @return Newly allocated string, an allocated empty string for empty ranges,
+ *         or NULL on allocation failure
+ */
+char *parser_join_token_lexemes_spaced(const Parser *p,
+                                       size_t start,
+                                       size_t end,
+                                       int trailing_space);
+
+/**
+ * @brief Join token lexemes from a half-open range without inserted spaces.
+ *
+ * @param p     Active parser
+ * @param start Starting token index (inclusive)
+ * @param end   Ending token index (exclusive)
+ * @return Newly allocated string, including an allocated empty string for
+ *         empty ranges, or NULL on allocation failure
+ */
+char *parser_join_token_lexemes_compact(const Parser *p,
+                                        size_t start,
+                                        size_t end);
+
+/**
+ * @brief Parse and assemble a qualified identifier-like name.
+ *
+ * Consumes a sequence matching `id(.id)*` under caller-selected token rules.
+ * The helper preserves the current parser behavior of consuming a trailing
+ * dot if present before the name ends.
+ *
+ * @param p                   Active parser
+ * @param allow_config        Non-zero to allow the CONFIG keyword as a name segment
+ * @param allow_decl_keywords Non-zero to allow declaration-context keywords as segments
+ * @param out_loc             Optional output for the location of the first segment
+ * @return Newly allocated assembled name, or NULL if no valid first segment
+ *         was present or on allocation failure
+ */
+char *parser_parse_qualified_name(Parser *p,
+                                  int allow_config,
+                                  int allow_decl_keywords,
+                                  JZLocation *out_loc);
 
 /**
  * @brief Determine whether a token may act as an identifier in declarations.
@@ -205,6 +284,19 @@ JZASTNode *parse_block(Parser *p,
  * @return 0 on success, -1 on error
  */
 int parse_const_block_body(Parser *p, JZASTNode *parent);
+
+/**
+ * @brief Recover from a misplaced directive/control-flow token inside a declaration block.
+ *
+ * This reports a rule-specific diagnostic when possible, skips the malformed
+ * construct up to a safe declaration boundary, and lets the caller continue
+ * parsing the surrounding block.
+ *
+ * @param p          Active parser
+ * @param block_kind Human-readable block name (e.g. "PORT", "WIRE")
+ * @return 1 if a bad token was recognized and recovered, 0 otherwise
+ */
+int parser_recover_decl_block_bad_token(Parser *p, const char *block_kind);
 
 /**
  * @brief Parse the body of a PORT block.

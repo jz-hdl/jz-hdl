@@ -156,6 +156,8 @@ typedef struct JZChipClockGenInput {
     char   *name;            /**< Input name (e.g., "REF_CLK", "CE"). */
     char   *default_value;   /**< Default value (e.g., "1'b1"), or NULL if required. */
     int     required;        /**< Non-zero if this input must be provided. */
+    int     has_width;       /**< Non-zero if the input width is specified in chip data. */
+    unsigned width;          /**< Required connected signal width when specified. */
     int     requires_period; /**< Non-zero if the connected clock must have a period. */
     int     has_min_mhz;     /**< Non-zero if min frequency constraint exists. */
     double  min_mhz;         /**< Minimum frequency in MHz. */

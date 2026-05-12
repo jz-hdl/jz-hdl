@@ -30,9 +30,7 @@ else
 fi
 
 # Test 2: Simulation with @repeat runs without error
-SIM_OUTPUT=$("$JZ_HDL" --simulate "${SCRIPT_DIR}/test_sim.jz" --vcd -o /tmp/repeat_golden.vcd 2>&1) || true
-
-if echo "$SIM_OUTPUT" | grep -q "@simulation counter"; then
+if SIM_OUTPUT=$("$JZ_HDL" --simulate "${SCRIPT_DIR}/test_sim.jz" --vcd -o /tmp/repeat_golden.vcd 2>&1); then
     echo "  PASS: simulation @repeat runs successfully"
     PASS=$((PASS + 1))
 else

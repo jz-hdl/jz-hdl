@@ -1,0 +1,3 @@
+File: HDL_4_4_1_BUS_SIGNAL_WRITE_TO_READABLE-sync_source_role.jz
+      37:9    error BUS_SIGNAL_WRITE_TO_READABLE S4.4.1 Write access to readable BUS signal is not allowed
+      37:9    error ASSIGN_TO_NON_REGISTER_IN_SYNC S5.2 Only REGISTERs may be assigned in SYNCHRONOUS blocks; declare as REGISTER or move to ASYNCHRONOUS

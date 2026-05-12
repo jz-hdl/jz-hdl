@@ -25,6 +25,7 @@
  */
 
 #include "lsp/lsp_internal.h"
+#include "path_security.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -46,6 +47,15 @@
 
 #define RC_FILENAME ".jzhdl-lsp.rc"
 
+typedef struct LspDiscoveryCache {
+    char filepath[2048];
+    char workspace_root[2048];
+    LspProjectList projects;
+    int valid;
+} LspDiscoveryCache;
+
+static LspDiscoveryCache s_discovery_cache = {0};
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
@@ -61,6 +71,12 @@
 static void extract_project_metadata(const char *content,
                                      char *chip, size_t chip_cap,
                                      char *name, size_t name_cap);
+static int discovery_cache_lookup(const char *filepath,
+                                  const char *workspace_root,
+                                  LspProjectList *out);
+static void discovery_cache_store(const char *filepath,
+                                  const char *workspace_root,
+                                  const LspProjectList *projects);
 
 /**
  * @brief Read a `.jz` file and detect whether it contains `@project`.
@@ -101,6 +117,10 @@ static void canonicalize_path(const char *path, char *out, size_t out_cap);
 static void add_project_entry(LspProjectList *list,
                               const char *file, const char *chip,
                               const char *name);
+static int lsp_project_path_allowed(const char *raw_path,
+                                    const char *base_dir,
+                                    char *canonical,
+                                    size_t canonical_cap);
 
 /**
  * @brief Extract CHIP and PROJECT_NAME from a @project directive line.
@@ -205,6 +225,40 @@ static int file_get_project_info(const char *path,
     return (name[0] != '\0' || chip[0] != '\0') ? 1 : 0;
 }
 
+static int discovery_cache_lookup(const char *filepath,
+                                  const char *workspace_root,
+                                  LspProjectList *out)
+{
+    if (!filepath || !out || !s_discovery_cache.valid) return 0;
+    if (strcmp(s_discovery_cache.filepath, filepath) != 0) return 0;
+    if (((workspace_root && *workspace_root) ? workspace_root : "")[0] != '\0' ||
+        s_discovery_cache.workspace_root[0] != '\0') {
+        if (strcmp(s_discovery_cache.workspace_root,
+                   (workspace_root && *workspace_root) ? workspace_root : "") != 0) {
+            return 0;
+        }
+    }
+    *out = s_discovery_cache.projects;
+    return 1;
+}
+
+static void discovery_cache_store(const char *filepath,
+                                  const char *workspace_root,
+                                  const LspProjectList *projects)
+{
+    if (!filepath || !projects) return;
+    snprintf(s_discovery_cache.filepath,
+             sizeof(s_discovery_cache.filepath),
+             "%s",
+             filepath);
+    snprintf(s_discovery_cache.workspace_root,
+             sizeof(s_discovery_cache.workspace_root),
+             "%s",
+             (workspace_root && *workspace_root) ? workspace_root : "");
+    s_discovery_cache.projects = *projects;
+    s_discovery_cache.valid = 1;
+}
+
 /**
  * @brief Extract the directory portion of a file path.
  */
@@ -259,6 +313,28 @@ static void add_project_entry(LspProjectList *list,
     e->chip[sizeof(e->chip) - 1] = '\0';
     strncpy(e->name, (name && name[0]) ? name : "-", sizeof(e->name) - 1);
     e->name[sizeof(e->name) - 1] = '\0';
+}
+
+static int lsp_project_path_allowed(const char *raw_path,
+                                    const char *base_dir,
+                                    char *canonical,
+                                    size_t canonical_cap)
+{
+    char *validated = NULL;
+    JZLocation loc;
+
+    if (!raw_path || !canonical || canonical_cap == 0) return 0;
+
+    memset(&loc, 0, sizeof(loc));
+    jz_path_security_set_allow_absolute(1);
+    validated = jz_path_validate(raw_path, base_dir, loc, NULL);
+    jz_path_security_set_allow_absolute(0);
+    if (!validated) return 0;
+
+    strncpy(canonical, validated, canonical_cap - 1);
+    canonical[canonical_cap - 1] = '\0';
+    free(validated);
+    return 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -468,7 +544,10 @@ static int scan_dir_for_projects(const char *dir, LspProjectList *list,
 
         /* Canonicalize for comparison. */
         char canonical[2048];
-        canonicalize_path(fullpath, canonical, sizeof(canonical));
+        if (!lsp_project_path_allowed(entry->d_name, dir,
+                                      canonical, sizeof(canonical))) {
+            continue;
+        }
 
         if (exclude_file && strcmp(canonical, exclude_file) == 0) continue;
 
@@ -524,8 +603,13 @@ static int scan_subdirs_for_projects(const char *dir, LspProjectList *list,
 static int validate_rc_entries(const LspProjectList *list)
 {
     for (size_t i = 0; i < list->count; i++) {
+        char canonical[2048];
         struct stat st;
-        if (stat(list->entries[i].file, &st) != 0 || !S_ISREG(st.st_mode)) {
+        if (!lsp_project_path_allowed(list->entries[i].file, NULL,
+                                      canonical, sizeof(canonical))) {
+            return 0;
+        }
+        if (stat(canonical, &st) != 0 || !S_ISREG(st.st_mode)) {
             return 0;
         }
     }
@@ -592,11 +676,15 @@ static int project_imports_file(const char *project_path,
         /* Resolve the full path and compare. */
         char resolved[2048];
         if (import_path[0] == '/') {
-            canonicalize_path(import_path, resolved, sizeof(resolved));
+            if (!lsp_project_path_allowed(import_path, NULL,
+                                          resolved, sizeof(resolved))) {
+                continue;
+            }
         } else {
-            char joined[2048];
-            snprintf(joined, sizeof(joined), "%s/%s", proj_dir, import_path);
-            canonicalize_path(joined, resolved, sizeof(resolved));
+            if (!lsp_project_path_allowed(import_path, proj_dir,
+                                          resolved, sizeof(resolved))) {
+                continue;
+            }
         }
 
         if (strcmp(resolved, target_file) == 0) {
@@ -622,11 +710,19 @@ int lsp_discover_projects(const char *filepath,
     if (!filepath || !out) return -1;
     out->count = 0;
 
+    if (!is_project_file && !source_content &&
+        discovery_cache_lookup(filepath, workspace_root, out)) {
+        return (out->count > 0) ? 0 : -1;
+    }
+
     char file_dir[2048];
     extract_directory(filepath, file_dir, sizeof(file_dir));
 
     char canonical_file[2048];
-    canonicalize_path(filepath, canonical_file, sizeof(canonical_file));
+    if (!lsp_project_path_allowed(filepath, NULL,
+                                  canonical_file, sizeof(canonical_file))) {
+        return -1;
+    }
 
     /* Step 1: If this file IS a project file, extract its info and
      * write/update the rc file. */
@@ -657,6 +753,7 @@ int lsp_discover_projects(const char *filepath,
         scan_dir_for_projects(file_dir, out, canonical_file);
 
         write_rc_file(file_dir, out);
+        discovery_cache_store(filepath, workspace_root, out);
         return 0;
     }
 
@@ -677,6 +774,7 @@ int lsp_discover_projects(const char *filepath,
                     lsp_log("found valid rc at %s with %zu project(s)",
                             rc_path, rc_list.count);
                     *out = rc_list;
+                    discovery_cache_store(filepath, workspace_root, out);
                     return 0;
                 }
                 /* Stale rc — remove and continue searching. */
@@ -716,6 +814,7 @@ int lsp_discover_projects(const char *filepath,
                         found.count, search_dir);
                 write_rc_file(search_dir, &found);
                 *out = found;
+                discovery_cache_store(filepath, workspace_root, out);
                 return 0;
             }
 
@@ -735,26 +834,40 @@ int lsp_discover_projects(const char *filepath,
     }
 
     lsp_log("no project files found for %s", filepath);
+    discovery_cache_store(filepath, workspace_root, out);
     return -1;
 }
 
 int lsp_find_project_for_file(const LspProjectList *projects,
-                              const char *filepath)
+                              const char *filepath,
+                              size_t *out_match_count)
 {
     if (!projects || !filepath || projects->count == 0) return -1;
 
     char canonical[2048];
+    size_t match_count = 0;
+    int match_index = -1;
     canonicalize_path(filepath, canonical, sizeof(canonical));
 
     /* If there's only one project, use it without checking imports. */
-    if (projects->count == 1) return 0;
+    if (projects->count == 1) {
+        if (out_match_count) *out_match_count = 1;
+        return 0;
+    }
 
     /* Check which project(s) import this file. */
     for (size_t i = 0; i < projects->count; i++) {
         if (project_imports_file(projects->entries[i].file, canonical)) {
-            return (int)i;
+            if (match_count == 0) {
+                match_index = (int)i;
+            }
+            match_count++;
         }
     }
+
+    if (out_match_count) *out_match_count = match_count;
+    if (match_count == 1) return match_index;
+    if (match_count > 1) return -2;
 
     /* No project imports this file — could be a standalone file. */
     return -1;

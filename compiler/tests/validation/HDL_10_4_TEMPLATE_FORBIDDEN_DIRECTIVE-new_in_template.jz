@@ -1,6 +1,6 @@
 // TEMPLATE_FORBIDDEN_DIRECTIVE: @new directive in file-scoped template.
 // Realistic syntax with full instantiation. Parser does not recover after the error,
-// producing cascading PARSE000. Split from other directive triggers for this reason.
+// producing cascading PARSE_SYNTAX_ERROR. Split from other directive triggers for this reason.
 
 @project TEMPLATE_FORBIDDEN_DIRECTIVE_new_in_template
     CONFIG {

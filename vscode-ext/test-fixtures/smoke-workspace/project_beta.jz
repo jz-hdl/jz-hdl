@@ -1,0 +1,15 @@
+@project PROJECT_BETA
+    @import "shared/shared_module.jz";
+    @top BetaTop {
+        OUT [1] q = _;
+    }
+@endproj
+
+@module BetaTop
+    PORT {
+        OUT [1] q;
+    }
+    ASYNCHRONOUS {
+        q = 1'b1;
+    }
+@endmod

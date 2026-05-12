@@ -1,0 +1,40 @@
+// SELECT_SIGNAL_IN_SCOPE: @select signal must resolve to a declared simulation WIRE, CLOCK, or TAP.
+// Fixture plan: keep the simulation valid, then reference an undeclared signal
+// in @select so the file emits only the scope diagnostic.
+
+@module SelectSignalInScopeDut
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    REGISTER {
+        state [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        data = state;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        state <= ~state;
+    }
+@endmod
+
+@simulation SelectSignalInScopeDut
+    CLOCK {
+        clk = { period=10 };
+    }
+
+    WIRE {
+        data [1];
+    }
+
+    @new dut SelectSignalInScopeDut {
+        clk [1] = clk;
+        data [1] = data;
+    }
+
+    @select(missing_signal, YELLOW)
+    @run(ns=10)
+@endsim

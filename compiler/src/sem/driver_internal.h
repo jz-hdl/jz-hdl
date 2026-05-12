@@ -642,7 +642,8 @@ void resolve_names_recursive(JZASTNode *node,
 void sem_build_net_graphs(JZASTNode *root,
                           JZBuffer *module_scopes,
                           const JZBuffer *project_symbols,
-                          JZDiagnosticList *diagnostics);
+                          JZDiagnosticList *diagnostics,
+                          int emit_reports);
 
 /* Alias-report emission (implemented in src/report/alias/alias_report.c). */
 void sem_emit_alias_report_for_module(const JZModuleScope *scope,

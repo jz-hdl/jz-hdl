@@ -1,6 +1,6 @@
 // TEMPLATE_FORBIDDEN_DIRECTIVE: @project directive in file-scoped template.
 // Realistic syntax with full project block. Parser does not recover after
-// the error, producing cascading PARSE000.
+// the error, producing cascading PARSE_SYNTAX_ERROR.
 
 @project TEMPLATE_FORBIDDEN_DIRECTIVE_project_in_template
     CONFIG {

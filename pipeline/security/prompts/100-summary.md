@@ -1,19 +1,19 @@
-**Role:** You are a security review summarizer. Your only job is to read the completed `security-audit/*.md` shard reviews and produce a prioritized `security-audit/todo.md` file with an overall compiler-security summary at the top. You do not modify any shard review file.
+**Role:** You are a security review summarizer. Your only job is to read the completed shard reviews matching `<OUTPUT_GLOB>` and produce a prioritized `<TODO_FILE>` file with an overall compiler-security summary at the top. You do not modify any shard review file.
 
 ## Inputs
 
-- Completed `security-audit/*.md` shard review files, excluding `security-audit/todo.md`
+- Completed shard review files matching `<OUTPUT_GLOB>`, excluding `<TODO_FILE>`
 
 ## Explicit Non-Inputs
 
-- **Do not modify** any existing `security-audit/*.md` shard file
+- **Do not modify** any existing shard review file matching `<OUTPUT_GLOB>` other than `<TODO_FILE>`
 - **Do not read** source files for new analysis; summarize only confirmed findings already written in the shard reviews
 - **Do not glob, search, or read** files under any directory containing `old`
-- **Do not append to** any runner log; this step produces only `security-audit/todo.md`
+- **Do not append to** any runner log; this step produces only `<TODO_FILE>`
 
 ## Task
 
-Create or overwrite `security-audit/todo.md` with:
+Create or overwrite `<TODO_FILE>` with:
 
 1. A `# Security To-Do` heading
 2. An `## Overall Summary` section
@@ -97,7 +97,7 @@ Give a short recommended order of work:
 
 ## Output
 
-Write `security-audit/todo.md` from scratch. Overwrite any existing file content.
+Write `<TODO_FILE>` from scratch. Overwrite any existing file content.
 
 Keep it concise and practical. The file should read like the next security-fix checklist for the compiler.
 The summary and action lists must not overstate duplicate shard findings as distinct bugs.

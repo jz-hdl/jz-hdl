@@ -1,0 +1,12 @@
+@module SharedHelper
+    PORT {
+        OUT [1] q;
+    }
+    WIRE {
+        local_sig [1]; // def-target
+    }
+    ASYNCHRONOUS {
+        local_sig = 1'b1;
+        q = local_sig; // def-target-use
+    }
+@endmod

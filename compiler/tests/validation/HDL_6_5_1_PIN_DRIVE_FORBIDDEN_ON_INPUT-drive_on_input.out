@@ -1,0 +1,2 @@
+File: HDL_6_5_1_PIN_DRIVE_FORBIDDEN_ON_INPUT-drive_on_input.jz
+      15:9    error PIN_DRIVE_FORBIDDEN_ON_INPUT S6.5.1 IN_PINS must not declare a drive attribute

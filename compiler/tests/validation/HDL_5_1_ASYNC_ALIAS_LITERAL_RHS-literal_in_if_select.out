@@ -1,8 +1,12 @@
 File: HDL_5_1_ASYNC_ALIAS_LITERAL_RHS-literal_in_if_select.jz
+      22:17   error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
+      23:17   error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
       29:13   error ASYNC_ALIAS_LITERAL_RHS S4.10/S5.1 Literal on RHS of `=` in ASYNCHRONOUS block; did you mean `<=` or `=>`?
       29:13   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?
       38:17   error ASYNC_ALIAS_LITERAL_RHS S4.10/S5.1 Literal on RHS of `=` in ASYNCHRONOUS block; did you mean `<=` or `=>`?
       38:17   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?
+      55:17   error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
+      56:17   error ASYNC_UNDEFINED_PATH_NO_DRIVER S1.5/S4.10/S5.1 Signal undriven on some ASYNCHRONOUS paths; add an ELSE branch or DEFAULT case
       69:13   error ASYNC_ALIAS_LITERAL_RHS S4.10/S5.1 Literal on RHS of `=` in ASYNCHRONOUS block; did you mean `<=` or `=>`?
       69:13   error ASYNC_ALIAS_IN_CONDITIONAL S4.10/S5.3 Alias `=` inside IF/SELECT is forbidden; did you mean `<=` or `=>`?
       78:17   error ASYNC_ALIAS_LITERAL_RHS S4.10/S5.1 Literal on RHS of `=` in ASYNCHRONOUS block; did you mean `<=` or `=>`?

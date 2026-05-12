@@ -115,7 +115,9 @@ void emit_instances(FILE *out, const IR_Design *design, const IR_Module *mod)
             for (int p = 0; p < inst->num_params; ++p) {
                 const IR_InstanceParam *param = &inst->params[p];
                 if (param->string_value) {
-                    fprintf(out, "        .%s(\"%s\")", param->name, param->string_value);
+                    fprintf(out, "        .%s(", param->name);
+                    verilog_emit_escaped_string(out, param->string_value);
+                    fputc(')', out);
                 } else {
                     fprintf(out, "        .%s(%lld)", param->name, param->value);
                 }

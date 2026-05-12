@@ -11,6 +11,8 @@
 #ifndef JZ_HDL_PATH_SECURITY_H
 #define JZ_HDL_PATH_SECURITY_H
 
+#include <stdio.h>
+
 #include "ast.h"
 #include "diagnostic.h"
 
@@ -65,6 +67,12 @@ char *jz_path_validate(const char *raw_path,
                        const char *base_dir,
                        JZLocation loc,
                        JZDiagnosticList *diag);
+
+FILE *jz_path_open_validated_read(const char *raw_path,
+                                  const char *base_dir,
+                                  JZLocation loc,
+                                  JZDiagnosticList *diag,
+                                  char **out_canonical);
 
 /**
  * @brief Release all resources held by the path security subsystem.

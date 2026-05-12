@@ -10,6 +10,7 @@
 #define JZ_SIM_JZW_H
 
 #include <stdint.h>
+#include "sim_value.h"
 
 /**
  * @brief Opaque writer for JZW waveform output.
@@ -91,10 +92,9 @@ void jzw_set_time(JZWWriter *w, uint64_t time_ps);
  *
  * @param w      JZW writer.
  * @param sig_id Signal ID returned by jzw_add_signal().
- * @param value  Signal value (up to 64 bits).
- * @param width  Signal width in bits for binary string formatting.
+ * @param value  Full simulator value.
  */
-void jzw_dump_value(JZWWriter *w, int sig_id, uint64_t value, int width);
+void jzw_dump_value(JZWWriter *w, int sig_id, SimValue value);
 
 /**
  * @brief Add an annotation to the JZW database.

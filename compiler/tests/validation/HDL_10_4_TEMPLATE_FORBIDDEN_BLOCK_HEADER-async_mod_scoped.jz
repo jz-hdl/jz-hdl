@@ -1,6 +1,6 @@
 // TEMPLATE_FORBIDDEN_BLOCK_HEADER: ASYNCHRONOUS block header in module-scoped template.
 // Realistic syntax with full block body. Parser does not recover after the error,
-// producing cascading PARSE000.
+// producing cascading PARSE_SYNTAX_ERROR.
 
 @project TEMPLATE_FORBIDDEN_BLOCK_HEADER_async_mod_scoped
     CONFIG {

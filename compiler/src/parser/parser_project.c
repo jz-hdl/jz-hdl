@@ -28,6 +28,7 @@
  * @return 0 on success, -1 on error
  */
 static int parse_project_top_binding_list(Parser *p, JZASTNode *top);
+static JZASTNode *parse_project_top_bus_target_expr(Parser *p);
 
 /**
  * @brief Parse the optional CHIP attribute in a @project header.
@@ -45,6 +46,126 @@ static int parse_project_header_chip_attr(Parser *p, char **out_chip_id);
  * @return Project top-instance AST node, or NULL on error
  */
 static JZASTNode *parse_project_top_new(Parser *p);
+
+static JZASTNode *parse_project_top_bus_target_expr(Parser *p)
+{
+    const JZToken *t = peek(p);
+    if (t->type == JZ_TOK_NUMBER || t->type == JZ_TOK_SIZED_NUMBER) {
+        JZASTNode *lit = jz_ast_new(JZ_AST_EXPR_LITERAL, t->loc);
+        if (!lit) return NULL;
+        if (t->lexeme) {
+            jz_ast_set_text(lit, t->lexeme);
+        }
+        advance(p);
+        return lit;
+    }
+
+    if (t->type == JZ_TOK_LBRACE) {
+        JZLocation loc = t->loc;
+        advance(p);
+        JZASTNode *concat = jz_ast_new(JZ_AST_EXPR_CONCAT, loc);
+        if (!concat) return NULL;
+        if (peek(p)->type != JZ_TOK_RBRACE) {
+            for (;;) {
+                JZASTNode *elem = parse_project_top_bus_target_expr(p);
+                if (!elem) {
+                    jz_ast_free(concat);
+                    return NULL;
+                }
+                if (jz_ast_add_child(concat, elem) != 0) {
+                    jz_ast_free(elem);
+                    jz_ast_free(concat);
+                    return NULL;
+                }
+                if (!match(p, JZ_TOK_COMMA)) break;
+            }
+        }
+        if (!match(p, JZ_TOK_RBRACE)) {
+            jz_ast_free(concat);
+            parser_error(p, "expected '}' at end of concatenation in project @top BUS binding");
+            return NULL;
+        }
+        return concat;
+    }
+
+    if (t->type != JZ_TOK_IDENTIFIER) {
+        parser_error(p, "expected pin, pin bus, or literal on right-hand side of project @top BUS binding");
+        return NULL;
+    }
+
+    JZLocation loc = t->loc;
+    char *buf = parser_parse_qualified_name(p, 0, 0, &loc);
+
+    if (!buf) {
+        parser_error(p, "expected identifier in project @top BUS binding");
+        return NULL;
+    }
+
+    JZASTNode *base = jz_ast_new(strchr(buf, '.') ? JZ_AST_EXPR_QUALIFIED_IDENTIFIER
+                                                  : JZ_AST_EXPR_IDENTIFIER,
+                                 loc);
+    if (!base) {
+        free(buf);
+        return NULL;
+    }
+    jz_ast_set_name(base, buf);
+    free(buf);
+
+    if (!match(p, JZ_TOK_LBRACKET)) {
+        return base;
+    }
+
+    JZASTNode *msb = parse_simple_index_expr(p);
+    if (!msb) {
+        jz_ast_free(base);
+        return NULL;
+    }
+
+    JZASTNode *lsb = NULL;
+    int is_slice = 0;
+    if (match(p, JZ_TOK_OP_COLON)) {
+        is_slice = 1;
+        lsb = parse_simple_index_expr(p);
+        if (!lsb) {
+            jz_ast_free(msb);
+            jz_ast_free(base);
+            return NULL;
+        }
+    }
+
+    if (!match(p, JZ_TOK_RBRACKET)) {
+        jz_ast_free(lsb);
+        jz_ast_free(msb);
+        jz_ast_free(base);
+        parser_error(p, "expected ']' after slice/index in project @top BUS binding");
+        return NULL;
+    }
+
+    JZASTNode *slice = jz_ast_new(JZ_AST_EXPR_SLICE, loc);
+    if (!slice) {
+        jz_ast_free(lsb);
+        jz_ast_free(msb);
+        jz_ast_free(base);
+        return NULL;
+    }
+    if (!is_slice) {
+        lsb = parser_clone_ast_tree(msb);
+        if (!lsb) {
+            jz_ast_free(slice);
+            jz_ast_free(msb);
+            jz_ast_free(base);
+            return NULL;
+        }
+    }
+
+    if (jz_ast_add_child(slice, base) != 0 ||
+        jz_ast_add_child(slice, msb) != 0 ||
+        jz_ast_add_child(slice, lsb) != 0) {
+        jz_ast_free(slice);
+        return NULL;
+    }
+    return slice;
+}
 
 static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
     for (;;) {
@@ -126,22 +247,8 @@ static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
                 advance(p); /* consume ']' */
 
                 if (width_start < width_end) {
-                    size_t buf_sz = 0;
-                    for (size_t i = width_start; i < width_end; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                    }
-                    if (buf_sz > 0) {
-                        array_width = (char *)malloc(buf_sz + 1);
-                        if (!array_width) return -1;
-                        array_width[0] = '\0';
-                        for (size_t i = width_start; i < width_end; ++i) {
-                            const JZToken *wt = &p->tokens[i];
-                            if (!wt->lexeme) continue;
-                            strcat(array_width, wt->lexeme);
-                            strcat(array_width, " ");
-                        }
-                    }
+                    array_width = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+                    if (!array_width) return -1;
                 }
             }
 
@@ -188,17 +295,20 @@ static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
             /* Optional '= target' part for BUS binding (similar to regular ports). */
             if (match(p, JZ_TOK_OP_ASSIGN)) {
                 const JZToken *target_tok = peek(p);
-                /* Check for no-connect: _ is lexed as JZ_TOK_IDENTIFIER with lexeme "_" */
-                if (target_tok->type == JZ_TOK_IDENTIFIER &&
-                    target_tok->lexeme && strcmp(target_tok->lexeme, "_") == 0) {
+                if (target_tok->type == JZ_TOK_NO_CONNECT) {
                     /* Explicit no-connect: BUS ... = _; */
                     advance(p);
-                    /* No-connect is already implied by absence of target; nothing to set. */
                 } else {
-                    /* TODO: handle non-trivial BUS binding targets if needed. */
-                    parser_error(p, "BUS port bindings in @top currently only support '= _' (no-connect)");
-                    jz_ast_free(decl);
-                    return -1;
+                    JZASTNode *rhs = parse_project_top_bus_target_expr(p);
+                    if (!rhs) {
+                        jz_ast_free(decl);
+                        return -1;
+                    }
+                    if (jz_ast_add_child(decl, rhs) != 0) {
+                        jz_ast_free(rhs);
+                        jz_ast_free(decl);
+                        return -1;
+                    }
                 }
             }
 
@@ -250,22 +360,8 @@ static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
 
         char *width_text = NULL;
         if (width_start < width_end) {
-            size_t buf_sz = 0;
-            for (size_t i = width_start; i < width_end; ++i) {
-                const JZToken *wt = &p->tokens[i];
-                if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-            }
-            if (buf_sz > 0) {
-                width_text = (char *)malloc(buf_sz + 1);
-                if (!width_text) return -1;
-                width_text[0] = '\0';
-                for (size_t i = width_start; i < width_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (!wt->lexeme) continue;
-                    strcat(width_text, wt->lexeme);
-                    strcat(width_text, " ");
-                }
-            }
+            width_text = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+            if (!width_text) return -1;
         }
 
         const JZToken *name_tok = peek(p);
@@ -370,27 +466,13 @@ static int parse_project_top_binding_list(Parser *p, JZASTNode *top) {
                         return -1;
                     }
 
-                    size_t buf_sz = 0;
-                    for (size_t i = expr_start; i < expr_end; ++i) {
-                        const JZToken *et = &p->tokens[i];
-                        if (et->lexeme) buf_sz += strlen(et->lexeme) + 1;
+                    char *buf = parser_join_token_lexemes_spaced(p, expr_start, expr_end, 1);
+                    if (!buf) {
+                        jz_ast_free(decl);
+                        return -1;
                     }
-                    if (buf_sz > 0) {
-                        char *buf = (char *)malloc(buf_sz + 1);
-                        if (!buf) {
-                            jz_ast_free(decl);
-                            return -1;
-                        }
-                        buf[0] = '\0';
-                        for (size_t i = expr_start; i < expr_end; ++i) {
-                            const JZToken *et = &p->tokens[i];
-                            if (!et->lexeme) continue;
-                            strcat(buf, et->lexeme);
-                            strcat(buf, " ");
-                        }
-                        jz_ast_set_text(decl, buf);
-                        free(buf);
-                    }
+                    jz_ast_set_text(decl, buf);
+                    free(buf);
                 }
             } else {
                 /* No explicit target; default to same name (port connected to
@@ -625,24 +707,10 @@ JZASTNode *parse_bus_definition(Parser *p, const JZToken *bus_kw) {
 
         char *width_text = NULL;
         if (width_start < width_end) {
-            size_t buf_sz = 0;
-            for (size_t i = width_start; i < width_end; ++i) {
-                const JZToken *wt = &p->tokens[i];
-                if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-            }
-            if (buf_sz > 0) {
-                width_text = (char *)malloc(buf_sz + 1);
-                if (!width_text) {
-                    jz_ast_free(bus);
-                    return NULL;
-                }
-                width_text[0] = '\0';
-                for (size_t i = width_start; i < width_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (!wt->lexeme) continue;
-                    strcat(width_text, wt->lexeme);
-                    strcat(width_text, " ");
-                }
+            width_text = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+            if (!width_text) {
+                jz_ast_free(bus);
+                return NULL;
             }
         }
 
@@ -751,28 +819,14 @@ JZASTNode *parse_global(Parser *p)
         jz_ast_set_name(decl, id_tok->lexeme);
 
         if (expr_start < expr_end) {
-            size_t buf_sz = 0;
-            for (size_t i = expr_start; i < expr_end; ++i) {
-                const JZToken *et = &p->tokens[i];
-                if (et->lexeme) buf_sz += strlen(et->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, expr_start, expr_end, 1);
+            if (!buf) {
+                jz_ast_free(decl);
+                jz_ast_free(glob);
+                return NULL;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(decl);
-                    jz_ast_free(glob);
-                    return NULL;
-                }
-                buf[0] = '\0';
-                for (size_t i = expr_start; i < expr_end; ++i) {
-                    const JZToken *et = &p->tokens[i];
-                    if (!et->lexeme) continue;
-                    strcat(buf, et->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_text(decl, buf);
-                free(buf);
-            }
+            jz_ast_set_text(decl, buf);
+            free(buf);
         }
 
         if (jz_ast_add_child(glob, decl) != 0) {
@@ -1061,24 +1115,10 @@ JZASTNode *parse_check(Parser *p) {
      */
     char *expr_text = NULL;
     if (expr_start < expr_end) {
-        size_t buf_sz = 0;
-        for (size_t i = expr_start; i < expr_end; ++i) {
-            const JZToken *t = &p->tokens[i];
-            if (t->lexeme) buf_sz += strlen(t->lexeme) + 1;
-        }
-        if (buf_sz > 0) {
-            expr_text = (char *)malloc(buf_sz + 1);
-            if (!expr_text) {
-                jz_ast_free(expr);
-                return NULL;
-            }
-            expr_text[0] = '\0';
-            for (size_t i = expr_start; i < expr_end; ++i) {
-                const JZToken *t = &p->tokens[i];
-                if (!t->lexeme) continue;
-                strcat(expr_text, t->lexeme);
-                strcat(expr_text, " ");
-            }
+        expr_text = parser_join_token_lexemes_spaced(p, expr_start, expr_end, 1);
+        if (!expr_text) {
+            jz_ast_free(expr);
+            return NULL;
         }
     }
 

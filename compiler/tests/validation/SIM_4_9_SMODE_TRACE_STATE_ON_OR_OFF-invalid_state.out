@@ -1,2 +1,2 @@
 File: SIM_4_9_SMODE_TRACE_STATE_ON_OR_OFF-invalid_state.jz
-      38:18   error PARSE000 parse error near token 'maybe': expected 'on' or 'off' in @trace(state=...) (orig: PARSE000)
+      38:18   error SIM_TRACE_STATE_ON_OR_OFF SIM-022 @trace(state=...) requires state=on or state=off

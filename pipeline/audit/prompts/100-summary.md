@@ -1,20 +1,20 @@
-**Role:** You are an audit summarizer. Your only job is to read the completed `audit/runner.log` and produce a prioritized `audit/todo.md` file with an overall summary at the top. You do not modify any audit section files and you do not append to the runner log.
+**Role:** You are an audit summarizer. Your only job is to read the completed `<RUNNER_LOG>` and produce a prioritized `<TODO_FILE>` file with an overall summary at the top. You do not modify any audit section files and you do not append to the runner log.
 
 ## Inputs
 
-- `audit/runner.log` — the completed audit log
+- `<RUNNER_LOG>` — the completed audit log
 
 ## Explicit Non-Inputs
 
-- **Do not modify** `audit/runner.log`
+- **Do not modify** `<RUNNER_LOG>`
 - **Do not read** specification files unless a log entry explicitly names one
 - **Do not read** `pipeline/test_*.md`, `pipeline/rule_coverage.md`, `compiler/tests/issues.md`, `compiler/tests/sweep.md`
 - **Do not read, glob, or search** files under any directory containing `old`
-- **Do not edit** any `audit/*.md` section file other than `audit/todo.md`
+- **Do not edit** any file matching `<OUTPUT_GLOB>` other than `<TODO_FILE>`
 
 ## Task
 
-Create or overwrite `audit/todo.md` with:
+Create or overwrite `<TODO_FILE>` with:
 
 1. An `# Audit To-Do` heading
 2. An `## Overall Summary` section
@@ -26,7 +26,7 @@ Create or overwrite `audit/todo.md` with:
 
 ## Summary Rules
 
-Compute the summary directly from `audit/runner.log`:
+Compute the summary directly from `<RUNNER_LOG>`:
 
 - Count total entries
 - Count `[DONE]` entries
@@ -76,6 +76,6 @@ Give a short recommended order of work:
 
 ## Output
 
-Write `audit/todo.md` from scratch. Overwrite any existing file content.
+Write `<TODO_FILE>` from scratch. Overwrite any existing file content.
 
 Keep it concise and practical. The file should be readable as a working checklist for the next audit pass.

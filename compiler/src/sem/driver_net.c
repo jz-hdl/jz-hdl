@@ -1411,7 +1411,7 @@ static int sem_tristate_check_bus_per_field(
                 char this_bus[128] = {0};
                 if (sscanf(bind->text, "%127s", this_bus) == 1) {
                     if (bus_name[0] == '\0') {
-                        strncpy(bus_name, this_bus, sizeof(bus_name) - 1);
+                        jz_strcpy_trunc(bus_name, sizeof(bus_name), this_bus);
                     } else if (strcmp(bus_name, this_bus) != 0) {
                         return 0; /* Different bus types on same wire */
                     }
@@ -1622,8 +1622,7 @@ static int sem_net_split_qualified_name(const char *name,
     memcpy(head, name, head_len);
     head[head_len] = '\0';
 
-    strncpy(tail, dot + 1, tail_size - 1);
-    tail[tail_size - 1] = '\0';
+    jz_strcpy_trunc(tail, tail_size, dot + 1);
     return 1;
 }
 
@@ -1699,8 +1698,8 @@ static int sem_net_resolve_bulk_endpoint(const JZASTNode *expr,
     if (bus_id[0] == '\0' || role[0] == '\0') return 0;
 
     memset(out, 0, sizeof(*out));
-    strncpy(out->bus_id, bus_id, sizeof(out->bus_id) - 1);
-    strncpy(out->role, role, sizeof(out->role) - 1);
+    jz_strcpy_trunc(out->bus_id, sizeof(out->bus_id), bus_id);
+    jz_strcpy_trunc(out->role, sizeof(out->role), role);
     snprintf(out->key, sizeof(out->key), "%s.%s", inst_name, port_name);
     return 1;
 }
@@ -2258,7 +2257,7 @@ static void sem_net_apply_simple_rules_for_module(const JZModuleScope *scope,
                      * check fails even though no individual field has a conflict.
                      */
                     int bus_ok = 0;
-                    if (project_symbols && jz_tristate_net_is_bus_port(net)) {
+                    if (project_symbols) {
                         bus_ok = sem_tristate_check_declared_bus_per_field(
                             net, net_name, scope, module_scopes,
                             project_symbols);
@@ -2599,7 +2598,8 @@ void sem_net_free_module_graph(JZBuffer *nets, JZBuffer *bindings)
 void sem_build_net_graphs(JZASTNode *root,
                           JZBuffer *module_scopes,
                           const JZBuffer *project_symbols,
-                          JZDiagnosticList *diagnostics)
+                          JZDiagnosticList *diagnostics,
+                          int emit_reports)
 {
     if (!root || root->type != JZ_AST_PROJECT || !module_scopes) return;
 
@@ -2647,21 +2647,21 @@ void sem_build_net_graphs(JZASTNode *root,
                                                  module_scopes, project_symbols,
                                                  &module_comb_cache, diagnostics);
 
-        /* Always delegate to alias-report module; it is a no-op when
-         * alias reporting is not enabled.
-         */
-        sem_emit_alias_report_for_module(scope, &nets, module_scopes, project_symbols, root);
-
-        /* Always delegate to tristate-report module; it is a no-op when
-         * tristate reporting is not enabled.
-         */
-        sem_emit_tristate_report_for_module(scope, &nets, module_scopes, project_symbols, root);
+        if (emit_reports) {
+            /* Delegate to report emitters only during the semantic lint pass.
+             * IR construction also reuses net graphs but must stay silent.
+             */
+            sem_emit_alias_report_for_module(scope, &nets, module_scopes, project_symbols, root);
+            sem_emit_tristate_report_for_module(scope, &nets, module_scopes, project_symbols, root);
+        }
 
         sem_net_free_module_graph(&nets, &bindings);
     }
 
     sem_comb_free_module_comb_cache(&module_comb_cache);
 
-    sem_emit_alias_report_finalize();
-    sem_emit_tristate_report_finalize();
+    if (emit_reports) {
+        sem_emit_alias_report_finalize();
+        sem_emit_tristate_report_finalize();
+    }
 }

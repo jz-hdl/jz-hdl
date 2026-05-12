@@ -16,6 +16,21 @@
 #include "path_security.h"
 #include "../parser/parser_internal.h"
 
+static unsigned g_sem_project_depth = 0;
+
+static int sem_project_enter_depth(JZDiagnosticList *diagnostics, JZLocation loc)
+{
+    if (jz_depth_enter_checked(&g_sem_project_depth,
+                               JZ_LIMIT_SEM_RECURSION_DEPTH) != 0) {
+        sem_report_rule(diagnostics,
+                        loc,
+                        "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",
+                        "semantic traversal exceeds the compiler safety limit");
+        return 0;
+    }
+    return 1;
+}
+
 /* -------------------------------------------------------------------------
  *  Module scopes and project-level symbol tables
  * -------------------------------------------------------------------------
@@ -62,14 +77,17 @@ static int collect_decls_from_feature(JZASTNode *guard,
                                       JZDiagnosticList *diagnostics)
 {
     if (!guard || guard->type != JZ_AST_FEATURE_GUARD) return 0;
+    if (!sem_project_enter_depth(diagnostics, guard->loc)) return -1;
     /* children[0] = condition, children[1] = THEN block, children[2] = ELSE block (optional) */
     for (size_t bi = 1; bi < guard->child_count; ++bi) {
         JZASTNode *branch = guard->children[bi];
         if (!branch) continue;
         if (collect_decls_from_feature_block(branch, scope, guard, branch, diagnostics) != 0) {
+            jz_depth_leave(&g_sem_project_depth);
             return -1;
         }
     }
+    jz_depth_leave(&g_sem_project_depth);
     return 0;
 }
 
@@ -80,6 +98,7 @@ static int collect_decls_from_feature_block(JZASTNode *block,
                                              JZDiagnosticList *diagnostics)
 {
     if (!block) return 0;
+    if (!sem_project_enter_depth(diagnostics, block->loc)) return -1;
     for (size_t j = 0; j < block->child_count; ++j) {
         JZASTNode *child = block->children[j];
         if (!child) continue;
@@ -87,7 +106,10 @@ static int collect_decls_from_feature_block(JZASTNode *block,
         /* Handle nested FEATURE_GUARD within a branch (module-scope feature) */
         if (child->type == JZ_AST_FEATURE_GUARD) {
             if (collect_decls_from_feature(child, scope, diagnostics) != 0)
+            {
+                jz_depth_leave(&g_sem_project_depth);
                 return -1;
+            }
             continue;
         }
 
@@ -230,6 +252,7 @@ static int collect_decls_from_feature_block(JZASTNode *block,
             break;
         }
     }
+    jz_depth_leave(&g_sem_project_depth);
     return 0;
 }
 
@@ -675,11 +698,11 @@ static void sem_check_file_readable(const char *file_path,
                                     JZLocation loc,
                                     JZDiagnosticList *diagnostics)
 {
-    char *validated = jz_path_validate(
-        file_path, base_dir, loc, diagnostics);
+    char *validated = NULL;
+    FILE *fp = jz_path_open_validated_read(
+        file_path, base_dir, loc, diagnostics, &validated);
     if (!validated) return;
 
-    FILE *fp = fopen(validated, "rb");
     if (!fp) {
         char msg[600];
         snprintf(msg, sizeof(msg),
@@ -743,6 +766,7 @@ static void sem_validate_override_file_paths(
     JZDiagnosticList *diagnostics)
 {
     if (!target_mod || !ov_block || !diagnostics) return;
+    if (!sem_project_enter_depth(diagnostics, ov_block->loc)) return;
 
     for (size_t k = 0; k < ov_block->child_count; ++k) {
         JZASTNode *ov_decl = ov_block->children[k];
@@ -771,7 +795,7 @@ static void sem_validate_override_file_paths(
                 if (!init->name ||
                     strcmp(init->name, const_name) != 0) continue;
 
-                char base_dir[512];
+                char base_dir[4096];
                 sem_base_dir_from_loc(&mem->loc, base_dir, sizeof(base_dir));
                 sem_check_file_readable(file_path,
                                         base_dir[0] ? base_dir : NULL,
@@ -842,6 +866,7 @@ static void sem_validate_override_file_paths(
             }
         }
     }
+    jz_depth_leave(&g_sem_project_depth);
 }
 
 int build_symbol_tables(JZASTNode *project,

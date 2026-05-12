@@ -1,0 +1,8 @@
+@module OrphanModule
+    PORT {
+        OUT [1] q;
+    }
+    ASYNCHRONOUS {
+        q = 1'b0;
+    }
+@endmod

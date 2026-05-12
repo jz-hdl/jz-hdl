@@ -48,6 +48,11 @@ static SimValue cmp_result(int result_bit);
  * @return One-bit simulator value set to `x`.
  */
 static SimValue cmp_x(void);
+static int sim_val_ucmp(SimValue a, SimValue b, int width);
+static SimValue sim_val_shift_left_bits(SimValue v, int shift, int width);
+static SimValue sim_val_unsigned_divmod(SimValue a, SimValue b, int width,
+                                        int want_remainder);
+static int sim_val_to_small_uint(SimValue v, uint64_t *out);
 
 static int num_words(int w) {
     if (w <= 0) return 1;
@@ -234,42 +239,83 @@ SimValue sim_val_add(SimValue a, SimValue b) {
     int rw = a.width > b.width ? a.width : b.width;
     SimValue x = arith_xz_check(a, b, rw);
     if (x.width != -1) return x;
-    return sim_val_from_uint(a.val[0] + b.val[0], rw);
+
+    SimValue r = sim_val_zero(rw);
+    int nw = num_words(rw);
+    uint64_t carry = 0;
+    for (int i = 0; i < nw; i++) {
+        uint64_t av = a.val[i] & word_mask(rw, i);
+        uint64_t bv = b.val[i] & word_mask(rw, i);
+        uint64_t sum = av + bv;
+        uint64_t sum2 = sum + carry;
+        uint64_t carry_out = (sum < av) || (sum2 < sum);
+        r.val[i] = sum2;
+        carry = carry_out;
+    }
+    return sim_val_mask(r);
 }
 
 SimValue sim_val_sub(SimValue a, SimValue b) {
     int rw = a.width > b.width ? a.width : b.width;
     SimValue x = arith_xz_check(a, b, rw);
     if (x.width != -1) return x;
-    return sim_val_from_uint(a.val[0] - b.val[0], rw);
+
+    SimValue r = sim_val_zero(rw);
+    int nw = num_words(rw);
+    uint64_t borrow = 0;
+    for (int i = 0; i < nw; i++) {
+        uint64_t av = a.val[i] & word_mask(rw, i);
+        uint64_t bv = b.val[i] & word_mask(rw, i);
+        uint64_t subtrahend = bv + borrow;
+        uint64_t borrow_out = (subtrahend < bv) || (av < subtrahend);
+        r.val[i] = av - subtrahend;
+        borrow = borrow_out;
+    }
+    return sim_val_mask(r);
 }
 
 SimValue sim_val_mul(SimValue a, SimValue b) {
     int rw = a.width > b.width ? a.width : b.width;
     SimValue x = arith_xz_check(a, b, rw);
     if (x.width != -1) return x;
-    return sim_val_from_uint(a.val[0] * b.val[0], rw);
+
+    SimValue r = sim_val_zero(rw);
+    for (int bit = 0; bit < rw; bit++) {
+        if (sim_val_get_bit(b, bit)) {
+            SimValue shifted = sim_val_shift_left_bits(a, bit, rw);
+            r = sim_val_add(r, shifted);
+        }
+    }
+    r.width = rw;
+    return sim_val_mask(r);
 }
 
 SimValue sim_val_div(SimValue a, SimValue b) {
     int rw = a.width > b.width ? a.width : b.width;
     SimValue x = arith_xz_check(a, b, rw);
     if (x.width != -1) return x;
-    if (b.val[0] == 0) return sim_val_all_x(rw);
-    return sim_val_from_uint(a.val[0] / b.val[0], rw);
+    a.width = rw;
+    b.width = rw;
+    if (sim_val_ucmp(sim_val_mask(b), sim_val_zero(rw), rw) == 0) return sim_val_all_x(rw);
+    return sim_val_unsigned_divmod(sim_val_mask(a), sim_val_mask(b), rw, 0);
 }
 
 SimValue sim_val_mod(SimValue a, SimValue b) {
     int rw = a.width > b.width ? a.width : b.width;
     SimValue x = arith_xz_check(a, b, rw);
     if (x.width != -1) return x;
-    if (b.val[0] == 0) return sim_val_all_x(rw);
-    return sim_val_from_uint(a.val[0] % b.val[0], rw);
+    a.width = rw;
+    b.width = rw;
+    if (sim_val_ucmp(sim_val_mask(b), sim_val_zero(rw), rw) == 0) return sim_val_all_x(rw);
+    return sim_val_unsigned_divmod(sim_val_mask(a), sim_val_mask(b), rw, 1);
 }
 
 SimValue sim_val_neg(SimValue a) {
     if (sim_val_has_xz(a)) return sim_val_all_x(a.width);
-    return sim_val_from_uint((~a.val[0] + 1), a.width);
+    SimValue inv = sim_val_not(a);
+    SimValue one = sim_val_zero(a.width);
+    one.val[0] = 1;
+    return sim_val_add(inv, one);
 }
 
 /* ---- bitwise (4-state truth tables, multi-word) ---- */
@@ -365,6 +411,56 @@ static SimValue cmp_x(void) {
     return sim_val_all_x(1);
 }
 
+static int sim_val_ucmp(SimValue a, SimValue b, int width) {
+    int nw = num_words(width);
+    for (int i = nw - 1; i >= 0; i--) {
+        uint64_t m = word_mask(width, i);
+        uint64_t av = a.val[i] & m;
+        uint64_t bv = b.val[i] & m;
+        if (av < bv) return -1;
+        if (av > bv) return 1;
+    }
+    return 0;
+}
+
+static SimValue sim_val_shift_left_bits(SimValue v, int shift, int width) {
+    SimValue shift_amt = sim_val_from_uint((uint64_t)shift, 32);
+    v.width = width;
+    return sim_val_shl(v, shift_amt);
+}
+
+static int sim_val_to_small_uint(SimValue v, uint64_t *out) {
+    int nw = num_words(v.width);
+    if (sim_val_has_xz(v)) return -1;
+    for (int i = 1; i < nw; i++) {
+        if (v.val[i] != 0) return -1;
+    }
+    *out = v.val[0];
+    return 0;
+}
+
+static SimValue sim_val_unsigned_divmod(SimValue a, SimValue b, int width,
+                                        int want_remainder)
+{
+    SimValue quotient = sim_val_zero(width);
+    SimValue remainder = sim_val_zero(width);
+
+    for (int bit = width - 1; bit >= 0; bit--) {
+        remainder = sim_val_shift_left_bits(remainder, 1, width);
+        sim_val_set_bit(&remainder, 0, sim_val_get_bit(a, bit));
+        if (sim_val_ucmp(remainder, b, width) >= 0) {
+            remainder = sim_val_sub(remainder, b);
+            remainder.width = width;
+            remainder = sim_val_mask(remainder);
+            sim_val_set_bit(&quotient, bit, 1);
+        }
+    }
+
+    quotient.width = width;
+    remainder.width = width;
+    return want_remainder ? sim_val_mask(remainder) : sim_val_mask(quotient);
+}
+
 SimValue sim_val_eq(SimValue a, SimValue b) {
     if (sim_val_has_xz(a) || sim_val_has_xz(b)) return cmp_x();
     int w = a.width > b.width ? a.width : b.width;
@@ -390,16 +486,9 @@ SimValue sim_val_neq(SimValue a, SimValue b) {
 SimValue sim_val_lt(SimValue a, SimValue b) {
     if (sim_val_has_xz(a) || sim_val_has_xz(b)) return cmp_x();
     int w = a.width > b.width ? a.width : b.width;
-    int nw = num_words(w);
-    /* Compare from MSW to LSW */
-    for (int i = nw - 1; i >= 0; i--) {
-        uint64_t m = word_mask(w, i);
-        uint64_t av = a.val[i] & m;
-        uint64_t bv = b.val[i] & m;
-        if (av < bv) return cmp_result(1);
-        if (av > bv) return cmp_result(0);
-    }
-    return cmp_result(0); /* equal */
+    a.width = w;
+    b.width = w;
+    return cmp_result(sim_val_ucmp(a, b, w) < 0);
 }
 
 SimValue sim_val_gt(SimValue a, SimValue b) {
@@ -409,15 +498,9 @@ SimValue sim_val_gt(SimValue a, SimValue b) {
 SimValue sim_val_lte(SimValue a, SimValue b) {
     if (sim_val_has_xz(a) || sim_val_has_xz(b)) return cmp_x();
     int w = a.width > b.width ? a.width : b.width;
-    int nw = num_words(w);
-    for (int i = nw - 1; i >= 0; i--) {
-        uint64_t m = word_mask(w, i);
-        uint64_t av = a.val[i] & m;
-        uint64_t bv = b.val[i] & m;
-        if (av < bv) return cmp_result(1);
-        if (av > bv) return cmp_result(0);
-    }
-    return cmp_result(1); /* equal -> true for LTE */
+    a.width = w;
+    b.width = w;
+    return cmp_result(sim_val_ucmp(a, b, w) <= 0);
 }
 
 SimValue sim_val_gte(SimValue a, SimValue b) {
@@ -451,9 +534,10 @@ SimValue sim_val_logical_not(SimValue a) {
 /* ---- shift ---- */
 
 SimValue sim_val_shl(SimValue a, SimValue b) {
+    uint64_t shift = 0;
     if (sim_val_has_xz(a) || sim_val_has_xz(b))
         return sim_val_all_x(a.width);
-    uint64_t shift = b.val[0];
+    if (sim_val_to_small_uint(b, &shift) != 0) return sim_val_zero(a.width);
     if (shift >= (uint64_t)a.width) return sim_val_zero(a.width);
 
     int s = (int)shift;
@@ -481,9 +565,10 @@ SimValue sim_val_shl(SimValue a, SimValue b) {
 }
 
 SimValue sim_val_shr(SimValue a, SimValue b) {
+    uint64_t shift = 0;
     if (sim_val_has_xz(a) || sim_val_has_xz(b))
         return sim_val_all_x(a.width);
-    uint64_t shift = b.val[0];
+    if (sim_val_to_small_uint(b, &shift) != 0) return sim_val_zero(a.width);
     if (shift >= (uint64_t)a.width) return sim_val_zero(a.width);
 
     SimValue am = sim_val_mask(a);
@@ -512,9 +597,13 @@ SimValue sim_val_shr(SimValue a, SimValue b) {
 }
 
 SimValue sim_val_ashr(SimValue a, SimValue b) {
+    uint64_t shift = 0;
     if (sim_val_has_xz(a) || sim_val_has_xz(b))
         return sim_val_all_x(a.width);
-    uint64_t shift = b.val[0];
+    if (sim_val_to_small_uint(b, &shift) != 0) {
+        int sign = sim_val_get_bit(a, a.width - 1);
+        return sign ? sim_val_ones(a.width) : sim_val_zero(a.width);
+    }
     int sign_bit = sim_val_get_bit(a, a.width - 1);
     if (shift >= (uint64_t)a.width) {
         return sign_bit ? sim_val_ones(a.width) : sim_val_zero(a.width);

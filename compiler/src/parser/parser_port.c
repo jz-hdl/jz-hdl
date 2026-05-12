@@ -35,6 +35,9 @@ int parse_port_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "PORT")) {
+            continue;
+        }
 
         /* BUS <bus_id> <ROLE> [N] <port_name>; */
         if (t->type == JZ_TOK_IDENTIFIER && t->lexeme && strcmp(t->lexeme, "BUS") == 0) {
@@ -72,22 +75,8 @@ int parse_port_block_body(Parser *p, JZASTNode *parent) {
                 advance(p); /* consume ']' */
 
                 if (width_start < width_end) {
-                    size_t buf_sz = 0;
-                    for (size_t i = width_start; i < width_end; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                    }
-                    if (buf_sz > 0) {
-                        array_width = (char *)malloc(buf_sz + 1);
-                        if (!array_width) return -1;
-                        array_width[0] = '\0';
-                        for (size_t i = width_start; i < width_end; ++i) {
-                            const JZToken *wt = &p->tokens[i];
-                            if (!wt->lexeme) continue;
-                            strcat(array_width, wt->lexeme);
-                            strcat(array_width, " ");
-                        }
-                    }
+                    array_width = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+                    if (!array_width) return -1;
                 }
             }
 
@@ -181,22 +170,8 @@ int parse_port_block_body(Parser *p, JZASTNode *parent) {
         /* Precompute width expr text once; reuse for all declarators on this line. */
         char *width_text = NULL;
         if (width_start < width_end) {
-            size_t buf_sz = 0;
-            for (size_t i = width_start; i < width_end; ++i) {
-                const JZToken *wt = &p->tokens[i];
-                if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-            }
-            if (buf_sz > 0) {
-                width_text = (char *)malloc(buf_sz + 1);
-                if (!width_text) return -1;
-                width_text[0] = '\0';
-                for (size_t i = width_start; i < width_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (!wt->lexeme) continue;
-                    strcat(width_text, wt->lexeme);
-                    strcat(width_text, " ");
-                }
-            }
+            width_text = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+            if (!width_text) return -1;
         }
 
         /* One or more port names, separated by commas, terminated by ';'. */
@@ -206,7 +181,7 @@ int parse_port_block_body(Parser *p, JZASTNode *parent) {
             if (!is_decl_identifier_token(name_tok)) {
                 if (!saw_any_name) {
                     if (width_text) free(width_text);
-                    parser_error(p, "expected port name after width in PORT block");
+                    parser_error_id_syntax_or_parse(p, "expected port name after width in PORT block");
                     return -1;
                 }
                 break;

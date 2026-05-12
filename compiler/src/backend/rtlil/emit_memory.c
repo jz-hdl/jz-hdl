@@ -4,9 +4,11 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 #include "rtlil_internal.h"
 #include "ir.h"
+#include "util.h"
 
 /* Reuse alias helpers from Verilog backend. */
 #include "backend/verilog-2005/verilog_internal.h"
@@ -68,6 +70,7 @@ static void rtlil_emit_blob_word_const(FILE *out, const uint8_t *word_bytes,
  * @param addr Address index to initialize.
  */
 static void emit_meminit_cell(FILE *out, const IR_Memory *mem, int addr);
+static int rtlil_mem_init_emission_within_limit(const IR_Memory *mem);
 
 static int append_sigspec_text(char *buf,
                                size_t buf_size,
@@ -175,6 +178,33 @@ static void emit_meminit_cell(FILE *out,
     fputc('\n', out);
     rtlil_indent(out, 1);
     fprintf(out, "end\n");
+}
+
+static int rtlil_mem_init_emission_within_limit(const IR_Memory *mem)
+{
+    size_t limit = jz_input_limit_value(JZ_LIMIT_RTLIL_MEM_INIT_EMIT_BYTES);
+    size_t width = 0;
+    size_t depth = 0;
+    size_t addr_width = 0;
+    size_t per_cell = 0;
+    size_t total = 0;
+
+    if (!mem) return 0;
+
+    width = (size_t)(mem->word_width > 0 ? mem->word_width : 1);
+    depth = (size_t)(mem->depth > 0 ? mem->depth : 0);
+    addr_width = (size_t)(mem->address_width > 0 ? mem->address_width : 1);
+
+    if (jz_size_mul_checked(width, 2u, &per_cell) != 0) {
+        return 0;
+    }
+    if (jz_size_add_checked(per_cell, addr_width + 128u, &per_cell) != 0) {
+        return 0;
+    }
+    if (jz_size_mul_checked(per_cell, depth, &total) != 0) {
+        return 0;
+    }
+    return total <= limit;
 }
 
 /**
@@ -436,6 +466,14 @@ void rtlil_emit_memory_cells(FILE *out, const IR_Module *mod)
                     mod->name ? mod->name : "?",
                     expected_num_bytes,
                     mem->init.blob->num_bytes);
+            s_mem_emit_errors++;
+            continue;
+        }
+        if (!rtlil_mem_init_emission_within_limit(mem)) {
+            fprintf(stderr,
+                    "error: RTLIL memory init for memory %s in module %s exceeds the compiler safety emit-size limit\n",
+                    mem->name ? mem->name : "jz_mem",
+                    mod->name ? mod->name : "?");
             s_mem_emit_errors++;
             continue;
         }

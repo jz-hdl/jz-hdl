@@ -1,5 +1,5 @@
 // TEMPLATE_FORBIDDEN_BLOCK_HEADER: Cross-reference test for S10.4 ASYNCHRONOUS header in template.
-// Parser does not recover after the error, producing cascading PARSE000.
+// Parser does not recover after the error, producing cascading PARSE_SYNTAX_ERROR.
 // Split from SYNC trigger for this reason.
 
 @project TEMPLATE_FORBIDDEN_BLOCK_HEADER_async_in_template

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "verilog_internal.h"
 #include "ir.h"
@@ -104,6 +105,101 @@ const char *verilog_safe_name(const char *name, char *buf, int buf_size)
     if (!verilog_is_keyword(name)) return name;
     snprintf(buf, buf_size, "\\%s ", name);
     return buf;
+}
+
+void verilog_emit_escaped_string(FILE *out, const char *text)
+{
+    const unsigned char *p = (const unsigned char *)(text ? text : "");
+
+    if (!out) return;
+    fputc('"', out);
+    while (*p) {
+        switch (*p) {
+        case '\\': fputs("\\\\", out); break;
+        case '"':  fputs("\\\"", out); break;
+        case '\n': fputs("\\n", out); break;
+        case '\r': fputs("\\r", out); break;
+        case '\t': fputs("\\t", out); break;
+        default:
+            if (*p < 0x20u || *p == 0x7fu) {
+                fprintf(out, "\\x%02X", (unsigned)*p);
+            } else {
+                fputc((int)*p, out);
+            }
+            break;
+        }
+        ++p;
+    }
+    fputc('"', out);
+}
+
+int verilog_constraint_value_is_safe(const char *text)
+{
+    const unsigned char *p = (const unsigned char *)text;
+
+    if (!text || !text[0]) return 0;
+    while (*p) {
+        if (!(isalnum(*p) || *p == '_' || *p == '-' || *p == '.' ||
+              *p == '/' || *p == '+' || *p == ':' || *p == '[' ||
+              *p == ']' || *p == ',')) {
+            return 0;
+        }
+        ++p;
+    }
+    return 1;
+}
+
+void verilog_emit_constraint_comment_text(FILE *out, const char *text)
+{
+    const unsigned char *p = (const unsigned char *)(text ? text : "");
+
+    if (!out) return;
+    while (*p) {
+        if (*p == '\r' || *p == '\n') {
+            fputc(' ', out);
+        } else if (*p < 0x20u || *p == 0x7fu) {
+            fputc('?', out);
+        } else {
+            fputc((int)*p, out);
+        }
+        ++p;
+    }
+}
+
+void verilog_emit_tcl_braced(FILE *out, const char *text)
+{
+    const unsigned char *p = (const unsigned char *)(text ? text : "");
+
+    if (!out) return;
+    fputc('{', out);
+    while (*p) {
+        switch (*p) {
+        case '{':
+        case '}':
+        case '\\':
+            fputc('\\', out);
+            fputc((int)*p, out);
+            break;
+        case '\r':
+            fputs("\\r", out);
+            break;
+        case '\n':
+            fputs("\\n", out);
+            break;
+        case '\t':
+            fputs("\\t", out);
+            break;
+        default:
+            if (*p < 0x20u || *p == 0x7fu) {
+                fprintf(out, "\\x%02X", (unsigned)*p);
+            } else {
+                fputc((int)*p, out);
+            }
+            break;
+        }
+        ++p;
+    }
+    fputc('}', out);
 }
 
 /* Return a safe Verilog memory array name.  If the raw memory name collides

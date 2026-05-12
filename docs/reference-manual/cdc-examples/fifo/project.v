@@ -1,5 +1,5 @@
 // This Verilog was transpiled from JZ-HDL.
-// jz-hdl version: Version 0.1.7 (c6d52fc)
+// jz-hdl version: Version 0.1.8 (4a569a5)
 // Intended for use with yosys.
 
 `default_nettype none
@@ -113,15 +113,21 @@ module cdc_fifo (
     reg [63:0] packet_word;
     reg [63:0] data_out;
     wire [63:0] packet_view;
+    wire _fifo_packet_view_wr_en;
+    wire _fifo_packet_view_rst_wr;
+    wire _fifo_packet_view_rst_rd;
 
+    assign _fifo_packet_view_wr_en = !rst_n || 1'b1;
+    assign _fifo_packet_view_rst_wr = ~rst_n;
+    assign _fifo_packet_view_rst_rd = ~rst_n;
 
     JZHDL_LIB_CDC_FIFO__W64 u_cdc_fifo_packet_view (
         .clk_wr(clk_a),
         .clk_rd(clk_b),
-        .rst_wr(rst_n),
-        .rst_rd(rst_n),
+        .rst_wr(_fifo_packet_view_rst_wr),
+        .rst_rd(_fifo_packet_view_rst_rd),
         .data_in(packet_word),
-        .write_en(1'b1),
+        .write_en(_fifo_packet_view_wr_en),
         .read_en(1'b1),
         .data_out(packet_view)
     );

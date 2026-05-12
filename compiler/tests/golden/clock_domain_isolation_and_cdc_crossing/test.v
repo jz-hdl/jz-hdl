@@ -1,5 +1,5 @@
 // This Verilog was transpiled from JZ-HDL.
-// jz-hdl version: jz-hdl 0.1 (prototype)
+// jz-hdl version: Version 0.1.8 (29db3ba)
 // Intended for use with yosys.
 
 `default_nettype none
@@ -24,35 +24,6 @@ module JZHDL_LIB_CDC_BIT (
     always @(posedge clk_dest) begin
         sync_ff1 <= data_in;
         sync_ff2 <= sync_ff1;
-    end
-endmodule
-
-module JZHDL_LIB_RESET_SYNC (
-    clk,
-    rst_async_n,
-    rst_sync_n
-);
-    // Ports
-    input clk;
-    input rst_async_n;
-    output rst_sync_n;
-
-    // Signals
-    reg sync_ff1;
-    reg sync_ff2;
-
-    assign rst_sync_n = sync_ff2;
-
-
-    always @(posedge clk or negedge rst_async_n) begin
-        if (!rst_async_n) begin
-            sync_ff1 <= 1'b0;
-            sync_ff2 <= 1'b0;
-        end
-        else begin
-            sync_ff1 <= 1'b1;
-            sync_ff2 <= sync_ff1;
-        end
     end
 endmodule
 
@@ -141,7 +112,6 @@ module cdc_top (
     reg sync_out;
     wire [29:0] counter_slow_view;
     wire flag_fast_view;
-    wire rst_sync_0;
 
     assign reset = por & rst_n;
 
@@ -156,11 +126,6 @@ module cdc_top (
         .data_in(slow_flag),
         .data_out(flag_fast_view)
     );
-    JZHDL_LIB_RESET_SYNC u_rst_sync_0 (
-        .clk(clk_fast),
-        .rst_async_n(reset),
-        .rst_sync_n(rst_sync_0)
-    );
 
 
     always @* begin
@@ -169,8 +134,8 @@ module cdc_top (
         display = {fast_counter[29], fast_is_even, slow_is_set};
     end
 
-    always @(posedge clk_fast) begin
-        if (!rst_sync_0) begin
+    always @(posedge clk_fast or negedge reset) begin
+        if (!reset) begin
             fast_counter <= 30'b000000000000000000000000000000;
             sync_out <= 1'b0;
         end

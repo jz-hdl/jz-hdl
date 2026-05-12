@@ -96,7 +96,10 @@ void rtlil_emit_const_val(FILE *out, int width, uint64_t value)
     if (width <= 0) width = 1;
     fprintf(out, "%d'", width);
     for (int i = width - 1; i >= 0; --i) {
-        unsigned bit = (unsigned)((value >> i) & 1u);
+        unsigned bit = 0;
+        if (i < 64) {
+            bit = (unsigned)((value >> i) & 1u);
+        }
         fputc(bit ? '1' : '0', out);
     }
 }

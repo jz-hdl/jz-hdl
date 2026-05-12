@@ -1,0 +1,52 @@
+@module wide_counter
+    PORT {
+        IN  [1] clk;
+        IN  [1] load;
+        IN  [256] seed;
+        OUT [256] count;
+    }
+
+    REGISTER {
+        cnt [256] = 256'h0;
+    }
+
+    ASYNCHRONOUS {
+        count <= cnt;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        cnt <= load ? seed : (cnt + 256'h0000000000000000000000000000000000000000000000000000000000000001);
+    }
+@endmod
+
+@simulation wide_counter
+    CLOCK {
+        clk = { period=10.0 };
+    }
+
+    WIRE {
+        load [1];
+        seed [256];
+        count [256];
+    }
+
+    @new dut wide_counter {
+        clk   [1] = clk;
+        load  [1] = load;
+        seed  [256] = seed;
+        count [256] = count;
+    }
+
+    @setup {
+        load <= 1'b1;
+        seed <= 256'h0123456789abcdef0000000000000001ffffffffffffffffffffffffffffffff;
+    }
+
+    @run(ns=10)
+
+    @update {
+        load <= 1'b0;
+    }
+
+    @run(ns=10)
+@endsim

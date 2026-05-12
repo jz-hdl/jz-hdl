@@ -1,0 +1,31 @@
+@project TRISTATE_REPORT_fixture
+    @top Top {
+        IN    [1] sel = _;
+        IN    [8] data_a = _;
+        IN    [8] data_b = _;
+        INOUT [8] bus = _;
+        OUT   [8] observed = _;
+    }
+@endproj
+
+@module Top
+    PORT {
+        IN    [1] sel;
+        IN    [8] data_a;
+        IN    [8] data_b;
+        INOUT [8] bus;
+        OUT   [8] observed;
+    }
+
+    ASYNCHRONOUS {
+        IF (sel) {
+            bus <= data_a;
+            bus <= 8'bzzzz_zzzz;
+        } ELSE {
+            bus <= 8'bzzzz_zzzz;
+            bus <= data_b;
+        }
+
+        observed <= bus;
+    }
+@endmod

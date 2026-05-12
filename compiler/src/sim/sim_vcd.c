@@ -157,21 +157,23 @@ void vcd_set_time(VCDWriter *w, uint64_t time_ps)
     }
 }
 
-void vcd_dump_value(VCDWriter *w, int sig_id, uint64_t value, int width)
+void vcd_dump_value(VCDWriter *w, int sig_id, SimValue value)
 {
     if (!w || !w->defs_ended || sig_id < 0 || sig_id >= w->num_signals) return;
 
     VCDSignal *sig = &w->signals[sig_id];
-    (void)width; /* use signal's declared width */
+    char bin[SIM_VAL_WORDS * 64 + 1];
 
     if (sig->width == 1) {
-        fprintf(w->fp, "%c%s\n", (value & 1) ? '1' : '0', sig->ident);
+        char ch = '0';
+        if (value.xmask[0] & 1U) ch = 'x';
+        else if (value.zmask[0] & 1U) ch = 'z';
+        else if (value.val[0] & 1U) ch = '1';
+        fprintf(w->fp, "%c%s\n", ch, sig->ident);
     } else {
-        fprintf(w->fp, "b");
-        for (int b = sig->width - 1; b >= 0; b--) {
-            fprintf(w->fp, "%c", (value >> b) & 1 ? '1' : '0');
-        }
-        fprintf(w->fp, " %s\n", sig->ident);
+        value.width = sig->width;
+        sim_val_to_bin(value, bin, sizeof(bin));
+        fprintf(w->fp, "b%s %s\n", bin, sig->ident);
     }
 }
 

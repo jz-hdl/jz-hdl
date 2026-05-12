@@ -1,6 +1,4 @@
 ---
-mainfont: "Helvetica Neue"
-monofont: "Menlo"
 title: "JZ-HDL CHIP INFO SPECIFICATION"
 subtitle: "State: Beta — Version: 0.1.9"
 toc: true
@@ -26,7 +24,7 @@ Examples: `gw2ar-18-qn88-c8-i7.json`, `ice40up-5k-sg.json`, `lfe5u-45f-6bg381.js
 
 ## 2. Top-Level Structure
 
-A chip data file is a single JSON object with the following top-level keys:
+A chip data file is a single JSON object with the following top-level keys. When custom chip JSON is used, these top-level keys are validated strictly: required keys must be present, required value types must match, and unknown top-level keys are rejected.
 
 | Key            | Type     | Required | Description                                    |
 |----------------|----------|----------|------------------------------------------------|
@@ -53,7 +51,7 @@ The compiler matches chip IDs case-insensitively by prefix. For example, `--chip
 
 ## 4. `boards`
 
-An array of objects describing development boards that use this chip. May be empty.
+An array of objects describing development boards that use this chip. May be empty. Each board entry must contain exactly `name` and `url`.
 
 | Key    | Type   | Required | Description             |
 |--------|--------|----------|-------------------------|
@@ -337,7 +335,7 @@ An array of clock generator objects. Each describes one type of clock generation
 | `feedback_wire`  | string  | No       | Base name for auto-generated feedback wire (see Section 9.9) |
 | `map`            | object  | Cond.    | Backend-specific instantiation templates. Required unless `variants` is present |
 | `variants`       | array   | Cond.    | Variant-dispatched backend templates (see Section 9.3). Required unless `map` is present |
-| `parameters`     | object  | Yes      | Configurable parameters                        |
+| `parameters`     | object  | No       | Configurable parameters                        |
 | `outputs`        | object  | Yes      | Clock output definitions                       |
 | `inputs`         | object  | No       | Clock input definitions (PLL only)             |
 | `derived`        | object  | No       | Derived values computed from parameters        |
@@ -611,7 +609,7 @@ An object mapping output names to their definitions. Each output represents eith
 
 | Key             | Type    | Required | Description                                |
 |-----------------|---------|----------|--------------------------------------------|
-| `description`   | string  | Yes      | What this output is                        |
+| `description`   | string  | No       | What this output is                        |
 | `port`          | string  | Yes      | Physical port name on the primitive        |
 | `is_clock`      | boolean | Yes      | `true` if this output is a clock signal, `false` if it is a status/control signal (e.g., LOCK) |
 | `frequency_mhz` | object | No       | Frequency specification (required when `is_clock` is `true`) |
@@ -724,7 +722,7 @@ If `pad_exclusive` is `false` or omitted, no special handling is applied.
 
 ## 10. `differential`
 
-An object describing differential I/O support. Optional; omit if the device has no differential I/O.
+An object describing differential I/O support. Optional; omit if the device has no differential I/O. When present, the object is validated strictly; unknown keys and malformed nested objects are rejected.
 
 ### 10.1 Top-Level Fields
 
@@ -733,9 +731,11 @@ An object describing differential I/O support. Optional; omit if the device has 
 | `source` | string | Yes      | Datasheet reference                                 |
 | `type`   | string | Yes      | `"true"` (native LVDS) or `"emulated"` (GPIO-based) |
 | `io_type`| string | Yes      | I/O standard name (e.g., `"LVDS25"`, `"LVCMOS33D"`) |
-| `output` | object | Yes      | Output differential support                         |
-| `input`  | object | Yes      | Input differential support                          |
+| `output` | object | No       | Output differential support                         |
+| `input`  | object | No       | Input differential support                          |
 | `clock`  | object | No       | Differential clock input support (see §10.3)        |
+
+At least one of `output` or `input` must be present. Some chips support only differential output or only differential input.
 
 ### 10.2 `output` / `input` Objects
 

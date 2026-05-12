@@ -43,16 +43,19 @@ int parse_wire_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "WIRE")) {
+            continue;
+        }
 
         const JZToken *name_tok = peek(p);
         if (!is_decl_identifier_token(name_tok)) {
-            parser_error(p, "expected wire name in WIRE block");
+            parser_error_id_syntax_or_parse(p, "expected wire name in WIRE block");
             return -1;
         }
         advance(p);
 
         if (!match(p, JZ_TOK_LBRACKET)) {
-            parser_error(p, "expected '[' after wire name");
+            parser_error_id_syntax_or_parse(p, "expected '[' after wire name");
             return -1;
         }
 
@@ -71,22 +74,8 @@ int parse_wire_block_body(Parser *p, JZASTNode *parent) {
 
         char *width_text = NULL;
         if (width_start < width_end) {
-            size_t buf_sz = 0;
-            for (size_t i = width_start; i < width_end; ++i) {
-                const JZToken *wt = &p->tokens[i];
-                if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-            }
-            if (buf_sz > 0) {
-                width_text = (char *)malloc(buf_sz + 1);
-                if (!width_text) return -1;
-                width_text[0] = '\0';
-                for (size_t i = width_start; i < width_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (!wt->lexeme) continue;
-                    strcat(width_text, wt->lexeme);
-                    strcat(width_text, " ");
-                }
-            }
+            width_text = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+            if (!width_text) return -1;
         }
 
         if (!match(p, JZ_TOK_SEMICOLON)) {

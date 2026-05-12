@@ -83,6 +83,7 @@ class PipelineConfig:
     default_cli: str
     output_dir: str
     placeholders: dict[str, str]
+    post_prompt_vars: dict[str, str]
     options: frozenset[str]
     targeting: dict[str, Any]
     steps: tuple[StepConfig, ...]
@@ -227,6 +228,7 @@ def load_pipeline_config(pipeline_name: str) -> PipelineConfig:
         default_cli=data["default_cli"],
         output_dir=repo_path(data["output_dir"]),
         placeholders=dict(data["placeholders"]),
+        post_prompt_vars=dict(data.get("post_prompt_vars", {})),
         options=frozenset(data["options"]),
         targeting=dict(data["targeting"]),
         steps=steps,
@@ -295,12 +297,29 @@ def safe_name(text: str, fallback: str = "") -> str:
     return safe or fallback
 
 
+def resolve_output_dir(
+    config: PipelineConfig, args: argparse.Namespace
+) -> str:
+    output_dir = args.output_dir if args.output_dir is not None else config.output_dir
+    return repo_path(output_dir)
+
+
 def build_output_path(
-    config: PipelineConfig, fields: dict[str, Any]
+    config: PipelineConfig, args: argparse.Namespace, fields: dict[str, Any]
 ) -> str:
     output_format = config.targeting["output_filename"]
     filename = output_format["template"].format(**fields)
-    return os.path.join(config.output_dir, filename)
+    return os.path.join(resolve_output_dir(config, args), filename)
+
+
+def resolve_post_prompt_vars(
+    config: PipelineConfig, args: argparse.Namespace
+) -> dict[str, str]:
+    output_dir = resolve_output_dir(config, args)
+    return {
+        key: repo_path(value.format(output_dir=output_dir))
+        for key, value in config.post_prompt_vars.items()
+    }
 
 
 def apply_common_filters(
@@ -422,6 +441,7 @@ def resolve_spec_targets(
     for heading in headings:
         output_path = build_output_path(
             config,
+            args,
             {
                 "section": heading.section,
                 "safe_title": safe_name(heading.title),
@@ -537,6 +557,7 @@ def resolve_source_shard_targets(
         first = os.path.splitext(os.path.basename(shard.paths[0]))[0]
         output_path = build_output_path(
             config,
+            args,
             {
                 "index": shard.index,
                 "safe_first_basename": safe_name(first, fallback="shard"),
@@ -574,7 +595,10 @@ def resolve_targets(
     group_type = config.targeting["group"]["type"]
 
     if discover_type == "singleton" and group_type == "singleton":
-        output_path = repo_path(config.targeting["output_path"])
+        output_path = os.path.join(
+            resolve_output_dir(config, args),
+            os.path.basename(config.targeting["output_path"]),
+        )
         label = config.targeting["label"]
         target = ResolvedTarget(
             label=label,
@@ -601,23 +625,29 @@ def render_prompt(
     step: StepConfig,
     config: PipelineConfig,
     target: ResolvedTarget | None,
+    prompt_vars: dict[str, str] | None = None,
 ) -> str:
     with open(prompt_path, "r") as f:
         prompt = f.read()
 
+    prompt_values: dict[str, str] = {}
     if target is not None:
-        for key, value in target.prompt_vars.items():
-            placeholder = config.placeholders.get(key)
-            if not placeholder:
-                continue
-            if placeholder not in prompt and step.kind == "target_prompt":
-                print(
-                    f"Warning: prompt template at {prompt_path} has no "
-                    f"{placeholder} placeholder; running it unchanged.",
-                    file=sys.stderr,
-                )
-                continue
-            prompt = prompt.replace(placeholder, value)
+        prompt_values.update(target.prompt_vars)
+    if prompt_vars:
+        prompt_values.update(prompt_vars)
+
+    for key, value in prompt_values.items():
+        placeholder = config.placeholders.get(key)
+        if not placeholder:
+            continue
+        if placeholder not in prompt and step.kind == "target_prompt":
+            print(
+                f"Warning: prompt template at {prompt_path} has no "
+                f"{placeholder} placeholder; running it unchanged.",
+                file=sys.stderr,
+            )
+            continue
+        prompt = prompt.replace(placeholder, value)
 
     if step.append_template and target is not None:
         prompt += step.append_template.format(output_path=target.output_path)
@@ -641,15 +671,23 @@ def expand_post_steps(config: PipelineConfig) -> list[tuple[str, str]]:
 
 def run_post_steps(
     prompt_steps: list[tuple[str, str]],
+    config: PipelineConfig,
+    args: argparse.Namespace,
     cli: str,
     dry_run: bool = False,
 ) -> bool:
+    prompt_vars = resolve_post_prompt_vars(config, args)
     for step_idx, (prompt_file, effort) in enumerate(prompt_steps, start=1):
         step_name = os.path.basename(prompt_file)
         print(f"post step {step_idx}/{len(prompt_steps)}: {step_name}")
-
-        with open(prompt_file, "r") as f:
-            prompt = f.read()
+        step = StepConfig(path=prompt_file, effort=effort, kind="post_prompt")
+        prompt = render_prompt(
+            prompt_path=prompt_file,
+            step=step,
+            config=config,
+            target=None,
+            prompt_vars=prompt_vars,
+        )
 
         rc = run_agent(prompt, cli=cli, dry_run=dry_run, effort=effort)
         if rc != 0:
@@ -726,6 +764,7 @@ def run_pipeline(config: PipelineConfig, args: argparse.Namespace) -> int:
     step_names = [os.path.basename(step.path) for step in config.steps]
     print(f"Pipeline: {config.name}")
     print(f"CLI: {args.cli}")
+    print(f"Output dir: {resolve_output_dir(config, args)}")
     print(f"Steps: {' -> '.join(step_names)}")
 
     post_prompt_steps = expand_post_steps(config)
@@ -752,7 +791,7 @@ def run_pipeline(config: PipelineConfig, args: argparse.Namespace) -> int:
     for i, target in enumerate(targets, start=start_offset + 1):
         print(f"[{i}/{total_matched}] {target.label}")
         if not args.dry_run:
-            os.makedirs(config.output_dir, exist_ok=True)
+            os.makedirs(resolve_output_dir(config, args), exist_ok=True)
 
         passed = run_target_steps(
             config=config,
@@ -783,6 +822,8 @@ def run_pipeline(config: PipelineConfig, args: argparse.Namespace) -> int:
             post_steps_ran = True
             post_steps_ok = run_post_steps(
                 post_prompt_steps,
+                config=config,
+                args=args,
                 cli=args.cli,
                 dry_run=args.dry_run,
             )
@@ -820,6 +861,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "Run a named pipeline with the shared pipeline runner. "
             "Pass the pipeline name last: audit, security, doxygen, or project_ready."
         ),
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Override the pipeline output directory for this run.",
     )
     parser.add_argument(
         "--filter",

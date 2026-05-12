@@ -1,6 +1,4 @@
 ---
-mainfont: "Helvetica Neue"
-monofont: "Menlo"
 title: "JZ-HDL SPECIFICATION"
 subtitle: "State: Beta — Version: 0.1.9"
 toc: true
@@ -25,8 +23,7 @@ header-includes:
 - Case-sensitive
 - Single underscore (`_`) is invalid as a regular identifier; reserved as a "no-connect" placeholder in module instantiation port lists only
 - **Diagnostics:**
-  - Length violations (>255 characters) → `ID_SYNTAX_INVALID`
-  - Character-class violations (e.g. `.`, `$`, `#`, non-ASCII) and leading-digit violations → `PARSE000`. The lexer enforces the character set structurally: `is_identifier_start()` accepts only `[A-Za-z_]` and `is_identifier_char()` accepts only `[A-Za-z0-9_]`, so invalid characters are never part of an identifier token. They are emitted as separate tokens and rejected by the parser.
+  - Length violations (>255 characters), character-class violations (e.g. `.`, `$`, `#`, non-ASCII), and leading-digit violations → `ID_SYNTAX_INVALID`
   - Single underscore in non-no-connect context → `ID_SINGLE_UNDERSCORE`
   - Reserved keywords and reserved identifiers used as declaration names → `KEYWORD_AS_IDENTIFIER` (covers both lists below)
 - Keywords (uppercase, reserved):
@@ -6462,6 +6459,17 @@ To write JZ-HDL designs that work with and without `--tristate-default`:
 ---
 
 ## 12. ERROR SUMMARY
+
+### 12.0 Diagnostic Group Suppression
+
+Lint mode supports severity-specific diagnostic group suppression:
+
+| Flag | Effect |
+|------|--------|
+| `--Wno-group=<NAME>` | Suppress diagnostics in group `<NAME>` whose effective runtime severity is `WARNING`. |
+| `--Eno-group=<NAME>` | Suppress diagnostics in group `<NAME>` whose effective runtime severity is `ERROR`. |
+
+Severity is evaluated after rule configuration and before `--warn-as-error` promotion. As a result, `--Wno-group=<NAME>` only affects diagnostics that are still warnings at suppression time.
 
 ### 12.1 Compile Errors
 

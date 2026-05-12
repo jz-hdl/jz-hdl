@@ -7,7 +7,7 @@
 // @feature additionally accepts: bitwise (&,|,^,~), ternary, concatenation.
 //
 // new-binding context is intentionally not exercised here: the @new RHS
-// grammar rejects every operator under test (verified empirically; PARSE000
+// grammar rejects every operator under test (verified empirically; generic parse rejection
 // "expected signal name or literal on right-hand side of @new instance
 // binding"). See audit/runner.log for the §3.2 entry.
 

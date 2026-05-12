@@ -33,11 +33,16 @@
 #define JZ_MAX_TRISTATE_DEPTH               1024u
 #define JZ_MAX_SEM_RECURSION_DEPTH          1024u
 #define JZ_MAX_REPORT_RECURSION_DEPTH       1024u
+#define JZ_MAX_CHIP_VARIANT_TUPLES          (1024u * 1024u)
+#define JZ_MAX_IR_EXPANDED_ITEMS            (1024u * 1024u)
+#define JZ_MAX_SEM_BRANCH_STATES            (64u * 1024u)
 #define JZ_MAX_MAP_PIN_WIDTH                (1024u * 1024u)
 #define JZ_MAX_MAP_BITMAP_BYTES             (8u * 1024u * 1024u)
+#define JZ_MAX_SIM_INSTANCE_DEPTH           1024u
 #define JZ_MAX_SIM_MEMORY_DEPTH             (1024u * 1024u)
 #define JZ_MAX_SIM_MEMORY_OBJECT_BYTES      (128u * 1024u * 1024u)
 #define JZ_MAX_EMITTED_TRACE_BYTES          (64u * 1024u * 1024u)
+#define JZ_MAX_RTLIL_MEM_INIT_EMIT_BYTES    (64u * 1024u * 1024u)
 
 /**
  * @enum JZInputLimitKind
@@ -64,9 +69,14 @@ typedef enum JZInputLimitKind {
     JZ_LIMIT_TRISTATE_DEPTH,               /**< Maximum tri-state analysis recursion depth. */
     JZ_LIMIT_SEM_RECURSION_DEPTH,          /**< Maximum semantic-analysis recursion depth. */
     JZ_LIMIT_REPORT_RECURSION_DEPTH,       /**< Maximum report-generation recursion depth. */
+    JZ_LIMIT_CHIP_VARIANT_TUPLES,          /**< Maximum tuple count used in chip variant coverage checks. */
+    JZ_LIMIT_IR_EXPANDED_ITEMS,            /**< Maximum aggregate item count created by IR expansion. */
+    JZ_LIMIT_SEM_BRANCH_STATES,            /**< Maximum temporary branch states during semantic analysis. */
+    JZ_LIMIT_SIM_INSTANCE_DEPTH,           /**< Maximum recursive simulation instance depth. */
     JZ_LIMIT_SIM_MEMORY_DEPTH,             /**< Maximum simulated memory depth. */
     JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES,      /**< Maximum bytes for one simulated memory object. */
-    JZ_LIMIT_EMITTED_TRACE_BYTES           /**< Maximum emitted trace size in bytes. */
+    JZ_LIMIT_EMITTED_TRACE_BYTES,          /**< Maximum emitted trace size in bytes. */
+    JZ_LIMIT_RTLIL_MEM_INIT_EMIT_BYTES     /**< Maximum emitted RTLIL bytes for memory init cells. */
 } JZInputLimitKind;
 
 /**
@@ -169,6 +179,27 @@ int jz_size_grow_doubling_checked(size_t current,
                                   size_t minimum,
                                   size_t initial,
                                   size_t *out);
+/**
+ * @brief Convert a signed int count to size_t after validating it is non-negative.
+ * @param value Signed value to convert.
+ * @param out Receives the converted size on success.
+ * @return 0 on success, -1 on invalid input or negative value.
+ */
+int jz_size_from_int_checked(int value, size_t *out);
+
+/**
+ * @brief Copy a C string into a fixed-size buffer with guaranteed NUL termination.
+ * @param dst Destination buffer.
+ * @param dst_size Size of @p dst in bytes.
+ * @param src Source string. NULL is treated as an empty string.
+ * @return Length of @p src (or 0 for NULL), excluding the terminator.
+ */
+size_t jz_strcpy_trunc(char *dst, size_t dst_size, const char *src);
+
+int jz_limit_accumulate_checked(size_t current,
+                                size_t add,
+                                JZInputLimitKind kind,
+                                size_t *out);
 
 /**
  * @brief Return the central hard limit value for a named input/resource policy.

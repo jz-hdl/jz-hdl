@@ -1,0 +1,161 @@
+JZ-HDL Chip Info
+
+================================================================================
+  CHIP: ICE40UP-5K-SG48
+  Primitives available on the Lattice iCE40 UltraPlus UP5K in SG48 (48-pin QFN) package.
+================================================================================
+
+--- Resources ------------------------------------------------------------------
+
+  LUT4        5280
+  DFF         5280
+  IOB         39
+  DIFF_PAIRS  13
+  GSR         1
+
+--- Latches --------------------------------------------------------------------
+
+  FAB  D: No   SR: No   (PLB storage elements are strictly edge-triggered registers.)
+  IOB  D: Yes  SR: No   (iCEGate latch via LATCH_INPUT_VALUE in SB_IO.)
+
+--- DSP ------------------------------------------------------------------------
+
+  MAC16         8  (SB_MAC16: 16x16 multiply or 2x 8x8 multiply, max 50 MHz)
+
+--- Memory ---------------------------------------------------------------------
+
+  BLOCK
+  122.9 Kbits total | 30 blocks x 4 Kbits | Max 150 MHz
+
+  Single Port (1R/1W)  Pseudo-Dual Port (1R/1W)  Read Only Memory
+  Width | Depth        Width | Depth             Width | Depth   
+  ------|------        ------|------             ------|------   
+     16 |   256           16 |   256                16 |   256   
+      8 |   512            8 |   512                 8 |   512   
+      4 |  1024            4 |  1024                 4 |  1024   
+      2 |  2048            2 |  2048                 2 |  2048   
+
+  SPRAM
+  1048.6 Kbits total
+
+  Single Port (1R/1W)
+  Width | Depth      
+  ------|------      
+     16 | 16384      
+
+--- Clock Generation -----------------------------------------------------------
+
+  CLOCK BUFFER (BUF)
+  8 BUFs available | Mode: global
+
+  BUF Inputs
+Input   | Width | Requires Period | Description                        
+--------|-------|-----------------|------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the buffer
+
+  BUF Outputs
+Output | Type  | Frequency Formula            | Description                            
+-------|-------|------------------------------|----------------------------------------
+BASE   | clock | (1000.0 / REF_CLK_period_ns) | Buffered clock output on global network
+
+
+  INTERNAL OSCILLATOR (OSC)
+  1 OSC available
+
+  OSC Inputs
+Input   | Width | Requires Period | Description                    
+--------|-------|-----------------|--------------------------------
+REF_CLK |       |                 | OSC has no external clock input
+
+  OSC Outputs
+Output | Type  | Frequency Formula | Description                             
+-------|-------|-------------------|-----------------------------------------
+BASE   | clock | 0.01              | Low-frequency oscillator output (10 kHz)
+
+
+  INTERNAL OSCILLATOR (OSC)
+  1 OSC available
+
+  OSC Inputs
+Input   | Width | Requires Period | Description                    
+--------|-------|-----------------|--------------------------------
+REF_CLK |       |                 | OSC has no external clock input
+
+  Configurable Parameters
+Parameter | Range/Valid            | Description                                                 
+----------|------------------------|-------------------------------------------------------------
+CLKHF_DIV | 0b00, 0b01, 0b10, 0b11 | Clock divider: 0b00=48MHz, 0b01=24MHz, 0b10=12MHz, 0b11=6MHz
+
+  OSC Outputs
+Output | Type  | Frequency Formula       | Description                     
+-------|-------|-------------------------|---------------------------------
+BASE   | clock | 48.0 / (1 << CLKHF_DIV) | High-frequency oscillator output
+
+
+  PHASE-LOCKED LOOP (PLL)
+  1 PLL available | Max VCO: 533-1066 MHz | Chaining: Not supported
+
+  PLL Inputs
+Input   | Width | Requires Period | Description                                                                                         
+--------|-------|-----------------|-----------------------------------------------------------------------------------------------------
+REF_CLK | 1     | yes             | Reference clock input to the PLL. When driven from a project input pin (pad), the compiler selects a
+                                    PAD variant and connects the signal to PACKAGEPIN. When driven from fabric, the compiler selects a  
+                                    CORE variant and connects the signal to REFERENCECLK.                                               
+
+  Configurable Parameters
+Parameter       | Range/Valid                                        | Description                                                                                         
+----------------|----------------------------------------------------|-----------------------------------------------------------------------------------------------------
+DIVR            | 0 - 15                                             | Reference clock divider (actual divider = DIVR + 1)                                                 
+DIVF            | 0 - 127                                            | Feedback divider (actual multiplier = DIVF + 1)                                                     
+DIVQ            | 0 - 7                                              | Output divider (divides VCO by 2^DIVQ)                                                              
+FILTER_RANGE    | 0 - 7                                              | PLL filter range for loop stability                                                                 
+PLLOUT_SELECT_P | GENCLK, GENCLK_HALF, SHIFTREG_0deg, SHIFTREG_90deg | Primary output mux: GENCLK (FVCO/2^DIVQ), GENCLK_HALF (FVCO/2^(DIVQ+1)), SHIFTREG_0deg, or          
+                                                                       SHIFTREG_90deg                                                                                      
+PLLOUT_SELECT_S | GENCLK, GENCLK_HALF, SHIFTREG_0deg, SHIFTREG_90deg | Secondary output mux (two-output variants only): GENCLK (FVCO/2^DIVQ), GENCLK_HALF                  
+                                                                       (FVCO/2^(DIVQ+1)), SHIFTREG_0deg, or SHIFTREG_90deg                                                 
+
+  PLL Outputs
+Output    | Type   | Frequency Formula  | Description                                                                                         
+----------|--------|--------------------|-----------------------------------------------------------------------------------------------------
+PRIMARY   | clock  | FVCO / (1 << DIVQ) | Primary PLL output. Physical port is PLLOUTGLOBAL on single-output variants and PLLOUTGLOBALA on    
+                                          two-output variants.                                                                                
+SECONDARY | clock  | FVCO / (1 << DIVQ) | Secondary PLL output (two-output variants only). Physical port is PLLOUTGLOBALB.                    
+LOCK      | signal |                    | PLL lock indicator, high when PLL is locked                                                         
+
+  Derived Values
+Name | Min | Max  | Formula                                                | Description           
+-----|-----|------|--------------------------------------------------------|-----------------------
+FVCO | 533 | 1066 | (1000.0 / REF_CLK_period_ns) * (DIVF + 1) / (DIVR + 1) | Internal VCO frequency
+
+  Constraints
+  FVCO range check
+
+
+--- Differential I/O -----------------------------------------------------------
+
+  Type:     Emulated LVDS
+  IO Type:  SB_LVCMOS
+  Serializer: 2:1 (2:1 DDR output using dual SB_IO (pseudo-differential LVDS))
+                requires: fclk
+
+--- Fixed Pins (9) -------------------------------------------------------------
+
+Pad             | Name    | Pin | Note
+----------------+---------+-----+------------------------
+RGB0            | RGB0    | 39  | LED driver output
+RGB1            | RGB1    | 40  | LED driver output
+RGB2            | RGB2    | 41  | LED driver output
+IOB_32a_SPI_SO  | SPI_SO  | 14  | SPI configuration flash
+IOB_33b_SPI_SI  | SPI_SI  | 17  | SPI configuration flash
+IOB_34a_SPI_SCK | SPI_SCK | 15  | SPI configuration flash
+IOB_35b_SPI_SS  | SPI_SS  | 16  | SPI configuration flash
+creset_b        | CRESET  | 8   | Configuration reset
+CDONE           | CDONE   | 7   | Configuration done
+
+--- Example Boards (2) ---------------------------------------------------------
+
+  UPduino v3.1
+    https://tinyvision.ai/products/upduino-v3-1
+  iCESugar
+    https://www.muselab-tech.com/zai-icesugarshang-yun-xing-muraxsoc/
+

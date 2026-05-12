@@ -81,12 +81,22 @@ size_t jz_input_limit_value(JZInputLimitKind kind)
         return JZ_MAX_SEM_RECURSION_DEPTH;
     case JZ_LIMIT_REPORT_RECURSION_DEPTH:
         return JZ_MAX_REPORT_RECURSION_DEPTH;
+    case JZ_LIMIT_CHIP_VARIANT_TUPLES:
+        return JZ_MAX_CHIP_VARIANT_TUPLES;
+    case JZ_LIMIT_IR_EXPANDED_ITEMS:
+        return JZ_MAX_IR_EXPANDED_ITEMS;
+    case JZ_LIMIT_SEM_BRANCH_STATES:
+        return JZ_MAX_SEM_BRANCH_STATES;
+    case JZ_LIMIT_SIM_INSTANCE_DEPTH:
+        return JZ_MAX_SIM_INSTANCE_DEPTH;
     case JZ_LIMIT_SIM_MEMORY_DEPTH:
         return JZ_MAX_SIM_MEMORY_DEPTH;
     case JZ_LIMIT_SIM_MEMORY_OBJECT_BYTES:
         return JZ_MAX_SIM_MEMORY_OBJECT_BYTES;
     case JZ_LIMIT_EMITTED_TRACE_BYTES:
         return JZ_MAX_EMITTED_TRACE_BYTES;
+    case JZ_LIMIT_RTLIL_MEM_INIT_EMIT_BYTES:
+        return JZ_MAX_RTLIL_MEM_INIT_EMIT_BYTES;
     default:
         return 0;
     }
@@ -179,6 +189,52 @@ int jz_size_grow_doubling_checked(size_t current,
         return -1;
     }
     *out = grown;
+    return 0;
+}
+
+int jz_size_from_int_checked(int value, size_t *out)
+{
+    if (!out || value < 0) return -1;
+    *out = (size_t)value;
+    return 0;
+}
+
+size_t jz_strcpy_trunc(char *dst, size_t dst_size, const char *src)
+{
+    size_t src_len = 0;
+    size_t copy_len = 0;
+
+    if (!dst || dst_size == 0) {
+        return src ? strlen(src) : 0;
+    }
+
+    if (!src) {
+        dst[0] = '\0';
+        return 0;
+    }
+
+    src_len = strlen(src);
+    copy_len = (src_len < (dst_size - 1)) ? src_len : (dst_size - 1);
+    if (copy_len > 0) {
+        memcpy(dst, src, copy_len);
+    }
+    dst[copy_len] = '\0';
+    return src_len;
+}
+
+int jz_limit_accumulate_checked(size_t current,
+                                size_t add,
+                                JZInputLimitKind kind,
+                                size_t *out)
+{
+    size_t next = 0;
+    size_t limit = 0;
+
+    if (!out) return -1;
+    if (jz_size_add_checked(current, add, &next) != 0) return -1;
+    limit = jz_input_limit_value(kind);
+    if (limit != 0 && next > limit) return -1;
+    *out = next;
     return 0;
 }
 

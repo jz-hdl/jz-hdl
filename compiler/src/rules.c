@@ -31,6 +31,7 @@ const JZRuleInfo jz_rule_table[] = {
     /* [PARSE] (done) */
     { "PARSE", "COMMENT_IN_TOKEN",                                  0, JZ_RULE_MODE_ERR, "S1.4 Comment appears inside a token (identifier/number/operator/literal)" },
     { "PARSE", "COMMENT_NESTED_BLOCK",                              0, JZ_RULE_MODE_ERR, "S1.4 Nested block comment `/* ... /* ... */ ... */` detected" },
+    { "PARSE", "PARSE_SYNTAX_ERROR",                                0, JZ_RULE_MODE_ERR, "Source text violates parser syntax and no more specific parse rule applies" },
     { "PARSE", "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S3.2 Expression nesting exceeds the compiler safety limit" },
     { "PARSE", "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 Statement nesting exceeds the compiler safety limit" },
     { "PARSE", "AST_DEPTH_LIMIT_EXCEEDED",                          0, JZ_RULE_MODE_ERR, "AST traversal exceeds the compiler safety limit" },
@@ -42,7 +43,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "PARSE", "LIT_INVALID_DIGIT_FOR_BASE",                        0, JZ_RULE_MODE_ERR, "S2.1 Literal contains digit not allowed for its base (b/d/h)" },
 
     /* [LEXICAL] (done) */
-    { "LEXICAL", "ID_SYNTAX_INVALID",                               1, JZ_RULE_MODE_ERR, "S1.1 Identifier exceeds 255 characters" },
+    { "LEXICAL", "ID_SYNTAX_INVALID",                               1, JZ_RULE_MODE_ERR, "S1.1 Identifier violates syntax (must start with ASCII letter/underscore, continue with ASCII letters/digits/underscores, and be at most 255 characters)" },
     { "LEXICAL", "ID_SINGLE_UNDERSCORE",                            0, JZ_RULE_MODE_ERR, "S1.1 Single underscore `_` used as regular identifier outside no-connect context" },
 
     /* [LITERALS_AND_TYPES] */
@@ -72,6 +73,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "OPERATORS_AND_EXPRESSIONS", "IR_EXPR_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S3.2 IR expression lowering exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "IR_STMT_DEPTH_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 IR statement traversal exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "IR_DIV_GUARD_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S3.2 IR division-guard analysis exceeds the compiler safety limit" },
+    { "OPERATORS_AND_EXPRESSIONS", "IR_EXPANSION_LIMIT_EXCEEDED",  0, JZ_RULE_MODE_ERR, "S4.4.1/S4.13.1/S5.3 IR expansion exceeds the compiler safety limit" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_EXPRESSION", 0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in arithmetic/logical expressions" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_IN_CONCAT",     0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not appear in concatenations" },
     { "OPERATORS_AND_EXPRESSIONS", "SPECIAL_DRIVER_SLICED",        0, JZ_RULE_MODE_ERR, "S2.3 GND/VCC may not be sliced or indexed" },
@@ -106,6 +108,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "CONST_RULES", "CONST_CYCLE_ANALYSIS_OVERFLOW",              0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST cycle analysis exceeds safe adjacency-matrix size limits" },
     { "CONST_RULES", "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "S4.3/S7.10 Constant-expression nesting exceeds the compiler safety limit" },
     { "CONST_RULES", "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "Semantic traversal exceeds the compiler safety limit" },
+    { "CONST_RULES", "SEM_BRANCH_STATE_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "Semantic branch-state growth exceeds the compiler safety limit" },
 
     /* [PORT_WIRE_REGISTER_DECLS] */
     { "PORT_WIRE_REGISTER_DECLS", "PORT_MISSING_WIDTH",             0, JZ_RULE_MODE_ERR, "S4.4/S8.1 Port declaration without mandatory `[N]` width" },
@@ -260,10 +263,10 @@ const JZRuleInfo jz_rule_table[] = {
     { "BUS_RULES", "BUS_PORT_INDEX_OUT_OF_RANGE",                    0, JZ_RULE_MODE_ERR, "S4.4.1 BUS port index is outside the declared range" },
     { "BUS_RULES", "BUS_PORT_NOT_BUS",                               0, JZ_RULE_MODE_ERR, "S4.4.1 BUS member access used on non-BUS port" },
     { "BUS_RULES", "BUS_SIGNAL_UNDEFINED",                           0, JZ_RULE_MODE_ERR, "S4.4.1 BUS signal does not exist in BUS definition" },
-    { "BUS_RULES", "BUS_SIGNAL_READ_FROM_WRITABLE",                  0, JZ_RULE_MODE_ERR, "S4.4.1 Read access to writable BUS signal is not allowed" },
-    { "BUS_RULES", "BUS_SIGNAL_WRITE_TO_READABLE",                   0, JZ_RULE_MODE_ERR, "S4.4.1 Write access to readable BUS signal is not allowed" },
+    { "BUS_RULES", "BUS_SIGNAL_READ_FROM_WRITABLE",                  1, JZ_RULE_MODE_ERR, "S4.4.1 Read access to writable BUS signal is not allowed" },
+    { "BUS_RULES", "BUS_SIGNAL_WRITE_TO_READABLE",                   1, JZ_RULE_MODE_ERR, "S4.4.1 Write access to readable BUS signal is not allowed" },
     { "BUS_RULES", "BUS_WILDCARD_WIDTH_MISMATCH",                    0, JZ_RULE_MODE_ERR, "S4.4.1 BUS wildcard assignment requires RHS width of 1 or array count" },
-    { "BUS_RULES", "BUS_TRISTATE_MISMATCH",                          0, JZ_RULE_MODE_ERR, "S4.4.1 Only writable BUS signals (INOUT or OUT from this role) may be assigned 'z' for tri-state" },
+    { "BUS_RULES", "BUS_TRISTATE_MISMATCH",                          1, JZ_RULE_MODE_ERR, "S4.4.1 Only writable BUS signals (INOUT or OUT from this role) may be assigned 'z' for tri-state" },
     { "BUS_RULES", "BUS_BULK_BUS_MISMATCH",                          0, JZ_RULE_MODE_ERR, "S6.8 Bulk BUS assignment requires both sides to reference the same BUS id" },
     { "BUS_RULES", "BUS_BULK_ROLE_CONFLICT",                         0, JZ_RULE_MODE_ERR, "S6.8 Bulk BUS assignment between instances with the same BUS role (SOURCE/SOURCE or TARGET/TARGET) is not allowed" },
 
@@ -323,6 +326,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "CLOCKS_PINS_MAP", "CLOCK_EDGE_INVALID",                      0, JZ_RULE_MODE_ERR, "S6.4/S6.9 Invalid edge specifier (not Rising/Falling)" },
     { "CLOCKS_PINS_MAP", "PIN_DECLARED_MULTIPLE_BLOCKS",            0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Same pin name appears in more than one of IN_PINS/OUT_PINS/INOUT_PINS" },
     { "CLOCKS_PINS_MAP", "PIN_INVALID_STANDARD",                    0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Invalid electrical standard in PIN declaration" },
+    { "CLOCKS_PINS_MAP", "PIN_DRIVE_FORBIDDEN_ON_INPUT",            0, JZ_RULE_MODE_ERR, "S6.5.1 IN_PINS must not declare a drive attribute" },
     { "CLOCKS_PINS_MAP", "PIN_DRIVE_MISSING_OR_INVALID",            0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Missing or nonpositive drive value for OUT_PINS/INOUT_PINS" },
     { "CLOCKS_PINS_MAP", "PIN_BUS_WIDTH_INVALID",                   0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Bus pin width non-integer or <= 0" },
     { "CLOCKS_PINS_MAP", "PIN_WIDTH_LIMIT_EXCEEDED",                0, JZ_RULE_MODE_ERR, "S6.5/S6.9 Pin width exceeds the compiler safety limit" },
@@ -357,6 +361,7 @@ const JZRuleInfo jz_rule_table[] = {
     /* [CLOCK_GEN_RULES] */
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_NOT_DECLARED",           0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input clock not declared in CLOCKS block" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_NO_PERIOD",              0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input clock must have a period declared in CLOCKS block" },
+    { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_WIDTH_MISMATCH",         0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input signal width does not match chip-defined input width" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_INPUT_FREQ_OUT_OF_RANGE",     0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN input frequency outside chip's supported reference clock range" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_OUTPUT_INVALID_SELECTOR",      0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN output selector not valid for this generator type" },
     { "CLOCK_GEN_RULES", "CLOCK_GEN_OUT_NOT_CLOCK",                0, JZ_RULE_MODE_ERR, "S6.4.1 CLOCK_GEN OUT used for non-clock output; use WIRE instead" },
@@ -513,13 +518,22 @@ const JZRuleInfo jz_rule_table[] = {
     /* [SIMULATION] */
     { "SIMULATION", "SIM_WRONG_TOOL",             0, JZ_RULE_MODE_ERR, "File contains @simulation blocks; use --simulate to run simulations" },
     { "SIMULATION", "SIM_PROJECT_MIXED",          0, JZ_RULE_MODE_ERR, "SIM-020 A file may not contain both @project and @simulation" },
+    { "SIMULATION", "SIM_ALERT_MESSAGE_STRING_LITERAL_REQUIRED", 0, JZ_RULE_MODE_ERR, "SIM-021 @alert message argument must be a string literal" },
+    { "SIMULATION", "SIM_TRACE_STATE_ON_OR_OFF",  0, JZ_RULE_MODE_ERR, "SIM-022 @trace(state=...) requires state=on or state=off" },
+    { "SIMULATION", "SIM_SINGLE_MONITOR_BLOCK",   0, JZ_RULE_MODE_ERR, "SIM-023 Only one MONITOR block is permitted per @simulation" },
+    { "SIMULATION", "SIM_MONITOR_ALLOWED_DIRECTIVES_ONLY", 0, JZ_RULE_MODE_ERR, "SIM-024 MONITOR blocks may contain only @print_if, @mark_if, and @alert_if directives" },
+    { "SIMULATION", "SIM_SELECT_CHAIN_REQUIRES_RUN", 0, JZ_RULE_MODE_ERR, "SIM-025 @select must be followed by another @select, @run, @run_until, or @run_while; a select chain must terminate in a run directive" },
+    { "SIMULATION", "SIM_SELECT_SIGNAL_IN_SCOPE", 0, JZ_RULE_MODE_ERR, "SIM-026 @select signal must resolve to a declared simulation WIRE, CLOCK, or TAP" },
 
     /* [SIMULATION_RUNTIME] */
     { "SIMULATION", "SIM_RUN_COND_TIMEOUT",         0, JZ_RULE_MODE_ERR, "SIM-030 @run_until/@run_while condition not met within timeout" },
     { "SIMULATION", "SIM_MEMORY_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-031 Declared simulation memory depth exceeds the simulator safety limit" },
+    { "SIMULATION", "SIM_INSTANCE_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-032 Simulation instance hierarchy exceeds the safety recursion limit" },
+    { "SIMULATION", "SIM_TRACE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-033 Emitted simulation trace exceeds the safety size limit" },
 
     /* [PRINT_DIRECTIVES] */
     { "PRINT_DIRECTIVES", "PRT_ARG_COUNT_MISMATCH", 0, JZ_RULE_MODE_ERR, "PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments" },
+    { "PRINT_DIRECTIVES", "PRT_FORMAT_STRING_LITERAL_REQUIRED", 0, JZ_RULE_MODE_ERR, "PRT-002 @print/@print_if format argument must be a string literal" },
 
     /* [REPEAT] */
     { "REPEAT", "RPT_COUNT_INVALID",              0, JZ_RULE_MODE_ERR, "RPT-001 @repeat requires a positive integer count" },

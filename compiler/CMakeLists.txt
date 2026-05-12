@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.16)
-
-project(jz_hdl VERSION 0.1.9 LANGUAGES C)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    message(FATAL_ERROR "Configure from the repository root: cmake -S . -B build")
+endif()
 
 # Default to Debug if no build type is specified (for single-config generators)
 if(NOT CMAKE_CONFIGURATION_TYPES)
@@ -13,33 +13,6 @@ endif()
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
-
-# ---- SQLite (for JZW waveform format) ----
-include(FetchContent)
-FetchContent_Declare(
-    sqlite3
-    URL https://www.sqlite.org/2025/sqlite-amalgamation-3490100.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
-FetchContent_MakeAvailable(sqlite3)
-
-add_library(sqlite3_lib STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
-target_include_directories(sqlite3_lib PUBLIC ${sqlite3_SOURCE_DIR})
-# SQLite needs C extensions and BSD types; silence warnings in third-party code
-set_target_properties(sqlite3_lib PROPERTIES C_EXTENSIONS ON C_STANDARD 99)
-target_compile_options(sqlite3_lib PRIVATE -w)
-target_compile_definitions(sqlite3_lib PRIVATE _BSD_SOURCE)
-# SQLite needs pthreads on POSIX
-find_package(Threads)
-if(Threads_FOUND)
-    target_link_libraries(sqlite3_lib PUBLIC Threads::Threads)
-endif()
-# SQLite needs dlopen on some platforms
-include(CheckLibraryExists)
-check_library_exists(dl dlopen "" HAVE_LIBDL)
-if(HAVE_LIBDL)
-    target_link_libraries(sqlite3_lib PUBLIC dl)
-endif()
 
 # Expose POSIX and default libc APIs (realpath, strdup, strtok_r, lstat, etc.)
 # Applied to jz_hdl_lib only (not third-party code like SQLite).
@@ -78,11 +51,6 @@ if(BUILD_TESTING)
     add_test(NAME const_eval       COMMAND jz-const-eval-test)
     add_test(NAME type_semantics   COMMAND jz-type-test)
     add_test(NAME literal_semantics COMMAND jz-literal-test)
-    add_test(
-        NAME lint_validation
-        COMMAND ${CMAKE_COMMAND} -E env JZ_HDL_BIN=$<TARGET_FILE:jz-hdl>
-                bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.sh
-    )
 endif()
 
 add_library(jz_hdl_lib
@@ -242,7 +210,7 @@ target_include_directories(jz_hdl_lib
 )
 
 target_compile_definitions(jz_hdl_lib PUBLIC _DEFAULT_SOURCE _POSIX_C_SOURCE=200809L)
-target_link_libraries(jz_hdl_lib PUBLIC sqlite3_lib)
+target_link_libraries(jz_hdl_lib PUBLIC jz_sqlite3_lib)
 
 add_executable(jz-hdl
     src/main.c
@@ -271,68 +239,9 @@ add_executable(jz-literal-test
 
 target_link_libraries(jz-literal-test PRIVATE jz_hdl_lib)
 
-# Documentation target (requires pandoc and xelatex)
-# LaTeX packages needed (install via: sudo tlmgr install <pkg>):
-#   framed, titling, collection-fontsrecommended
-# Or install most common packages at once:
-#   sudo tlmgr install collection-latexrecommended
-find_program(PANDOC_EXECUTABLE pandoc)
-if(PANDOC_EXECUTABLE)
-    # 1. Define your list of files (Filename without extension)
-    set(DOC_FILES
-        "jz-hdl-specification"
-        "simulation-specification"
-        "testbench-specification"
-        "chip-info-specification"
-        "jzw-specification"
-    )
-
-    set(PDF_OUTPUTS "")
-
-    foreach(DOC_NAME ${DOC_FILES})
-        set(SRC_MD "${CMAKE_CURRENT_SOURCE_DIR}/../specification/${DOC_NAME}.md")
-        set(OUT_PDF "${CMAKE_CURRENT_BINARY_DIR}/${DOC_NAME}.pdf")
-
-        # 2. Create an individual custom command for each file
-        add_custom_command(
-            OUTPUT "${OUT_PDF}"
-            COMMAND ${PANDOC_EXECUTABLE}
-                "${SRC_MD}"
-                -o "${OUT_PDF}"
-                --pdf-engine=xelatex
-                -V geometry:margin=1in
-                -V fontsize=11pt
-                --syntax-highlighting=tango
-                -V colorlinks=true
-            DEPENDS "${SRC_MD}"
-            COMMENT "Building PDF for ${DOC_NAME}"
-        )
-        
-        list(APPEND PDF_OUTPUTS "${OUT_PDF}")
-    endforeach()
-
-    # 3. Copy built PDFs to the docs site public directory
-    set(DOCS_PUBLIC_PDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../docs/public/pdf")
-    set(PDF_COPY_COMMANDS "")
-    foreach(DOC_NAME ${DOC_FILES})
-        list(APPEND PDF_COPY_COMMANDS
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_BINARY_DIR}/${DOC_NAME}.pdf"
-                "${DOCS_PUBLIC_PDF_DIR}/${DOC_NAME}.pdf"
-        )
-    endforeach()
-
-    # 4. Create one top-level target to build all docs and copy to site
-    add_custom_target(docs ALL
-        DEPENDS ${PDF_OUTPUTS}
-        ${PDF_COPY_COMMANDS}
-        COMMENT "Copying PDFs to docs/public/pdf/"
-    )
-
-else()
-    message(STATUS "pandoc not found - 'docs' target will not be available")
-endif()
-
 # Install rules
 include(GNUInstallDirs)
-install(TARGETS jz-hdl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS jz-hdl
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT Compiler
+)

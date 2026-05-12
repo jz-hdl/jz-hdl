@@ -335,7 +335,8 @@ static int match_keyword(const char *lexeme, JZTokenType *out_type) {
     if (strcmp(lexeme, "@run_while") == 0)       { *out_type = JZ_TOK_KW_RUN_WHILE; return 1; }
     if (strcmp(lexeme, "@print") == 0)           { *out_type = JZ_TOK_KW_PRINT;    return 1; }
     if (strcmp(lexeme, "@print_if") == 0)        { *out_type = JZ_TOK_KW_PRINT_IF; return 1; }
-    if (strcmp(lexeme, "@trace") == 0)           { *out_type = JZ_TOK_KW_TRACE;    return 1; }
+    if (strcmp(lexeme, "@trace") == 0)           { *out_type = JZ_TOK_KW_TRACE;      return 1; }
+    if (strcmp(lexeme, "@select") == 0)          { *out_type = JZ_TOK_KW_SIM_SELECT; return 1; }
     if (strcmp(lexeme, "@mark") == 0)            { *out_type = JZ_TOK_KW_MARK;     return 1; }
     if (strcmp(lexeme, "@mark_if") == 0)         { *out_type = JZ_TOK_KW_MARK_IF;  return 1; }
     if (strcmp(lexeme, "@alert") == 0)           { *out_type = JZ_TOK_KW_ALERT;    return 1; }
@@ -1015,7 +1016,7 @@ static void lex_one_token(LexerState *st) {
     default: {
         char err_msg[64];
         snprintf(err_msg, sizeof(err_msg), "unrecognized character '%c'", c);
-        lexer_report_parse_error(st, loc, "PARSE000", err_msg);
+        lexer_report_parse_error(st, loc, "ID_SYNTAX_INVALID", err_msg);
         st->pos++; st->column++;
         emit_token(st, JZ_TOK_OTHER, &c, 1, loc);
         break;

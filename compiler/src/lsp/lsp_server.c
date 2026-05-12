@@ -24,6 +24,7 @@
 #include "path_security.h"
 #include "ir_builder.h"
 #include "ir.h"
+#include "version.h"
 
 #include "util.h"
 
@@ -587,8 +588,14 @@ static void publish_diagnostics(const char *uri, LspDocStore *store);
  * @param uri Document URI being described.
  * @param projects Candidate projects discovered for the file.
  * @param active_index Index of the active project, or -1 when none is active.
+ * @param selection_state Stable project-selection status for the client.
+ * @param detail_message Stable user-facing detail for the current status.
  */
-static void send_project_info(const char *uri, const LspProjectList *projects, int active_index);
+static void send_project_info(const char *uri,
+                              const LspProjectList *projects,
+                              int active_index,
+                              const char *selection_state,
+                              const char *detail_message);
 /**
  * @brief Compile diagnostics through a discovered project context.
  * @param uri URI of the edited file.
@@ -811,7 +818,7 @@ static void handle_initialize(const char *msg, int id, LspDocStore *store) {
             "},"
             "\"serverInfo\":{"
                 "\"name\":\"jz-hdl-lsp\","
-                "\"version\":\"0.1.0\""
+                "\"version\":\"" JZ_HDL_VERSION_STRING "\""
             "}"
         "}";
 
@@ -853,7 +860,9 @@ static void handle_shutdown(int id) {
  */
 static void send_project_info(const char *uri,
                               const LspProjectList *projects,
-                              int active_index) {
+                              int active_index,
+                              const char *selection_state,
+                              const char *detail_message) {
     LspJson j;
     lsp_json_init(&j);
     lsp_json_append(&j, "{\"uri\":");
@@ -873,6 +882,10 @@ static void send_project_info(const char *uri,
 
     lsp_json_append(&j, "],\"activeIndex\":");
     lsp_json_append_int(&j, active_index);
+    lsp_json_append(&j, ",\"selectionState\":");
+    lsp_json_append_escaped(&j, selection_state ? selection_state : "active");
+    lsp_json_append(&j, ",\"message\":");
+    lsp_json_append_escaped(&j, detail_message ? detail_message : "");
     lsp_json_append_char(&j, '}');
 
     send_notification("jz-hdl/projectInfo", j.data);
@@ -1055,7 +1068,7 @@ static void publish_diagnostics_via_project(const char *uri,
     lsp_json_free(&j);
 
     /* Notify the client about project context. */
-    send_project_info(uri, projects, active_index);
+    send_project_info(uri, projects, active_index, "active", "");
 
     /* Cleanup. */
     jz_token_stream_free(&tokens);
@@ -1142,6 +1155,7 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
         LspProjectList projects;
         projects.count = 0;
         int idx = -1;
+        size_t importer_count = 0;
 
         if (lsp_discover_projects(filepath, s_workspace_root,
                                   0, NULL, &projects) == 0) {
@@ -1158,7 +1172,8 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
 
             /* Fall back to automatic detection via @import. */
             if (idx < 0) {
-                idx = lsp_find_project_for_file(&projects, filepath);
+                idx = lsp_find_project_for_file(&projects, filepath,
+                                                &importer_count);
             }
 
             if (idx >= 0) {
@@ -1175,13 +1190,31 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
                                                 &projects, idx);
                 return;
             }
-        }
-        /* No project file found — fall through to standalone analysis. */
-        lsp_log("no project file found, using standalone analysis for %s",
-                filepath);
 
-        /* Notify client: no active project for this file. */
-        send_project_info(uri, &projects, -1);
+            if (idx == -2) {
+                char detail[512];
+                snprintf(detail, sizeof(detail),
+                         "Ambiguous project selection: %zu discovered projects import this file. Select the intended project.",
+                         importer_count);
+                lsp_log("ambiguous project selection for %s: %zu importers",
+                        filepath, importer_count);
+                send_project_info(uri, &projects, -1, "ambiguous", detail);
+            } else if (projects.count > 0) {
+                char detail[512];
+                snprintf(detail, sizeof(detail),
+                         "Project discovery found %zu project(s), but none import this file. Select a project manually or add an @import for this file.",
+                         projects.count);
+                lsp_log("no discovered project imports %s", filepath);
+                send_project_info(uri, &projects, -1, "not-imported", detail);
+            }
+        }
+        if (projects.count == 0) {
+            /* No project file found — fall through to standalone analysis. */
+            lsp_log("no project file found, using standalone analysis for %s",
+                    filepath);
+            send_project_info(uri, &projects, -1, "not-found",
+                              "Project discovery failed: no JZ-HDL project files were found for this file.");
+        }
     }
 
     /* If this file IS a project file, register it for future discovery. */
@@ -1209,7 +1242,7 @@ static void publish_diagnostics(const char *uri, LspDocStore *store) {
                 break;
             }
         }
-        send_project_info(uri, &proj_list, self_idx);
+        send_project_info(uri, &proj_list, self_idx, "active", "");
     }
 
     /* Template expansion + semantic analysis. */
@@ -1501,9 +1534,30 @@ static void handle_select_project(const char *msg, LspDocStore *store) {
     char filepath[1024];
     if (lsp_uri_to_path(uri, filepath, sizeof(filepath)) != 0) return;
 
+    if (s_workspace_root[0]) {
+        jz_path_security_init(filepath);
+        jz_path_security_add_root(s_workspace_root);
+    } else {
+        jz_path_security_init(filepath);
+    }
+
     lsp_log("selectProject: %s -> %s", filepath, project_file);
 
-    set_project_override(filepath, project_file);
+    {
+        JZLocation loc;
+        char *validated = NULL;
+        memset(&loc, 0, sizeof(loc));
+        jz_path_security_set_allow_absolute(1);
+        validated = jz_path_validate(project_file, NULL, loc, NULL);
+        jz_path_security_set_allow_absolute(0);
+        jz_path_security_cleanup();
+        if (!validated) {
+            lsp_log("selectProject rejected outside-sandbox project: %s", project_file);
+            return;
+        }
+        set_project_override(filepath, validated);
+        free(validated);
+    }
 
     /* Re-run diagnostics with the new project selection. */
     publish_diagnostics(uri, store);

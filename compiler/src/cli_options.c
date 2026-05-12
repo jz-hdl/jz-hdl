@@ -135,7 +135,7 @@ static int parse_expansion_limits_arg(JZExpansionLimits *limits, const char *arg
 
 void jz_cli_print_usage(const char *prog) {
     fprintf(stderr,
-            "Usage: %s JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]\n"
+            "Usage: %s JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--Eno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]\n"
             "       %s JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]\n"
             "       %s JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]\n"
             "       %s JZ_FILE --alias-report [-o OUT_FILE]\n"
@@ -144,12 +144,16 @@ void jz_cli_print_usage(const char *prog) {
             "       %s JZ_FILE --ast [-o OUT_FILE]\n"
             "       %s JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]\n"
             "       %s JZ_FILE --test [--verbose] [--seed=0xHEX] [--tristate-default=GND|VCC]\n"
-            "       %s JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX] [--tristate-default=GND|VCC]\n"
+            "       %s JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX] [--jitter=CLOCK:PS] [--drift=CLOCK:PPM] [--tristate-default=GND|VCC]\n"
             "       %s --chip-info [CHIP_ID] [-o OUT_FILE]\n"
             "       %s --lint-rules\n"
             "       %s --lsp\n"
             "       %s --help\n"
             "       %s --version\n"
+            "\n"
+            "Simulation timing options:\n"
+            "  --jitter=CLOCK:PS       Add peak-to-peak clock jitter in picoseconds (may repeat)\n"
+            "  --drift=CLOCK:PPM       Add maximum clock drift in parts per million (may repeat)\n"
             "\n"
             "Expansion safety options:\n"
             "  --expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>\n"
@@ -316,13 +320,15 @@ int jz_cli_parse_options(JZCLIOptions *opts, int argc, char **argv) {
             if (*group && opts->group_override_count < sizeof(opts->group_overrides) / sizeof(opts->group_overrides[0])) {
                 opts->group_overrides[opts->group_override_count].group = group;
                 opts->group_overrides[opts->group_override_count].enabled = 0;
+                opts->group_overrides[opts->group_override_count].severity = JZ_SEVERITY_WARNING;
                 opts->group_override_count++;
             }
-        } else if (strncmp(arg, "--Wgroup=", 9) == 0) {
-            const char *group = arg + 9;
+        } else if (strncmp(arg, "--Eno-group=", 12) == 0) {
+            const char *group = arg + 12;
             if (*group && opts->group_override_count < sizeof(opts->group_overrides) / sizeof(opts->group_overrides[0])) {
                 opts->group_overrides[opts->group_override_count].group = group;
-                opts->group_overrides[opts->group_override_count].enabled = 1;
+                opts->group_overrides[opts->group_override_count].enabled = 0;
+                opts->group_overrides[opts->group_override_count].severity = JZ_SEVERITY_ERROR;
                 opts->group_override_count++;
             }
         } else if (strcmp(arg, "--allow-absolute-paths") == 0) {

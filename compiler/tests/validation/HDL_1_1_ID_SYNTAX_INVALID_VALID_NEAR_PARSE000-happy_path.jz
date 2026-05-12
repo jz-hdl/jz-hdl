@@ -1,4 +1,4 @@
-// Req #7: Happy-path for PARSE000-adjacent cases. Valid identifiers that
+// Req #7: Happy-path for generic-parse-adjacent cases. Valid identifiers that
 // are near-miss for leading-digit and character-class violations: digits
 // appear only in non-leading positions, leading underscores are allowed,
 // and only ASCII [A-Za-z0-9_] characters are used across all contexts.

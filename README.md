@@ -10,6 +10,7 @@ The compiler enforces strict rules around clocks, resets, driver ownership, widt
 @module blinker
     PORT {
         IN  [1] clk;
+        IN  [1] reset;
         OUT [1] led;
     }
 
@@ -36,26 +37,28 @@ The compiler enforces strict rules around clocks, resets, driver ownership, widt
 - **Tristate proof engine** — verifies that tristate buses have proper non-overlapping enable conditions
 - **Bus abstraction** — structured bus interfaces with source/target ports and automatic interconnect
 - **Memory primitives** — first-class support for register files, block RAM, and ROM with explicit read/write port semantics
-- **Cycle-accurate simulator** — built-in simulation engine with VCD waveform output
+- **Cycle-accurate simulator** — built-in simulation engine with `VCD`, `FST`, and `JZW` waveform output
 - **FPGA backend** — generates synthesizable Verilog targeting Gowin, iCE40, and ECP5 FPGAs
 
 ## Building
 
-Requires CMake and a C99 compiler.
+Requires CMake, a C99 compiler for the compiler, and a C++17 compiler for the viewer.
 
 ```bash
 # Configure
-cmake -S compiler -B compiler/build
+cmake -S . -B build
 
-# Build
-cmake --build compiler/build
+# Build compiler + viewer
+cmake --build build
 ```
+
+On Unix-like single-config generators, the compiler is typically written to `build/compiler/jz-hdl` and the viewer to `build/viewer/jz-viewer`. On Windows multi-config generators such as Visual Studio, expect `build/compiler/<Config>/jz-hdl.exe` and `build/viewer/<Config>/jz-viewer.exe`, and pass `--config Release` or `--config Debug` to `cmake --build`.
 
 ## Usage
 
 ```bash
 $ ./jz-hdl
-Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [-o OUT_FILE]
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--Eno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
@@ -63,13 +66,22 @@ Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] 
        ./jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ast [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]
-       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX]
-       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX]
+       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX] [--jitter=CLOCK:PS] [--drift=CLOCK:PPM] [--tristate-default=GND|VCC]
        ./jz-hdl --chip-info [CHIP_ID] [-o OUT_FILE]
        ./jz-hdl --lint-rules
        ./jz-hdl --lsp
        ./jz-hdl --help
        ./jz-hdl --version
+
+Simulation timing options:
+  --jitter=CLOCK:PS       Add peak-to-peak clock jitter in picoseconds (may repeat)
+  --drift=CLOCK:PPM       Add maximum clock drift in parts per million (may repeat)
+
+Expansion safety options:
+  --expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>
+                           Override hard expansion limits (defaults: repeat-count=1024,
+                           repeat-bytes=1048576, apply-count=1024, apply-growth=4096)
 
 Path security options:
   --sandbox-root=<dir>     Add permitted root directory for file access
@@ -84,9 +96,20 @@ Path security options:
 bash compiler/tests/run_validation.sh
 
 # Run CTest suite
-cmake -S compilerz-hdl -B compiler/build -DBUILD_TESTING=ON
-ctest --test-dir compiler/build
+cmake -S . -B build -DBUILD_TESTING=ON
+ctest --test-dir build
+
+# Build and verify the published docs site
+scripts/build-docs-site
+
+# Compile and smoke-test the VS Code extension
+cd vscode-ext
+npm ci
+npm run compile
+npm run smoke
 ```
+
+Release gating for `1.0.0` treats compiler tests, viewer smoke, docs build, and VS Code extension compile/smoke as required automation. Example synthesis remains a broader compatibility sweep driven by `scripts/run_examples.sh`; it is useful for nightly or pre-release verification, but it is not a required per-PR gate.
 
 ## Examples
 
@@ -95,6 +118,8 @@ The `examples/` directory contains complete projects ranging from simple counter
 ## Documentation
 
 Full documentation is available at [jz-hdl.github.io/jz-hdl](https://jz-hdl.github.io/jz-hdl/) and in the `docs/` directory, covering the language specification, type system, module system, memory semantics, simulation, and testbench authoring.
+
+The docs site also ships rendered PDF copies of the specifications. Regenerate them from the Markdown sources in `specification/` with the root CMake `docs` target (requires `pandoc` and `xelatex`); the PDFs are written to `build/specification/` and staged into the published site by `scripts/gitpages-update`.
 
 ### Specification
 
@@ -125,7 +150,9 @@ The `vscode-ext/` directory contains a VS Code extension providing:
 ```bash
 cd vscode-ext
 npm install
-npm run compile
+npm run package:vsix
 ```
 
-Then in VS Code: **Extensions** → **...** → **Install from VSIX** or use **Developer: Install Extension from Location** and select the `vscode-ext/` directory.
+Then in VS Code: **Extensions** → **...** → **Install from VSIX** and select `vscode-ext/build/jz-hdl.vsix`.
+
+The generated `.vsix` file is a build artifact under `vscode-ext/build/`, not a checked-in source artifact.

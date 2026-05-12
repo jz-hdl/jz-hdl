@@ -1,4 +1,4 @@
 File: HDL_1_1_ID_SYNTAX_INVALID-mem_name.jz
-      29:9    error ID_SYNTAX_INVALID S1.1 Identifier exceeds 255 characters
+      29:9    error ID_SYNTAX_INVALID S1.1 Identifier violates syntax (must start with ASCII letter/underscore, continue with ASCII letters/digits/underscores, and be at most 255 characters)
       30:17   warn  MEM_WARN_PORT_NEVER_ACCESSED S7.7.3 MEM IN/OUT/INOUT port declared but never used
       31:17   warn  MEM_WARN_PORT_NEVER_ACCESSED S7.7.3 MEM IN/OUT/INOUT port declared but never used

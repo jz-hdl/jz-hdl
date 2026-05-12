@@ -1,5 +1,5 @@
 // TEMPLATE_FORBIDDEN_DIRECTIVE: Cross-reference test for S10.4 @module directive in template.
-// Parser does not recover after the error, producing cascading PARSE000.
+// Parser does not recover after the error, producing cascading PARSE_SYNTAX_ERROR.
 // Split from @new trigger for this reason.
 
 @project TEMPLATE_FORBIDDEN_DIRECTIVE_module_in_template

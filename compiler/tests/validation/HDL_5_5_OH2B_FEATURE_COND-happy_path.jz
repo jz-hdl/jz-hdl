@@ -4,7 +4,7 @@
 // diagnostics expected.
 // new-binding and check-expr are inapplicable: @new instance bindings
 // reject function-call expressions (parser_instance.c restricts the RHS
-// to signal-like forms, PARSE000) and @check rejects oh2b with
+// to signal-like forms, generic parse rejection) and @check rejects oh2b with
 // CHECK_INVALID_EXPR_TYPE before §5.5.12 rules can fire.
 // See audit/runner.log.
 

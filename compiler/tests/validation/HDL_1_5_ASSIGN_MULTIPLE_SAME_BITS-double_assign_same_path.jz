@@ -22,10 +22,10 @@
     }
     ASYNCHRONOUS {
         // Trigger 1: port assigned twice at root level
-        out_a = VCC;
-        out_a = GND;
+        out_a <= VCC;
+        out_a <= GND;
         // Valid: different target (no false positive)
-        out_b = r;
+        out_b <= r;
     }
     SYNCHRONOUS(CLK=clk) {
         r <= ~r;
@@ -55,13 +55,13 @@
 
     ASYNCHRONOUS {
         // Drive outputs first (valid, no conflict)
-        out_b = ha_b;
+        out_b <= ha_b;
         // Trigger 2: port assigned twice at root level
-        out_a = ha_a;
-        out_a = ha_b;
+        out_a <= ha_a;
+        out_a <= ha_b;
         // Trigger 3: wire assigned twice at root level
-        w = VCC;
-        w = GND;
+        w <= VCC;
+        w <= GND;
     }
     SYNCHRONOUS(CLK=clk) {
         r <= ~r;

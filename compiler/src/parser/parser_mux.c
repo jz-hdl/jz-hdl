@@ -50,10 +50,13 @@ int parse_mux_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "MUX")) {
+            continue;
+        }
 
         /* MUX identifier. */
         if (!is_decl_identifier_token(t) || !t->lexeme) {
-            parser_error(p, "expected MUX identifier");
+            parser_error_id_syntax_or_parse(p, "expected MUX identifier");
             return -1;
         }
         const JZToken *id_tok = t;
@@ -88,24 +91,10 @@ int parse_mux_block_body(Parser *p, JZASTNode *parent) {
 
             char *width = NULL;
             if (start < end) {
-                size_t buf_sz = 0;
-                for (size_t i = start; i < end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                }
-                if (buf_sz > 0) {
-                    width = (char *)malloc(buf_sz + 1);
-                    if (!width) {
-                        jz_ast_free(mux);
-                        return -1;
-                    }
-                    width[0] = '\0';
-                    for (size_t i = start; i < end; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (!wt->lexeme) continue;
-                        strcat(width, wt->lexeme);
-                        strcat(width, " ");
-                    }
+                width = parser_join_token_lexemes_spaced(p, start, end, 1);
+                if (!width) {
+                    jz_ast_free(mux);
+                    return -1;
                 }
             }
             if (width) {
@@ -117,7 +106,7 @@ int parse_mux_block_body(Parser *p, JZASTNode *parent) {
         /* Mandatory '=' token. */
         if (!match(p, JZ_TOK_OP_ASSIGN)) {
             jz_ast_free(mux);
-            parser_error(p, "expected '=' in MUX declaration");
+            parser_error_id_syntax_or_parse(p, "expected '=' in MUX declaration");
             return -1;
         }
 

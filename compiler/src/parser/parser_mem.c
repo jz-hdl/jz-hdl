@@ -36,16 +36,19 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                 return -1;
             continue;
         }
+        if (parser_recover_decl_block_bad_token(p, "MEM")) {
+            continue;
+        }
 
         const JZToken *name_tok = peek(p);
         if (!is_decl_identifier_token(name_tok)) {
-            parser_error(p, "expected memory name in MEM block");
+            parser_error_id_syntax_or_parse(p, "expected memory name in MEM block");
             return -1;
         }
         advance(p);
 
         if (!match(p, JZ_TOK_LBRACKET)) {
-            parser_error(p, "expected '[' after MEM name for word_width");
+            parser_error_id_syntax_or_parse(p, "expected '[' after MEM name for word_width");
             return -1;
         }
 
@@ -219,54 +222,26 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
 
         /* word_width into width field */
         if (word_start < word_end) {
-            size_t buf_sz = 0;
-            for (size_t i = word_start; i < word_end; ++i) {
-                const JZToken *wt = &p->tokens[i];
-                if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, word_start, word_end, 1);
+            if (!buf) {
+                jz_ast_free(init_expr);
+                jz_ast_free(mem);
+                return -1;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(init_expr);
-                    jz_ast_free(mem);
-                    return -1;
-                }
-                buf[0] = '\0';
-                for (size_t i = word_start; i < word_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (!wt->lexeme) continue;
-                    strcat(buf, wt->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_width(mem, buf);
-                free(buf);
-            }
+            jz_ast_set_width(mem, buf);
+            free(buf);
         }
 
         /* depth expression stored in text for now (no generic width slot left) */
         if (depth_start < depth_end) {
-            size_t buf_sz = 0;
-            for (size_t i = depth_start; i < depth_end; ++i) {
-                const JZToken *dt = &p->tokens[i];
-                if (dt->lexeme) buf_sz += strlen(dt->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, depth_start, depth_end, 1);
+            if (!buf) {
+                jz_ast_free(init_expr);
+                jz_ast_free(mem);
+                return -1;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(init_expr);
-                    jz_ast_free(mem);
-                    return -1;
-                }
-                buf[0] = '\0';
-                for (size_t i = depth_start; i < depth_end; ++i) {
-                    const JZToken *dt = &p->tokens[i];
-                    if (!dt->lexeme) continue;
-                    strcat(buf, dt->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_text(mem, buf);
-                free(buf);
-            }
+            jz_ast_set_text(mem, buf);
+            free(buf);
         }
 
         /* Attach the parsed initializer expression (literal or @file form) as
@@ -312,7 +287,7 @@ int parse_mem_block_body(Parser *p, JZASTNode *parent) {
                  * Error-recovery for a very common mistake: using the read-port
                  * timing qualifiers on a write (IN) port, e.g. `IN wr ASYNC;`
                  * or `IN wr SYNC;`. Instead of treating this as a syntax error
-                 * (which would fall back to PARSE000), emit
+                 * (which would otherwise fall back to generic parse syntax), emit
                  * the MEM_INVALID_PORT_TYPE rule at the qualifier token and
                  * then continue parsing so the rest of the MEM block can still
                  * be analyzed.

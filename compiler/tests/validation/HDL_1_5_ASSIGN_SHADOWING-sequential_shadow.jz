@@ -27,12 +27,12 @@
     }
     ASYNCHRONOUS {
         // Trigger 1: root port assignment shadowed by IF branch
-        out_a = GND;
+        out_a <= GND;
         IF (sel) {
             out_a <= VCC;
         }
         // Valid: no shadowing (different target)
-        out_b = r;
+        out_b <= r;
     }
     SYNCHRONOUS(CLK=clk) {
         r <= ~r;
@@ -66,22 +66,22 @@
 
     ASYNCHRONOUS {
         // Trigger 2: root wire assignment shadowed by nested IF
-        w = GND;
+        w <= GND;
         IF (sel) {
             w <= VCC;
         }
         // Trigger 3: root port assignment shadowed by nested IF
-        out_a = ha_a;
+        out_a <= ha_a;
         IF (sel) {
             out_a <= ha_b;
         }
         // Trigger 4: root port assignment shadowed by nested SELECT
-        out_b = GND;
+        out_b <= GND;
         SELECT (sel2) {
             CASE 2'b00 { out_b <= VCC; }
             DEFAULT { out_b <= GND; }
         }
-        out_c = w;
+        out_c <= w;
     }
     SYNCHRONOUS(CLK=clk) {
         r <= ~r;

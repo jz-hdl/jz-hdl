@@ -86,27 +86,13 @@ int parse_clocks_block_body(Parser *p, JZASTNode *parent) {
             size_t attr_end = p->pos - 1; /* index of closing '}' */
 
             if (attr_start < attr_end) {
-                size_t buf_sz = 0;
-                for (size_t i = attr_start; i < attr_end; ++i) {
-                    const JZToken *at = &p->tokens[i];
-                    if (at->lexeme) buf_sz += strlen(at->lexeme) + 1;
+                char *buf = parser_join_token_lexemes_spaced(p, attr_start, attr_end, 1);
+                if (!buf) {
+                    jz_ast_free(decl);
+                    return -1;
                 }
-                if (buf_sz > 0) {
-                    char *buf = (char *)malloc(buf_sz + 1);
-                    if (!buf) {
-                        jz_ast_free(decl);
-                        return -1;
-                    }
-                    buf[0] = '\0';
-                    for (size_t i = attr_start; i < attr_end; ++i) {
-                        const JZToken *at = &p->tokens[i];
-                        if (!at->lexeme) continue;
-                        strcat(buf, at->lexeme);
-                        strcat(buf, " ");
-                    }
-                    jz_ast_set_text(decl, buf);
-                    free(buf);
-                }
+                jz_ast_set_text(decl, buf);
+                free(buf);
             }
         }
 
@@ -160,22 +146,8 @@ int parse_pins_block_body(Parser *p, JZASTNode *parent, const char *block_kind) 
             advance(p); /* consume ']' */
 
             if (width_start < width_end) {
-                size_t buf_sz = 0;
-                for (size_t i = width_start; i < width_end; ++i) {
-                    const JZToken *wt = &p->tokens[i];
-                    if (wt->lexeme) buf_sz += strlen(wt->lexeme) + 1;
-                }
-                if (buf_sz > 0) {
-                    width_text = (char *)malloc(buf_sz + 1);
-                    if (!width_text) return -1;
-                    width_text[0] = '\0';
-                    for (size_t i = width_start; i < width_end; ++i) {
-                        const JZToken *wt = &p->tokens[i];
-                        if (!wt->lexeme) continue;
-                        strcat(width_text, wt->lexeme);
-                        strcat(width_text, " ");
-                    }
-                }
+                width_text = parser_join_token_lexemes_spaced(p, width_start, width_end, 1);
+                if (!width_text) return -1;
             }
         }
 
@@ -232,27 +204,13 @@ int parse_pins_block_body(Parser *p, JZASTNode *parent, const char *block_kind) 
         }
 
         if (attr_start < attr_end) {
-            size_t buf_sz = 0;
-            for (size_t i = attr_start; i < attr_end; ++i) {
-                const JZToken *at = &p->tokens[i];
-                if (at->lexeme) buf_sz += strlen(at->lexeme) + 1;
+            char *buf = parser_join_token_lexemes_spaced(p, attr_start, attr_end, 1);
+            if (!buf) {
+                jz_ast_free(decl);
+                return -1;
             }
-            if (buf_sz > 0) {
-                char *buf = (char *)malloc(buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(decl);
-                    return -1;
-                }
-                buf[0] = '\0';
-                for (size_t i = attr_start; i < attr_end; ++i) {
-                    const JZToken *at = &p->tokens[i];
-                    if (!at->lexeme) continue;
-                    strcat(buf, at->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_text(decl, buf);
-                free(buf);
-            }
+            jz_ast_set_text(decl, buf);
+            free(buf);
         }
 
         if (jz_ast_add_child(parent, decl) != 0) {
@@ -331,51 +289,25 @@ int parse_map_block_body(Parser *p, JZASTNode *parent) {
         }
 
         /* Build LHS name string (e.g., clk, led[0]). */
-        size_t buf_sz = 0;
-        for (size_t i = lhs_start; i < lhs_end; ++i) {
-            const JZToken *lt = &p->tokens[i];
-            if (lt->lexeme) buf_sz += strlen(lt->lexeme) + 1;
+        char *buf = parser_join_token_lexemes_spaced(p, lhs_start, lhs_end, 1);
+        if (!buf) {
+            jz_ast_free(entry);
+            return -1;
         }
-        if (buf_sz > 0) {
-            char *buf = (char *)malloc(buf_sz + 1);
+        if (buf[0] != '\0') {
+            jz_ast_set_name(entry, buf);
+        }
+        free(buf);
+
+        /* Build RHS text (e.g., 4, 79). */
+        if (rhs_start < rhs_end) {
+            buf = parser_join_token_lexemes_spaced(p, rhs_start, rhs_end, 1);
             if (!buf) {
                 jz_ast_free(entry);
                 return -1;
             }
-            buf[0] = '\0';
-            for (size_t i = lhs_start; i < lhs_end; ++i) {
-                const JZToken *lt = &p->tokens[i];
-                if (!lt->lexeme) continue;
-                strcat(buf, lt->lexeme);
-                strcat(buf, " ");
-            }
-            jz_ast_set_name(entry, buf);
+            jz_ast_set_text(entry, buf);
             free(buf);
-        }
-
-        /* Build RHS text (e.g., 4, 79). */
-        if (rhs_start < rhs_end) {
-            size_t rhs_buf_sz = 0;
-            for (size_t i = rhs_start; i < rhs_end; ++i) {
-                const JZToken *rt = &p->tokens[i];
-                if (rt->lexeme) rhs_buf_sz += strlen(rt->lexeme) + 1;
-            }
-            if (rhs_buf_sz > 0) {
-                char *buf = (char *)malloc(rhs_buf_sz + 1);
-                if (!buf) {
-                    jz_ast_free(entry);
-                    return -1;
-                }
-                buf[0] = '\0';
-                for (size_t i = rhs_start; i < rhs_end; ++i) {
-                    const JZToken *rt = &p->tokens[i];
-                    if (!rt->lexeme) continue;
-                    strcat(buf, rt->lexeme);
-                    strcat(buf, " ");
-                }
-                jz_ast_set_text(entry, buf);
-                free(buf);
-            }
         }
 
         if (jz_ast_add_child(parent, entry) != 0) {

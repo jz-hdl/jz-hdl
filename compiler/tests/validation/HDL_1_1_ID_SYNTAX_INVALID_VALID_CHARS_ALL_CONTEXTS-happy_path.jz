@@ -1,6 +1,6 @@
 // ID_SYNTAX_INVALID: Happy-path test for valid character classes in all
 // declaration contexts. Identifiers use the full valid character set
-// (letters A-Z/a-z, digits 0-9, underscore _) without triggering PARSE000.
+// (letters A-Z/a-z, digits 0-9, underscore _) without triggering ID_SYNTAX_INVALID.
 // Covers all 10 contexts including module-name, config-name, latch-name,
 // mem-name, mux-name, and instance-name.
 

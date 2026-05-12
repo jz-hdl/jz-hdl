@@ -6,7 +6,8 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR%/tests}"
 VALIDATION_DIR="${ROOT_DIR}/tests/validation"
-JZ_HDL_BIN="${JZ_HDL_BIN:-${ROOT_DIR}/build/jz-hdl}"
+REPO_ROOT="${ROOT_DIR%/compiler}"
+JZ_HDL_BIN="${JZ_HDL_BIN:-${REPO_ROOT}/build/compiler/jz-hdl}"
 
 if [[ ! -x "${JZ_HDL_BIN}" ]]; then
   echo "error: jz-hdl binary not found or not executable at: ${JZ_HDL_BIN}" >&2
@@ -34,7 +35,7 @@ normalize_validation_output() {
   local src="$1"
   local dst="$2"
 
-  sed -E 's|^(VCD written to: ).*/compiler/tests/validation/([^/]+\.vcd)$|\1compiler/tests/validation/\2|' "${src}" > "${dst}"
+  sed -E 's|^(VCD written to: ).*/([^/]+\.vcd)$|\1compiler/tests/validation/\2|' "${src}" > "${dst}"
 }
 
 copy_generated_mem_sidecars() {
@@ -87,6 +88,7 @@ for file in "${validation_files[@]}"; do
 
   # Determine extra flags based on filename.
   extra_flags=()
+  tmp_waveform_dir=""
   case "$(basename "${file}")" in
     *_GND_*) extra_flags+=(--tristate-default=GND) ;;
     *_VCC_*) extra_flags+=(--tristate-default=VCC) ;;
@@ -126,7 +128,12 @@ for file in "${validation_files[@]}"; do
     *_SMODE_*) cmd_flags=(--simulate) ;;
   esac
   tmp_artifact=""
+  tmp_waveform=""
   case "$(basename "${file}")" in
+    *_SMODE_*)
+      tmp_waveform_dir="$(mktemp -d "${ROOT_DIR}/tests/.validation_waveform.XXXXXX")"
+      tmp_waveform="${tmp_waveform_dir}/$(basename "${base_no_ext}").vcd"
+      ;;
     CHIP_10_4_INFO_SERIALIZER_CASCADE-cascaded_serializers.jz)
       cmd_flags=(--info --verilog)
       tmp_artifact="$(mktemp)"
@@ -143,6 +150,10 @@ for file in "${validation_files[@]}"; do
   if [[ -n "${tmp_artifact}" ]]; then
     "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_artifact}" "${input_file}" >"${tmp_out}" 2>&1 || true
     rm -f "${tmp_artifact}"
+  elif [[ -n "${tmp_waveform}" ]]; then
+    "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} -o "${tmp_waveform}" "${input_file}" >"${tmp_out}" 2>&1 || true
+    rm -f "${tmp_waveform}"
+    rm -rf "${tmp_waveform_dir}"
   else
     "${JZ_HDL_BIN}" "${cmd_flags[@]}" ${extra_flags[@]+"${extra_flags[@]}"} "${input_file}" >"${tmp_out}" 2>&1 || true
   fi
@@ -489,15 +500,138 @@ if [[ -d "${SIMULATION_DIR}" ]] && [[ -x "${JZ_HDL_BIN}" ]]; then
 
     for file in "${sim_files[@]}"; do
       rel_path="${file#${ROOT_DIR}/}"
+      expected_vcd="${file%.jz}.vcd"
+      tmp_waveform="${TMPDIR:-/tmp}/$(basename "${file%.jz}").$$.vcd"
 
-      if "${JZ_HDL_BIN}" --simulate "${file}" -o /dev/null >"${tmp_out}" 2>&1; then
-        echo "PASS ${rel_path}"
-        ((sim_pass++))
+      if "${JZ_HDL_BIN}" --simulate "${file}" -o "${tmp_waveform}" >"${tmp_out}" 2>&1; then
+        if [[ -f "${expected_vcd}" ]]; then
+          tmp_expected_norm="$(mktemp)"
+          tmp_actual_norm="$(mktemp)"
+          python3 - "${expected_vcd}" "${tmp_expected_norm}" <<'PY'
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+signal_order = []
+signal_values = {}
+snapshots = []
+current_time = None
+started = False
+
+
+def apply_change(line: str) -> None:
+    if not line:
+        return
+    if line[0] in "01xz":
+        ident = line[1:]
+    else:
+        parts = line.split(" ", 1)
+        if len(parts) != 2:
+            return
+        ident = parts[1]
+    if ident not in signal_values:
+        signal_order.append(ident)
+    signal_values[ident] = line
+
+
+with open(src, "r", encoding="utf-8") as f:
+    for raw in f:
+        line = raw.rstrip("\n")
+        if not started:
+            if line.startswith("#"):
+                started = True
+            else:
+                continue
+        if line.startswith("#"):
+            if current_time is not None:
+                snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+            current_time = line
+            continue
+        apply_change(line)
+
+if current_time is not None:
+    snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+
+last_values = None
+with open(dst, "w", encoding="utf-8") as out:
+    for time_line, values in snapshots:
+        if values != last_values:
+            out.write(time_line + "\n")
+            for value in values:
+                out.write(value + "\n")
+            last_values = values
+PY
+          python3 - "${tmp_waveform}" "${tmp_actual_norm}" <<'PY'
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+signal_order = []
+signal_values = {}
+snapshots = []
+current_time = None
+started = False
+
+
+def apply_change(line: str) -> None:
+    if not line:
+        return
+    if line[0] in "01xz":
+        ident = line[1:]
+    else:
+        parts = line.split(" ", 1)
+        if len(parts) != 2:
+            return
+        ident = parts[1]
+    if ident not in signal_values:
+        signal_order.append(ident)
+    signal_values[ident] = line
+
+
+with open(src, "r", encoding="utf-8") as f:
+    for raw in f:
+        line = raw.rstrip("\n")
+        if not started:
+            if line.startswith("#"):
+                started = True
+            else:
+                continue
+        if line.startswith("#"):
+            if current_time is not None:
+                snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+            current_time = line
+            continue
+        apply_change(line)
+
+if current_time is not None:
+    snapshots.append((current_time, [signal_values[ident] for ident in signal_order]))
+
+last_values = None
+with open(dst, "w", encoding="utf-8") as out:
+    for time_line, values in snapshots:
+        if values != last_values:
+            out.write(time_line + "\n")
+            for value in values:
+                out.write(value + "\n")
+            last_values = values
+PY
+          if diff -u "${tmp_expected_norm}" "${tmp_actual_norm}" >/dev/null; then
+            echo "PASS ${rel_path}"
+            ((sim_pass++))
+          else
+            echo "FAIL ${rel_path} (waveform mismatch)"
+            diff -u "${tmp_expected_norm}" "${tmp_actual_norm}" || true
+            ((sim_fail++))
+          fi
+          rm -f "${tmp_expected_norm}" "${tmp_actual_norm}"
+        else
+          echo "PASS ${rel_path}"
+          ((sim_pass++))
+        fi
       else
         echo "FAIL ${rel_path}"
         cat "${tmp_out}"
         ((sim_fail++))
       fi
+      rm -f "${tmp_waveform}"
     done
 
     echo

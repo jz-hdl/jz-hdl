@@ -521,6 +521,39 @@ static void jzw_recompute_display_start_time(JZWFile *jzw)
     }
 }
 
+static int run_validation_mode(const char *path)
+{
+    JZWFile jzw;
+    if (!jzw.load(path)) {
+        fprintf(stderr, "%s\n", jzw.error_message.c_str());
+        return 1;
+    }
+
+    if (jzw.tick_ps <= 0) {
+        fprintf(stderr, "Trace metadata is invalid: tick_ps must be positive\n");
+        return 1;
+    }
+    if (jzw.signals.empty()) {
+        fprintf(stderr, "Trace metadata is invalid: no signals were loaded\n");
+        return 1;
+    }
+    if (jzw.changes.empty()) {
+        fprintf(stderr, "Trace data is invalid: no value changes were loaded\n");
+        return 1;
+    }
+    if (jzw.annotations.empty()) {
+        fprintf(stderr, "Trace data is invalid: no annotations were loaded\n");
+        return 1;
+    }
+
+    printf("Validated %s: %zu signals, %zu signal change sets, %zu annotations\n",
+           path,
+           jzw.signals.size(),
+           jzw.changes.size(),
+           jzw.annotations.size());
+    return 0;
+}
+
 static void show_fatal_error(const char *title, const std::string &message, SDL_Window *window)
 {
     if (message.empty()) return;
@@ -1406,20 +1439,32 @@ static void draw_waveform(ImDrawList *dl, const Signal &sig,
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: jz-viewer <file.jzw>\n");
+    bool validate_only = false;
+    const char *trace_path = nullptr;
+
+    if (argc == 2) {
+        trace_path = argv[1];
+    } else if (argc == 3 && strcmp(argv[1], "--validate") == 0) {
+        validate_only = true;
+        trace_path = argv[2];
+    } else {
+        fprintf(stderr, "Usage: jz-viewer [--validate] <file.jzw>\n");
         return 1;
     }
 
+    if (validate_only) {
+        return run_validation_mode(trace_path);
+    }
+
     JZWFile jzw;
-    if (!jzw.load(argv[1])) {
+    if (!jzw.load(trace_path)) {
         show_fatal_error("Failed to load trace", jzw.error_message, nullptr);
         return 1;
     }
 
     /* Extract display filename */
-    const char *display_name = strrchr(argv[1], '/');
-    display_name = display_name ? display_name + 1 : argv[1];
+    const char *display_name = strrchr(trace_path, '/');
+    display_name = display_name ? display_name + 1 : trace_path;
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -2634,6 +2679,21 @@ int main(int argc, char **argv)
                             ImVec2(clip_x1, y + row_height),
                             IM_COL32(50, 50, 50, 255), 1.0f);
 
+                for (const auto &ann : jzw.annotations) {
+                    if (ann.type != "select" || ann.signal_id != sig.id || ann.end_time <= ann.time) {
+                        continue;
+                    }
+                    float sx0 = wpos.x + (float)((ann.time - scroll_ps) / ps_per_px);
+                    float sx1 = wpos.x + (float)((ann.end_time - scroll_ps) / ps_per_px);
+                    float left = std::max(sx0, clip_x0);
+                    float right = std::min(sx1, clip_x1);
+                    if (left < right) {
+                        ImU32 base = annotation_color(ann.color);
+                        ImU32 fill = (base & 0x00FFFFFFu) | (ImU32(48) << 24);
+                        dl->AddRectFilled(ImVec2(left, y), ImVec2(right, y + row_height), fill);
+                    }
+                }
+
                 /* Highlight row being dragged */
                 if (dragging_signal && drag_src_idx == (int)i) {
                     dl->AddRectFilled(ImVec2(clip_x0, y), ImVec2(clip_x1, y + row_height),
@@ -2661,6 +2721,21 @@ int main(int argc, char **argv)
                         dl->AddLine(ImVec2(clip_x0, bit_y + row_height),
                                     ImVec2(clip_x1, bit_y + row_height),
                                     IM_COL32(40, 40, 40, 255), 1.0f);
+
+                        for (const auto &ann : jzw.annotations) {
+                            if (ann.type != "select" || ann.signal_id != sig.id || ann.end_time <= ann.time) {
+                                continue;
+                            }
+                            float sx0 = wpos.x + (float)((ann.time - scroll_ps) / ps_per_px);
+                            float sx1 = wpos.x + (float)((ann.end_time - scroll_ps) / ps_per_px);
+                            float left = std::max(sx0, clip_x0);
+                            float right = std::min(sx1, clip_x1);
+                            if (left < right) {
+                                ImU32 base = annotation_color(ann.color);
+                                ImU32 fill = (base & 0x00FFFFFFu) | (ImU32(32) << 24);
+                                dl->AddRectFilled(ImVec2(left, bit_y), ImVec2(right, bit_y + row_height), fill);
+                            }
+                        }
 
                         /* Create a virtual 1-bit signal for this bit */
                         Signal bit_sig = sig;

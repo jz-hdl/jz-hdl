@@ -92,6 +92,9 @@ static int is_allowed_template_ident(ExpandContext *ctx,
                                      const char **scratch_names,
                                      size_t scratch_count,
                                      int has_idx);
+static int template_width_expr_needs_apply_context(const char *expr,
+                                                   const char **param_names,
+                                                   size_t param_count);
 
 static void report_rule(ExpandContext *ctx, JZLocation loc,
                          const char *rule_id, const char *fallback)
@@ -361,6 +364,36 @@ static int eval_count_expr(ExpandContext *ctx, const char *expr, long *out)
     while (*expr && isspace((unsigned char)*expr)) expr++;
     if (!*expr) return 0;
 
+    /* Strip one layer of wrapping parentheses. */
+    if (*expr == '(') {
+        size_t len = strlen(expr);
+        if (len >= 2 && expr[len - 1] == ')') {
+            int depth = 0;
+            int wraps = 1;
+            for (size_t i = 0; i < len - 1; ++i) {
+                if (expr[i] == '(') depth++;
+                else if (expr[i] == ')') {
+                    depth--;
+                    if (depth == 0 && i != len - 2) {
+                        wraps = 0;
+                        break;
+                    }
+                }
+            }
+            if (wraps) {
+                char *inner = (char *)malloc(len - 1);
+                if (!inner) return 0;
+                memcpy(inner, expr + 1, len - 2);
+                inner[len - 2] = '\0';
+                {
+                    int ok = eval_count_expr(ctx, inner, out);
+                    free(inner);
+                    if (ok) return 1;
+                }
+            }
+        }
+    }
+
     /* Try plain integer */
     if (parse_int_str(expr, out)) return 1;
 
@@ -382,6 +415,47 @@ static int eval_count_expr(ExpandContext *ctx, const char *expr, long *out)
         if (lookup_const(ctx, config_name, &v)) {
             *out = v;
             return 1;
+        }
+    }
+
+    /* Try clog2(<expr>) */
+    if (strncmp(expr, "clog2", 5) == 0) {
+        const char *p = expr + 5;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '(') {
+            const char *arg_start = ++p;
+            int depth = 1;
+            while (*p && depth > 0) {
+                if (*p == '(') depth++;
+                else if (*p == ')') depth--;
+                p++;
+            }
+            if (depth == 0) {
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == '\0') {
+                    size_t arg_len = (size_t)((p - 1) - arg_start);
+                    char *arg = (char *)malloc(arg_len + 1);
+                    long arg_val = 0;
+                    if (!arg) return 0;
+                    memcpy(arg, arg_start, arg_len);
+                    arg[arg_len] = '\0';
+                    {
+                        int ok = eval_count_expr(ctx, arg, &arg_val);
+                        free(arg);
+                        if (ok && arg_val > 0) {
+                            long out_val = 0;
+                            long probe = 1;
+                            while (probe < arg_val) {
+                                probe <<= 1;
+                                out_val++;
+                            }
+                            if (arg_val == 1) out_val = 1;
+                            *out = out_val;
+                            return 1;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -440,6 +514,38 @@ static int eval_count_expr(ExpandContext *ctx, const char *expr, long *out)
         int ok = eval_count_expr(ctx, left, &lv) && eval_count_expr(ctx, right, &rv);
         free(left);
         if (ok) { *out = lv * rv; return 1; }
+    }
+
+    return 0;
+}
+
+static int template_width_expr_needs_apply_context(const char *expr,
+                                                   const char **param_names,
+                                                   size_t param_count)
+{
+    if (!expr) return 0;
+
+    if (strstr(expr, "widthof(") != NULL ||
+        strstr(expr, "clog2(") != NULL ||
+        strstr(expr, "IDX") != NULL) {
+        return 1;
+    }
+
+    for (size_t i = 0; i < param_count; ++i) {
+        const char *name = param_names[i];
+        size_t len;
+        const char *p;
+
+        if (!name || !*name) continue;
+        len = strlen(name);
+        p = expr;
+        while ((p = strstr(p, name)) != NULL) {
+            int left_ok = (p == expr) ||
+                !(isalnum((unsigned char)p[-1]) || p[-1] == '_');
+            int right_ok = !(isalnum((unsigned char)p[len]) || p[len] == '_');
+            if (left_ok && right_ok) return 1;
+            p += len;
+        }
     }
 
     return 0;
@@ -1010,6 +1116,11 @@ static void register_template(ExpandContext *ctx, JZASTNode *def, JZASTNode *sco
         } else {
             long w = 0;
             if (!eval_count_expr(ctx, sd->width, &w)) {
+                if (template_width_expr_needs_apply_context(sd->width,
+                                                            reg_param_names,
+                                                            reg_param_count)) {
+                    continue;
+                }
                 char sw_msg[512];
                 snprintf(sw_msg, sizeof(sw_msg),
                          "@scratch `%s` width `%s` could not be evaluated to a positive integer",

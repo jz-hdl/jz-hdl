@@ -1,0 +1,55 @@
+// DIRECTIVE_INVALID_CONTEXT: @check is forbidden inside declaration-style blocks.
+// Triggers: @check inside CONST, PORT, WIRE, REGISTER, MUX, and CDC.
+// The file is otherwise semantically valid so each trigger should emit only
+// DIRECTIVE_INVALID_CONTEXT and recovery should preserve later declarations.
+
+@project DIRECTIVE_INVALID_CONTEXT_check_in_decl_blocks
+    @top TopMod {
+        IN  [1] clk_a = _;
+        IN  [1] clk_b = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    CONST {
+        WIDTH = 1;
+        @check(1, "const");
+    }
+
+    PORT {
+        @check(1, "port");
+        IN  [1] clk_a;
+        IN  [1] clk_b;
+        OUT [1] data;
+    }
+
+    WIRE {
+        @check(1, "wire");
+        w1 [1];
+    }
+
+    REGISTER {
+        @check(1, "register");
+        r [1] = 1'b0;
+    }
+
+    MUX {
+        @check(1, "mux");
+        pick = clk_a, clk_b;
+    }
+
+    CDC {
+        @check(1, "cdc");
+        BIT r (clk_a) => crossed (clk_b);
+    }
+
+    ASYNCHRONOUS {
+        w1 = clk_a;
+        data = w1 | crossed;
+    }
+
+    SYNCHRONOUS(CLK=clk_a) {
+        r <= clk_b;
+    }
+@endmod

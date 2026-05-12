@@ -24,12 +24,11 @@
     }
 
     ASYNCHRONOUS {
+        dout <= din_wide;
+
         // Trigger: =z alias inside IF body
         IF (sel) {
             dout =z din_narrow;
-        } ELSE {
-            // Valid: receive-assign in ELSE (no error)
-            dout <= din_wide;
         }
     }
 @endmod
@@ -44,9 +43,9 @@
     }
 
     ASYNCHRONOUS {
+        dout <= din_wide;
+
         IF (sel) {
-            // Valid: receive-assign in IF (no error)
-            dout <= din_wide;
         } ELSE {
             // Trigger: =s alias inside ELSE body
             dout =s din_narrow;
@@ -80,13 +79,12 @@
     };
 
     ASYNCHRONOUS {
+        dout_c <= din_b;
+
         // Trigger: = alias inside ELIF body
         IF (sel_a) {
-            dout_c <= din_b;
         } ELIF (sel_b) {
             dout_c = din_b;
-        } ELSE {
-            dout_c <= din_b;
         }
     }
 @endmod

@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DOCS_SRC_DIR="$REPO_ROOT/docs"
+SITE_OUT=""
+BUILD_DIR=""
+TEMP_DIRS=()
+CMAKE_ARGS=()
+
+EXPECTED_PDFS=(
+  "jz-hdl-specification.pdf"
+  "simulation-specification.pdf"
+  "testbench-specification.pdf"
+  "chip-info-specification.pdf"
+  "jzw-specification.pdf"
+)
+
+cleanup() {
+  local dir
+  for dir in "${TEMP_DIRS[@]}"; do
+    if [ -n "$dir" ] && [ -d "$dir" ]; then
+      rm -rf "$dir"
+    fi
+  done
+}
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/build-docs-site [--build-dir DIR] [--site-out DIR]
+
+Builds the specification PDFs, stages them into a temporary docs source tree,
+builds the VitePress site, and verifies the published /pdf/ artifacts exist in
+the final site output.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --build-dir)
+      BUILD_DIR="$2"
+      shift 2
+      ;;
+    --site-out)
+      SITE_OUT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+trap cleanup EXIT
+
+if [ -z "$BUILD_DIR" ]; then
+  BUILD_DIR="$(mktemp -d)"
+  TEMP_DIRS+=("$BUILD_DIR")
+fi
+
+WORK_ROOT="$(mktemp -d)"
+TEMP_DIRS+=("$WORK_ROOT")
+DOCS_WORK_DIR="$WORK_ROOT/docs"
+
+if [ -n "${SDL_UNIX_CONSOLE_BUILD:-}" ]; then
+  CMAKE_ARGS+=("-DSDL_UNIX_CONSOLE_BUILD=${SDL_UNIX_CONSOLE_BUILD}")
+fi
+
+echo "==> Building specification PDFs..."
+if [ ${#CMAKE_ARGS[@]} -gt 0 ]; then
+  cmake -S "$REPO_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
+else
+  cmake -S "$REPO_ROOT" -B "$BUILD_DIR"
+fi
+cmake --build "$BUILD_DIR" --target docs
+
+echo "==> Preparing temporary docs tree..."
+mkdir -p "$DOCS_WORK_DIR"
+rsync -a \
+  --exclude '.vitepress/dist' \
+  --exclude '.vitepress/cache' \
+  --exclude 'node_modules' \
+  "$DOCS_SRC_DIR"/ "$DOCS_WORK_DIR"/
+ln -s "$REPO_ROOT/examples" "$WORK_ROOT/examples"
+
+mkdir -p "$DOCS_WORK_DIR/public/pdf"
+find "$DOCS_WORK_DIR/public/pdf" -type f -name '*.pdf' -delete
+cp "$BUILD_DIR/specification"/*.pdf "$DOCS_WORK_DIR/public/pdf/"
+
+echo "==> Installing docs dependencies..."
+(cd "$DOCS_WORK_DIR" && npm install)
+
+echo "==> Building VitePress site..."
+(cd "$DOCS_WORK_DIR" && npm run build)
+
+DIST_DIR="$DOCS_WORK_DIR/.vitepress/dist"
+if [ ! -f "$DIST_DIR/index.html" ]; then
+  echo "Error: VitePress build output missing index.html" >&2
+  exit 1
+fi
+
+echo "==> Verifying published PDFs..."
+for pdf in "${EXPECTED_PDFS[@]}"; do
+  if [ ! -f "$DIST_DIR/pdf/$pdf" ]; then
+    echo "Error: Missing published PDF $pdf" >&2
+    exit 1
+  fi
+done
+
+if [ -n "$SITE_OUT" ]; then
+  rm -rf "$SITE_OUT"
+  mkdir -p "$SITE_OUT"
+  cp -R "$DIST_DIR"/. "$SITE_OUT"/
+fi
+
+echo "==> Docs site build verified."

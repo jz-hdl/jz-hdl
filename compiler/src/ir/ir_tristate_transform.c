@@ -2074,8 +2074,14 @@ static int transform_shared_nets(IR_Design *design,
 
         /* For each real driver, create _out and _oe in child, and
          * corresponding wires + connections in parent. */
-        int *parent_out_ids = (int *)calloc((size_t)net->num_drivers, sizeof(int));
-        int *parent_oe_ids  = (int *)calloc((size_t)net->num_drivers, sizeof(int));
+        size_t driver_count = 0;
+        if (jz_size_from_int_checked(net->num_drivers, &driver_count) != 0) {
+            free(split_records);
+            shared_net_free(shared, shared_count);
+            return -1;
+        }
+        int *parent_out_ids = (int *)calloc(driver_count, sizeof(int));
+        int *parent_oe_ids  = (int *)calloc(driver_count, sizeof(int));
         if (!parent_out_ids || !parent_oe_ids) {
             free(parent_out_ids); free(parent_oe_ids);
             free(split_records);

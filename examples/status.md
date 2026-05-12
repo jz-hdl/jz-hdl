@@ -11,9 +11,9 @@
 | latch      |     PASS     |     PASS      |   FAIL    |               |
 | lcd        |              |               |           |     PASS      |
 | pll        |     PASS     |     PASS      |   PASS    |               |
-| soc        |              |     FAIL      |           |               |
+| soc        |              |     PASS      |           |               |
 | terminal   |              |     PASS      |           |               |
 | uart_audio |              |     PASS      |   PASS    |               |
 | uart_echo  |     PASS     |     PASS      |   PASS    |               |
 
-_Generated on 2026-04-18 19:44 UTC_
+_Generated on 2026-05-06 23:17 UTC_

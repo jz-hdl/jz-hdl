@@ -1,6 +1,6 @@
 // ID_SYNTAX_INVALID: Leading-digit violation in module-name context.
 // A module name starting with a digit; the lexer produces a number token
-// instead of an identifier, causing a PARSE000 parser error.
+// instead of an identifier, causing an ID_SYNTAX_INVALID diagnostic.
 
 @project ID_SYNTAX_INVALID_invalid_chars_module
     @top TopMod {

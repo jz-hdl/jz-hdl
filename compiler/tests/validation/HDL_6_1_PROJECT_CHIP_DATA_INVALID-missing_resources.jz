@@ -1,0 +1,19 @@
+// PROJECT_CHIP_DATA_INVALID: chip JSON missing a required top-level section.
+
+@project(CHIP="HDL_6_1_PROJECT_CHIP_DATA_INVALID-missing_resources") PROJECT_CHIP_DATA_INVALID_missing_resources
+    @top TopMod {
+        IN  [1] clk = _;
+        OUT [1] data = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        OUT [1] data;
+    }
+
+    ASYNCHRONOUS {
+        data = clk;
+    }
+@endmod

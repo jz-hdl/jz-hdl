@@ -19,10 +19,49 @@ if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
   exit 1
 fi
 
-IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$VERSION"
-
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="$REPO_ROOT/release"
+SYNC_VERSION="$REPO_ROOT/scripts/sync_version.py"
+TEMP_DIRS=()
+VERSION_FILES=(
+  "$REPO_ROOT/VERSION"
+  "$REPO_ROOT/compiler/include/version.h"
+  "$REPO_ROOT/docs/getting-started/cli-usage.md"
+  "$REPO_ROOT/vscode-ext/package.json"
+  "$REPO_ROOT/vscode-ext/package-lock.json"
+)
+
+cleanup_temp_dirs() {
+  local dir
+  for dir in "${TEMP_DIRS[@]}"; do
+    if [ -n "$dir" ] && [ -d "$dir" ]; then
+      rm -rf "$dir"
+    fi
+  done
+}
+
+rollback_version_bump() {
+  local files=()
+  local path
+
+  for path in "${VERSION_FILES[@]}" "$REPO_ROOT/specification"; do
+    if ! git -C "$REPO_ROOT" diff --quiet -- "$path"; then
+      files+=("$path")
+    fi
+  done
+
+  if [ ${#files[@]} -gt 0 ]; then
+    git -C "$REPO_ROOT" restore --source=HEAD -- "${files[@]}"
+  fi
+}
+
+abort_release() {
+  echo "Error: $1. Aborting release."
+  rollback_version_bump
+  exit 1
+}
+
+trap cleanup_temp_dirs EXIT
 
 # Ensure we're on a clean working tree
 if ! git -C "$REPO_ROOT" diff --quiet || ! git -C "$REPO_ROOT" diff --cached --quiet; then
@@ -36,135 +75,99 @@ echo "==> Releasing v${VERSION}"
 # 1. Update version numbers
 # ---------------------------------------------------------------------------
 echo "==> Updating version to ${VERSION}..."
-
-# CMakeLists.txt
-sed -i '' "s/project(jz_hdl VERSION [0-9]*\.[0-9]*\.[0-9]*/project(jz_hdl VERSION ${VERSION}/" \
-  "$REPO_ROOT/compiler/CMakeLists.txt"
-
-# Fallback version.h
-sed -i '' \
-  -e "s/#define JZ_HDL_VERSION_MAJOR [0-9]*/#define JZ_HDL_VERSION_MAJOR ${V_MAJOR}/" \
-  -e "s/#define JZ_HDL_VERSION_MINOR [0-9]*/#define JZ_HDL_VERSION_MINOR ${V_MINOR}/" \
-  -e "s/#define JZ_HDL_VERSION_PATCH [0-9]*/#define JZ_HDL_VERSION_PATCH ${V_PATCH}/" \
-  -e "s/#define JZ_HDL_VERSION_STRING \"Version [0-9]*\.[0-9]*\.[0-9]* (unknown)\"/#define JZ_HDL_VERSION_STRING \"Version ${VERSION} (unknown)\"/" \
-  "$REPO_ROOT/compiler/include/version.h"
-
-# Specification markdown files
-for spec in "$REPO_ROOT"/specification/*.md; do
-  sed -i '' "s/Version: [0-9][0-9.]*/Version: ${VERSION}/" "$spec"
-done
+python3 "$SYNC_VERSION" "$VERSION"
 
 # ---------------------------------------------------------------------------
-# 2. Build (includes PDFs) and test
+# 2. Build and test
 # ---------------------------------------------------------------------------
-echo "==> Building compiler, PDFs, and running tests..."
+echo "==> Building artifacts and running tests..."
 
 BUILD_DIR="$(mktemp -d)"
-cmake -S "$REPO_ROOT/compiler" -B "$BUILD_DIR" -DBUILD_TESTING=ON
-cmake --build "$BUILD_DIR"
+TEMP_DIRS+=("$BUILD_DIR")
+VIEWER_SMOKE_DIR="$(mktemp -d)"
+TEMP_DIRS+=("$VIEWER_SMOKE_DIR")
+VIEWER_SMOKE_PATH="$VIEWER_SMOKE_DIR/release-viewer-smoke.jzw"
+JZ_HDL_BIN="$BUILD_DIR/compiler/jz-hdl"
+JZ_VIEWER_BIN="$BUILD_DIR/viewer/jz-viewer"
+cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
+  -DBUILD_TESTING=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DJZ_HDL_WERROR=ON
+cmake --build "$BUILD_DIR" --parallel
 
 echo "==> Running CTest..."
 if ! ctest --test-dir "$BUILD_DIR" --output-on-failure; then
-  echo "Error: CTest tests failed. Aborting release."
-  rm -rf "$BUILD_DIR"
-  # Undo version changes
-  git -C "$REPO_ROOT" checkout -- .
-  exit 1
+  abort_release "CTest tests failed"
 fi
 
 echo "==> Running validation tests..."
-if ! JZ_HDL_BIN="$BUILD_DIR/jz-hdl" bash "$REPO_ROOT/compiler/tests/run_validation.sh"; then
-  echo "Error: Validation tests failed. Aborting release."
-  rm -rf "$BUILD_DIR"
-  git -C "$REPO_ROOT" checkout -- .
-  exit 1
+if ! JZ_HDL_BIN="$JZ_HDL_BIN" bash "$REPO_ROOT/compiler/tests/run_validation.sh"; then
+  abort_release "Validation tests failed"
 fi
 
-rm -rf "$BUILD_DIR"
+echo "==> Running viewer smoke test..."
+"$JZ_HDL_BIN" --simulate \
+  "$REPO_ROOT/compiler/tests/golden/sim_select_annotations/test.jz" \
+  --jzw \
+  -o "$VIEWER_SMOKE_PATH"
+"$JZ_VIEWER_BIN" --validate "$VIEWER_SMOKE_PATH"
+
+echo "==> Building and smoke-testing VS Code extension..."
+(
+  cd "$REPO_ROOT/vscode-ext"
+  npm ci
+  npm run compile
+  npm run smoke
+)
 
 # ---------------------------------------------------------------------------
-# 3. Commit version bump and updated PDFs
+# 3. Build docs site and PDFs for release artifacts
 # ---------------------------------------------------------------------------
-echo "==> Committing version bump and PDFs..."
+echo "==> Building and verifying docs site..."
+"$REPO_ROOT/scripts/build-docs-site" --build-dir "$BUILD_DIR"
+
+# ---------------------------------------------------------------------------
+# 4. Commit version bump
+# ---------------------------------------------------------------------------
+echo "==> Committing version bump..."
 
 git -C "$REPO_ROOT" add \
+  CMakeLists.txt \
+  VERSION \
   compiler/CMakeLists.txt \
   compiler/include/version.h \
+  docs/getting-started/cli-usage.md \
+  scripts/sync_version.py \
   specification/ \
-  docs/public/pdf/
+  vscode-ext/package.json \
+  vscode-ext/package-lock.json
 
 git -C "$REPO_ROOT" commit -m "Bump version to ${VERSION}"
 
 # ---------------------------------------------------------------------------
-# 4. Tag the release
+# 5. Tag the release
 # ---------------------------------------------------------------------------
 echo "==> Tagging v${VERSION}..."
 git -C "$REPO_ROOT" tag -a "v${VERSION}" -m "Release v${VERSION}"
 
 # ---------------------------------------------------------------------------
-# 5. Build source tarball
+# 6. Build packages
 # ---------------------------------------------------------------------------
-echo "==> Building source tarball..."
+echo "==> Building release packages..."
 mkdir -p "$RELEASE_DIR"
 
-git -C "$REPO_ROOT" archive \
-  --format=tar.gz \
-  --prefix="jz-hdl-${VERSION}/" \
-  -o "$RELEASE_DIR/jz-hdl-${VERSION}-source.tar.gz" \
-  "v${VERSION}" -- compiler/
+cpack --config "$BUILD_DIR/CPackConfig.cmake" -B "$RELEASE_DIR"
+cpack --config "$BUILD_DIR/CPackSourceConfig.cmake" -B "$RELEASE_DIR"
 
 # ---------------------------------------------------------------------------
-# 6. Build PDF tarball from committed PDFs
-# ---------------------------------------------------------------------------
-echo "==> Building PDF tarball..."
-
-PDF_STAGING="$(mktemp -d)/jz-hdl-${VERSION}-docs"
-mkdir -p "$PDF_STAGING"
-cp "$REPO_ROOT"/docs/public/pdf/*.pdf "$PDF_STAGING/"
-
-tar -czf "$RELEASE_DIR/jz-hdl-${VERSION}-docs.tar.gz" \
-  -C "$(dirname "$PDF_STAGING")" \
-  "$(basename "$PDF_STAGING")"
-
-rm -rf "$(dirname "$PDF_STAGING")"
-
-# ---------------------------------------------------------------------------
-# 7. Build VS Code extension tarball
-# ---------------------------------------------------------------------------
-echo "==> Building VS Code extension tarball..."
-
-git -C "$REPO_ROOT" archive \
-  --format=tar.gz \
-  --prefix="jz-hdl-${VERSION}-vscode-ext/" \
-  -o "$RELEASE_DIR/jz-hdl-${VERSION}-vscode-ext.tar.gz" \
-  "v${VERSION}" -- vscode-ext/
-
-# ---------------------------------------------------------------------------
-# 8. Build viewer tarball
-# ---------------------------------------------------------------------------
-echo "==> Building viewer tarball..."
-
-git -C "$REPO_ROOT" archive \
-  --format=tar.gz \
-  --prefix="jz-hdl-${VERSION}-viewer/" \
-  -o "$RELEASE_DIR/jz-hdl-${VERSION}-viewer.tar.gz" \
-  "v${VERSION}" -- viewer/
-
-# ---------------------------------------------------------------------------
-# Done
+# 7. Done
 # ---------------------------------------------------------------------------
 echo ""
 echo "Release v${VERSION} prepared:"
-echo "  $RELEASE_DIR/jz-hdl-${VERSION}-source.tar.gz"
-echo "  $RELEASE_DIR/jz-hdl-${VERSION}-docs.tar.gz"
-echo "  $RELEASE_DIR/jz-hdl-${VERSION}-vscode-ext.tar.gz"
-echo "  $RELEASE_DIR/jz-hdl-${VERSION}-viewer.tar.gz"
+find "$RELEASE_DIR" -maxdepth 1 -type f | sort | sed 's/^/  /'
 echo ""
 echo "To publish:"
 echo "  git push origin main --tags"
 echo "  gh release create v${VERSION} \\"
-echo "    release/jz-hdl-${VERSION}-source.tar.gz \\"
-echo "    release/jz-hdl-${VERSION}-docs.tar.gz \\"
-echo "    release/jz-hdl-${VERSION}-vscode-ext.tar.gz \\"
-echo "    release/jz-hdl-${VERSION}-viewer.tar.gz \\"
+echo "    release/*${VERSION}*.tar.gz \\"
 echo "    --title \"v${VERSION}\" --notes \"Release v${VERSION}\""
