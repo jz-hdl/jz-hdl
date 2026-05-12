@@ -1,6 +1,6 @@
 ---
 title: "JZ-HDL WAVEFORM FORMAT SPECIFICATION (JZW)"
-subtitle: "State: Beta — Version: 0.1.9"
+subtitle: "State: Beta — Version: 0.2.0"
 toc: true
 header-includes:
   - \usepackage{titling}
@@ -83,7 +83,7 @@ The `meta` table stores key-value pairs describing the simulation context. The f
 | `sim_end_time` | Yes | Simulation end time in picoseconds. Written when the simulation completes. If the simulation is still running or was aborted, this key may be absent. |
 | `date` | Yes | ISO 8601 date-time when the simulation was run (e.g., `2026-03-09T14:30:00Z`). |
 | `source_file` | Yes | Path to the JZ-HDL source file that was simulated. |
-| `compiler_version` | Yes | JZ-HDL compiler version string (e.g., `0.1.8`). |
+| `compiler_version` | Yes | JZ-HDL compiler version string (e.g., `0.2.0`). |
 | `seed` | Yes | Simulation seed in hexadecimal (e.g., `0xDEADBEEF`). |
 | `tick_ps` | Yes | Tick resolution in picoseconds (the GCD of all clock half-periods). |
 | `module_name` | Yes | Name of the top-level module under simulation. |

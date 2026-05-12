@@ -60,7 +60,7 @@ Path security options:
 | `--lint-rules` | List all diagnostic rule IDs and their descriptions. |
 | `--lsp` | Start the Language Server Protocol server (stdio transport). See [Editor Integration](#editor-integration). |
 | `--help` | Print usage information. |
-| `--version` | Print the compiler version and git commit (e.g., `Version 0.1.8 (abc1234)`). |
+| `--version` | Print the compiler version and git commit (e.g., `Version 0.2.0 (abc1234)`). |
 
 ## Common options
 
