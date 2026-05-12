@@ -1719,8 +1719,7 @@ static int sem_parse_map_lhs(const char *lhs,
     sem_trim_copy(lhs, tmp, sizeof(tmp));
     const char *br = strchr(tmp, '[');
     if (!br) {
-        strncpy(out_pin_name, tmp, out_name_size - 1);
-        out_pin_name[out_name_size - 1] = '\0';
+        jz_strcpy_trunc(out_pin_name, out_name_size, tmp);
         return 1;
     }
 
@@ -2028,8 +2027,9 @@ void sem_check_project_map(JZASTNode *project,
                             }
                         }
                         if (k == phys_count && phys_count < sizeof(phys) / sizeof(phys[0])) {
-                            strncpy(phys[phys_count].id, pair_pins[pp_idx], sizeof(phys[phys_count].id) - 1);
-                            phys[phys_count].id[sizeof(phys[phys_count].id) - 1] = '\0';
+                            jz_strcpy_trunc(phys[phys_count].id,
+                                            sizeof(phys[phys_count].id),
+                                            pair_pins[pp_idx]);
                             ++phys_count;
                         }
                     }
@@ -2048,8 +2048,9 @@ void sem_check_project_map(JZASTNode *project,
                             }
                         }
                         if (k == phys_count && phys_count < sizeof(phys) / sizeof(phys[0])) {
-                            strncpy(phys[phys_count].id, phys_id, sizeof(phys[phys_count].id) - 1);
-                            phys[phys_count].id[sizeof(phys[phys_count].id) - 1] = '\0';
+                            jz_strcpy_trunc(phys[phys_count].id,
+                                            sizeof(phys[phys_count].id),
+                                            phys_id);
                             ++phys_count;
                         }
                     }

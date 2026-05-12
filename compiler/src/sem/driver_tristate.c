@@ -782,8 +782,7 @@ static int tristate_extract_if_guard(const JZASTNode *module_root,
         pos += added;
     }
 
-    strncpy(guard->condition_text, buf, sizeof(guard->condition_text) - 1);
-    guard->condition_text[sizeof(guard->condition_text) - 1] = '\0';
+    jz_strcpy_trunc(guard->condition_text, sizeof(guard->condition_text), buf);
 
     guard->n_guard_terms = 0;
     for (size_t i = 0; i < n_terms && i < JZ_MAX_GUARD_TERMS; ++i) {
@@ -800,12 +799,12 @@ static int tristate_extract_if_guard(const JZASTNode *module_root,
             guard->input_name = tmp.input_name;
             guard->compare_lit = tmp.compare_lit;
             guard->is_inverted = terms[i].neg ? !tmp.is_inverted : tmp.is_inverted;
-            strncpy(guard->normalized_lhs, tmp.normalized_lhs,
-                    sizeof(guard->normalized_lhs) - 1);
-            guard->normalized_lhs[sizeof(guard->normalized_lhs) - 1] = '\0';
-            strncpy(guard->normalized_rhs, tmp.normalized_rhs,
-                    sizeof(guard->normalized_rhs) - 1);
-            guard->normalized_rhs[sizeof(guard->normalized_rhs) - 1] = '\0';
+            jz_strcpy_trunc(guard->normalized_lhs,
+                            sizeof(guard->normalized_lhs),
+                            tmp.normalized_lhs);
+            jz_strcpy_trunc(guard->normalized_rhs,
+                            sizeof(guard->normalized_rhs),
+                            tmp.normalized_rhs);
             return rc;
         }
     }
@@ -1083,8 +1082,7 @@ static const char *alias_pool_store(const char *s)
     if (!s) return NULL;
     size_t slot = g_alias_pool_idx % ALIAS_POOL_SLOTS;
     g_alias_pool_idx++;
-    strncpy(g_alias_pool[slot], s, ALIAS_POOL_SLOT_SIZE - 1);
-    g_alias_pool[slot][ALIAS_POOL_SLOT_SIZE - 1] = '\0';
+    jz_strcpy_trunc(g_alias_pool[slot], ALIAS_POOL_SLOT_SIZE, s);
     return g_alias_pool[slot];
 }
 
@@ -1798,15 +1796,15 @@ void jz_tristate_analyze_net(JZTristateNetInfo *info,
                 driver.enable.compare_value = guard.compare_lit;
                 driver.enable.is_inverted = guard.is_inverted;
                 driver.enable.is_complex = (guard_rc == 3) ? 1 : 0;
-                strncpy(driver.enable.normalized_lhs, guard.normalized_lhs,
-                        sizeof(driver.enable.normalized_lhs) - 1);
-                driver.enable.normalized_lhs[sizeof(driver.enable.normalized_lhs) - 1] = '\0';
-                strncpy(driver.enable.normalized_rhs, guard.normalized_rhs,
-                        sizeof(driver.enable.normalized_rhs) - 1);
-                driver.enable.normalized_rhs[sizeof(driver.enable.normalized_rhs) - 1] = '\0';
-                strncpy(driver.enable.condition_text, guard.condition_text,
-                        sizeof(driver.enable.condition_text) - 1);
-                driver.enable.condition_text[sizeof(driver.enable.condition_text) - 1] = '\0';
+                jz_strcpy_trunc(driver.enable.normalized_lhs,
+                                sizeof(driver.enable.normalized_lhs),
+                                guard.normalized_lhs);
+                jz_strcpy_trunc(driver.enable.normalized_rhs,
+                                sizeof(driver.enable.normalized_rhs),
+                                guard.normalized_rhs);
+                jz_strcpy_trunc(driver.enable.condition_text,
+                                sizeof(driver.enable.condition_text),
+                                guard.condition_text);
                 driver.enable.n_compare_terms = guard.n_compare_terms;
                 for (size_t ci = 0; ci < guard.n_compare_terms; ++ci) {
                     driver.enable.compare_terms[ci] = guard.compare_terms[ci];
@@ -1851,15 +1849,15 @@ void jz_tristate_analyze_net(JZTristateNetInfo *info,
                         driver.enable.compare_value = guard.compare_lit;
                         driver.enable.is_inverted = guard.is_inverted;
                         driver.enable.is_complex = (guard_rc == 3) ? 1 : 0;
-                        strncpy(driver.enable.normalized_lhs, guard.normalized_lhs,
-                                sizeof(driver.enable.normalized_lhs) - 1);
-                        driver.enable.normalized_lhs[sizeof(driver.enable.normalized_lhs) - 1] = '\0';
-                        strncpy(driver.enable.normalized_rhs, guard.normalized_rhs,
-                                sizeof(driver.enable.normalized_rhs) - 1);
-                        driver.enable.normalized_rhs[sizeof(driver.enable.normalized_rhs) - 1] = '\0';
-                        strncpy(driver.enable.condition_text, guard.condition_text,
-                                sizeof(driver.enable.condition_text) - 1);
-                        driver.enable.condition_text[sizeof(driver.enable.condition_text) - 1] = '\0';
+                        jz_strcpy_trunc(driver.enable.normalized_lhs,
+                                        sizeof(driver.enable.normalized_lhs),
+                                        guard.normalized_lhs);
+                        jz_strcpy_trunc(driver.enable.normalized_rhs,
+                                        sizeof(driver.enable.normalized_rhs),
+                                        guard.normalized_rhs);
+                        jz_strcpy_trunc(driver.enable.condition_text,
+                                        sizeof(driver.enable.condition_text),
+                                        guard.condition_text);
                         driver.enable.n_compare_terms = guard.n_compare_terms;
                         for (size_t ci = 0; ci < guard.n_compare_terms; ++ci) {
                             driver.enable.compare_terms[ci] = guard.compare_terms[ci];
@@ -1878,15 +1876,15 @@ void jz_tristate_analyze_net(JZTristateNetInfo *info,
                     driver.enable.compare_value = guard.compare_lit;
                     driver.enable.is_inverted = guard.is_inverted;
                     driver.enable.is_complex = (guard_rc == 3) ? 1 : 0;
-                    strncpy(driver.enable.normalized_lhs, guard.normalized_lhs,
-                            sizeof(driver.enable.normalized_lhs) - 1);
-                    driver.enable.normalized_lhs[sizeof(driver.enable.normalized_lhs) - 1] = '\0';
-                    strncpy(driver.enable.normalized_rhs, guard.normalized_rhs,
-                            sizeof(driver.enable.normalized_rhs) - 1);
-                    driver.enable.normalized_rhs[sizeof(driver.enable.normalized_rhs) - 1] = '\0';
-                    strncpy(driver.enable.condition_text, guard.condition_text,
-                            sizeof(driver.enable.condition_text) - 1);
-                    driver.enable.condition_text[sizeof(driver.enable.condition_text) - 1] = '\0';
+                    jz_strcpy_trunc(driver.enable.normalized_lhs,
+                                    sizeof(driver.enable.normalized_lhs),
+                                    guard.normalized_lhs);
+                    jz_strcpy_trunc(driver.enable.normalized_rhs,
+                                    sizeof(driver.enable.normalized_rhs),
+                                    guard.normalized_rhs);
+                    jz_strcpy_trunc(driver.enable.condition_text,
+                                    sizeof(driver.enable.condition_text),
+                                    guard.condition_text);
                     driver.enable.n_guard_terms = guard.n_guard_terms;
                     for (size_t gi = 0; gi < guard.n_guard_terms; ++gi) {
                         driver.enable.guard_terms[gi].expr = guard.guard_terms[gi].expr;

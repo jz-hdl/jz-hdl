@@ -1411,7 +1411,7 @@ static int sem_tristate_check_bus_per_field(
                 char this_bus[128] = {0};
                 if (sscanf(bind->text, "%127s", this_bus) == 1) {
                     if (bus_name[0] == '\0') {
-                        strncpy(bus_name, this_bus, sizeof(bus_name) - 1);
+                        jz_strcpy_trunc(bus_name, sizeof(bus_name), this_bus);
                     } else if (strcmp(bus_name, this_bus) != 0) {
                         return 0; /* Different bus types on same wire */
                     }
@@ -1622,8 +1622,7 @@ static int sem_net_split_qualified_name(const char *name,
     memcpy(head, name, head_len);
     head[head_len] = '\0';
 
-    strncpy(tail, dot + 1, tail_size - 1);
-    tail[tail_size - 1] = '\0';
+    jz_strcpy_trunc(tail, tail_size, dot + 1);
     return 1;
 }
 
@@ -1699,8 +1698,8 @@ static int sem_net_resolve_bulk_endpoint(const JZASTNode *expr,
     if (bus_id[0] == '\0' || role[0] == '\0') return 0;
 
     memset(out, 0, sizeof(*out));
-    strncpy(out->bus_id, bus_id, sizeof(out->bus_id) - 1);
-    strncpy(out->role, role, sizeof(out->role) - 1);
+    jz_strcpy_trunc(out->bus_id, sizeof(out->bus_id), bus_id);
+    jz_strcpy_trunc(out->role, sizeof(out->role), role);
     snprintf(out->key, sizeof(out->key), "%s.%s", inst_name, port_name);
     return 1;
 }

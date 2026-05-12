@@ -179,6 +179,23 @@ int jz_size_grow_doubling_checked(size_t current,
                                   size_t minimum,
                                   size_t initial,
                                   size_t *out);
+/**
+ * @brief Convert a signed int count to size_t after validating it is non-negative.
+ * @param value Signed value to convert.
+ * @param out Receives the converted size on success.
+ * @return 0 on success, -1 on invalid input or negative value.
+ */
+int jz_size_from_int_checked(int value, size_t *out);
+
+/**
+ * @brief Copy a C string into a fixed-size buffer with guaranteed NUL termination.
+ * @param dst Destination buffer.
+ * @param dst_size Size of @p dst in bytes.
+ * @param src Source string. NULL is treated as an empty string.
+ * @return Length of @p src (or 0 for NULL), excluding the terminator.
+ */
+size_t jz_strcpy_trunc(char *dst, size_t dst_size, const char *src);
+
 int jz_limit_accumulate_checked(size_t current,
                                 size_t add,
                                 JZInputLimitKind kind,

@@ -489,8 +489,9 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
                     JZRegisterDomainInfo *info = sem_sync_find_reg_info(regs, reg_count, src_sym->node);
                     if (info) {
                         if (!info->has_home) {
-                            strncpy(info->home_clk, src_clk_name, sizeof(info->home_clk) - 1);
-                            info->home_clk[sizeof(info->home_clk) - 1] = '\0';
+                            jz_strcpy_trunc(info->home_clk,
+                                            sizeof(info->home_clk),
+                                            src_clk_name);
                             info->has_home = 1;
                         } else if (info->home_clk[0] != '\0' &&
                                    strcmp(info->home_clk, src_clk_name) != 0) {
@@ -555,8 +556,9 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
                 if (dst_id && dst_id->type == JZ_AST_EXPR_IDENTIFIER && dst_id->name &&
                     alias_count < alias_cap) {
                     aliases[alias_count].decl = dst_id;
-                    strncpy(aliases[alias_count].home_clk, dst_clk_name, sizeof(aliases[alias_count].home_clk) - 1);
-                    aliases[alias_count].home_clk[sizeof(aliases[alias_count].home_clk) - 1] = '\0';
+                    jz_strcpy_trunc(aliases[alias_count].home_clk,
+                                    sizeof(aliases[alias_count].home_clk),
+                                    dst_clk_name);
                     aliases[alias_count].has_home = 1;
                     alias_count++;
                 }
@@ -919,8 +921,9 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
                     }
                 }
                 if (!seen && clk_seen_count < sizeof(clk_seen) / sizeof(clk_seen[0])) {
-                    strncpy(clk_seen[clk_seen_count].clk, clk_id, sizeof(clk_seen[clk_seen_count].clk) - 1);
-                    clk_seen[clk_seen_count].clk[sizeof(clk_seen[clk_seen_count].clk) - 1] = '\0';
+                    jz_strcpy_trunc(clk_seen[clk_seen_count].clk,
+                                    sizeof(clk_seen[clk_seen_count].clk),
+                                    clk_id);
                     clk_seen[clk_seen_count].first_loc = blk->loc;
                     clk_seen_count++;
                 } else if (seen && diagnostics) {
@@ -956,8 +959,9 @@ void sem_check_sync_clock_domains(JZBuffer *module_scopes,
                 if (!info) continue;
 
                 if (!info->has_home && clk_id[0] != '\0') {
-                    strncpy(info->home_clk, clk_id, sizeof(info->home_clk) - 1);
-                    info->home_clk[sizeof(info->home_clk) - 1] = '\0';
+                    jz_strcpy_trunc(info->home_clk,
+                                    sizeof(info->home_clk),
+                                    clk_id);
                     info->has_home = 1;
                 } else if (info->has_home && clk_id[0] != '\0' &&
                            info->home_clk[0] != '\0' &&

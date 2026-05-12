@@ -312,8 +312,14 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
         }
     }
 
+    size_t signal_count = 0;
+    if (jz_size_from_int_checked(module->num_signals, &signal_count) != 0) {
+        sim_ctx_destroy(ctx);
+        return NULL;
+    }
+
     ctx->num_signals = module->num_signals;
-    ctx->signals = calloc((size_t)module->num_signals, sizeof(SimSignalEntry));
+    ctx->signals = calloc(signal_count, sizeof(SimSignalEntry));
     if (module->num_signals > 0 && !ctx->signals) {
         sim_ctx_destroy(ctx);
         return NULL;
@@ -373,7 +379,7 @@ SimContext *sim_ctx_create(const IR_Module *module, const IR_Design *design,
     }
 
     /* Allocate per-signal dirty flags (all dirty initially for first settle) */
-    ctx->sig_dirty = calloc((size_t)module->num_signals, sizeof(uint8_t));
+    ctx->sig_dirty = calloc(signal_count, sizeof(uint8_t));
     if (module->num_signals > 0 && !ctx->sig_dirty) {
         sim_ctx_destroy(ctx);
         return NULL;
