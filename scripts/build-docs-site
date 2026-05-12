@@ -6,6 +6,7 @@ DOCS_SRC_DIR="$REPO_ROOT/docs"
 SITE_OUT=""
 BUILD_DIR=""
 TEMP_DIRS=()
+CMAKE_ARGS=()
 
 EXPECTED_PDFS=(
   "jz-hdl-specification.pdf"
@@ -67,8 +68,12 @@ WORK_ROOT="$(mktemp -d)"
 TEMP_DIRS+=("$WORK_ROOT")
 DOCS_WORK_DIR="$WORK_ROOT/docs"
 
+if [ -n "${SDL_UNIX_CONSOLE_BUILD:-}" ]; then
+  CMAKE_ARGS+=("-DSDL_UNIX_CONSOLE_BUILD=${SDL_UNIX_CONSOLE_BUILD}")
+fi
+
 echo "==> Building specification PDFs..."
-cmake -S "$REPO_ROOT" -B "$BUILD_DIR"
+cmake -S "$REPO_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
 cmake --build "$BUILD_DIR" --target docs
 
 echo "==> Preparing temporary docs tree..."
