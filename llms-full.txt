@@ -28,6 +28,10 @@ jz-hdl                          design.jz   # Default: allow z (ASIC/Sim mode)
   * Tri-state nets are permitted; no transformation occurs.
   * Behavior is consistent with ASIC or simulation semantics.
 
+**Accepted CLI modes:** `--lint`, `--verilog`, `--rtlil`, `--ir`, `--test`, and `--simulate`.
+
+**Rejected CLI modes:** `--ast` rejects `--tristate-default`. Non-compilation modes such as `--chip-info`, `--lint-rules`, and `--lsp` do not use it.
+
 ## Applicability and Scope
 
 ### Applicable Contexts
@@ -389,7 +393,7 @@ url: /jz-hdl/getting-started/cli-usage.md
 ## Synopsis
 
 ```bash
-Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [-o OUT_FILE]
+Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] [--Wno-group=NAME] [--Eno-group=NAME] [--tristate-default=GND|VCC] [-o OUT_FILE]
        ./jz-hdl JZ_FILE --verilog [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --rtlil [-o OUT_FILE] [--sdc SDC_FILE] [--xdc XDC_FILE] [--pcf PCF_FILE] [--cst CST_FILE] [--tristate-default=GND|VCC]
        ./jz-hdl JZ_FILE --alias-report [-o OUT_FILE]
@@ -397,13 +401,22 @@ Usage: ./jz-hdl JZ_FILE --lint [--warn-as-error] [--color] [--info] [--explain] 
        ./jz-hdl JZ_FILE --tristate-report [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ast [-o OUT_FILE]
        ./jz-hdl JZ_FILE --ir [-o OUT_FILE] [--tristate-default=GND|VCC]
-       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX]
-       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX]
+       ./jz-hdl JZ_FILE --test [--verbose] [--seed=0xHEX] [--tristate-default=GND|VCC]
+       ./jz-hdl JZ_FILE --simulate [-o WAVEFORM_FILE] [--vcd] [--fst] [--jzw] [--verbose] [--seed=0xHEX] [--jitter=CLOCK:PS] [--drift=CLOCK:PPM] [--tristate-default=GND|VCC]
        ./jz-hdl --chip-info [CHIP_ID] [-o OUT_FILE]
        ./jz-hdl --lint-rules
        ./jz-hdl --lsp
        ./jz-hdl --help
        ./jz-hdl --version
+
+Simulation timing options:
+  --jitter=CLOCK:PS       Add peak-to-peak clock jitter in picoseconds (may repeat)
+  --drift=CLOCK:PPM       Add maximum clock drift in parts per million (may repeat)
+
+Expansion safety options:
+  --expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>
+                           Override hard expansion limits (defaults: repeat-count=1024,
+                           repeat-bytes=1048576, apply-count=1024, apply-growth=4096)
 
 Path security options:
   --sandbox-root=<dir>     Add permitted root directory for file access
@@ -429,7 +442,7 @@ Path security options:
 | `--lint-rules` | List all diagnostic rule IDs and their descriptions. |
 | `--lsp` | Start the Language Server Protocol server (stdio transport). See [Editor Integration](#editor-integration). |
 | `--help` | Print usage information. |
-| `--version` | Print the compiler version and git commit (e.g., `Version 0.1.0 (abc1234)`). |
+| `--version` | Print the compiler version and git commit (e.g., `Version 0.2.0 (abc1234)`). |
 
 ## Common options
 
@@ -440,7 +453,8 @@ Path security options:
 | `--info` | Include informational diagnostics (not just warnings and errors). |
 | `--explain` | Print detailed explanation under each diagnostic. |
 | `--warn-as-error` | Treat all warnings as errors. |
-| `--Wno-group=NAME` | Suppress diagnostics in the named group. |
+| `--Wno-group=NAME` | Suppress WARNING-level diagnostics in the named group. |
+| `--Eno-group=NAME` | Suppress ERROR-level diagnostics in the named group. |
 
 ## Constraint file options (with `--verilog`)
 
@@ -461,14 +475,22 @@ Path security options:
 
 By default, the compiler restricts all file paths to be within the directory containing the input file. See [Path Security](/reference-manual/formal-reference/projects#path-security-sandbox) for details.
 
-## Tristate default (with `--verilog`, `--rtlil`, or `--ir`)
+## Tristate default
 
 | Option | Description |
 | --- | --- |
 | `--tristate-default=GND` | Convert internal tri-state nets to priority muxes with GND default. |
 | `--tristate-default=VCC` | Convert internal tri-state nets to priority muxes with VCC default. |
 
+This option is accepted with `--lint`, `--verilog`, `--rtlil`, `--ir`, `--test`, and `--simulate`. It is rejected with `--ast`.
+
 See [Tristate Default](../reference-manual/tristate-default.md) for details.
+
+## Expansion safety options
+
+| Option | Description |
+| --- | --- |
+| `--expansion-limits=repeat-count=<n>,repeat-bytes=<n>,apply-count=<n>,apply-growth=<n>` | Override the hard expansion safety limits for `@repeat` and template `@apply`. Defaults: `repeat-count=1024`, `repeat-bytes=1048576`, `apply-count=1024`, `apply-growth=4096`. |
 
 ## Testbench options (with `--test`)
 
@@ -490,10 +512,12 @@ See [Tristate Default](../reference-manual/tristate-default.md) for details.
 
 | Option | Description |
 | --- | --- |
-| `-o WAVEFORM_FILE` | Output waveform file path. Default: `<input_basename>.vcd`. |
+| `-o WAVEFORM_FILE` | Output waveform file path. Default: `<input_basename>.vcd`, or the selected format's extension when `--fst` or `--jzw` is specified. |
 | `--vcd` | Force VCD output format (default). |
 | `--fst` | Force FST output format. |
 | `--jzw` | Force JZW output format (SQLite-based). |
+| `--jitter=<clock>:<ps>` | Add peak-to-peak clock jitter in picoseconds. May be specified multiple times. |
+| `--drift=<clock>:<ppm>` | Add maximum clock drift in parts per million. May be specified multiple times. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 | `--seed=0xHEX` | 32-bit hex seed for register/memory randomization. Default: `0xDEADBEEF`. |
 
@@ -548,6 +572,13 @@ jz-hdl sim_fifo.jz --simulate
 # Run simulation with explicit output path
 jz-hdl sim_fifo.jz --simulate -o fifo_waves.vcd
 
+# Run simulation in FST or JZW format
+jz-hdl sim_fifo.jz --simulate --fst
+jz-hdl sim_fifo.jz --simulate --jzw
+
+# Run simulation with clock jitter and drift
+jz-hdl sim_fifo.jz --simulate --jitter=clk:200 --drift=clk:50
+
 # Run simulation with verbose output and fixed seed
 jz-hdl sim_fifo.jz --simulate --verbose --seed=0x1234
 
@@ -571,10 +602,12 @@ A VS Code extension is included in the `vscode-ext/` directory. To install:
 ```bash
 cd vscode-ext
 npm install
-npm run compile
+npm run package:vsix
 ```
 
-Then in VS Code: **Extensions** → **...** → **Install from VSIX** or use **Developer: Install Extension from Location** and select the `vscode-ext/` directory.
+Then in VS Code: **Extensions** → **...** → **Install from VSIX** and select `vscode-ext/build/jz-hdl.vsix`.
+
+The generated `.vsix` file is build output and should not be checked into the repository.
 
 #### Settings
 
@@ -751,7 +784,7 @@ A 1‑bit `event_flag` is written in the `clk_a` domain and read via the synchro
 
 ```il \[Generated RTLIL]
 # Generated by jz-hdl RTLIL backend
-# jz-hdl version: Version 0.1.7 (c6d52fc)
+# jz-hdl version: Version 0.1.8 (4a569a5)
 
 attribute \src "unknown:1"
 module \JZHDL_LIB_CDC_BIT
@@ -921,7 +954,7 @@ An 8‑bit `gray_ptr` register crosses from `clk_a` to `clk_b` using a 3‑stage
 
 ```il \[Generated RTLIL]
 # Generated by jz-hdl RTLIL backend
-# jz-hdl version: Version 0.1.7 (c6d52fc)
+# jz-hdl version: Version 0.1.8 (4a569a5)
 
 attribute \src "unknown:1"
 module \JZHDL_LIB_CDC_BUS__W8
@@ -1203,7 +1236,7 @@ A 64‑bit `packet_word` register crosses from `clk_a` to `clk_b` using a 4‑st
 
 ```il \[Generated RTLIL]
 # Generated by jz-hdl RTLIL backend
-# jz-hdl version: Version 0.1.7 (c6d52fc)
+# jz-hdl version: Version 0.1.8 (4a569a5)
 
 attribute \src "unknown:1"
 module \JZHDL_LIB_CDC_FIFO__W64
@@ -1559,33 +1592,74 @@ module \cdc_fifo
   wire width 64 \packet_word
   wire width 64 \data_out
   wire width 64 \packet_view
+  wire width 1 \_fifo_packet_view_wr_en
+  wire width 1 \_fifo_packet_view_rst_wr
+  wire width 1 \_fifo_packet_view_rst_rd
+  wire width 1 $auto$46
+  cell $logic_not $auto$47
+    parameter \A_SIGNED 0
+    parameter \A_WIDTH 1
+    parameter \Y_WIDTH 1
+    connect \A \rst_n
+    connect \Y $auto$46
+  end
+  wire width 1 $auto$48
+  cell $logic_or $auto$49
+    parameter \A_SIGNED 0
+    parameter \A_WIDTH 1
+    parameter \B_SIGNED 0
+    parameter \B_WIDTH 1
+    parameter \Y_WIDTH 1
+    connect \A $auto$46
+    connect \B 1'1
+    connect \Y $auto$48
+  end
+  connect \_fifo_packet_view_wr_en $auto$48
+  wire width 1 $auto$50
+  cell $not $auto$51
+    parameter \A_SIGNED 0
+    parameter \A_WIDTH 1
+    parameter \Y_WIDTH 1
+    connect \A \rst_n
+    connect \Y $auto$50
+  end
+  connect \_fifo_packet_view_rst_wr $auto$50
+  wire width 1 $auto$52
+  cell $not $auto$53
+    parameter \A_SIGNED 0
+    parameter \A_WIDTH 1
+    parameter \Y_WIDTH 1
+    connect \A \rst_n
+    connect \Y $auto$52
+  end
+  connect \_fifo_packet_view_rst_rd $auto$52
   cell \JZHDL_LIB_CDC_FIFO__W64 \u_cdc_fifo_packet_view
     connect \clk_wr \clk_a
     connect \clk_rd \clk_b
-    connect \rst_wr \rst_n
-    connect \rst_rd \rst_n
+    connect \rst_wr \_fifo_packet_view_rst_wr
+    connect \rst_rd \_fifo_packet_view_rst_rd
     connect \data_in \packet_word
-    connect \write_en 1'1
+    connect \write_en \_fifo_packet_view_wr_en
     connect \read_en 1'1
     connect \data_out \packet_view
   end
   wire width 6 $0\leds[5:0]
-  process $proc$async$46
+  process $proc$async$54
     assign $0\leds[5:0] \data_out [5:0]
     sync always
       update \leds $0\leds[5:0]
   end
   wire width 64 $0\packet_word[63:0]
-  wire width 1 $auto$47
-  cell $logic_not $auto$48
+  wire width 1 $auto$55
+  cell $logic_not $auto$56
     parameter \A_SIGNED 0
     parameter \A_WIDTH 1
     parameter \Y_WIDTH 1
     connect \A \rst_n
-    connect \Y $auto$47
+    connect \Y $auto$55
   end
-  wire width 64 $auto$49
-  cell $add $auto$50
+  wire width 64 $auto$57
+  cell $add $auto$58
     parameter \A_SIGNED 0
     parameter \A_WIDTH 64
     parameter \B_SIGNED 0
@@ -1593,31 +1667,31 @@ module \cdc_fifo
     parameter \Y_WIDTH 64
     connect \A \packet_word
     connect \B 64'0000000000000000000000000000000000000000000000000000000000000001
-    connect \Y $auto$49
+    connect \Y $auto$57
   end
-  process $proc$clk0$51
+  process $proc$clk0$59
     assign $0\packet_word[63:0] \packet_word
-    switch $auto$47
+    switch $auto$55
       case 1'1
         assign $0\packet_word[63:0] 64'0000000000000000000000000000000000000000000000000000000000000000
       case
-        assign $0\packet_word[63:0] $auto$49
+        assign $0\packet_word[63:0] $auto$57
     end
     sync posedge \clk_a
       update \packet_word $0\packet_word[63:0]
   end
   wire width 64 $0\data_out[63:0]
-  wire width 1 $auto$52
-  cell $logic_not $auto$53
+  wire width 1 $auto$60
+  cell $logic_not $auto$61
     parameter \A_SIGNED 0
     parameter \A_WIDTH 1
     parameter \Y_WIDTH 1
     connect \A \rst_n
-    connect \Y $auto$52
+    connect \Y $auto$60
   end
-  process $proc$clk1$54
+  process $proc$clk1$62
     assign $0\data_out[63:0] \data_out
-    switch $auto$52
+    switch $auto$60
       case 1'1
         assign $0\data_out[63:0] 64'0000000000000000000000000000000000000000000000000000000000000000
       case
@@ -1693,7 +1767,7 @@ A 16‑bit `config_word` register crosses unsynchronized via RAW. No CDC logic i
 
 ```il \[Generated RTLIL]
 # Generated by jz-hdl RTLIL backend
-# jz-hdl version: Version 0.1.7 (c6d52fc)
+# jz-hdl version: Version 0.1.8 (4a569a5)
 
 attribute \src "jz-hdl:7"
 module \cdc_raw
@@ -2863,7 +2937,8 @@ Every diagnostic emitted by the JZ-HDL compiler has one of three severity levels
 | --- | --- |
 | `--info` | Show INFO-level diagnostics in addition to errors and warnings. Without this flag, only errors and warnings are displayed. |
 | `--warn-as-error` | Promote all warnings to errors. Useful for CI pipelines where you want zero tolerance for potential issues. |
-| `--Wno-group=NAME` | Suppress all diagnostics in the named group. For example, `--Wno-group=GENERAL_WARNINGS` silences unused register warnings, dead code warnings, etc. |
+| `--Wno-group=NAME` | Suppress WARNING-level diagnostics in the named group. For example, `--Wno-group=GENERAL_WARNINGS` silences unused register warnings, dead code warnings, etc. |
+| `--Eno-group=NAME` | Suppress ERROR-level diagnostics in the named group. |
 | `--color` | Force colored output. Errors appear in red, warnings in yellow, and info in blue. |
 
 ### Listing All Rules
@@ -2874,7 +2949,7 @@ Use `--lint-rules` to print every diagnostic rule ID, its severity, and a short 
 jz-hdl design.jz --lint-rules
 ```
 
-This is useful for discovering the exact rule ID to reference when suppressing diagnostics with `--Wno-group`, or when searching this page for details about a specific diagnostic.
+This is useful for discovering the exact rule group to reference when controlling diagnostics with `--Wno-group` or `--Eno-group`, or when searching this page for details about a specific diagnostic.
 
 ## Diagnostic Reference
 
@@ -2894,17 +2969,23 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Cause: `/* ... /* ... */ ... */` — nested block comments are not supported.
 * Fix: Remove inner `/*` or close the outer block before starting another; use line comments instead.
 
+### PARSE.PARSE\_SYNTAX\_ERROR — Generic parse syntax error
+
+* Severity: ERROR
+* Cause: Source text violates parser syntax and no more specific parser rule applies.
+* Fix: Correct the malformed syntax or use the more specific rule diagnostics nearby to identify the broken construct.
+
 ### PARSE.DIRECTIVE\_INVALID\_CONTEXT — Directive used in invalid location
 
 * Severity: ERROR
 * Cause: Structural directives (@project, @module, @import, @new, @blackbox, @endproj, @endmod, etc.) placed where not allowed.
 * Fix: Place directives only in permitted locations per the spec (e.g., @import only immediately inside @project).
 
-### LEXICAL.ID\_SYNTAX\_INVALID — Identifier exceeds 255 characters
+### LEXICAL.ID\_SYNTAX\_INVALID — Identifier violates syntax
 
 * Severity: ERROR
-* Cause: Identifier length exceeds the 255-character maximum. Character-class and leading-digit violations are caught earlier by the lexer/parser as PARSE000.
-* Fix: Shorten the identifier to 255 characters or fewer.
+* Cause: Identifier is too long, starts with a digit, or contains characters outside `[A-Za-z0-9_]` after the first character.
+* Fix: Use an identifier that starts with an ASCII letter or underscore, continues with ASCII letters/digits/underscores, and is 255 characters or fewer.
 
 ### LEXICAL.ID\_SINGLE\_UNDERSCORE — Illegal use of single underscore
 
@@ -2935,6 +3016,36 @@ The sections below list all diagnostic rules organized by category. Each entry s
 * Severity: ERROR
 * Cause: Literal contains a digit not valid for its base (e.g., `8'b102`).
 * Fix: Use valid digits for the base.
+
+### PRINT\_DIRECTIVES.PRT\_FORMAT\_STRING\_LITERAL\_REQUIRED — Format argument must be a string literal
+
+* Severity: ERROR
+* Cause: `@print` or `@print_if` received a non-string first format argument.
+* Fix: Pass a string literal as the format argument.
+
+### SIMULATION.SIM\_ALERT\_MESSAGE\_STRING\_LITERAL\_REQUIRED — Alert message must be a string literal
+
+* Severity: ERROR
+* Cause: `@alert` received a non-string message argument.
+* Fix: Pass a string literal after the color argument.
+
+### SIMULATION.SIM\_TRACE\_STATE\_ON\_OR\_OFF — Trace state must be on or off
+
+* Severity: ERROR
+* Cause: `@trace(state=...)` used a value other than `on` or `off`.
+* Fix: Use `@trace(state=on)` or `@trace(state=off)`.
+
+### SIMULATION.SIM\_SINGLE\_MONITOR\_BLOCK — Multiple MONITOR blocks
+
+* Severity: ERROR
+* Cause: More than one `MONITOR` block appears in the same `@simulation`.
+* Fix: Keep a single `MONITOR` block per simulation.
+
+### SIMULATION.SIM\_MONITOR\_ALLOWED\_DIRECTIVES\_ONLY — MONITOR contains a forbidden directive
+
+* Severity: ERROR
+* Cause: A `MONITOR` block contains something other than `@print_if`, `@mark_if`, or `@alert_if`.
+* Fix: Restrict `MONITOR` contents to the allowed directives.
 
 ### PARSE.INSTANCE\_UNDEFINED\_MODULE — Instantiation references non-existent module
 
@@ -4555,43 +4666,118 @@ url: /jz-hdl/getting-started/installation.md
 ## Prerequisites
 
 * A C99-compatible compiler (GCC, Clang, or MSVC)
+* A C++17-compatible compiler
 * CMake 3.16 or later
 
 ## Building from source
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd JZ-HDL
+git clone https://github.com/zaun/jz-hdl.git
+cd jz-hdl
 
 # Configure the build
-cmake -S jz-hdl -B jz-hdl/build
+cmake -S . -B build
 
-# Build
-cmake --build jz-hdl/build
+# Build compiler + viewer
+cmake --build build
 ```
 
-The compiler binary is produced at `jz-hdl/build/jz-hdl`.
+On Unix-like single-config generators, the compiler binary is typically produced at `build/compiler/jz-hdl`, and the viewer at `build/viewer/jz-viewer`.
+
+On Windows multi-config generators such as Visual Studio, use an explicit configuration:
+
+```bash
+cmake --build build --config Release
+```
+
+In that case the binaries are typically produced at `build/compiler/Release/jz-hdl.exe` and `build/viewer/Release/jz-viewer.exe`.
+
+## Installing
+
+```bash
+cmake --install build --prefix /usr/local
+```
+
+The install tree places both `jz-hdl` and `jz-viewer` in the configured install `bin/` directory.
 
 ## Building with tests
 
 ```bash
-cmake -S jz-hdl -B jz-hdl/build -DBUILD_TESTING=ON
-cmake --build jz-hdl/build
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build
 
-# Run all tests
-ctest --test-dir jz-hdl/build
+# For Visual Studio or other multi-config generators
+cmake --build build --config Release
+
+# Run the CTest suite
+ctest --test-dir build --output-on-failure
+
+# Multi-config generators may also require:
+ctest --test-dir build -C Release --output-on-failure
 ```
+
+Current CTest targets are:
+
+* `const_eval`
+* `type_semantics`
+* `literal_semantics`
+* `lint_validation`
 
 ## Verifying the installation
 
 ```bash
 # Check that the compiler runs
-jz-hdl/build/jz-hdl --help
+build/compiler/jz-hdl --help
 
-# Lint a test file
-jz-hdl/build/jz-hdl --lint jz-hdl/tests/blink.jz
+# Run the focused CTest validation target
+ctest --test-dir build --output-on-failure -R lint_validation
+
+# Run the full validation script directly
+bash compiler/tests/run_validation.sh
 ```
+
+If you built with a multi-config generator, replace `build/compiler/jz-hdl` with the configuration-specific binary path such as `build/compiler/Release/jz-hdl.exe`.
+
+## Regenerating the specification PDFs
+
+The website ships PDF copies of the specifications, but the authoritative sources live in `specification/*.md`.
+
+The existing regeneration path is defined in `specification/CMakeLists.txt` and exposed through the root `docs` target. It requires `pandoc` and a XeLaTeX installation with the needed LaTeX packages.
+
+```bash
+cmake -S . -B build
+cmake --build build --target docs
+```
+
+That target rebuilds:
+
+* `jz-hdl-specification.pdf`
+* `simulation-specification.pdf`
+* `testbench-specification.pdf`
+* `chip-info-specification.pdf`
+* `jzw-specification.pdf`
+
+The generated PDFs are written to `build/specification/`. `scripts/gitpages-update` rebuilds them and stages them into the published site output under `/pdf/` during docs deployment.
+
+For a full release-style docs verification, run:
+
+```bash
+scripts/build-docs-site
+```
+
+That command rebuilds the specification PDFs, stages them into the site source, runs the VitePress build, and verifies the published `/pdf/` artifacts exist in the final site output.
+
+For the editor tooling release gate, also run:
+
+```bash
+cd vscode-ext
+npm ci
+npm run compile
+npm run smoke
+```
+
+For `1.0.0`, example synthesis remains a broader pre-release or nightly compatibility sweep rather than a required per-PR gate. Use `scripts/run_examples.sh` when you want to regenerate `examples/status.md` and audit the wider example matrix.
 
 ---
 
@@ -8786,10 +8972,10 @@ url: /jz-hdl/reference-manual/simulation.md
 
 The `@simulation` construct provides a **time-based, multi-clock continuous simulation environment**. While [`@testbench`](/reference-manual/testbench) provides strictly manual, cycle-stepped control for functional verification, `@simulation` runs clocks automatically in the background based on their defined periods.
 
-In a simulation, the simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (VCD) at each clock event.
+In a simulation, the simulator uses event-driven scheduling with 1 picosecond resolution, jumping directly between clock edges. The test sequence advances via absolute time (`@run`) directives rather than manual edge toggles. All declared `WIRE`s, `CLOCK`s, and `TAP`ped internal signals are automatically monitored and dumped to an output waveform file (`VCD`, `FST`, or `JZW`) at each clock event.
 
 ::: tip When to use @simulation vs @testbench
-Use `@simulation` for **waveform-based analysis** — observing multi-clock behavior over time with automatic clock toggling and VCD output. Use [`@testbench`](/reference-manual/testbench) for **functional verification** — asserting specific values at specific cycle counts.
+Use `@simulation` for **waveform-based analysis** — observing multi-clock behavior over time with automatic clock toggling and waveform output. Use [`@testbench`](/reference-manual/testbench) for **functional verification** — asserting specific values at specific cycle counts.
 :::
 
 ## Timing and Execution Model
@@ -9201,10 +9387,11 @@ Every signal in CLOCK, WIRE, and TAP blocks is sampled and written to the wavefo
 ```bash
 jz-hdl sim_file.jz --simulate                    # produces sim_file.vcd
 jz-hdl sim_file.jz --simulate -o output.vcd      # explicit output path
-jz-hdl sim_file.jz --simulate --seed=0xCAFE      # reproducible register init
-jz-hdl sim_file.jz --simulate --verbose           # print tick resolution, events
-jz-hdl sim_file.jz --simulate --jitter=clk:200   # 200ps peak-to-peak jitter
-jz-hdl sim_file.jz --simulate --drift=clk:50    # ±50 ppm crystal tolerance
+jz-hdl sim_file.jz --simulate --seed=0xCAFE            # reproducible register init
+jz-hdl sim_file.jz --simulate --verbose                # print tick resolution, events
+jz-hdl sim_file.jz --simulate --jitter=clk:200         # 200ps peak-to-peak jitter
+jz-hdl sim_file.jz --simulate --drift=clk:50           # +/-50 ppm crystal tolerance
+jz-hdl sim_file.jz --simulate --jitter=clk:200 --drift=clk:50
 ```
 
 Files containing `@simulation` blocks must be run with `--simulate`. Using `--lint` or `--test` on a file that contains `@simulation` will produce a `SIM_WRONG_TOOL` error.
@@ -9214,12 +9401,14 @@ Files containing `@simulation` blocks must be run with `--simulate`. Using `--li
 | Flag | Description |
 | --- | --- |
 | `--simulate` | Run all `@simulation` blocks in the file. |
-| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`. |
+| `-o <path>` | Output waveform file path. Default: `<input_basename>.vcd`, or the selected format's extension when `--fst` or `--jzw` is specified. |
 | `--seed=0xHEX` | 32-bit seed for register randomization. Default: `0xDEADBEEF`. |
 | `--vcd` | Force VCD output format (default). |
-| `--fst` | Force FST output format (not yet supported). |
+| `--fst` | Force FST output format. |
+| `--jzw` | Force JZW output format (SQLite-based). |
 | `--jitter=<clock>:<ps>` | Add Gaussian period jitter to a clock. `<ps>` is peak-to-peak jitter in picoseconds (σ = ps/6, clamped at ±ps/2). May be specified multiple times. See [Clock Jitter](#clock-jitter). |
 | `--drift=<clock>:<ppm>` | Add frequency drift to a clock. `<ppm>` is the maximum drift in parts per million. Actual drift selected from Gaussian (σ = ppm/3, clamped at ±ppm). May be specified multiple times. See [Clock Drift](#clock-drift). |
+| `--tristate-default=GND|VCC` | Apply internal tri-state lowering before simulation, using the selected default when all drivers release. |
 | `--verbose` | Print tick resolution, clock periods, and `@run`/`@update` events. |
 
 ## Complete Example

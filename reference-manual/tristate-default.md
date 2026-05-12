@@ -28,6 +28,10 @@ jz-hdl                          design.jz   # Default: allow z (ASIC/Sim mode)
   * Tri-state nets are permitted; no transformation occurs.
   * Behavior is consistent with ASIC or simulation semantics.
 
+**Accepted CLI modes:** `--lint`, `--verilog`, `--rtlil`, `--ir`, `--test`, and `--simulate`.
+
+**Rejected CLI modes:** `--ast` rejects `--tristate-default`. Non-compilation modes such as `--chip-info`, `--lint-rules`, and `--lsp` do not use it.
+
 ## Applicability and Scope
 
 ### Applicable Contexts
