@@ -73,7 +73,11 @@ if [ -n "${SDL_UNIX_CONSOLE_BUILD:-}" ]; then
 fi
 
 echo "==> Building specification PDFs..."
-cmake -S "$REPO_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
+if [ ${#CMAKE_ARGS[@]} -gt 0 ]; then
+  cmake -S "$REPO_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
+else
+  cmake -S "$REPO_ROOT" -B "$BUILD_DIR"
+fi
 cmake --build "$BUILD_DIR" --target docs
 
 echo "==> Preparing temporary docs tree..."
