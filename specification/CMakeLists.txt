@@ -31,7 +31,7 @@ if(PANDOC_EXECUTABLE)
                 --pdf-engine=xelatex
                 -V geometry:margin=1in
                 -V fontsize=11pt
-                --syntax-highlighting=tango
+                --highlight-style=tango
                 -V colorlinks=true
             DEPENDS "${SRC_MD}"
             COMMENT "Building PDF for ${DOC_NAME}"

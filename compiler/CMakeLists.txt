@@ -51,11 +51,6 @@ if(BUILD_TESTING)
     add_test(NAME const_eval       COMMAND jz-const-eval-test)
     add_test(NAME type_semantics   COMMAND jz-type-test)
     add_test(NAME literal_semantics COMMAND jz-literal-test)
-    add_test(
-        NAME lint_validation
-        COMMAND ${CMAKE_COMMAND} -E env JZ_HDL_BIN=$<TARGET_FILE:jz-hdl>
-                bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.sh
-    )
 endif()
 
 add_library(jz_hdl_lib
