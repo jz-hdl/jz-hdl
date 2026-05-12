@@ -27,10 +27,14 @@ jobs:
         run: cmake --build build --parallel
 
       - name: Unit tests (CTest)
-        run: ctest --test-dir build --output-on-failure
+        run: |
+          export PATH="/usr/bin:/bin:$PATH"
+          ctest --test-dir build --output-on-failure
 
       - name: Validation and golden tests
-        run: JZ_HDL_BIN="$GITHUB_WORKSPACE/build/compiler/jz-hdl" bash compiler/tests/run_validation.sh
+        run: |
+          export PATH="/usr/bin:/bin:$PATH"
+          JZ_HDL_BIN="$GITHUB_WORKSPACE/build/compiler/jz-hdl" bash compiler/tests/run_validation.sh
 
   docs-site:
     name: Docs site
