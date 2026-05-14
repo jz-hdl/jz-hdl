@@ -1,0 +1,2 @@
+File: HDL_7_7_1_MEM_INVALID_WORD_WIDTH-string_width_const_config.jz
+      73:9    error CONST_STRING_IN_NUMERIC_CONTEXT S4.3/S6.3 String CONST/CONFIG value used where a numeric expression is expected

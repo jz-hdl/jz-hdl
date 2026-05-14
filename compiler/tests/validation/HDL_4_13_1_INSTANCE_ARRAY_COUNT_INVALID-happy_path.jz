@@ -1,0 +1,60 @@
+// INSTANCE_ARRAY_COUNT_INVALID: Happy path for valid instance-array counts.
+// Exercises a positive literal count and a positive parent-scope CONST count.
+
+@project INSTANCE_ARRAY_COUNT_INVALID_happy_path
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] din = _;
+        OUT [4] data = _;
+    }
+@endproj
+
+@module ChildMod
+    PORT {
+        IN  [1] clk;
+        IN  [1] din;
+        OUT [1] data;
+    }
+    REGISTER {
+        r [1] = 1'b0;
+    }
+    ASYNCHRONOUS {
+        data = r;
+    }
+    SYNCHRONOUS(CLK=clk) {
+        r <= din;
+    }
+@endmod
+
+@module TopMod
+    CONST {
+        ARRAY_COUNT = 2;
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [4] din;
+        OUT [4] data;
+    }
+
+    WIRE {
+        literal_out [2];
+        const_out [2];
+    }
+
+    @new literal_arr[2] ChildMod {
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX];
+        OUT [1] data = literal_out[IDX];
+    };
+
+    @new const_arr[ARRAY_COUNT] ChildMod {
+        IN  [1] clk = clk;
+        IN  [1] din = din[IDX + 2];
+        OUT [1] data = const_out[IDX];
+    };
+
+    ASYNCHRONOUS {
+        data = { const_out, literal_out };
+    }
+@endmod

@@ -1,0 +1,35 @@
+@project(CHIP="GW1NR-9-QN88-C6-I5") EDGE_RESET_EXAMPLE
+    @import "sr_latch.jz"
+
+    CLOCKS {
+        SCLK = { period=37.04 };
+    }
+
+    IN_PINS {
+        SCLK = { standard=LVCMOS33 };
+        DONE = { standard=LVCMOS33 };
+        KEY  = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        LED[6] = { standard=LVCMOS33, drive=8 };
+    }
+
+    MAP {
+        SCLK = 52;
+        KEY = 3;
+        LED[0] = 10;
+        LED[1] = 11;
+        LED[2] = 13;
+        LED[3] = 14;
+        LED[4] = 15;
+        LED[5] = 16;
+        DONE = IOL14A;
+    }
+
+    @top edge_reset_demo {
+        IN  [1] clk    = SCLK;
+        IN  [1] rst_hi = KEY;
+        OUT [6] leds   = ~LED;
+    }
+@endproj

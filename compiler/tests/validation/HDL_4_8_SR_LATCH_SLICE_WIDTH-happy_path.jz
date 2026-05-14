@@ -1,0 +1,35 @@
+// SR_LATCH_SLICE_WIDTH: SR latch set/reset operands for a sliced
+// assignment are checked against the selected target slice width, not
+// the full latch width.
+// No diagnostics expected.
+
+@project SR_LATCH_SLICE_WIDTH_happy_path
+    @top TopMod {
+        IN  [4] set_lo = _;
+        IN  [4] rst_lo = _;
+        IN  [4] set_hi = _;
+        IN  [4] rst_hi = _;
+        OUT [8] q = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [4] set_lo;
+        IN  [4] rst_lo;
+        IN  [4] set_hi;
+        IN  [4] rst_hi;
+        OUT [8] q;
+    }
+
+    LATCH {
+        lat_split [8] SR;
+    }
+
+    ASYNCHRONOUS {
+        lat_split[3:0] <= set_lo : rst_lo;
+        lat_split[7:4] <= set_hi : rst_hi;
+
+        q <= lat_split;
+    }
+@endmod

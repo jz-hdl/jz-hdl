@@ -1,0 +1,97 @@
+// Simulation for the instance-array example.
+
+@module bit_stage
+    PORT {
+        IN  [1] clk;
+        IN  [1] reset;
+        IN  [1] din;
+        OUT [1] dout;
+    }
+
+    REGISTER {
+        q [1] = 1'b0;
+    }
+
+    ASYNCHRONOUS {
+        dout <= q;
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=reset RESET_ACTIVE=Low) {
+        q <= din;
+    }
+@endmod
+
+@module instance_array_demo
+    PORT {
+        IN  [1] clk;
+        IN  [1] por;
+        IN  [1] rst_n;
+        OUT [6] leds;
+    }
+
+    WIRE {
+        reset     [1];
+        stage_in  [6];
+        stage_out [6];
+    }
+
+    REGISTER {
+        counter [8] = 8'b1;
+    }
+
+    @new stages[6] bit_stage {
+        IN  [1] clk   = clk;
+        IN  [1] reset = reset;
+        IN  [1] din   = stage_in[IDX];
+        OUT [1] dout  = stage_out[IDX];
+    };
+
+    ASYNCHRONOUS {
+        reset <= por & rst_n;
+        stage_in[0] <= counter[7];
+        stage_in[5:1] <= stage_out[4:0];
+        leds <= stage_out;
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=reset RESET_ACTIVE=Low) {
+        counter <= counter + 8'b1;
+    }
+@endmod
+
+@simulation instance_array_demo
+    CLOCK {
+        clk = { period=20 };
+    }
+
+    WIRE {
+        por   [1];
+        rst_n [1];
+        leds  [6];
+    }
+
+    TAP {
+        dut.counter;
+        dut.stage_out;
+    }
+
+    @new dut instance_array_demo {
+        clk   [1] = clk;
+        por   [1] = por;
+        rst_n [1] = rst_n;
+        leds  [6] = leds;
+    }
+
+    @setup {
+        por   <= 1'b0;
+        rst_n <= 1'b0;
+    }
+
+    @run(ns=60)
+
+    @update {
+        por   <= 1'b1;
+        rst_n <= 1'b1;
+    }
+
+    @run(ns=800)
+@endsim

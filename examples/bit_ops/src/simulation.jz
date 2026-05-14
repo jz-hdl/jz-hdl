@@ -1,0 +1,88 @@
+// Simulation for the bit-ops example.
+
+@module bit_ops_demo
+    PORT {
+        IN  [1] clk;
+        IN  [1] por;
+        IN  [1] rst_n;
+        OUT [6] leds;
+    }
+
+    WIRE {
+        reset       [1];
+        requests    [8];
+        swap_view   [16];
+        grant_hot   [8];
+        idx_ext     [8];
+        sticky_next [8];
+    }
+
+    REGISTER {
+        counter  [12] = 12'b1;
+        sticky   [8]  = 8'b0;
+        sign_reg [8]  = 8'b0;
+    }
+
+    ASYNCHRONOUS {
+        reset <= por & rst_n;
+        swap_view <= bswap({ counter[7:0], counter[11:4] });
+        requests <= swap_view[7:0] ^ reverse(counter[11:4]);
+        grant_hot <= reverse(b2oh(prienc(requests), 8));
+        idx_ext =z prienc(requests);
+        sticky_next <= sbit(sticky, prienc(requests), gbit(requests, prienc(requests)));
+
+        leds <= {
+            reduce_or(requests),
+            reduce_and(sticky),
+            reduce_xor(requests),
+            sign_reg[7],
+            idx_ext[0],
+            grant_hot[7]
+        };
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=reset RESET_ACTIVE=Low) {
+        counter <= counter + 12'b1;
+        sticky <= sticky_next;
+        sign_reg <=s counter[3:0];
+    }
+@endmod
+
+@simulation bit_ops_demo
+    CLOCK {
+        clk = { period=20 };
+    }
+
+    WIRE {
+        por   [1];
+        rst_n [1];
+        leds  [6];
+    }
+
+    TAP {
+        dut.counter;
+        dut.requests;
+        dut.sticky;
+    }
+
+    @new dut bit_ops_demo {
+        clk   [1] = clk;
+        por   [1] = por;
+        rst_n [1] = rst_n;
+        leds  [6] = leds;
+    }
+
+    @setup {
+        por   <= 1'b0;
+        rst_n <= 1'b0;
+    }
+
+    @run(ns=60)
+
+    @update {
+        por   <= 1'b1;
+        rst_n <= 1'b1;
+    }
+
+    @run(ns=600)
+@endsim

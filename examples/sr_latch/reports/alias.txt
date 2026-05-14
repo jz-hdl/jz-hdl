@@ -1,0 +1,83 @@
+JZ-HDL Alias Report
+Input file: src/ice_sugar_v15.jz
+
+Module: edge_reset_demo
+
+User-visible identifiers:  5
+Internal elaboration nodes:14
+Total identifiers:        19
+Total alias statements:   0
+Resolved physical nets:   4
+Tri-state nets:           0
+Extended-width aliases:   0
+
+PHYSICAL NET: NET_0000    Width: 1    Kind: CLOCK
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: sr_latch.jz@11
+
+Consumers:
+    SYNCHRONOUS block (CLK=clk) at line 24
+
+PHYSICAL NET: NET_0001    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: sr_latch.jz@12
+
+Sinks:
+    sr_latch.jz@24: <source unavailable>
+
+Top-level binding:
+    PORT binding: IN rst_hi -> 1'b0
+
+PHYSICAL NET: NET_0002    Width: 6    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT OUT
+Declared at: sr_latch.jz@13
+
+ASYNCHRONOUS Drivers:
+    sr_latch.jz@21: <source unavailable>
+
+Top-level binding:
+    PORT binding: OUT leds -> { ~ LED , _ , _ , _ }
+
+PHYSICAL NET: NET_0003    Width: 6    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: sr_latch.jz@17
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    sr_latch.jz@25: <source unavailable>
+
+Sinks:
+    sr_latch.jz@21: <source unavailable>
+    sr_latch.jz@25: <source unavailable>
+
+------------------------------------------------------------
+IDENTIFIER INDEX
+------------------------------------------------------------
+clk  -> NET_0000
+rst_hi  -> NET_0001
+leds  -> NET_0002
+neg_counter  -> NET_0003
+
+------------------------------------------------------------
+HARDWARE SUMMARY
+------------------------------------------------------------
+- 1 clock domain
+- 1 register
+- Alias net merges: none
+- Tri-state logic: none
+------------------------------------------------------------
+
+============================================================
+CROSS-MODULE SUMMARY
+============================================================
+Total modules analyzed: 1
+
+Module                 Nets Clocks   Regs Tri-St  Alias
+-------------------- ------ ------ ------ ------ ------
+edge_reset_demo           4      1      1      0      0
+-------------------- ------ ------ ------ ------ ------
+TOTAL                     4      1      1      0      0
+============================================================

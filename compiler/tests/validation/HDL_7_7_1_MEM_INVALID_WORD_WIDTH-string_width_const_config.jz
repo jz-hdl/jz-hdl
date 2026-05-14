@@ -1,0 +1,95 @@
+// MEM_INVALID_WORD_WIDTH: string CONST/CONFIG used as MEM width.
+// Valid numeric widths are included to avoid false positives.
+
+@project MEM_INVALID_WORD_WIDTH_string_width_const_config
+    CONFIG {
+        GOOD_WIDTH = 8;
+        BAD_WIDTH = "rom.hex";
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [2] addr = _;
+        IN  [8] wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    CONST {
+        BAD_CONST_WIDTH = "helper.hex";
+    }
+
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    // Trigger 1: string CONST used as MEM width
+    MEM {
+        mem_bad_const [BAD_CONST_WIDTH] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Valid: numeric MEM width in helper module
+    MEM {
+        mem_ok [8] [4] = 8'h00 {
+            OUT rd_ok ASYNC;
+            IN  wr_ok;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_bad_const.rd[addr] ^ mem_ok.rd_ok[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_bad_const.wr[addr] <= wdata;
+        mem_ok.wr_ok[addr] <= wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [2] addr;
+        IN  [8] wdata;
+        OUT [8] data;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [2] addr = addr;
+        IN  [8] wdata = wdata;
+        OUT [8] data = _;
+    };
+
+    // Trigger 2: string CONFIG used as MEM width
+    MEM {
+        mem_bad_config [CONFIG.BAD_WIDTH] [4] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr;
+        };
+    }
+
+    // Valid: numeric CONFIG width in top module
+    MEM {
+        mem_ok [CONFIG.GOOD_WIDTH] [4] = 8'h00 {
+            OUT rd_ok ASYNC;
+            IN  wr_ok;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_bad_config.rd[addr] ^ mem_ok.rd_ok[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        mem_bad_config.wr[addr] <= wdata;
+        mem_ok.wr_ok[addr] <= wdata;
+    }
+@endmod

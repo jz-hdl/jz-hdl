@@ -1,415 +1,450 @@
 # jz-hdl-dev 1.0.0 Release Readiness
 
 **Status:** Review complete
-**Date:** 2026-05-09
+**Date:** 2026-05-11
 **Reviewer:** Codex (GPT-5)
 
 ## Exclusions
 - `datasheets/`
 - `.git/`
-- build/output folders including `compiler/build/`, `viewer/build/`, `docs/.vitepress/dist/`, `docs/node_modules/`, `vscode-ext/node_modules/`, `vscode-ext/out/`, example `build/`, `out/`, and `reports/` directories
-- generated compiler outputs inside examples including emitted `*.jzw` files and memory-init artifacts
-- Python cache and transient files such as `pipeline/__pycache__/`
+- `build/`, `target/`, `dist/`, `out/`, `node_modules/`
+- `compiler/build/`, `viewer/build/`, `docs/.vitepress/dist/`, `vscode-ext/out/`
+- generated example outputs including emitted `*.jzw` files and reports
 
 ## Top 1.0.0 Blockers (cross-cutting)
-- Restore a clean release gate: `compiler/tests/run_validation.sh` currently depends on a missing `compiler/tests/path_security_escape_target.jz`, and standalone testbench/simulation smoke tests are not part of the enforced gate.
-- Fix release-critical correctness mismatches in shipped semantics: `@repeat` ignores block comments incorrectly, hierarchical `TAP` lookup is leaf-name only, and `@run_until` / `@run_while` do not short-circuit on already-satisfied entry conditions.
-- Unify versioning and release stamping across the project: specs still present as beta `0.1.8`, the VS Code extension is `0.1.0`, and LSP `serverInfo.version` is hardcoded to `0.1.0`.
-- Raise build and packaging infrastructure from internal-tool quality to release quality: viewer is not built in CI, dependency fetches are not checksum-locked, docs generation dirties the source tree, and there is no full install/package flow for shipped artifacts.
-- Fix LSP file attribution so diagnostics are matched by canonical path/URI instead of basename-only filtering.
-- Decide and document the supported chip-data surface: embed or intentionally exclude `gw5a-lv25-mg121-c1-i0.json`, align differential type vocabulary with the spec, and tighten schema validation expectations.
-- Bring examples and docs up to release teaching quality: fix the README quick example, replace placeholder install instructions, and close the most visible feature/example coverage gaps.
-- Decide the shipping scope for the viewer and editor tooling, then either package/persist/polish them or explicitly position them as preview-tier companion tools rather than 1.0.0-complete deliverables.
+- Release framing is still visibly pre-1.0: the core specifications still say `State: Beta — Version: 0.2.0`, the docs site republishes that framing, and at least one CLI example still shows `Version 0.2.0`.
+- Clean-build reproducibility is not release-grade yet: the root build fetches `sqlite3`, the viewer fetches SDL3 and ImGui, and the docs publish path still depends on non-lockfile `npm install`.
+- Simulator artifacts are not yet reproducible: VCD, FST, and JZW outputs embed wall-clock timestamps, and all three waveform writers still impose a fixed 4096-signal ceiling.
+- The examples tree over-promises in a few places: multiple roots advertise `simulate` targets without a local simulation harness, and some copied clean rules do not match actual outputs.
+- Chip-data validation is not yet strict enough for a 1.0.0 contract: duplicate `clock_gen` entries can exist in built-ins and legacy compatibility paths still widen the accepted schema.
+- The viewer and VS Code extension are functional, but their release packaging stories are still incomplete: network-coupled viewer builds, thin marketplace assets for the extension, and limited UI-level regression coverage.
 
-## Overall Score: 6 / 10
-The weighted picture is stronger than the release story alone suggests: the core language specification, frontend, IR, backends, simulator, diagnostics, and chip modeling mostly land in the `7–8/10` range, which means the heart of the compiler is already solid and close to production quality. The overall score is pulled down by groups that matter disproportionately for a 1.0.0 release claim: the validation gate is not currently clean, build/package/CI infrastructure is only `5/10`, and several user-facing surfaces still carry inconsistent versioning, onboarding gaps, or correctness edge cases. The top three blockers are the broken release gate, the undercooked packaging/versioning story, and the remaining correctness bugs in repeat expansion, simulation TAP/timeout semantics, and LSP file attribution. Weighting favored compiler correctness, validation trustworthiness, and release reproducibility over companion tooling polish, but even with that weighting the project is not yet at “production-ready with minor rough edges.” No group scores were revised during calibration; the initial per-group spread was internally consistent.
+## Overall Score: 7 / 10
+The project is solidly above “usable but rough” and below “production-ready with only minor rough edges.” I weighted the compiler frontend, IR, backends, diagnostics, simulator, and verification stack most heavily, because those are the critical-path 1.0.0 promises; that core is strong, generally scores 7 to 8, and looks materially closer to release than the surrounding tooling. The overall score stays at 7 because the remaining blockers are concentrated in release polish rather than core language capability: stale beta framing, nondeterministic simulator artifacts, non-reproducible build and docs paths, and avoidable example and chip-data hygiene issues. The viewer and VS Code extension pull less weight than the compiler core, but both still reinforce the same conclusion: the project already feels real, yet it has not fully crossed the line into a crisp, deterministic, audited 1.0.0 release system. The top three blockers are release framing and version drift, reproducible builds and publication, and simulator artifact determinism.
 
 ---
 
 ## Groups
 
-### 1. Language Specification & Rule Catalog — Score: 7 / 10
+### 1. Language & Specification — Score: 7 / 10
 **Paths owned:** `specification/`, `pipeline/`
 **Criteria scored against:**
-- Completeness versus implemented language, simulation, testbench, and chip-data behavior
-- Consistency across specification documents and rule-catalog material
-- Clarity and auditability for a new reader tracing rule intent to tests
-- Staleness, broken references, and release-readiness of process docs
-**Last reviewed:** 2026-05-09
+- completeness versus implemented language, simulation, testbench, chip-info, and waveform behavior
+- consistency across specifications and rule-coverage documents
+- clarity for a new reader and suitability as 1.0.0 reference material
+- stale content, dead references, and versioning/release framing
+**Last reviewed:** 2026-05-11
 **Rationale:**
-The spec corpus is strong: the five specification documents are detailed, internally consistent, and cover the major language, simulation, testbench, waveform, and chip-data behaviors that the implementation and validation corpus exercise. Cross-document references I spot-checked are live and line up with real headings, and the owned paths are free of actual unfinished-code markers; the only `TODO`/`FIXME` hits in `pipeline/` are in the review-plan prompt text itself. The main reason this does not reach 8/10 is release maturity, not coverage depth: every spec front matter still says `State: Beta — Version: 0.1.8`, and a few sections still carry explicit deferred/future-feature language (`phase offset` in simulation, reserved future `input.<NAME>.type` in chip data). The pipeline files are usable and coherent, but they read as internal operator instructions rather than polished 1.0.0 process docs.
+The core specs are broad and mostly implementation-aligned: the simulator and CLI already support the major documented surfaces, including `@simulation`, `@testbench`, `@run_until`, `@run_while`, `@trace`, `@mark_if`, `@alert_if`, `--jzw`, jitter/drift, and JZW clock metadata. The main gap is not feature coverage but polish and consistency: all five spec docs still carry a Beta 0.2.0 framing, and there are several stale or misnumbered internal references in the language and testbench docs. That puts this comfortably above “usable but rough” but still below 1.0.0 reference quality.
 
 **Key measurements:**
-- 5 spec files and 17 pipeline files in scope, totaling 13,299 lines across the owned paths.
-- No actual `TODO`/`FIXME`/`XXX`/`HACK`/`assert(0)`/`abort(`/`not implemented`/`stub`/`unimplemented` markers in the spec docs themselves; the only grep hits in `pipeline/` were instruction text in `pipeline/project_ready/prompts/1-review-plan.md`.
-- Cross-reference scan found the expected live anchors: `1.6.3`, `1.6.4`, `1.6.6`, `1.6.7`, `5.2`, `6.2`, `7.3`, and `12.2`, and the corresponding headings exist in the source docs.
-- The spec set is broadly aligned on core semantics like `@testbench` vs. `@simulation`, tri-state handling, and combinational-loop behavior.
+- 6 specification files, totaling 10,398 lines.
+- 18 pipeline files, totaling 3,313 lines, including a committed `pipeline/__pycache__/run_pipeline.cpython-314.pyc` artifact.
+- 5/5 spec front-matter banners still say `State: Beta — Version: 0.2.0`.
+- 9 literal `TODO`/`FIXME`/`XXX`/`HACK`/`stub`/`unimplemented` matches in `pipeline/`, all in prompt/config text rather than implementation code.
+- 0 literal marker hits in the spec documents themselves.
+- At least 4 obvious stale or misnumbered self-references in the core spec set, including `Section 4.10`, `Section 4.9`, and `Section 6.8` references that no longer point cleanly at the intended material.
+- The simulator spec and the implementation agree on the important runtime surface, including waveform formats, per-clock jitter/drift, and monitor/trace behavior.
 
 **Needed before 1.0.0:**
-- Update the spec front matter from `Beta — Version: 0.1.8` to a release-stamped 1.0.0 pass after one final consistency review.
-- Decide whether the remaining deferred items are intentionally post-1.0.0 (`phase offset` in simulation, reserved future `input.<NAME>.type` in chip data) or must be implemented and documented before release.
-- Add a concise release-oriented traceability pass for the spec/rule pipeline so a new reader can map rule intent to tests without reading the internal review prompt first.
+- Replace the Beta 0.2.0 front matter across all five spec docs with 1.0.0-ready release framing, or explicitly document why the project is still intentionally pre-1.0.
+- Audit and fix the stale section references in `jz-hdl-specification.md`, `testbench-specification.md`, and `simulation-specification.md` so the docs read cleanly as a single authoritative set.
+- Add a concise release-status or compatibility note that tells new readers what is guaranteed stable at 1.0.0 and what is intentionally frozen.
+- Decide whether `pipeline/__pycache__/run_pipeline.cpython-314.pyc` belongs in the repository; if not, remove it before release and ignore it going forward.
+- Normalize the `simulation-specification.md` section order and cross-references so the structure matches the narrative flow without requiring the reader to mentally correct numbering drift.
 
 **Surprising findings:**
-- The core spec corpus is much closer to release-ready than the version banners suggest; the biggest gap is maturity labeling and release packaging, not missing language coverage.
+- The implementation already covers most of the documented simulation and waveform surface, so the remaining issue is documentation quality, not missing runtime capability.
 
-### 2. Compiler Frontend — Score: 8 / 10
-**Paths owned:** `compiler/include/{ast.h,ast_json.h,lexer.h,parser.h,sem.h,sem_driver.h,repeat_expand.h,template_expand.h,expansion_limits.h}`, `compiler/src/ast/`, `compiler/src/lexer.c`, `compiler/src/parser/`, `compiler/src/sem/`, `compiler/src/repeat_expand.c`
+### 2. Compiler — Frontend — Score: 8 / 10
+**Paths owned:** `compiler/src/lexer.c`, `compiler/src/parser/`, `compiler/src/ast/`, `compiler/src/sem/`, `compiler/src/repeat_expand.c`, `compiler/src/compiler.c`, `compiler/include/`
 **Criteria scored against:**
-- Feature completeness versus the language and testbench specifications
-- Diagnostic quality, source locations, and parse/semantic recovery behavior
-- Test coverage depth for parsing, typing, constant evaluation, templates, CDC, and memory semantics
-- Memory safety and absence of obvious undefined behavior in C implementation
-**Last reviewed:** 2026-05-09
+- feature completeness versus the core language spec
+- parser and semantic correctness on edge cases
+- diagnostic quality, source locations, and recovery behavior
+- test coverage, TODO density, and obvious memory-safety or UB risks
+**Last reviewed:** 2026-05-11
 **Rationale:**
-This frontend is broadly feature-complete for the shipped language surface. The lexer, recursive-descent parser, semantic drivers, constant-eval helpers, and expansion passes collectively cover modules, projects, blackboxes, imports, testbenches, simulations, templates, CDC, memory semantics, `widthof()`, `clog2()`, tristate behavior, and the main recovery paths the specs describe. Diagnostics are generally strong: most errors are rule-linked, source-located, and designed to survive recovery instead of collapsing into generic parse failures.
-
-What keeps this at 8 instead of 9 is polish, not basic capability. The clearest concrete defect is in `compiler/src/repeat_expand.c`: the raw `@repeat` prepass ignores line comments and strings, but not block comments, even though the spec says `@repeat` inside comments is ignored. That is a real language mismatch and a missing regression. I also see a few release-readiness rough edges: template scratch naming is time-seeded and therefore nondeterministic, and some pre-lexing diagnostics are coarse compared with the rest of the frontend. None of that looks like a structural blocker, but it is enough to keep this out of “spec-complete and polished.”
+The frontend is broadly feature-complete for the core language surface: the parser and semantic passes cover modules, projects, declarations, control flow, feature guards, templates, instantiation, testbenches, simulation, and MEM `@file()` handling, with rule-based diagnostics and source locations threaded through the stack. The codebase also looks mature from a safety standpoint, with no TODO/FIXME/HACK/abort-style markers in the owned tree and no obvious memory-safety shortcuts in the main control paths. It still lands short of 9 because recovery and test coverage are uneven, and a few areas rely on compatibility-specific parsing rather than a uniformly polished grammar.
 
 **Key measurements:**
-- 48,318 lines across the owned frontend headers and sources I inspected.
-- The validation corpus in scope is broad: 260 frontend-related validation artifacts across HDL/TB/SIM, with dense coverage for templates, `@repeat`, `widthof()`, `clog2()`, CDC, memory, tristate, and simulation/testbench directives.
-- No actual `TODO`/`FIXME`/`XXX`/`HACK`/`assert(0)`/`abort(`/`not implemented`/`stub`/`unimplemented` markers showed up in the owned frontend paths.
-- The codebase already has focused validation for the critical semantic buckets this group owns, including template expansion, constant evaluation, identifier rules, memory semantics, and tri-state analysis.
+- 74 owned files totaling 53,078 LOC.
+- 19 parser files totaling 11,981 LOC.
+- 26 semantic-analysis files totaling 35,172 LOC.
+- 2 AST source files totaling 455 LOC.
+- 24 public headers totaling 3,721 LOC.
+- 97 AST node kinds in `compiler/include/ast.h`.
+- 119 token kinds in `compiler/include/lexer.h`.
+- 3 frontend unit-test files under `compiler/src/sem/` and 0 parser unit-test files in the owned tree.
+- 0 TODO/FIXME/XXX/HACK/assert(0)/abort(/not implemented/stub hits in the owned tree.
 
 **Needed before 1.0.0:**
-- Fix `@repeat` expansion so block comments are treated the same as line comments and strings, and add a regression fixture for `/* @repeat ... */`.
-- Decide whether the time-seeded scratch suffix generation in `template_expand.c` is acceptable for a 1.0.0 release; if reproducible output matters, make it deterministic.
-- Tighten any remaining pre-lexing diagnostic locality if you want repeat-expansion failures to match the rest of the frontend’s source-location quality.
+- Add parser-focused regression coverage for malformed directives, unterminated and nested blocks, recovery after bad tokens, and edge cases around `@feature`, `@apply`, `@new`, and `@file()`.
+- Tighten recovery in the largest parser paths so one bad construct does not collapse the rest of a file.
+- Normalize the remaining lexer/parser compatibility wrinkles, especially around `@file`, so there is one clearly intended tokenization path.
+- Add a release-grade frontend test matrix that covers both positive spec conformance and diagnostic/source-location quality.
 
 **Surprising findings:**
-- The parser/semantics layer is much more mature than the raw `@repeat` prepass suggests; the main gap I found was a pre-lexing corner case, not a missing core language feature.
+- `@file()` is already supported end to end, including a compatibility path that accepts both `@` plus `file` tokens and a single `@file` lexeme.
+- The frontend is larger and more complete than it reads at first glance: rule-driven diagnostics are already wired through lexer, parser, and semantics rather than being bolted on later.
 
-### 3. Compiler IR & Middle-end — Score: 8 / 10
-**Paths owned:** `compiler/include/{ir.h,ir_builder.h,ir_mem_bind.h,ir_serialize.h}`, `compiler/src/ir/`
+### 3. Compiler — IR & Middle-end — Score: 8 / 10
+**Paths owned:** `compiler/src/ir/`
 **Criteria scored against:**
-- Correctness and completeness of lowering from semantic model to IR
-- Soundness of transformation passes and invariants between passes
-- Serialization/debuggability for users and maintainers
-- Testability and evidence that IR features are exercised by validation or example flows
-**Last reviewed:** 2026-05-09
+- IR completeness for all frontend constructs that must lower cleanly
+- transformation correctness and invariants preservation
+- serialization/debuggability and internal API cohesion
+- test coverage, TODO density, and obvious correctness risks
+**Last reviewed:** 2026-05-11
 **Rationale:**
-This middle-end is broadly production-ready. The core build pipeline is coherent and ordered correctly: `jz_ir_build_design()` constructs the design, binds memory ports while semantic scope is still available, lowers memory writes, materializes CDC library modules, and then eliminates dead modules. The tri-state pass is also disciplined: it clones the design, transforms in place, and rolls back on any failure instead of mutating the caller’s IR into a half-lowered state.
-
-The implementation coverage is strong across the supported IR surface. I found real lowering for signals, expressions, assignments, control-flow, memories, module instances, CDC crossings, differential pin metadata, dead-module elimination, and division-guard analysis. The owned paths have no actual `TODO`/`FIXME`/`XXX`/`HACK`/`assert(0)`/`abort(`/`not implemented`/`stub`/`unimplemented` markers. What keeps this from 9 is release polish and a few fidelity gaps: the JSON serializer still stamps `ir_version` as `0.1.0`, does not surface some internal middle-end metadata like `eliminated`, `is_blackbox`, or `port_alias_groups`, and a few lowering paths still rely on explicit fallback behavior for unsupported forms rather than fully normalized IR.
+The IR middle-end is broadly feature-complete and internally coherent: it lowers the core frontend constructs into a rich IR, runs dedicated passes for tri-state elimination, memory initialization, differential metadata, dead-module elimination, and division-guard analysis, and serializes the result with depth protection. The tree also looks mature operationally, with no TODO/FIXME/XXX/HACK/stub markers in `compiler/src/ir/` and broad validation coverage around the main transform paths. It still lands below 9 because there are a few real rough edges, notably fixed-size instance-collection buffers, best-effort memory binding, and some unsupported lowering fallbacks that should be closed or rejected earlier before 1.0.0.
 
 **Key measurements:**
-- 20 owned files in scope, totaling 24,562 lines.
-- 57 IR golden outputs are present, and the validation tree contains 2,936 files overall.
-- The IR-focused coverage is broad: `cdc_*`, `tristate_*`, `memory_*`, `mem_file_init_*`, `intrinsic_*`, `top_concatenation_binding`, `override_module_specialization`, `serializer_reset`, `clock_domain_isolation_and_cdc_crossing`, and `path-exclusive_determinism` all exercise the serializer or the lowered IR.
-- Spot-checked goldens show the serializer captures the major structures users need for debugging: modules, signals, clock domains, memories, instances, CDC crossings, project pins/mappings, and top bindings.
+- `compiler/src/ir/` contains 16 source and header files totaling 23,539 LOC.
+- The pass surface is compact and cohesive: design build, tri-state transform, differential lowering, memory init lowering, div-guard checks, dead-module elimination, cloning, library-module generation, and JSON serialization.
+- A literal scan of `compiler/src/ir/` found 0 TODO/FIXME/XXX/HACK/assert(0)/abort(/not implemented/stub/unimplemented markers.
+- Validation coverage exists for the main IR surfaces, including div-guard, tri-state transform, memory handling, instance specialization, CDC lowering, and assignment/statement lowering.
+- The JSON serializer covers the major IR shapes end to end, including signals, expressions, statements, memories, clock domains, instances, CDC crossings, and project metadata, with depth-limit protection.
 
 **Needed before 1.0.0:**
-- Re-stamp the IR JSON format from `0.1.0` to a release version and decide whether the serializer should expose `eliminated`, `is_blackbox`, and `port_alias_groups` for debugging.
-- Add or tighten regressions around the remaining fallback lowering paths so unsupported selector/LHS forms fail explicitly and consistently.
-- Keep the existing IR validation coverage as a release gate, especially for memory lowering, CDC lowering, tri-state transforms, and the `--ir` output path.
+- Replace the fixed 512-entry instance-collection buffers in specialization and elaboration with dynamic growth or explicit overflow diagnostics.
+- Decide whether complex assignment targets such as concatenation LHS should be supported in IR; if yes, lower them, and if not, move the rejection into semantics and add a regression test.
+- Make memory-port binding deterministic by reporting unresolved bindings or proving them earlier, rather than silently treating it as best effort.
+- Remove or justify the remaining “unsupported for now” lowering fallbacks that can still reach release paths, especially around expression forms that are only preserved indirectly for backends.
+- Reframe the serialized IR versioning if the JSON output is intended to be a stable 1.0.0 debug artifact.
 
 **Surprising findings:**
-- The lowering pipeline is much closer to shipped quality than the serializer versioning suggests; the weakest part is release-facing metadata, not the core IR transformations.
+- The middle-end is more complete than the file layout suggests: the IR builder already handles BUS accesses, memory reads and writes, CDC metadata, clock-domain reset wrapping, and post-build transforms in one pipeline.
+- The JSON exporter still hardcodes an `ir_version` of `0.1.0`, so the internal wire format is not yet being presented as release-stable even though the implementation is otherwise mature.
 
-### 4. Compiler Backends — Score: 8 / 10
-**Paths owned:** `compiler/include/{verilog_backend.h,rtlil_backend.h}`, `compiler/src/backend/`
+### 4. Compiler — Backends — Score: 8 / 10
+**Paths owned:** `compiler/src/backend/`
 **Criteria scored against:**
-- Correctness and completeness of Verilog and RTLIL generation
-- Constraint/output support for supported FPGA flows
-- Stability of emitted code for real examples and downstream toolchains
-- Coverage of backend-specific edge cases, diagnostics, and unsupported constructs
-**Last reviewed:** 2026-05-09
+- feature completeness versus supported synthesis targets
+- output correctness and conformance for Verilog-2005 and RTLIL
+- constraint and wrapper generation quality
+- test coverage, TODO density, and backend-specific failure handling
+**Last reviewed:** 2026-05-11
 **Rationale:**
-This backend layer is broadly production-ready. The Verilog emitter and RTLIL emitter both cover the expected release surface: module emission, instances, memory lowering, aliasing, clock-gen wrappers, differential I/O, and project-level wrappers, plus SDC/XDC/PCF/CST sidecar generation for the supported FPGA flows. The output paths are exercised by a substantial golden corpus and by `run_validation.sh`, which checks both backend diffs and downstream Yosys parsing, and for fixtures that have both formats it also checks Verilog vs. RTLIL equivalence.
+This backend layer is already production-capable for the supported release targets: Verilog-2005, RTLIL, and the board-constraint formats (`SDC`, `XDC`, `PCF`, `CST`). The emitters are not thin wrappers; they handle alias resolution, module ordering, project wrappers, chip-data-driven differential I/O, clock-generator expansion, memory initialization, and safety-checked file output. Output hygiene is also solid: the Verilog backend emits Yosys-oriented headers and escapes strings and names carefully, while the RTLIL backend resets IDs, enforces memory-init limits, and reports I/O failures through diagnostics.
 
-What keeps this at 8 instead of 9 is polish and a small number of explicit fallback paths. I found one concrete backend `TODO` in RTLIL wrapper emission for multi-bit inverted ports, and both backends still contain “unsupported stmt kind” fallback comments rather than fully surfaced diagnostics for unreachable shapes. Those are real rough edges, but they are isolated and do not look like release blockers given the current coverage and the fact that the main emitted flows are already stable against Yosys and the golden fixtures.
+It still stops short of a 9 because there are a few release-quality gaps rather than broad missing subsystems. The owned tree still has one literal `TODO` and a couple of `unsupported` emission paths, the RTLIL wrapper still has an open note for multi-bit inverted ports, and some chip-data-dependent cases fall back to generic primitives or comments when templates are unavailable. Those are bounded gaps, but they are real polish and conformance risks for a 1.0.0 synthesis story.
 
 **Key measurements:**
-- 60 Verilog goldens, 57 RTLIL goldens, and 21 backend-sidecar golden scripts are present in scope.
-- `run_validation.sh` verifies generated `.v` and `.il` files with Yosys parse checks, and runs Verilog/RTLIL equivalence checks for fixtures that carry both outputs.
-- Constraint coverage is real, not incidental: the corpus includes SDC/XDC/PCF/CST generation and escaping-focused fixtures.
-- The owned paths have no broad forest of unfinished-code markers; the only explicit backend `TODO` I found was the RTLIL multi-bit inverted-port note.
+- `compiler/src/backend/` contains 20 files totaling 13,354 LOC: 11 Verilog-2005 files and 9 RTLIL files.
+- Marker scan found 1 `TODO`, 2 `unsupported` references, and no `FIXME`, `HACK`, `stub`, or `unimplemented` hits in the owned tree.
+- `compiler/tests/golden/` includes 71 `.jz` inputs, 60 Verilog outputs, 57 RTLIL outputs, and 5 constraint outputs (`1 .sdc`, `2 .xdc`, `1 .pcf`, `1 .cst`).
+- There are 24 shell-based golden/backend checks, including dedicated coverage for RTLIL memory-init limits and constraint escaping.
+- `compiler/tests/run_validation.sh` already includes Yosys parse and Verilog-vs-RTLIL equivalence checks for backend outputs.
 
 **Needed before 1.0.0:**
-- Decide whether RTLIL multi-bit inverted top bindings should be implemented before release, or explicitly documented as unsupported if they are truly out of scope.
-- Replace the remaining generic “unsupported stmt kind” fallback comments with explicit diagnostics if those code paths can be reached by valid inputs.
-- Keep the existing Verilog/RTLIL/Yosys validation as a release gate, especially for memory emission, differential I/O, clock-gen wrappers, and constraint sidecars.
+- Close the remaining RTLIL wrapper TODO, especially multi-bit inverted-port handling, instead of leaving it as a known gap.
+- Replace or harden fallback emission paths that silently downgrade unsupported chip-data cases to comments or generic primitives.
+- Add explicit regression coverage for backend failure paths that are still only exercised indirectly, especially around wrapper generation and RTLIL unsupported-statement handling.
+- Decide whether the backend-specific golden coverage should stay concentrated in `compiler/tests/golden/` or also be mirrored into `tests/validation/` for release-gate visibility.
 
 **Surprising findings:**
-- The strongest signal here is not code volume but verification depth: the backend outputs are already cross-checked by golden diffs, parser validation, and equivalence checks, which is a good sign for downstream toolchain stability.
+- `compiler/tests/validation/` has no committed `.v` or `.il` golden files, so the Verilog/RTLIL parse and equivalence checks in `run_validation.sh` are effectively backed by `compiler/tests/golden/`, not the main lint corpus.
+- The wrapper and constraint side is more mature than the file layout suggests: the Verilog backend already emits and escapes four constraint dialects and handles differential I/O and clock-gen templates with chip-data-aware logic.
 
-### 5. Simulator & Waveforms — Score: 8 / 10
-**Paths owned:** `compiler/src/sim/`
+### 5. Simulator — Score: 7 / 10
+**Paths owned:** `compiler/src/sim/`, `specification/simulation-specification.md`, `specification/jzw-specification.md`
 **Criteria scored against:**
-- Conformance to simulation and waveform specifications
-- Correctness of event execution, value semantics, clocks, and waveform emission
-- Performance sanity and absence of obvious pathological behavior
-- Coverage of simulation-specific error handling and format interoperability
-**Last reviewed:** 2026-05-09
+- simulation-spec and waveform-spec conformance
+- correctness, determinism, and runtime behavior on realistic designs
+- waveform output quality across `vcd`, `fst`, and `jzw`
+- performance sanity, test coverage, and obvious stub or error-path gaps
+**Last reviewed:** 2026-05-11
 **Rationale:**
-This is broadly production-ready. The simulator has a coherent event-driven core with deterministic clock ordering, 1ps internal time, exact ps conversion checks, reset/setup sequencing, combinational settling, NBA updates, `@run`/`@run_until`/`@run_while`, `@trace`, `@mark`, `@alert`, `@monitor`, TAP dumping, and three waveform backends. The waveform layer is also solid: VCD, FST, and JZW are all wired through a shared interface, and JZW carries the expected SQLite schema, metadata, clock records, change-only storage, and annotations.
-
-What keeps this at 8 instead of 9 is a small set of real fidelity gaps. The most concrete one is TAP resolution: `compiler/src/sim/sim_engine.c` resolves `TAP dut.child.signal` by leaf signal name only, so hierarchical taps can misbind if two signals share a leaf name. I also found a semantic gap in `@run_until`/`@run_while`: the loop does not check whether the condition is already satisfied at entry, so those directives do not short-circuit immediately on a pre-existing true/false condition. Those are not release blockers, but they are correctness issues that matter for a 1.0.0 claim.
+The simulator is broadly implemented and covers the major documented runtime surface: `@simulation`, `@run`, `@run_until`, `@run_while`, `@update`, `@trace`, `@mark`, `@alert`, `MONITOR`, jitter/drift, JZW metadata, and waveform emission for VCD, FST, and JZW. The implementation is not a stub and the validation corpus shows real coverage for directive syntax, timing conversion, annotation rules, and select-chain behavior. The release blocker is determinism and polish, not basic feature existence: VCD, FST, and JZW all stamp wall-clock date information, so identical source and seed do not yet guarantee bit-identical waveform artifacts. There is also a fixed 4096-signal ceiling in all three waveform writers, which is a real limit for larger designs and should be surfaced as an explicit release constraint or removed before 1.0.0.
 
 **Key measurements:**
-- The owned simulator tree is compact but complete: 18 source/header files in `compiler/src/sim/`.
-- Validation and examples are substantial: 54 simulation validation artifacts, 5 standalone simulation tests, plus golden coverage for waveform formats and `@run_until`/`@run_while`.
-- I found no actual unfinished-code markers in the owned sim sources; the only hits were benign no-op perf stubs in `sim_perf.h`.
-- The exercised surface includes wide-value emission, trace toggling, JZW metadata, TAPs, multi-clock scheduling, and the main simulation directives.
+- `compiler/src/sim/` contains 20 source and header files totaling 9,419 LOC.
+- Validation coverage includes 73 simulator and JZW fixtures under `compiler/tests/validation/`, plus 8 focused runtime fixtures under `compiler/tests/simulation/`.
+- JZW-specific coverage exists for select chains, select scope resolution, annotation color validation, trace toggles, exact picosecond conversion, and wrong-tool gating.
+- A literal scan of `compiler/src/sim/` found no `TODO`/`FIXME`/`XXX`/`HACK`/`stub`/`unimplemented` markers in the core simulator paths; the only hits are deliberate no-op perf stubs in `sim_perf.h`.
+- The JZW backend implements the documented schema surface, including `meta`, `signals`, `changes`, `annotations`, and `clocks`, plus prepared-statement batching.
+- The runtime engine already has deterministic PRNG seeding, event-driven clock scheduling, exact picosecond conversion checks, monitor evaluation, and runtime timeout and error paths.
 
 **Needed before 1.0.0:**
-- Fix TAP lookup to resolve the full hierarchical path, not just the leaf signal name, so nested `TAP` entries cannot misbind.
-- Make `@run_until` and `@run_while` short-circuit when the condition is already satisfied or violated at directive entry.
-- Add regressions for hierarchical TAP collisions and zero-wait `@run_until`/`@run_while` cases, and keep the existing simulation/golden corpus as the release gate.
+- Remove wall-clock date stamping from VCD, FST, and JZW output paths, or document and isolate it so identical inputs produce bit-identical artifacts.
+- Add an explicit regression test that compares simulator output across repeated runs with the same seed to prove determinism.
+- Replace the fixed 4096-signal cap in the waveform backends with dynamic growth or a hard diagnostic that is documented as a supported release limit.
+- Add direct tests for large-design waveform emission and for failure behavior when signal registration or annotation tables approach capacity.
+- Audit the VCD and FST timestamp handling against the ps-resolution engine so sub-ns activity is either preserved or intentionally documented as lossy.
 
 **Surprising findings:**
-- The simulator is farther along than the directory size suggests: the hard parts are already in place, and the remaining work is mostly precision and edge-case correctness rather than missing subsystems.
+- The simulator is materially more complete than the file list suggests: the same engine already drives both `@testbench` and `@simulation`, and the waveform backends are not thin wrappers.
+- The main release risk is not missing features but nondeterministic artifact generation, which is a stronger blocker than the feature surface itself.
 
-### 6. Testbench & Validation Suite — Score: 7 / 10
-**Paths owned:** `compiler/tests/`, `compiler/src/parser/parser_testbench.c`, `compiler/src/parser/parser_simulation.c`, `compiler/src/sem/driver_testbench.c`
+### 6. Testbench & Verification — Score: 8 / 10
+**Paths owned:** `compiler/src/parser/parser_testbench.c`, `compiler/src/sem/driver_testbench.c`, `compiler/tests/`
 **Criteria scored against:**
-- Isolation and correctness of validation fixtures against intended rule coverage
-- Breadth and maintainability of simulation, testbench, and golden-output coverage
-- Drift risk between specs, compiler diagnostics, and golden files
-- Ability of the suite to catch release-blocking regressions before 1.0.0
-**Last reviewed:** 2026-05-09
+- completeness versus the testbench specification
+- quality and isolation of validation fixtures and expected outputs
+- breadth of automated verification for compiler behavior
+- maintainability of the validation harness and test signal-to-noise
+**Last reviewed:** 2026-05-11
 **Rationale:**
-The suite is broad and mostly well structured. The parser/semantic split for `@testbench` and `@simulation` is explicit, the validation corpus covers the main rule families for TB/SIM plus repeat expansion and path-security, and the golden tests exercise runtime behaviors like waveform output, `@run_until`/`@run_while`, `@expect_tristate`, and hierarchical `@expect_equal`. The main reason this does not reach 8 is that the release gate is not clean: `compiler/tests/run_validation.sh` currently fails on `HDL_12_4_ADDITIONAL_SANDBOX_ROOT-happy_path.jz` because it imports a missing `compiler/tests/path_security_escape_target.jz`, and the auxiliary `compiler/tests/testbenches/` and `compiler/tests/simulation/` fixtures are not wired into CI.
+The testbench stack is broadly release-ready. The parser and semantic driver cover the documented `@testbench` surface end to end: `CLOCK`, `WIRE`, file-level and in-block `@import`, BUS declarations and BUS shorthand bindings, `@new`, `@setup`, `@update`, `@clock`, `@expect_equal`, `@expect_not_equal`, `@expect_tristate`, `@print`, and `@print_if`. The verification corpus is large and intentional rather than ad hoc: fixtures are named around specific rules, expected outputs are usually minimal, and the harness already exercises lint-style validation, simulation, golden backend outputs, Yosys parse checks, backend equivalence, testbench smoke runs, simulation smoke runs, and cross-mode rejection. It stays at 8 rather than 9 because the verification story is still heavily fixture- and shell-script-driven, helper inputs are mixed into the same validation tree as executable cases, and the main runner is a sizable convention-based script rather than a smaller layered harness.
 
 **Key measurements:**
-- 47 `TB_*.jz` validation fixtures and 27 `SIM_*.jz` validation fixtures are present, plus 5 standalone testbench smoke tests, 5 standalone simulation smoke tests, and 91 golden assets.
-- `run_validation.sh` covers `tests/validation` and `tests/golden`; it skips any validation `.jz` without a sibling `.out`, which is fine for helper libraries but creates drift risk if a real happy-path fixture is added without an expected output.
-- Coverage is strong for declaration and diagnostic rules, but there are still gaps in release-blocking runtime regressions, especially the zero-wait `@run_until`/`@run_while` cases and a TAP collision case for same-leaf hierarchical names.
-- The tree already has good positive coverage for hierarchical `@expect_equal`, `@expect_tristate`, `MONITOR`, `TAP`, `@print_if`, and repeat expansion, so the core semantics are exercised rather than only syntax.
+- The owned implementation is compact relative to the coverage surface: `parser_testbench.c` is 914 LOC and `driver_testbench.c` is 1,172 LOC.
+- The main validation corpus has 1,505 `.jz` fixtures and 1,468 expected `.out` files under `compiler/tests/validation/`.
+- The validation tree is broad by category: 93 `TB_*`, 60 `SIM_*`, and 13 `JZW_*` validation cases, plus 38 helper inputs that intentionally have no `.out`.
+- Golden coverage is substantial: 71 golden `.jz` inputs, 60 Verilog outputs, 57 RTLIL outputs, and 24 `test.sh`-driven golden scripts.
+- `compiler/tests/run_validation.sh` currently reports 1,889 passes, 0 failures, and 38 skips, including 114 Yosys parse checks, 56 equivalence checks, 5 testbench smoke tests, 5 simulation smoke tests, and 5 cross-mode rejection checks.
+- A literal marker scan found no `TODO`, `FIXME`, `XXX`, `HACK`, `stub`, `unimplemented`, `assert(0)`, or `abort(` hits in the owned parser and semantics files.
 
 **Needed before 1.0.0:**
-- Fix or restore the missing path-security import target so `run_validation.sh` passes end to end again.
-- Add a regression for `@run_until`/`@run_while` when the condition is already satisfied or violated at directive entry.
-- Add a regression for hierarchical `TAP` name collisions, and wire the standalone `compiler/tests/testbenches/` and `compiler/tests/simulation/` smoke tests into the release gate or a documented test job.
-- Consider making the validation harness fail on unexpected skipped happy-path fixtures rather than silently ignoring `.jz` files with no `.out`, to reduce fixture drift.
+- Split or factor the validation harness enough that the core flows are easier to understand and extend without following filename conventions through a large shell script.
+- Make the skipped helper fixtures more explicit in the corpus layout so the 38 skips are clearly intentional instead of just implicit by filename.
+- Add a few more focused negative testbench fixtures for parser and semantic edge cases that are still mostly exercised indirectly through the larger regression matrix.
+- Reduce the remaining `test.sh`-only golden cases where a declarative `.jz` plus `.out` fixture would express the same behavior without shell-side logic.
 
 **Surprising findings:**
-- The suite is healthier than the failed gate suggests: most of the coverage is disciplined and targeted, but a single missing imported fixture is enough to make the current release gate unusable.
+- `@repeat` is handled as a pre-parser expansion step, so the testbench and simulation parser never sees the raw directive structure; that keeps the parser simpler, but it also means repeat regressions live in the expansion harness rather than the parser.
+- The validation runner already normalizes volatile waveform paths and filters version lines before comparison, which is why the golden outputs stay stable across machines even though the underlying tools emit environment-specific text.
 
 ### 7. Diagnostics & Reports — Score: 8 / 10
-**Paths owned:** `compiler/include/{diagnostic.h,rules.h}`, `compiler/src/diagnostic.c`, `compiler/src/rules.c`, `compiler/src/report/`
+**Paths owned:** `compiler/src/diagnostic.c`, `compiler/src/rules.c`, `compiler/src/report/`
 **Criteria scored against:**
-- Quality, precision, and consistency of diagnostics and rule metadata
-- Usefulness and maturity of alias, memory, chip, and tristate reports
-- Consistency between documented rules, emitted diagnostics, and tests
-- Stability of outputs users would rely on in a 1.0.0 release
-**Last reviewed:** 2026-05-09
+- diagnostic clarity, consistency, and explainability
+- lint-rule surface area and report usefulness
+- source mapping, grouping, warning-policy behavior, and output polish
+- test coverage and obvious message-quality gaps
+**Last reviewed:** 2026-05-11
 **Rationale:**
-This group is close to release-ready. The diagnostic core is disciplined: buffered storage, rule-linked severities, warning policy handling, deterministic sorting/deduping, and a renderer that keeps source location, rule code, and message text aligned. The rule catalog is large and coherent at 446 entries, and the public report surfaces are real products, not placeholders: alias, memory, tristate, and chip-info all have dedicated golden suites with exact output diffs.
+This is a strong, mostly release-ready diagnostics layer. The core renderer already does the right hard things: rule-aware severity mapping, stable sorting, file and line grouping, duplicate suppression on same-location output, project-relative filename normalization, `--explain` support, colorized rendering, and warning-policy filtering by group. The rule table is broad and well-structured, with clear groupings and readable messages, and the dedicated report emitters for aliasing, tri-state analysis, and memory resource reporting are substantive rather than cosmetic.
 
-I kept this at 8 instead of 9 because there are still a few release-polish gaps. The public `--lint-rules` listing is part of the contract, but I did not find a dedicated snapshot test for it. The report emitters in `compiler/src/report/` are useful, but they still rely on fixed-width stack buffers and hand-formatted tables, which is fine today but a little brittle if chip databases or descriptions grow. The generic diagnostic printer also has one small one-off branch for `RPT_COUNT_INVALID` rather than a fully uniform metadata path.
+It stays at 8 instead of 9 because the direct regression surface is still thinner than the implementation surface. The code supports user-facing knobs like `--warn-as-error`, `--info`, `--color`, `--explain`, `--Wno-group`, `--Eno-group`, and `--lint-rules`, but the tests are still weighted toward semantic fixtures and a few report goldens rather than explicit coverage of every rendering and policy path. The result is good output behavior with a small but real risk of UI-regression drift.
 
 **Key measurements:**
-- 446 rules are defined in `compiler/src/rules.c`.
-- The owned files total 1,534 lines across `diagnostic.h`, `rules.h`, `diagnostic.c`, `rules.c`, and `compiler/src/report/`.
-- There are 4 dedicated report golden suites: `alias_report`, `memory_report`, `tristate_report`, and `chip_info`, and 2,937 validation artifacts overall.
-- I did not find unfinished-code markers in the owned paths.
+- 6 owned source files totaling 6,355 LOC across diagnostics, rules, and report emitters.
+- `compiler/src/rules.c` contains 200-plus rule entries organized into named groups, including `REPORTS`, `GENERAL_WARNINGS`, `TESTBENCH`, `SIMULATION`, and `TRISTATE_TRANSFORM`.
+- 1,505 validation fixtures and 1,468 expected `.out` files under `compiler/tests/validation/`.
+- 3 dedicated report golden suites (`alias_report`, `memory_report`, `tristate_report`) plus 23 shell-based golden scripts across diagnostics-adjacent features.
+- Marker scan found 0 `TODO`, `FIXME`, `XXX`, `HACK`, `stub`, or `unimplemented` hits in the owned tree.
+- `run_validation.sh` already exercises the normal lint path with `--info --lint`, while report goldens cover `--alias-report`, `--memory-report`, and `--tristate-report`.
 
 **Needed before 1.0.0:**
-- Add a dedicated snapshot for `--lint-rules` so the public rule catalog is pinned like the other report commands.
-- Add at least one stress case for long chip/memory labels and descriptions, or switch the report tables to safer bounded formatting if larger chip data is expected.
-- Decide whether `REPORT_DEPTH_LIMIT_EXCEEDED` should get an explicit regression, since the rule exists and the code path is present but is not visibly pinned by a golden case.
+- Add direct regression coverage for diagnostic rendering flags, especially `--warn-as-error`, `--explain`, `--color`, and `--info`.
+- Add explicit tests for warning-policy group overrides (`--Wno-group` and `--Eno-group`) so suppression behavior is locked down independently of semantic fixtures.
+- Add a small `--lint-rules` golden or snapshot test so rule-table output is stable as the table evolves.
+- Expand report-mode coverage with at least one negative-path fixture for report traversal limits or depth diagnostics, not just happy-path output.
+- Review the rule descriptions for a few remaining wording inconsistencies and ensure the most user-facing messages stay concise and explanatory.
 
 **Surprising findings:**
-- The report layer is much more mature than the directory layout suggests: the four user-facing report commands are already backed by exact golden outputs, and the chip-info command is detailed enough to be a real release feature rather than a debugging dump.
+- The renderer already has release-grade sorting and grouping semantics: same-file and same-line diagnostics are prioritized, deduplicated, and rendered deterministically.
+- The report emitters are more useful than their names suggest: alias reporting includes identifier indexing and cross-module summaries, tri-state reporting includes proof obligations, and memory reporting is chip-aware.
 
 ### 8. Chip Data & Vendor Support — Score: 7 / 10
-**Paths owned:** `compiler/data/`, `compiler/include/chip_data.h`, `compiler/src/chip_data.c`, `compiler/src/chip_data_internal.h`
+**Paths owned:** `compiler/data/`, `compiler/src/chip_data.c`, `compiler/src/chip_data_internal.h`, `specification/chip-info-specification.md`
 **Criteria scored against:**
-- Correctness versus the chip-info specification and vendor modeling needs
-- Coverage and completeness of supported FPGA parts and resource data
-- Validation, error handling, and resistance to malformed or inconsistent chip definitions
-- End-to-end readiness of chip data for backend and reporting workflows
-**Last reviewed:** 2026-05-09
+- chip-info spec conformance and schema correctness
+- vendor coverage and whether declared resources look usable end to end
+- completeness of pin/resource modeling and special-case handling
+- validation depth, data hygiene, and drift risk between JSON and compiler expectations
+**Last reviewed:** 2026-05-11
 **Rationale:**
-This is solid and close to release-ready for the parts it actually models. The database spans Gowin, Lattice iCE40, Lattice ECP5, and AMD/Xilinx Artix-7; the chip records carry real resources, memory tables, clock generators, differential I/O, latch/DSP metadata, and fixed pins; and the loader is not a dumb parser. It enforces built-in/local path safety, token/nesting limits, variant exhaustiveness/disjointness, and basic shape checks for memory and clock-gen sections, which keeps malformed vendor data from turning into silent bad output.
+The chip-data layer is broadly usable and clearly not an afterthought. The built-in JSON set covers four vendor families end to end, and the compiler consumes that data in multiple places: chip-info reporting, memory reporting, semantic validation, backend wrapper generation, and differential I/O lowering. The schema validator is also reasonably strict for the top-level structure and the nested `clock_gen`, `differential`, memory, and fixed-pin shapes, including exhaustive and disjoint validation for `variants`.
 
-It still lands below an 8 because the shipping surface is narrower and less schema-strict than the spec implies. There are 9 JSON definitions in `compiler/data/`, but only 8 are embedded in `k_builtin_chips`; `gw5a-lv25-mg121-c1-i0.json` exists as source data without being part of the built-in database. The chip-info spec is also not fully aligned with the data vocabulary, because the iCE40 differential entries use `type: "pseudo"` while the spec documents only `true` or `emulated`. On the validation side, the loader accepts a lot of partially malformed structure by skipping unknown or missing fields instead of rejecting them, so custom chip definitions can fail open unless they hit the narrow set of explicit checks.
+It stops short of a 1.0.0-ready 8 because there are still real hygiene and drift risks. The loader keeps legacy compatibility paths for some memory and differential shapes, which is fine for transition but weakens the release contract. More importantly, the implementation does not enforce a few semantic invariants the spec and consumers rely on, and the iCE40 chip files currently contain duplicate `osc` entries with the same `type` and `mode`, making one definition unreachable through the current lookup API. That is the kind of data issue that can sit quietly until a backend or report path asks for the wrong entry.
 
 **Key measurements:**
-- 9 chip JSON definitions exist under `compiler/data/`.
-- 8 of those are embedded as built-ins in `compiler/src/chip_data.c`.
-- The built-in set covers 4 vendor families: Gowin, Lattice iCE40, Lattice ECP5, and AMD/Xilinx Artix-7.
-- Across the data set, I saw 5 memory types (`SDRAM`, `DISTRIBUTED`, `BLOCK`, `SPRAM`, `FLASH`) and 7 distinct clock-gen types (`osc`, `pll`, `pll2`, `clkdiv`, `clkdiv2`, `buf`, `buf2`).
-- The `chip_info` golden coverage is narrow: one list snapshot and one detailed chip snapshot are pinned.
-- The loader does validate higher-risk cases like variant coverage, path safety, and token/nesting limits, so the failure mode is controlled rather than arbitrary.
+- 9 built-in chip JSON files are present, spanning Gowin, iCE40, ECP5, and Xilinx 7-series devices.
+- 8 of 9 built-ins include a `differential` section; `gw5a-lv25-mg121-c1-i0` intentionally omits it.
+- 40 chip-data-focused validation fixtures exist, covering malformed JSON, missing required sections, bad differential keys and types, `map` versus `variants` exclusivity, variant coverage, and clock-gen parameter errors.
+- The owned chip-data code path is marker-clean in the scanned files: no `TODO`, `FIXME`, `XXX`, `HACK`, `stub`, or `unimplemented` hits in `compiler/src/chip_data.c` or the chip-info spec.
+- The chip-data API is used directly by `compiler/src/sem/driver_project_hw.c`, `compiler/src/report/chip_report.c`, `compiler/src/report/memory_report.c`, and both backend wrapper emitters.
 
 **Needed before 1.0.0:**
-- Decide whether `gw5a-lv25-mg121-c1-i0.json` is intentionally external-only or needs to be embedded and listed as a supported built-in chip.
-- Normalize the differential type vocabulary in the spec and data (`pseudo` vs. `true`/`emulated`) so the contract is explicit.
-- Add stricter schema validation for required top-level sections and unknown or malformed nested objects if custom chip JSON is expected to be supported.
-- Expand report and test coverage beyond one detailed `--chip-info` snapshot so changes to non-Gowin vendor data are pinned before release.
+- Enforce the semantic invariants the compiler already depends on, especially rejecting duplicate `clock_gen` entries with the same `type` and `mode` and validating required outputs such as `BASE`.
+- Remove or split the duplicate `osc` definitions in both iCE40 chip JSON files so every declared clock generator is reachable by lookup.
+- Add end-to-end regression coverage for each built-in chip JSON so report output, clock-gen lookup, differential handling, and fixed-pin metadata stay aligned with the compiler’s expectations.
+- Tighten the loader contract around legacy compatibility paths so only intentionally supported JSON shapes remain accepted.
 
 **Surprising findings:**
-- The modeled hardware surface is broader than the built-in list suggests, but the main risk is release packaging and schema discipline, not missing primitive categories.
+- Chip data is not just for synthesis; the same payload drives user-facing reports, semantic checks, backend generation, and vendor-specific constraints.
+- `variants` coverage is already validated exhaustively and disjointly at load time, which is stronger than the rest of the chip JSON validation surface.
 
 ### 9. CLI & LSP — Score: 7 / 10
-**Paths owned:** `compiler/include/{compiler.h,lsp.h,path_security.h,util.h,version.h}`, `compiler/src/{main.c,compiler.c,util.c,arena.c,path_security.c,cli_frontend.c,cli_frontend.h,cli_modes.c,cli_modes.h,cli_options.c,cli_options.h}`, `compiler/src/lsp/`
+**Paths owned:** `compiler/src/main.c`, `compiler/src/cli_*.c`, `compiler/src/path_security.c`, `compiler/src/lsp/`
 **Criteria scored against:**
-- CLI surface completeness, coherence, and user-facing stability
-- LSP capability depth and robustness for real editor use
-- Path security, file handling, and failure-mode quality
-- Packaging/versioning maturity for a 1.0.0 command-line tool
-**Last reviewed:** 2026-05-09
+- CLI surface completeness and stability for 1.0.0 users
+- path-safety, IO robustness, and mode dispatch correctness
+- LSP feature completeness and resilience on malformed input
+- test coverage, packaging ergonomics, and user-facing error handling
+**Last reviewed:** 2026-05-11
 **Rationale:**
-The command-line surface is broad and coherent: lint, AST, IR, Verilog, RTLIL, test, simulate, report commands, chip-info, lint-rules, and the stdio LSP entrypoint are all wired through a single parser and mode dispatcher. Path security is also materially strong for a 1.0.0 tool: it canonicalizes paths, rejects absolute/traversal by default, supports explicit sandbox roots, checks symlink escapes, and revalidates open-after-validate on POSIX.
-
-What keeps this at 7 is release-facing polish and one editor-grade correctness bug. The version banner is still stamped as `0.1.8`, the LSP initialize response hardcodes `serverInfo.version` to `0.1.0`, and the only dedicated LSP regression coverage I found is two golden suites. More importantly, both diagnostic publish paths filter by basename only, so same-named files in different directories can be misattributed in real workspaces. That is the kind of failure mode that will show up quickly in a large editor project.
+The CLI surface is mostly complete and the docs are already aligned with it: the entrypoint exposes the expected modes, `--chip-info`, `--lint-rules`, path-safety flags, expansion limits, and `--lsp`, and the README plus CLI usage docs describe the same surfaces. The LSP server is also real rather than skeletal: it handles initialize and shutdown, diagnostics, hover, completion, definition, project selection, project discovery, and cached clock metadata. The score stops at 7 because the release-hardening story is still uneven. Top-level dispatch has only indirect coverage for some standalone flags, malformed LSP payloads are mostly dropped or truncated rather than turned into explicit protocol errors, and diagnostics still collapse file identity to basenames during publish, which is risky in multi-file workspaces with duplicate filenames.
 
 **Key measurements:**
-- 21 owned CLI/LSP source/header files in scope.
-- 2 dedicated LSP golden suites.
-- 28 path-security validation fixtures in `compiler/tests/validation/`.
-- The CLI usage surface already advertises the release-oriented modes and commands, including `--chip-info`, `--lint-rules`, and `--lsp`.
+- 10 owned source and header files totaling 5,538 LOC.
+- 3 LSP-specific shell goldens and 23 path-security validation cases.
+- The validation runner already exercises lint, golden backends, Yosys parse and equivalence, testbench, simulation, and cross-mode rejection paths.
+- `README.md` and `docs/getting-started/cli-usage.md` both document `--lsp`, the major modes, path-safety flags, and editor integration.
+- The LSP transport layer caps message bodies at 16 MiB and uses a 250 ms read timeout; the server also keeps fixed-capacity stores for 128 open docs, 32 discovered projects, and 32 sandbox roots.
 
 **Needed before 1.0.0:**
-- Replace basename-only LSP diagnostic filtering with canonical path or URI matching so same-leaf files cannot collide.
-- Re-stamp the release-facing version surfaces (`version.h`, LSP `serverInfo.version`, and any generated version metadata) to 1.0.0.
-- Expand dedicated LSP regression coverage beyond the current sandbox and resource tests, especially for hover, definition, and completion on real multi-file projects.
+- Add direct CLI smoke coverage for standalone dispatch and error paths, especially `--help`, `--version`, `--lint-rules`, mode-conflict rejection, and unknown-option handling.
+- Return explicit JSON-RPC errors for malformed LSP requests instead of silently ignoring bad params or relying on fixed-size intermediate buffers.
+- Preserve canonical file identity when publishing diagnostics so files with the same basename in different directories do not collide.
+- Decide whether the fixed caps on open documents, discovered projects, and sandbox roots are supported release limits or should be replaced with dynamic growth plus explicit diagnostics.
 
 **Surprising findings:**
-- The sandbox layer is stronger than the directory name suggests; the bigger gap is not path validation but release stamping and editor-facing correctness.
+- The LSP server already exposes more than the typical minimum editor surface, including a custom `jz-hdl/projectInfo` notification and project override flow.
+- Path sandboxing is stricter than the CLI docs alone suggest: absolute paths, traversal, and symlink escapes all have dedicated diagnostics and dedicated validation fixtures.
 
-### 10. Build, Packaging & CI Infrastructure — Score: 5 / 10
-**Paths owned:** `compiler/CMakeLists.txt`, `compiler/cmake/`, `viewer/CMakeLists.txt`, `.github/`, `scripts/`
+### 10. Waveform Viewer — Score: 6 / 10
+**Paths owned:** `viewer/`
 **Criteria scored against:**
-- Reproducible clean builds for compiler, viewer, and supporting tools
-- CI coverage breadth and likelihood of catching release regressions
-- Version stamping, release automation, and packaging hygiene
-- Contributor and release-engineering ergonomics for 1.0.0
-**Last reviewed:** 2026-05-09
+- clean-build and run readiness on a fresh machine
+- feature completeness versus emitted waveform formats
+- packaging and release readiness for 1.0.0 distribution
+- error handling, UX rough edges, and obvious maintenance risks
+**Last reviewed:** 2026-05-11
 **Rationale:**
-The build system is functional, but it is not yet release-grade. The compiler has a conventional CMake build, generated version stamping, and CI does run build, CTest, and validation with warnings-as-errors. But the release surface is still narrow: CI only exercises the compiler on one Ubuntu job, the viewer is not built or tested in CI, and there is no real install/export/package layer beyond a single `install(TARGETS jz-hdl ...)` rule.
-
-Reproducibility is also incomplete. Both compiler and viewer pull third-party dependencies through `FetchContent` with pinned tags or versioned URLs, but not with checksum-locked artifacts, so a clean build still depends on upstream availability. In `compiler/CMakeLists.txt`, the `docs` target is `ALL` and copies generated PDFs back into `docs/public/pdf/`, which dirties the source tree during a normal build. That is poor packaging hygiene for 1.0.0 and makes “clean build” less clean than it should be.
-
-`scripts/release` is useful, but it behaves more like an internal release helper than a shippable packaging workflow. It is macOS-specific (`sed -i ''`), edits multiple source files directly, validates only the compiler path, and archives source trees rather than producing a reproducible compiled viewer artifact. `scripts/gitpages-update` is similarly serviceable, but `npm install` makes the docs deployment less deterministic than a locked install flow.
+The viewer is a capable JZW-native UI: it handles live reload, signal expansion, annotations, clocks, cursors, and waveform rendering without obvious stub paths, and the SQLite loading code is careful about text bounds and quota enforcement. It is not 1.0.0-ready yet because the build is network-coupled at configure time (`FetchContent` pulls SQLite, SDL3, and ImGui from upstream URLs), the release surface is intentionally narrow (`.jzw` only, with VCD and FST explicitly out of scope), and the interactive UI has no dedicated regression coverage beyond a `--validate` smoke path in CI. The initial open path also insists on `SQLITE_OPEN_READWRITE`, which blocks read-only archives and makes the viewer less robust on packaged or locked-down installs. The monolithic `viewer/src/main.cpp` is a maintenance hotspot.
 
 **Key measurements:**
-- 1 CI workflow in `.github/workflows/ci.yml`, with a single Ubuntu job.
-- 5 owned support/build scripts or CMake helpers outside the two main CMakeLists.
-- Only the compiler install target is defined in the reviewed paths.
-- Both compiler and viewer use network-fetched third-party dependencies during clean builds.
+- `viewer/src/main.cpp` is 3,125 LOC and owns the full runtime and UI path.
+- `viewer/CMakeLists.txt` is 60 LOC, but it fetches SDL3 and ImGui from GitHub at configure time, while the root build also fetches sqlite3 from sqlite.org.
+- CI has one `viewer-smoke` job, and it exercises `--validate` only, not the interactive GUI or live-reload UI.
+- `viewer/README.md` documents explicit limitations: no file-open dialog, no persistence, no modularization, and no VCD or FST support.
 
 **Needed before 1.0.0:**
-- Add viewer build/test coverage in CI, plus at least one matrix dimension that catches release-relevant variation beyond a single Ubuntu compiler job.
-- Stop writing generated PDFs back into the source tree during ordinary builds; stage them in the build tree or a dedicated packaging output path instead.
-- Add a real install/package flow for shipped artifacts, including the viewer, and centralize version stamping so the release script does not have to patch multiple files.
-- Replace the ad hoc release helper with cross-platform, deterministic packaging steps and pinned dependency installs.
+- Add an offline or vendored dependency path so a clean build does not depend on live network fetches during configure.
+- Decide whether JZW-only support is the release boundary; if it is, document that clearly as the supported scope, otherwise add support for the other emitted waveform formats.
+- Add at least one GUI-level smoke or screenshot regression test for the interactive viewer, not just `--validate`.
+- Relax the initial `SQLITE_OPEN_READWRITE` load path or add a read-only fallback so archived traces on read-only media still open.
+- Split `viewer/src/main.cpp` or isolate loading, state, and rendering into separate units before release.
 
 **Surprising findings:**
-- The strongest part of the current release story is compiler validation coverage, not packaging; the automation looks polished on the surface, but it still behaves like internal tooling rather than 1.0.0 distribution infrastructure.
+- The viewer feature set itself is stronger than the file layout suggests: live reload, four cursors, signal-tree expansion, annotation rendering, and a clock dialog are already implemented.
+- The strongest release risk is packaging and portability, not missing core waveform rendering logic.
 
-### 11. Waveform Viewer — Score: 6 / 10
-**Paths owned:** `viewer/` excluding `viewer/build/`
+### 11. VS Code Extension — Score: 7 / 10
+**Paths owned:** `vscode-ext/`
 **Criteria scored against:**
-- Buildability and runtime completeness on a clean machine
-- Fidelity and usability for inspecting JZW waveforms
-- Error handling, persistence, and scalability expectations for practical use
-- Packaging/distribution readiness as a shipped companion tool
-**Last reviewed:** 2026-05-09
+- install/build/package readiness and editor integration quality
+- LSP client behavior, configuration ergonomics, and fallback behavior
+- documentation, smoke coverage, and marketplace/release readiness
+- stale build artifacts, dependency hygiene, and obvious UX gaps
+**Last reviewed:** 2026-05-11
 **Rationale:**
-The viewer is functionally solid for its core job. `src/main.cpp` already loads JZW traces directly from SQLite, supports live reload against WAL, renders scalar and bus waveforms, shows annotations and clock metadata, and provides the expected interaction set for a waveform browser: zoom, pan, cursors, signal visibility, drag reorder, and per-bit expansion. Error handling is also materially better than a prototype; the loader enforces explicit caps on signals, changes, annotations, clocks, and resident text, and it reports malformed trace data with readable failures instead of undefined behavior.
+The extension is functional and reasonably well integrated: it compiles to `out/`, packages a VSIX, activates on `jz-hdl` files and `.jz` workspaces, starts an LSP client against either `jz-hdl` on `PATH` or a configured binary, and exposes a project picker plus status-bar state. The smoke path is real rather than symbolic: it packages the extension, installs the VSIX into a downloaded VS Code, and exercises startup without LSP, missing and non-file binary failures, project discovery, project selection, go-to-definition, and diagnostics against fixture workspaces.
 
-What keeps this out of 7/10 is release maturity. The clean-machine build story depends on network fetches in `CMakeLists.txt` for SDL3, SQLite, and ImGui, and there is no install or packaging target to turn the tool into a distributable companion app. The usability surface is still thin for a shipped viewer: there is no file-open dialog, no search/filter, and no persistence for layout, zoom, or cursor state. The live-reload path is also not fully robust, because polling advances by `time > max_loaded_time`, which can miss late-arriving rows at an already-seen timestamp.
+It still lands at 7 because release packaging is thin and a few polish gaps remain. There is no `README.md`, `CHANGELOG.md`, icon, or other marketplace-facing content under `vscode-ext/`, the package version is still `0.2.0`, the automated coverage is concentrated in one end-to-end smoke suite plus a small test harness, and binary selection is still mostly settings-driven rather than discoverable from the UI. I did not find marker debt in the owned source, but the release story is not yet complete enough to call polished 1.0.0 material.
 
 **Key measurements:**
-- 3 owned files in scope, totaling 3,296 lines; `src/main.cpp` alone is 3,050 lines.
-- The build pulls 3 upstream dependencies with `FetchContent`: SDL3 `release-3.2.14`, SQLite amalgamation `3.49.0100`, and Dear ImGui `v1.91.8-docking`.
-- The implementation has explicit in-memory caps for 200,000 signals, 4,000,000 changes, 200,000 annotations, 4,096 clocks, and 256 MiB of resident text.
-- The runtime surface already covers the major JZW viewer features: signal tree browsing, waveform drawing, four cursors, annotations, clock metadata, and live-follow.
+- 2 extension source files (`src/extension.ts` and `src/test/suite/index.ts`), 1 smoke script, and 5 smoke fixtures under `test-fixtures/smoke-workspace/`.
+- `package.json` defines `compile`, `package:vsix`, `smoke`, `test`, and a `vscode:prepublish` hook.
+- The extension contributes one language, one grammar, one command, and three user-facing settings (`binaryPath`, `lsp.enabled`, and two hover toggles).
+- Smoke coverage spans startup-disabled-LSP, missing binary, non-file binary, ambiguous project selection, project switching, go-to-definition, and diagnostics.
+- Literal marker scan found 0 `TODO`/`FIXME`/`XXX`/`HACK`/`stub`/`unimplemented` hits in `vscode-ext/src/` and `vscode-ext/scripts/`.
 
 **Needed before 1.0.0:**
-- Add an offline-capable build path and a real packaging/install target so the viewer can be shipped without relying on live source fetches.
-- Fix live-reload change ingestion so same-timestamp rows cannot be skipped.
-- Add file-open and search/filter support, or explicitly defer them if the intended release scope is a minimal companion viewer.
-- Add persistence for viewport, signal ordering, visibility, and cursors if the tool is meant to feel like a finished desktop app rather than a transient trace inspector.
+- Add marketplace-facing release assets and docs: `README.md`, changelog or release notes, and an icon or banner if the extension is meant to ship publicly.
+- Bump the extension package version from `0.2.0` and verify the VSIX metadata matches the release train.
+- Add at least one focused regression test for settings persistence or restart behavior so config-driven LSP fallback is covered beyond the current smoke path.
+- Reduce reliance on manual settings for binary selection by adding a clearer UI affordance or quick-pick path for `jz-hdl.binaryPath`.
+- Audit whether any generated release artifacts are intentionally tracked; if not, keep build outputs out of the published tree.
 
 **Surprising findings:**
-- The rendering and trace-loading core are farther along than the project layout suggests; the main gap is distribution and polish, not the waveform engine itself.
+- The extension already handles the main failure modes cleanly: it validates configured binaries up front, falls back to `PATH` when unset, and emits targeted startup diagnostics instead of failing silently.
+- The smoke suite is more than a launch check; it verifies project discovery and editor features end to end against real workspace fixtures.
 
-### 12. VS Code Extension — Score: 6 / 10
-**Paths owned:** `vscode-ext/` excluding `vscode-ext/node_modules/` and `vscode-ext/out/`
+### 12. Examples — Score: 7 / 10
+**Paths owned:** `examples/` source trees and per-example `Makefile`s
 **Criteria scored against:**
-- Install/build/run readiness and extension packaging quality
-- Quality of editor integration with the CLI/LSP
-- Robustness on missing binaries, bad paths, and failure states
-- Feature completeness relative to what a 1.0.0 editor integration should expose
-**Last reviewed:** 2026-05-09
+- buildability and simulation usefulness from clean source inputs
+- representativeness of the language and platform feature set
+- code quality and whether examples teach good patterns
+- explanation quality, maintenance burden, and stale-output risk
+**Last reviewed:** 2026-05-11
 **Rationale:**
-This is a usable extension, but not yet a finished 1.0.0 editor integration. The manifest, language configuration, grammar, and compiled entrypoint are all present, and `npm run compile` succeeds cleanly. The client can launch `jz-hdl --lsp` or a configured binary, expose hover toggles, surface a project picker, and show a user-facing error if startup fails.
+The examples tree is broadly strong and genuinely useful as a release corpus. It covers the language from small, teachable designs (`counter`, `latch`) through clocking and multi-domain examples (`domains`, `pll`) into larger integration demos (`dvi`, `dvi_audio`, `uart_audio`, `terminal`, `cpu`, `soc`, `ascon`, `uart_echo`, `lcd`). The source quality is generally good, and the best examples do teach solid patterns with clear comments and readable structure.
 
-What keeps it at 6 instead of 7 is editor-fidelity and release polish. The extension version is still `0.1.0`, activation is only `onLanguage:jz-hdl`, and the LSP client only targets `file` documents, so unsaved or non-file buffers do not get the integration path. The project-info cache is also global rather than per active document or URI, which means switching between multiple open `.jz` files can leave the status bar and picker state stale or misattributed. Error handling for missing or bad binaries is present, but it is generic and stops at a single message instead of offering a clearer degraded mode or binary validation flow. The published-package story is also thin: `.vscodeignore` keeps the payload lean, but there is no in-repo VSIX packaging or smoke-test flow beyond TypeScript compilation.
+It is not 1.0.0-clean yet. The build story is inconsistent across roots: only 5 example trees actually ship a local `src/simulation.jz` harness (`counter`, `domains`, `dvi`, `latch`, `pll`), while the other 8 root `Makefile`s still expose `simulate` targets that point at a missing file. Maintenance hygiene is also uneven: `examples/cpu/Makefile` cleans the wrong outputs, `examples/soc/Makefile` leaves `reports/` behind, and several docs read like working notes or stale snapshots rather than release guidance (`examples/soc/bios.md`, `examples/status.md`, `examples/terminal/tools/escape commands.md`). The result is useful and representative, but still rough enough to keep it below 8.
 
 **Key measurements:**
-- 5 owned files in scope, totaling 500 lines.
-- The extension contributes 1 language, 1 grammar, 1 command, and 4 user-facing settings.
-- `npm run compile` passes in the extension directory.
-- Packaging is controlled by `.vscodeignore`, which excludes `src/**`, `node_modules/**`, `.gitignore`, and `tsconfig.json` from the shipped extension payload.
+- 13 example roots and 14 `Makefile`s cover 138 `.jz` source files.
+- Only 5 roots have a dedicated `src/simulation.jz` harness; 8 root `Makefile`s still advertise `simulate` without a matching local source file.
+- 6 Markdown docs and notes live under `examples/`, including `examples/coverage.md` and a generated status snapshot dated `2026-05-06`.
+- Tracked report-like outputs exist in `examples/cpu/reports/` and `examples/soc/reports/`, plus generated data files such as `examples/terminal/font/font.json`.
+- Marker scans over `examples/` found no `TODO`/`FIXME`/`XXX`/`HACK`/`stub`/`unimplemented` hits.
 
 **Needed before 1.0.0:**
-- Stamp the extension-facing version surfaces to `1.0.0` instead of `0.1.0`.
-- Track project info per active editor or URI so status-bar state and project selection do not bleed across multiple open files.
-- Broaden activation and document targeting if unsaved or remote `.jz` buffers are expected to work in real editor use.
-- Add explicit packaging and smoke-test coverage for install, startup, missing-binary, and bad-path cases, not just a TypeScript compile check.
+- Add or remove `simulate` targets so every advertised simulation path has a source-backed harness, or gate those targets per example and document the limitation clearly.
+- Fix the clean rules so they remove the outputs the example actually generates, especially `examples/cpu/Makefile` and `examples/soc/Makefile`.
+- Separate checked-in generated artifacts from hand-written documentation, or mark them explicitly as generated snapshots and add freshness or regeneration checks.
+- Rewrite the drafty notes into release-grade example documentation, especially the BIOS notes, terminal escape reference, and status snapshot.
+- Add a top-level examples index that explains which trees are build-only, simulation-ready, or board-specific so users do not have to infer behavior from copied `Makefile` templates.
 
 **Surprising findings:**
-- The code is smaller and cleaner than the feature surface suggests; the main gap is not complexity, it is state handling and editor reach.
+- The corpus is more representative than the directory names suggest: it spans simple counters, latches, DVI and video, UART and audio, terminal I/O, crypto, and a small SoC with software payload generation.
+- The weakest part is not RTL quality but hygiene and documentation drift, and the copy-pasted `Makefile` template has replicated the same `simulate` and `clean` problems into multiple roots.
 
-### 13. Examples — Score: 6 / 10
-**Paths owned:** `examples/` excluding generated outputs
+### 13. Documentation Site — Score: 7 / 10
+**Paths owned:** `docs/`, `README.md`
 **Criteria scored against:**
-- Buildability and simulation sanity from clean source state
-- Representativeness of language, chip, and tooling features
-- Code quality and whether examples teach good patterns
-- Documentation/comments sufficient for users to learn from them
-**Last reviewed:** 2026-05-09
+- completeness and navigability for new users
+- consistency with the authoritative specifications and current tooling
+- build/publish readiness and dead-link/stale-content risk
+- onboarding quality for install, build, and first success
+**Last reviewed:** 2026-05-11
 **Rationale:**
-The examples corpus is useful and broadly healthy, but it is not yet a polished 1.0.0 showcase. Most example roots have a conventional `build`/`synthesis`/`simulate` flow that shells out to `../../compiler/build/jz-hdl`, and the better-written samples such as `terminal` and `soc` are heavily commented and do teach real patterns: module composition, buses, clocks, memories, reports, simulation, and board-specific configuration. The two top-level docs also help: `examples/status.md` gives a current synthesis matrix and `examples/coverage.md` is a useful feature map for the whole corpus.
+The docs surface is already solid for a 1.0.0 release: `README.md`, `docs/getting-started/*`, `docs/examples/*`, and the reference manual form a coherent path from install to first compile, and the VitePress nav mirrors that structure cleanly. The site is not content-starved, and the onboarding flow is materially better than a typical project README plus a pile of reference pages.
 
-The gap is completeness and consistency. The status matrix still shows one explicit board failure (`latch` on `pa35t-edu`) and several blank board/example combinations, so the set is not uniformly build-verified across its advertised targets. More importantly, the coverage matrix itself documents missing or underrepresented language features that matter for a release claim, including `=z`/`<=z`, `=s`/`<=s`, hardware `*` and `/`, alternate reset/clock modes, write-mode variants, and several intrinsic functions. Documentation quality also varies: `examples/soc/bios.md` reads like working notes rather than release-facing guidance, and some Makefiles are copy-paste heavy or board-specific in ways that make the corpus less teachable than it could be.
+The main gaps are release polish and publish reproducibility, not missing coverage. The only stale marker found in owned docs content is the `Version 0.2.0` example in CLI usage, but the published spec PDFs still inherit beta-era framing from `specification/`, which makes the site feel pre-release even though the current tooling and docs layout are otherwise release-shaped. The build path is also not yet self-contained: `scripts/build-docs-site` goes through a top-level CMake configure that fetches `sqlite3` from the network, and the docs build uses `npm install` without a `docs/package-lock.json`, so the publish path is not fully deterministic.
 
 **Key measurements:**
-- 13 example roots are present: `ascon`, `counter`, `cpu`, `domains`, `dvi`, `dvi_audio`, `latch`, `lcd`, `pll`, `soc`, `terminal`, `uart_audio`, and `uart_echo`.
-- I counted 180 tracked non-generated files in the owned example tree, including source, docs, and helper scripts.
-- `examples/status.md` tracks 13 examples across 4 board targets and shows one explicit `FAIL` plus several unfilled cells.
-- `examples/coverage.md` confirms broad coverage for modules, memories, CDC, clocks, simulation, and configuration, but also lists several intentionally uncovered core features.
-- The strongest teaching examples are the large, commented designs: `terminal`, `soc`, `dvi`, and `uart_audio`.
+- 57 owned `docs/` and `README.md` files, including 37 markdown pages under `docs/` (`4` getting-started, `22` reference-manual, `10` examples).
+- `docs/.vitepress/config.mts` already sets the GitHub Pages base path, wires the main nav and sidebar, and links the PDF specifications.
+- `scripts/build-docs-site` stages 5 spec PDFs into the site and verifies they exist in the final output.
+- One stale version marker remains in owned docs and README: `docs/getting-started/cli-usage.md` still shows `Version 0.2.0 (abc1234)`.
+- The publish build failed in this environment because the root CMake `FetchContent` step tried to download `sqlite3` from `www.sqlite.org`, and DNS resolution was unavailable.
 
 **Needed before 1.0.0:**
-- Add at least one small, focused tri-state example and one width-mismatch/sign-extension example so the coverage gaps in `examples/coverage.md` stop being the default story for the corpus.
-- Normalize the build/sim story across the example roots so the simplest demos are as reproducible and discoverable as the larger board-oriented projects.
-- Turn the roughest prose docs, especially `examples/soc/bios.md`, into release-quality guidance or reclassify them as internal notes.
+- Replace the remaining `0.2.0` CLI example and add a short release-status note that tells readers what is guaranteed stable at 1.0.0.
+- Make the docs publish path deterministic and offline-safe by removing the network fetch from the docs build path and switching `scripts/build-docs-site` to lockfile-driven dependency installation.
+- Add a minimal site smoke or link-check step so internal nav and published PDF targets are validated before deployment.
+- Regenerate and republish the spec PDFs after the release framing is updated so the site stops shipping mixed beta-era language.
 
 **Surprising findings:**
-- The corpus is better documented than the directory name suggests: `coverage.md` is a genuinely useful feature map, and the best examples already show real design patterns instead of toy snippets.
+- The onboarding path is better than the raw file count suggests: `README.md`, `docs/getting-started/*`, and `docs/examples/*` already give new users a mostly linear path to install, build, and run.
+- The bigger risk is build reproducibility, not documentation breadth.
 
-### 14. Documentation Site & Project Docs — Score: 6 / 10
-**Paths owned:** `docs/` excluding generated and dependency folders, `README.md`
+### 14. Build & CI Infrastructure — Score: 7 / 10
+**Paths owned:** `CMakeLists.txt`, `compiler/CMakeLists.txt`, `specification/CMakeLists.txt`, `viewer/CMakeLists.txt`, `.github/`, `scripts/`, `VERSION`
 **Criteria scored against:**
-- Accuracy and completeness of user-facing documentation versus implementation
-- Information architecture, onboarding quality, and release usability
-- Staleness, generated-asset drift, and broken-reference risk
-- Adequacy of installation/build/run guidance for external users
-**Last reviewed:** 2026-05-09
+- reproducible clean builds from checkout
+- CI breadth against the project’s stated release gates
+- release packaging/version stamping and artifact story
+- contributor ergonomics and automation gaps
+**Last reviewed:** 2026-05-11
 **Rationale:**
-The docs surface is structurally solid. The VitePress site already has a sensible Quick Start / Reference Manual / Verification / Examples / Specifications split, and the README covers build, test, CLI usage, examples, and editor support in a way an external user can mostly follow.
+The build and CI story is solidly usable and covers most of the release path end to end: the root CMake project wires versioning, packaging, and subprojects together; the compiler CMake config generates version headers and installs the binary; the docs target builds PDFs when `pandoc` is present; and the viewer build is integrated with its third-party dependencies. The single GitHub Actions workflow also covers the stated 1.0.0 gates from `README.md`: compiler build and test and validation, docs build, VS Code extension compile and smoke, and viewer smoke, with an extra macOS viewer matrix.
 
-What keeps this from 7/10 is concrete release-facing polish. The README quick example references `reset` without declaring it, so copy-paste users will hit a compile error. `docs/getting-started/installation.md` still uses `git clone <repository-url>`, which is not actionable for a release user. The CLI docs also omit `--Wgroup=NAME`, even though the compiler accepts it. The shipped PDFs under `docs/public/pdf/` are useful, but they are checked-in generated artifacts and there is no documented regeneration path in the docs package, so drift risk remains.
+It stops at 7 because reproducibility and release publication are not fully deterministic yet. The build still fetches third-party source at configure time from live URLs and tags, `scripts/build-docs-site` uses `npm install` even though the docs tree has a lockfile, and the release path is split across multiple scripts rather than one publishable, CI-verified artifact pipeline. The versioning flow exists and works, but it is still more release helper than release system.
 
 **Key measurements:**
-- 37 Markdown source pages in `docs/`, plus `README.md`.
-- 5 shipped PDF specification artifacts under `docs/public/pdf/`.
-- 38 HTML pages in `docs/.vitepress/dist`, so the site is already broad enough for a 1.0.0 docs set.
-- The site config already separates Quick Start, Reference Manual, Verification, Specifications, and Examples.
+- 1 GitHub Actions workflow file with 4 jobs: `compiler-test`, `docs-site`, `vscode-extension`, and `viewer-smoke`.
+- The viewer smoke job is the only matrixed build, and it covers 2 OSes: Ubuntu and macOS.
+- `CMakeLists.txt` defines 3 CPack components (`Compiler`, `Viewer`, `Docs`) and both binary and source TGZ packaging.
+- `scripts/release` already runs the full release sequence: version sync, CMake build, CTest, `compiler/tests/run_validation.sh`, viewer smoke, VS Code extension smoke, docs build, tagging, and `cpack`.
+- `scripts/sync_version.py` updates 5 versioned touchpoints: `VERSION`, `compiler/include/version.h`, `docs/getting-started/cli-usage.md`, `vscode-ext/package.json`, and `vscode-ext/package-lock.json`.
+- There are 3 external `FetchContent` fetches in the build graph: SQLite in the root CMake and SDL3 and ImGui in `viewer/CMakeLists.txt`.
 
 **Needed before 1.0.0:**
-- Replace the placeholder clone instruction in `docs/getting-started/installation.md` with the actual repository URL and a platform-accurate build note.
-- Fix the invalid README quick example so every referenced signal is declared, or remove the undeclared reset reference.
-- Document all accepted diagnostic-group flags, including `--Wgroup=NAME`, in the README and CLI docs.
-- Add a documented regeneration path for the shipped PDF specs, or move them out of the hand-edited docs tree to reduce drift risk.
-- Tighten cross-platform installation guidance if you want the build output path and toolchain notes to be truly external-user friendly.
+- Pin or vendor the remaining network-fetched dependencies so a clean checkout builds without depending on mutable upstream availability or tag state.
+- Make the docs-site build deterministic by using lockfile-driven install behavior instead of `npm install`.
+- Add CI coverage for release packaging itself, not just the build-and-test steps that precede it.
+- Consolidate the release publication story so docs deployment, package generation, version stamping, and tagging are exercised through one obvious path.
+- Remove the remaining hardcoded version example drift in `docs/getting-started/cli-usage.md` if it is intended to be release-quality.
+- Decide whether broader platform build smoke beyond the viewer’s Ubuntu and macOS matrix is part of the 1.0.0 support promise; if it is, add it now.
 
 **Surprising findings:**
-- The information architecture is already release-shaped; the main gap is trustworthiness of specific examples and onboarding instructions, not missing topical coverage.
+- The repository already has a more complete release helper than the CI surface suggests: `scripts/release` is effectively a manual release pipeline.
+- Docs publication is integrated more tightly than it first appears, because the docs build rebuilds the PDFs and verifies they appear in the final VitePress output.

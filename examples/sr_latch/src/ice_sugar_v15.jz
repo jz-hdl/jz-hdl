@@ -1,0 +1,28 @@
+@project(CHIP="ICE40UP-5K-SG48") EDGE_RESET_EXAMPLE
+    @import "sr_latch.jz"
+
+    CLOCKS {
+        SCLK = { period=83.33 };
+    }
+
+    IN_PINS {
+        SCLK = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        LED[3] = { standard=LVCMOS33, drive=8 };
+    }
+
+    MAP {
+        SCLK = 35;
+        LED[0] = 40;
+        LED[1] = 41;
+        LED[2] = 39;
+    }
+
+    @top edge_reset_demo {
+        IN  [1] clk    = SCLK;
+        IN  [1] rst_hi = 1'b0;
+        OUT [6] leds   = { ~LED, _, _, _ };
+    }
+@endproj

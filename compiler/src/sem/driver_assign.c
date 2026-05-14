@@ -1275,48 +1275,54 @@ static void sem_check_assignment_stmt(JZASTNode *stmt,
                     }
 
                     /* For SR latches, enforce that both set and reset
-                     * expression widths match the latch width (S4.8).
+                     * expression widths match the assignment target width
+                     * (the full latch for unsliced writes, or the selected
+                     * slice width for sliced writes).
                      * Guard form: latch <= set_expr : reset_expr
                      * children[1] = set_expr, children[2] = reset_expr.
                      */
                     if (is_latch_guard && is_sr_latch && stmt->child_count >= 3) {
-                        JZBitvecType latch_t;
-                        latch_t.width = 0;
-                        latch_t.is_signed = 0;
-                        infer_expr_type(lhs_base, mod_scope, project_symbols,
-                                        diagnostics, &latch_t);
+                        JZBitvecType target_t;
+                        target_t.width = 0;
+                        target_t.is_signed = 0;
+                        infer_expr_type(lhs, mod_scope, project_symbols,
+                                        diagnostics, &target_t);
+                        if (target_t.width == 0) {
+                            infer_expr_type(lhs_base, mod_scope, project_symbols,
+                                            diagnostics, &target_t);
+                        }
 
                         JZASTNode *set_ast = stmt->children[1];
                         JZASTNode *reset_ast = stmt->children[2];
 
-                        if (set_ast && latch_t.width > 0) {
+                        if (set_ast && target_t.width > 0) {
                             JZBitvecType set_t;
                             set_t.width = 0;
                             set_t.is_signed = 0;
                             infer_expr_type(set_ast, mod_scope, project_symbols,
                                             diagnostics, &set_t);
-                            if (set_t.width > 0 && set_t.width != latch_t.width) {
+                            if (set_t.width > 0 && set_t.width != target_t.width) {
                                 char msg[512];
                                 snprintf(msg, sizeof(msg),
                                          "SR-latch '%s' set expression has width %u, "
-                                         "but latch width is %u",
-                                         lhs_base->name, set_t.width, latch_t.width);
+                                         "but target width is %u",
+                                         lhs_base->name, set_t.width, target_t.width);
                                 sem_report_rule(diagnostics, set_ast->loc,
                                                 "LATCH_SR_WIDTH_MISMATCH", msg);
                             }
                         }
-                        if (reset_ast && latch_t.width > 0) {
+                        if (reset_ast && target_t.width > 0) {
                             JZBitvecType reset_t;
                             reset_t.width = 0;
                             reset_t.is_signed = 0;
                             infer_expr_type(reset_ast, mod_scope, project_symbols,
                                             diagnostics, &reset_t);
-                            if (reset_t.width > 0 && reset_t.width != latch_t.width) {
+                            if (reset_t.width > 0 && reset_t.width != target_t.width) {
                                 char msg[512];
                                 snprintf(msg, sizeof(msg),
                                          "SR-latch '%s' reset expression has width %u, "
-                                         "but latch width is %u",
-                                         lhs_base->name, reset_t.width, latch_t.width);
+                                         "but target width is %u",
+                                         lhs_base->name, reset_t.width, target_t.width);
                                 sem_report_rule(diagnostics, reset_ast->loc,
                                                 "LATCH_SR_WIDTH_MISMATCH", msg);
                             }

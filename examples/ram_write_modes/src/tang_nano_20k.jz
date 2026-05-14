@@ -1,0 +1,36 @@
+@project(CHIP="GW2AR-18-QN88-C8-I7") RAM_WRITE_MODES_EXAMPLE
+    @import "ram_write_modes.jz"
+
+    CLOCKS {
+        SCLK = { period=37.04 };
+    }
+
+    IN_PINS {
+        SCLK = { standard=LVCMOS33 };
+        DONE = { standard=LVCMOS33 };
+        KEY  = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        LED[6] = { standard=LVCMOS33, drive=8 };
+    }
+
+    MAP {
+        SCLK = 4;
+        KEY = 87;
+        LED[0] = 15;
+        LED[1] = 16;
+        LED[2] = 17;
+        LED[3] = 18;
+        LED[4] = 19;
+        LED[5] = 20;
+        DONE = IOR32B;
+    }
+
+    @top ram_write_modes_demo {
+        IN  [1] clk   = SCLK;
+        IN  [1] por   = DONE;
+        IN  [1] rst_n = ~KEY;
+        OUT [6] leds  = ~LED;
+    }
+@endproj

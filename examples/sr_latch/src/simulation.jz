@@ -1,0 +1,66 @@
+// Simulation for the edge/reset example.
+
+@module edge_reset_demo
+    PORT {
+        IN  [1] clk;
+        IN  [1] rst_hi;
+        OUT [6] leds;
+    }
+
+    REGISTER {
+        neg_counter [6] = 6'b0;
+    }
+
+    ASYNCHRONOUS {
+        leds <= neg_counter;
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=rst_hi RESET_ACTIVE=High RESET_TYPE=Immediate EDGE=Falling) {
+        neg_counter <= neg_counter + 6'b1;
+    }
+@endmod
+
+@simulation edge_reset_demo
+    CLOCK {
+        clk = { period=37.04 };
+    }
+
+    WIRE {
+        rst_hi [1];
+        leds  [6];
+    }
+
+    TAP {
+        dut.neg_counter;
+    }
+
+    @new dut edge_reset_demo {
+        clk    [1] = clk;
+        rst_hi [1] = rst_hi;
+        leds   [6] = leds;
+    }
+
+    @setup {
+        rst_hi <= 1'b1;
+    }
+
+    @run(ns=185)
+
+    @update {
+        rst_hi <= 1'b0;
+    }
+
+    @run(ns=400)
+
+    @update {
+        rst_hi <= 1'b1;
+    }
+
+    @run(ns=60)
+
+    @update {
+        rst_hi <= 1'b0;
+    }
+
+    @run(ns=200)
+@endsim

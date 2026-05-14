@@ -1,0 +1,34 @@
+@project(CHIP="XC7A35T-2FGG484") INSTANCE_ARRAY_EXAMPLE
+    @import "instance_array.jz"
+
+    CLOCKS {
+        SCLK = { period=5 };
+    }
+
+    IN_PINS {
+        SCLK = { standard=DIFF_SSTL15, mode=DIFFERENTIAL };
+        NRST = { standard=LVCMOS33 };
+    }
+
+    OUT_PINS {
+        LED[6] = { standard=LVCMOS33, drive=4 };
+    }
+
+    MAP {
+        SCLK = { P=R4, N=T4 };
+        NRST = R14;
+        LED[0] = J21;
+        LED[1] = J19;
+        LED[2] = H19;
+        LED[3] = K18;
+        LED[4] = K19;
+        LED[5] = L19;
+    }
+
+    @top instance_array_demo {
+        IN  [1] clk   = SCLK;
+        IN  [1] por   = 1'b1;
+        IN  [1] rst_n = NRST;
+        OUT [6] leds  = LED;
+    }
+@endproj
