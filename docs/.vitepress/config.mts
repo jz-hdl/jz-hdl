@@ -3,9 +3,12 @@ import llmstxt from 'vitepress-plugin-llms'
 import jzLang from '../shiki/jz-hdl.tmLanguage.json';
 import jzTheme from '../shiki/jz-hdl.theme.json';
 
+const siteBase = '/jz-hdl/';
+const pdfLink = (fileName: string) => `${siteBase}pdf/${fileName}`;
+
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  base: '/jz-hdl/',
+  base: siteBase,
   vite: {
     plugins: [llmstxt()]
   },
@@ -21,11 +24,11 @@ export default defineConfig({
       {
         text: 'Specifications',
         items: [
-          { text: 'JZ-HDL Specification', link: '/pdf/jz-hdl-specification.pdf', target: '_blank' },
-          { text: 'Simulation Specification', link: '/pdf/simulation-specification.pdf', target: '_blank' },
-          { text: 'Testbench Specification', link: '/pdf/testbench-specification.pdf', target: '_blank' },
-          { text: 'Chip Info Specification', link: '/pdf/chip-info-specification.pdf', target: '_blank' },
-          { text: 'JZW File Format Specification', link: '/pdf/jzw-specification.pdf', target: '_blank' },
+          { text: 'JZ-HDL Specification', link: pdfLink('jz-hdl-specification.pdf'), target: '_blank' },
+          { text: 'Simulation Specification', link: pdfLink('simulation-specification.pdf'), target: '_blank' },
+          { text: 'Testbench Specification', link: pdfLink('testbench-specification.pdf'), target: '_blank' },
+          { text: 'Chip Info Specification', link: pdfLink('chip-info-specification.pdf'), target: '_blank' },
+          { text: 'JZW File Format Specification', link: pdfLink('jzw-specification.pdf'), target: '_blank' },
         ]
       },
       { text: 'GitHub', link: 'https://github.com/zaun/jz-hdl' },
@@ -80,11 +83,11 @@ export default defineConfig({
       }, {
         text: 'Specifications (PDF)',
         items: [
-          { text: 'JZ-HDL Specification', link: '/pdf/jz-hdl-specification.pdf', target: '_blank' },
-          { text: 'Simulation Specification', link: '/pdf/simulation-specification.pdf', target: '_blank' },
-          { text: 'Testbench Specification', link: '/pdf/testbench-specification.pdf', target: '_blank' },
-          { text: 'Chip Info Specification', link: '/pdf/chip-info-specification.pdf', target: '_blank' },
-          { text: 'JZW File Format Specification', link: '/pdf/jzw-specification.pdf', target: '_blank' },
+          { text: 'JZ-HDL Specification', link: pdfLink('jz-hdl-specification.pdf'), target: '_blank' },
+          { text: 'Simulation Specification', link: pdfLink('simulation-specification.pdf'), target: '_blank' },
+          { text: 'Testbench Specification', link: pdfLink('testbench-specification.pdf'), target: '_blank' },
+          { text: 'Chip Info Specification', link: pdfLink('chip-info-specification.pdf'), target: '_blank' },
+          { text: 'JZW File Format Specification', link: pdfLink('jzw-specification.pdf'), target: '_blank' },
         ]
       }, {
         text: 'Examples',

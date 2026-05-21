@@ -113,6 +113,20 @@ for pdf in "${EXPECTED_PDFS[@]}"; do
   fi
 done
 
+BAD_PDF_LINKS="$(find "$DIST_DIR" -type f \( -name '*.html' -o -name '*.js' \) -print0 | xargs -0 grep -H 'href="/pdf/' || true)"
+if [ -n "$BAD_PDF_LINKS" ]; then
+  echo "Error: Found root-relative PDF links that will 404 on GitHub Pages:" >&2
+  printf '%s\n' "$BAD_PDF_LINKS" >&2
+  exit 1
+fi
+
+for pdf in "${EXPECTED_PDFS[@]}"; do
+  if ! find "$DIST_DIR" -type f \( -name '*.html' -o -name '*.js' \) -print0 | xargs -0 grep -q "href=\"/jz-hdl/pdf/$pdf"; then
+    echo "Error: Missing /jz-hdl/pdf/$pdf link in published site output" >&2
+    exit 1
+  fi
+done
+
 if [ -n "$SITE_OUT" ]; then
   rm -rf "$SITE_OUT"
   mkdir -p "$SITE_OUT"
