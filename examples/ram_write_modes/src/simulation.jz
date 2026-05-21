@@ -1,0 +1,107 @@
+// Simulation for the RAM write-mode example.
+
+@module ram_write_modes_demo
+    PORT {
+        IN  [1] clk;
+        IN  [1] por;
+        IN  [1] rst_n;
+        OUT [6] leds;
+    }
+
+    WIRE {
+        reset [1];
+    }
+
+    REGISTER {
+        phase   [1] = 1'b0;
+        addr    [2] = 2'b0;
+        wdata   [1] = 1'b0;
+        seen_wf [1] = 1'b0;
+        seen_rf [1] = 1'b0;
+        seen_nc [1] = 1'b0;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem_wf [1] [4] = 1'b0 {
+            INOUT rw WRITE_FIRST;
+        };
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem_rf [1] [4] = 1'b0 {
+            INOUT rw READ_FIRST;
+        };
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem_nc [1] [4] = 1'b0 {
+            INOUT rw NO_CHANGE;
+        };
+    }
+
+    ASYNCHRONOUS {
+        reset = por & rst_n;
+        leds <= { phase, seen_wf, seen_rf, seen_nc, addr };
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=reset RESET_ACTIVE=Low) {
+        mem_wf.rw.addr <= addr;
+        mem_rf.rw.addr <= addr;
+        mem_nc.rw.addr <= addr;
+
+        seen_wf <= mem_wf.rw.data;
+        seen_rf <= mem_rf.rw.data;
+        seen_nc <= mem_nc.rw.data;
+
+        IF (phase == 1'b1) {
+            mem_wf.rw.wdata <= wdata;
+            mem_rf.rw.wdata <= wdata;
+            mem_nc.rw.wdata <= wdata;
+            wdata <= !wdata;
+            addr <= addr + 2'b1;
+        }
+
+        phase <= !phase;
+    }
+@endmod
+
+@simulation ram_write_modes_demo
+    CLOCK {
+        clk = { period=20 };
+    }
+
+    WIRE {
+        por   [1];
+        rst_n [1];
+        leds  [6];
+    }
+
+    TAP {
+        dut.addr;
+        dut.phase;
+        dut.seen_wf;
+        dut.seen_rf;
+        dut.seen_nc;
+    }
+
+    @new dut ram_write_modes_demo {
+        clk   [1] = clk;
+        por   [1] = por;
+        rst_n [1] = rst_n;
+        leds  [6] = leds;
+    }
+
+    @setup {
+        por   <= 1'b0;
+        rst_n <= 1'b0;
+    }
+
+    @run(ns=60)
+
+    @update {
+        por   <= 1'b1;
+        rst_n <= 1'b1;
+    }
+
+    @run(ns=400)
+@endsim

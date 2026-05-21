@@ -1,0 +1,48 @@
+// UNINITIALIZED_LATCH_OBSERVABLE_READ: Reading an uninitialized latch
+// whose value may reach an observable sink is a design error. The
+// compiler surfaces this through NET_FLOATING_WITH_SINK because the
+// latch is read before any guarded assignment ever drives it.
+
+@project UNINITIALIZED_LATCH_OBSERVABLE_READ_read_to_output
+    @top TopMod {
+        OUT [1] top_data = _;
+        OUT [1] helper_data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        OUT [1] data;
+    }
+
+    LATCH {
+        // Trigger 1: helper latch is read to an observable sink before
+        // any write drives it.
+        lat_uninit [1] D;
+    }
+
+    ASYNCHRONOUS {
+        data <= lat_uninit ^ 1'b0;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        OUT [1] top_data;
+        OUT [1] helper_data;
+    }
+
+    @new inst_h HelperMod {
+        OUT [1] data = helper_data;
+    };
+
+    LATCH {
+        // Trigger 2: top-level latch is read directly to an observable sink
+        // before any write drives it.
+        lat_uninit [1] D;
+    }
+
+    ASYNCHRONOUS {
+        top_data <= lat_uninit ^ 1'b0;
+    }
+@endmod

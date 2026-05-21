@@ -31,10 +31,10 @@ const JZRuleInfo jz_rule_table[] = {
     /* [PARSE] (done) */
     { "PARSE", "COMMENT_IN_TOKEN",                                  0, JZ_RULE_MODE_ERR, "S1.4 Comment appears inside a token (identifier/number/operator/literal)" },
     { "PARSE", "COMMENT_NESTED_BLOCK",                              0, JZ_RULE_MODE_ERR, "S1.4 Nested block comment `/* ... /* ... */ ... */` detected" },
-    { "PARSE", "PARSE_SYNTAX_ERROR",                                0, JZ_RULE_MODE_ERR, "Source text violates parser syntax and no more specific parse rule applies" },
+    { "PARSE", "PARSE_SYNTAX_ERROR",                                0, JZ_RULE_MODE_ERR, "S1/S4/S5/S6/S7/S8/S9/S10/S11 Source text violates parser syntax and no more specific parse rule applies" },
     { "PARSE", "PARSER_EXPR_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S3.2 Expression nesting exceeds the compiler safety limit" },
     { "PARSE", "PARSER_STMT_DEPTH_LIMIT_EXCEEDED",                  0, JZ_RULE_MODE_ERR, "S5.3/S5.4 Statement nesting exceeds the compiler safety limit" },
-    { "PARSE", "AST_DEPTH_LIMIT_EXCEEDED",                          0, JZ_RULE_MODE_ERR, "AST traversal exceeds the compiler safety limit" },
+    { "PARSE", "AST_DEPTH_LIMIT_EXCEEDED",                          0, JZ_RULE_MODE_ERR, "S1/S4/S5/S6/S7/S8/S9/S10/S11 AST traversal exceeds the compiler safety limit" },
     { "PARSE", "DIRECTIVE_INVALID_CONTEXT",                         0, JZ_RULE_MODE_ERR, "S1.1/S6.2 Structural directives (@project/@module/@endproj/@endmod/@blackbox/@new/@import) used in invalid location" },
     { "PARSE", "KEYWORD_AS_IDENTIFIER",                             2, JZ_RULE_MODE_ERR, "S1.1 Reserved keyword used as identifier" },
     { "PARSE", "IF_COND_MISSING_PARENS",                            0, JZ_RULE_MODE_ERR, "S5.3 IF/ELIF condition missing required parentheses" },
@@ -107,8 +107,8 @@ const JZRuleInfo jz_rule_table[] = {
     { "CONST_RULES", "CONST_CIRCULAR_DEP",                         1, JZ_RULE_MODE_ERR, "S4.3/S7.10 Circular dependency in CONST/CONFIG definitions" },
     { "CONST_RULES", "CONST_CYCLE_ANALYSIS_OVERFLOW",              0, JZ_RULE_MODE_ERR, "S4.3/S7.10 CONST cycle analysis exceeds safe adjacency-matrix size limits" },
     { "CONST_RULES", "CONST_EVAL_DEPTH_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "S4.3/S7.10 Constant-expression nesting exceeds the compiler safety limit" },
-    { "CONST_RULES", "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "Semantic traversal exceeds the compiler safety limit" },
-    { "CONST_RULES", "SEM_BRANCH_STATE_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "Semantic branch-state growth exceeds the compiler safety limit" },
+    { "CONST_RULES", "SEM_RECURSION_DEPTH_LIMIT_EXCEEDED",         0, JZ_RULE_MODE_ERR, "S1.5/S1.6/S4/S5/S6 Semantic traversal exceeds the compiler safety limit" },
+    { "CONST_RULES", "SEM_BRANCH_STATE_LIMIT_EXCEEDED",            0, JZ_RULE_MODE_ERR, "S1.5/S1.6/S5 Semantic branch-state growth exceeds the compiler safety limit" },
 
     /* [PORT_WIRE_REGISTER_DECLS] */
     { "PORT_WIRE_REGISTER_DECLS", "PORT_MISSING_WIDTH",             0, JZ_RULE_MODE_ERR, "S4.4/S8.1 Port declaration without mandatory `[N]` width" },
@@ -470,11 +470,11 @@ const JZRuleInfo jz_rule_table[] = {
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_OE_EXTRACT_FAIL",       0, JZ_RULE_MODE_ERR, "S11.7 Could not extract output-enable condition from tri-state port; _oe driven high as fallback" },
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_UNUSED_DEFAULT",        0, JZ_RULE_MODE_WRN, "S11.7 --tristate-default specified but no internal tri-state nets found to transform" },
     { "TRISTATE_TRANSFORM", "TRISTATE_TRANSFORM_ROLLBACK",             0, JZ_RULE_MODE_ERR, "S11.5 Tri-state transform failed and was rolled back to the pre-transform IR" },
-    { "TRISTATE_TRANSFORM", "INFO_TRISTATE_TRANSFORM",                  0, JZ_RULE_MODE_INF, "S11 Tri-state net transformed by --tristate-default" },
+    { "TRISTATE_TRANSFORM", "INFO_TRISTATE_TRANSFORM",                  0, JZ_RULE_MODE_INF, "S11.4 Tri-state net transformed by --tristate-default" },
 
     /* [SERIALIZER] */
-    { "SERIALIZER", "INFO_SERIALIZER_CASCADE",                         0, JZ_RULE_MODE_INF, "Differential output uses cascaded serializers (master+slave) for extended serialization ratio" },
-    { "SERIALIZER", "SERIALIZER_WIDTH_EXCEEDS_RATIO",                  0, JZ_RULE_MODE_ERR, "Differential output port width exceeds chip serializer ratio and cascade is not supported" },
+    { "SERIALIZER", "INFO_SERIALIZER_CASCADE",                         0, JZ_RULE_MODE_INF, "S10.4 Differential output uses cascaded serializers (master+slave) for extended serialization ratio" },
+    { "SERIALIZER", "SERIALIZER_WIDTH_EXCEEDS_RATIO",                  0, JZ_RULE_MODE_ERR, "S6.5.4/S10.4 Differential output port width exceeds chip serializer ratio and cascade is not supported" },
 
     /* [TEMPLATE] */
     { "TEMPLATE", "TEMPLATE_UNDEFINED",              0, JZ_RULE_MODE_ERR, "S10.5 @apply references undefined template" },
@@ -495,11 +495,11 @@ const JZRuleInfo jz_rule_table[] = {
     { "TEMPLATE", "TEMPLATE_APPLY_COUNT_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 @apply count exceeds the configured hard limit" },
     { "TEMPLATE", "TEMPLATE_EXPANSION_GROWTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 Template expansion exceeds the configured total growth limit" },
     { "TEMPLATE", "TEMPLATE_EXPANSION_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S10.5 Template expansion nesting exceeds the compiler safety limit" },
-    { "REPORTS", "REPORT_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "Report traversal exceeds the compiler safety limit" },
+    { "REPORTS", "REPORT_DEPTH_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S6.10 Report traversal exceeds the compiler safety limit" },
 
     /* [TESTBENCH] */
-    { "TESTBENCH", "TB_WRONG_TOOL",               0, JZ_RULE_MODE_ERR, "File contains @testbench blocks; use --test to run testbenches" },
-    { "TESTBENCH", "TB_PROJECT_MIXED",            0, JZ_RULE_MODE_ERR, "TB-020 A file may not contain both @project and @testbench" },
+    { "TESTBENCH", "TB_WRONG_TOOL",                0, JZ_RULE_MODE_ERR, "S12.1 File contains @testbench blocks; use --test to run testbenches" },
+    { "TESTBENCH", "TB_PROJECT_MIXED",             0, JZ_RULE_MODE_ERR, "TB-020 A file may not contain both @project and @testbench" },
     { "TESTBENCH", "TB_MODULE_NOT_FOUND",          0, JZ_RULE_MODE_ERR, "TB-001 @testbench module name must refer to a module in scope" },
     { "TESTBENCH", "TB_PORT_NOT_CONNECTED",        0, JZ_RULE_MODE_ERR, "TB-002 All module ports must be connected in @new" },
     { "TESTBENCH", "TB_PORT_WIDTH_MISMATCH",       0, JZ_RULE_MODE_ERR, "TB-003 Port width must match module declared width" },
@@ -516,7 +516,7 @@ const JZRuleInfo jz_rule_table[] = {
     { "TESTBENCH", "TB_MULTIPLE_NEW",              0, JZ_RULE_MODE_ERR, "TB-013 Each TEST must contain exactly one @new instantiation" },
 
     /* [SIMULATION] */
-    { "SIMULATION", "SIM_WRONG_TOOL",             0, JZ_RULE_MODE_ERR, "File contains @simulation blocks; use --simulate to run simulations" },
+    { "SIMULATION", "SIM_WRONG_TOOL",             0, JZ_RULE_MODE_ERR, "S5.1 File contains @simulation blocks; use --simulate to run simulations" },
     { "SIMULATION", "SIM_PROJECT_MIXED",          0, JZ_RULE_MODE_ERR, "SIM-020 A file may not contain both @project and @simulation" },
     { "SIMULATION", "SIM_ALERT_MESSAGE_STRING_LITERAL_REQUIRED", 0, JZ_RULE_MODE_ERR, "SIM-021 @alert message argument must be a string literal" },
     { "SIMULATION", "SIM_TRACE_STATE_ON_OR_OFF",  0, JZ_RULE_MODE_ERR, "SIM-022 @trace(state=...) requires state=on or state=off" },
@@ -532,15 +532,15 @@ const JZRuleInfo jz_rule_table[] = {
     { "SIMULATION", "SIM_TRACE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "SIM-033 Emitted simulation trace exceeds the safety size limit" },
 
     /* [PRINT_DIRECTIVES] */
-    { "PRINT_DIRECTIVES", "PRT_ARG_COUNT_MISMATCH", 0, JZ_RULE_MODE_ERR, "PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments" },
-    { "PRINT_DIRECTIVES", "PRT_FORMAT_STRING_LITERAL_REQUIRED", 0, JZ_RULE_MODE_ERR, "PRT-002 @print/@print_if format argument must be a string literal" },
+    { "PRINT_DIRECTIVES", "PRT_ARG_COUNT_MISMATCH", 0, JZ_RULE_MODE_ERR, "S7.5/S7.6/S4.7/S4.8 PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments" },
+    { "PRINT_DIRECTIVES", "PRT_FORMAT_STRING_LITERAL_REQUIRED", 0, JZ_RULE_MODE_ERR, "S7.5/S7.6/S4.7/S4.8 PRT-002 @print/@print_if format argument must be a string literal" },
 
     /* [REPEAT] */
-    { "REPEAT", "RPT_COUNT_INVALID",              0, JZ_RULE_MODE_ERR, "RPT-001 @repeat requires a positive integer count" },
-    { "REPEAT", "RPT_NO_MATCHING_END",            0, JZ_RULE_MODE_ERR, "RPT-002 @repeat without matching @end" },
-    { "REPEAT", "RPT_COUNT_LIMIT_EXCEEDED",       0, JZ_RULE_MODE_ERR, "RPT-003 @repeat count exceeds the configured hard limit" },
-    { "REPEAT", "RPT_EXPANDED_SIZE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "RPT-004 @repeat expansion exceeds the configured expanded-size limit" },
-    { "REPEAT", "RPT_INTERNAL",                   0, JZ_RULE_MODE_ERR, "RPT-005 Internal failure during @repeat expansion" },
+    { "REPEAT", "RPT_COUNT_INVALID",              0, JZ_RULE_MODE_ERR, "S7.4/S4.6 RPT-001 @repeat requires a positive integer count" },
+    { "REPEAT", "RPT_NO_MATCHING_END",            0, JZ_RULE_MODE_ERR, "S7.4/S4.6 RPT-002 @repeat without matching @end" },
+    { "REPEAT", "RPT_COUNT_LIMIT_EXCEEDED",       0, JZ_RULE_MODE_ERR, "S7.4/S4.6 RPT-003 @repeat count exceeds the configured hard limit" },
+    { "REPEAT", "RPT_EXPANDED_SIZE_LIMIT_EXCEEDED", 0, JZ_RULE_MODE_ERR, "S7.4/S4.6 RPT-004 @repeat expansion exceeds the configured expanded-size limit" },
+    { "REPEAT", "RPT_INTERNAL",                   0, JZ_RULE_MODE_ERR, "S7.4/S4.6 RPT-005 Internal failure during @repeat expansion" },
 
     /* [GENERAL_WARNINGS] */
     { "GENERAL_WARNINGS", "WARN_UNUSED_REGISTER",                   0, JZ_RULE_MODE_WRN, "S8.3 Register is never read or written; remove it if unused" },
@@ -552,11 +552,11 @@ const JZRuleInfo jz_rule_table[] = {
     { "GENERAL_WARNINGS", "WARN_UNUSED_MODULE",                     0, JZ_RULE_MODE_WRN, "S8.3 Module declared but never instantiated; remove it or add a @new" },
     { "GENERAL_WARNINGS", "WARN_UNUSED_WIRE",                      1, JZ_RULE_MODE_WRN, "S12.3 WIRE declared but never driven or read; remove it if unused" },
     { "GENERAL_WARNINGS", "WARN_UNUSED_PORT",                      1, JZ_RULE_MODE_WRN, "S12.3 PORT declared but never used; remove it if unused" },
-    { "GENERAL_WARNINGS", "WARN_INTERNAL_TRISTATE",                0, JZ_RULE_MODE_WRN, "S11 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC" },
+    { "GENERAL_WARNINGS", "WARN_INTERNAL_TRISTATE",                0, JZ_RULE_MODE_WRN, "S11.1/S11.7.2 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC" },
 
     /* [IO] */
-    { "IO", "IO_BACKEND",                                          0, JZ_RULE_MODE_ERR, "Failed to open or write backend output file" },
-    { "IO", "IO_IR",                                               0, JZ_RULE_MODE_ERR, "Failed to write or finalize IR output file" },
+    { "IO", "IO_BACKEND",                                          0, JZ_RULE_MODE_ERR, "S6 Failed to open or write backend output file" },
+    { "IO", "IO_IR",                                               0, JZ_RULE_MODE_ERR, "S6 Failed to write or finalize IR output file" },
 
     /* [PATH_SECURITY] */
     { "PATH_SECURITY", "PATH_ABSOLUTE_FORBIDDEN",                0, JZ_RULE_MODE_ERR, "S12.2 Absolute path used without --allow-absolute-paths" },

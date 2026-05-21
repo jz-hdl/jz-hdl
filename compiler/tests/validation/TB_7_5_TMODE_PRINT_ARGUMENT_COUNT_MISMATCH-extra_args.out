@@ -1,2 +1,2 @@
 File: TB_7_5_TMODE_PRINT_ARGUMENT_COUNT_MISMATCH-extra_args.jz
-      52:9    error PRT_ARG_COUNT_MISMATCH PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments
+      52:9    error PRT_ARG_COUNT_MISMATCH S7.5/S7.6/S4.7/S4.8 PRT-001 Number of non-autonomous format specifiers in @print/@print_if must match the number of arguments

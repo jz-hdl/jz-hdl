@@ -1,2 +1,2 @@
 File: HDL_1_6_8_OUT_PORT_CONDITIONAL_DRIVE_Z_RELEASE-happy_path.jz
-      22:17   warn  WARN_INTERNAL_TRISTATE S11 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC
+      22:17   warn  WARN_INTERNAL_TRISTATE S11.1/S11.7.2 Internal tri-state logic is not FPGA-compatible; use --tristate-default=GND or --tristate-default=VCC

@@ -1,0 +1,81 @@
+// RAM write-mode example.
+//
+// Three single-port memories are driven with the same address and write data.
+// The only difference is the INOUT write mode:
+//   leds[4] - sampled WRITE_FIRST output
+//   leds[3] - sampled READ_FIRST output
+//   leds[2] - sampled NO_CHANGE output
+//   leds[5] - write phase (1 = write tick, 0 = read tick)
+//   leds[1:0] - low address bits
+
+@module ram_write_modes_demo
+    PORT {
+        IN  [1] clk;
+        IN  [1] por;
+        IN  [1] rst_n;
+        OUT [6] leds;
+    }
+
+    WIRE {
+        reset [1];
+        tick  [1];
+    }
+
+    REGISTER {
+        divider [22] = 22'b0;
+        phase   [1]  = 1'b0;
+        addr    [4]  = 4'b0;
+        wdata   [1]  = 1'b0;
+        seen_wf [1]  = 1'b0;
+        seen_rf [1]  = 1'b0;
+        seen_nc [1]  = 1'b0;
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem_wf [1] [16] = 1'b0 {
+            INOUT rw WRITE_FIRST;
+        };
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem_rf [1] [16] = 1'b0 {
+            INOUT rw READ_FIRST;
+        };
+    }
+
+    MEM(TYPE=BLOCK) {
+        mem_nc [1] [16] = 1'b0 {
+            INOUT rw NO_CHANGE;
+        };
+    }
+
+    ASYNCHRONOUS {
+        reset = por & rst_n;
+        tick = reduce_and(divider);
+        leds <= { phase, seen_wf, seen_rf, seen_nc, addr[1:0] };
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=reset RESET_ACTIVE=Low) {
+        divider <= divider + 22'b1;
+
+        mem_wf.rw.addr <= addr;
+        mem_rf.rw.addr <= addr;
+        mem_nc.rw.addr <= addr;
+
+        IF (tick == 1'b1) {
+            seen_wf <= mem_wf.rw.data;
+            seen_rf <= mem_rf.rw.data;
+            seen_nc <= mem_nc.rw.data;
+
+            IF (phase == 1'b1) {
+                mem_wf.rw.wdata <= wdata;
+                mem_rf.rw.wdata <= wdata;
+                mem_nc.rw.wdata <= wdata;
+                wdata <= !wdata;
+                addr <= addr + 4'b1;
+            }
+
+            phase <= !phase;
+        }
+    }
+@endmod

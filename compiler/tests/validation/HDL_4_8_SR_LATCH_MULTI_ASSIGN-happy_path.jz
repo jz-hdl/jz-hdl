@@ -1,0 +1,88 @@
+// SR_LATCH_MULTI_ASSIGN: Multiple guarded assignments to the same SR
+// latch are permitted when they target non-overlapping bit ranges or
+// are mutually exclusive by structure.
+// No diagnostics expected.
+
+@project SR_LATCH_MULTI_ASSIGN_happy_path
+    @top TopMod {
+        IN  [1] sel = _;
+        IN  [4] set_lo = _;
+        IN  [4] rst_lo = _;
+        IN  [4] set_hi = _;
+        IN  [4] rst_hi = _;
+        IN  [8] set_a = _;
+        IN  [8] rst_a = _;
+        IN  [8] set_b = _;
+        IN  [8] rst_b = _;
+        OUT [8] q_split = _;
+        OUT [8] q_mux = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] sel;
+        IN  [4] set_lo;
+        IN  [4] rst_lo;
+        IN  [4] set_hi;
+        IN  [4] rst_hi;
+        IN  [8] set_a;
+        IN  [8] rst_a;
+        IN  [8] set_b;
+        IN  [8] rst_b;
+        OUT [8] q_split;
+        OUT [8] q_mux;
+    }
+
+    LATCH {
+        // Split-bits SR latch: low nibble and high nibble written separately.
+        lat_split [8] SR;
+        // Mutually exclusive structural writes to the same SR latch.
+        lat_mux [8] SR;
+    }
+
+    ASYNCHRONOUS {
+        // Valid: set/reset operands match the selected slice widths.
+        lat_split[3:0] <= set_lo : rst_lo;
+        lat_split[7:4] <= set_hi : rst_hi;
+
+        IF (sel) {
+            lat_mux <= set_a : rst_a;
+        } ELSE {
+            lat_mux <= set_b : rst_b;
+        }
+
+        q_split <= lat_split;
+        q_mux <= lat_mux;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] sel;
+        IN  [4] set_lo;
+        IN  [4] rst_lo;
+        IN  [4] set_hi;
+        IN  [4] rst_hi;
+        IN  [8] set_a;
+        IN  [8] rst_a;
+        IN  [8] set_b;
+        IN  [8] rst_b;
+        OUT [8] q_split;
+        OUT [8] q_mux;
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] sel = sel;
+        IN  [4] set_lo = set_lo;
+        IN  [4] rst_lo = rst_lo;
+        IN  [4] set_hi = set_hi;
+        IN  [4] rst_hi = rst_hi;
+        IN  [8] set_a = set_a;
+        IN  [8] rst_a = rst_a;
+        IN  [8] set_b = set_b;
+        IN  [8] rst_b = rst_b;
+        OUT [8] q_split = q_split;
+        OUT [8] q_mux = q_mux;
+    };
+@endmod

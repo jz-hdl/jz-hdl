@@ -1,0 +1,27 @@
+// Edge and reset example.
+//
+// This example demonstrates a falling-edge clocked register bank with a
+// high-active immediate reset.
+//
+// LED layout:
+//   leds[5:0] - falling-edge counter state
+
+@module edge_reset_demo
+    PORT {
+        IN  [1] clk;
+        IN  [1] rst_hi;
+        OUT [6] leds;
+    }
+
+    REGISTER {
+        neg_counter [6] = 6'b0;
+    }
+
+    ASYNCHRONOUS {
+        leds <= neg_counter;
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=rst_hi RESET_ACTIVE=High RESET_TYPE=Immediate EDGE=Falling) {
+        neg_counter <= neg_counter + 6'b1;
+    }
+@endmod

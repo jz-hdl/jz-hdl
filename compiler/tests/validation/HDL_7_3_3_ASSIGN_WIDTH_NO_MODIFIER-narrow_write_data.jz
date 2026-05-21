@@ -1,0 +1,86 @@
+// ASSIGN_WIDTH_NO_MODIFIER: bare <= on synchronous MEM writes requires exact
+// word width; narrower write data must use <=z.
+
+@project ASSIGN_WIDTH_NO_MODIFIER_narrow_write_data
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1] clk = _;
+        IN  [4] addr = _;
+        IN  [4] narrow_wdata = _;
+        IN  [8] exact_wdata = _;
+        OUT [8] data = _;
+    }
+@endproj
+
+@module HelperMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [4] narrow_wdata;
+        IN  [8] exact_wdata;
+        OUT [8] data;
+    }
+
+    MEM {
+        mem_h [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr_bad;
+            IN  wr_ok;
+        };
+    }
+
+    ASYNCHRONOUS {
+        data = mem_h.rd[addr];
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 1: bare <= with narrower write data on helper MEM IN port.
+        mem_h.wr_bad[addr] <= narrow_wdata;
+        // Valid: exact-width synchronous MEM write.
+        mem_h.wr_ok[addr] <= exact_wdata;
+    }
+@endmod
+
+@module TopMod
+    PORT {
+        IN  [1] clk;
+        IN  [4] addr;
+        IN  [4] narrow_wdata;
+        IN  [8] exact_wdata;
+        OUT [8] data;
+    }
+
+    WIRE {
+        helper_data [8];
+    }
+
+    MEM {
+        mem_t [8] [16] = 8'h00 {
+            OUT rd ASYNC;
+            IN  wr_bad;
+            IN  wr_ok;
+        };
+    }
+
+    @new inst_h HelperMod {
+        IN  [1] clk = clk;
+        IN  [4] addr = addr;
+        IN  [4] narrow_wdata = narrow_wdata;
+        IN  [8] exact_wdata = exact_wdata;
+        OUT [8] data = helper_data;
+    };
+
+    ASYNCHRONOUS {
+        data = mem_t.rd[addr] ^ helper_data;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Trigger 2: bare <= with narrower write data on top MEM IN port.
+        mem_t.wr_bad[addr] <= narrow_wdata;
+        // Valid: exact-width synchronous MEM write.
+        mem_t.wr_ok[addr] <= exact_wdata;
+    }
+@endmod

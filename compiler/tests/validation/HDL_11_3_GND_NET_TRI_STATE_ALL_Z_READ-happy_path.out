@@ -1,6 +1,6 @@
 File: HDL_11_3_GND_NET_TRI_STATE_ALL_Z_READ-happy_path.jz
-      16:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      30:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      44:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      16:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default
+      30:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default
+      44:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default
       54:0    warn  TRISTATE_TRANSFORM_SINGLE_DRIVER S11.7 Single-driver tri-state net transformed to default value; original z replaced with GND/VCC
-      56:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      56:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default

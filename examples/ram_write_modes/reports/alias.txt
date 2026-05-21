@@ -1,0 +1,176 @@
+JZ-HDL Alias Report
+Input file: src/ice_sugar_v15.jz
+
+Module: ram_write_modes_demo
+
+User-visible identifiers:  17
+Internal elaboration nodes:49
+Total identifiers:        66
+Total alias statements:   2
+Resolved physical nets:   10
+Tri-state nets:           0
+Extended-width aliases:   1
+
+PHYSICAL NET: NET_0000    Width: 1    Kind: CLOCK
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: ram_write_modes.jz@13
+
+Consumers:
+    SYNCHRONOUS block (CLK=clk) at line 58
+
+PHYSICAL NET: NET_0001    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: ram_write_modes.jz@14
+
+Members (Aliased Identifiers):
+    ram_write_modes.jz@53: reset == por
+    ram_write_modes.jz@53: reset == rst_n
+
+Sinks:
+    ram_write_modes.jz@53: <source unavailable>
+    ram_write_modes.jz@58: <source unavailable>
+
+Top-level binding:
+    PORT binding: IN por -> 1'b1
+
+PHYSICAL NET: NET_0003    Width: 6    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT OUT
+Declared at: ram_write_modes.jz@16
+
+ASYNCHRONOUS Drivers:
+    ram_write_modes.jz@55: <source unavailable>
+
+Top-level binding:
+    PORT binding: OUT leds -> { ~ LED , _ , _ , _ }
+
+PHYSICAL NET: NET_0005    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: WIRE
+Declared at: ram_write_modes.jz@21
+
+Members (Aliased Identifiers):
+    ram_write_modes.jz@54: tick == divider
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    ram_write_modes.jz@59: <source unavailable>
+
+Sinks:
+    ram_write_modes.jz@54: <source unavailable>
+    ram_write_modes.jz@59: <source unavailable>
+    ram_write_modes.jz@65: <source unavailable>
+
+PHYSICAL NET: NET_0007    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: ram_write_modes.jz@26
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    ram_write_modes.jz@78: <source unavailable>
+
+Sinks:
+    ram_write_modes.jz@55: <source unavailable>
+    ram_write_modes.jz@70: <source unavailable>
+    ram_write_modes.jz@78: <source unavailable>
+
+PHYSICAL NET: NET_0008    Width: 4    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: ram_write_modes.jz@27
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    ram_write_modes.jz@75: <source unavailable>
+
+Sinks:
+    ram_write_modes.jz@55: <source unavailable>
+    ram_write_modes.jz@61: <source unavailable>
+    ram_write_modes.jz@62: <source unavailable>
+    ram_write_modes.jz@63: <source unavailable>
+    ram_write_modes.jz@75: <source unavailable>
+
+PHYSICAL NET: NET_0009    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: ram_write_modes.jz@28
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    ram_write_modes.jz@74: <source unavailable>
+
+Sinks:
+    ram_write_modes.jz@71: <source unavailable>
+    ram_write_modes.jz@72: <source unavailable>
+    ram_write_modes.jz@73: <source unavailable>
+    ram_write_modes.jz@74: <source unavailable>
+
+PHYSICAL NET: NET_0010    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: ram_write_modes.jz@29
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    ram_write_modes.jz@66: <source unavailable>
+
+Sinks:
+    ram_write_modes.jz@55: <source unavailable>
+
+PHYSICAL NET: NET_0011    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: ram_write_modes.jz@30
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    ram_write_modes.jz@67: <source unavailable>
+
+Sinks:
+    ram_write_modes.jz@55: <source unavailable>
+
+PHYSICAL NET: NET_0012    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: ram_write_modes.jz@31
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    ram_write_modes.jz@68: <source unavailable>
+
+Sinks:
+    ram_write_modes.jz@55: <source unavailable>
+
+------------------------------------------------------------
+IDENTIFIER INDEX
+------------------------------------------------------------
+clk  -> NET_0000
+por  -> NET_0001
+reset  -> NET_0001
+rst_n  -> NET_0001
+leds  -> NET_0003
+tick  -> NET_0005
+divider  -> NET_0005
+phase  -> NET_0007
+addr  -> NET_0008
+wdata  -> NET_0009
+seen_wf  -> NET_0010
+seen_rf  -> NET_0011
+seen_nc  -> NET_0012
+
+------------------------------------------------------------
+HARDWARE SUMMARY
+------------------------------------------------------------
+- 1 clock domain
+- 7 registers
+- Alias net merges: present
+- Tri-state logic: none
+------------------------------------------------------------
+
+============================================================
+CROSS-MODULE SUMMARY
+============================================================
+Total modules analyzed: 1
+
+Module                 Nets Clocks   Regs Tri-St  Alias
+-------------------- ------ ------ ------ ------ ------
+ram_write_modes_demo     10      1      7      0      2
+-------------------- ------ ------ ------ ------ ------
+TOTAL                    10      1      7      0      2
+============================================================

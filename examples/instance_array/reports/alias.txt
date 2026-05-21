@@ -1,0 +1,206 @@
+JZ-HDL Alias Report
+Input file: src/ice_sugar_v15.jz
+
+Module: bit_stage
+
+User-visible identifiers:  6
+Internal elaboration nodes:10
+Total identifiers:        16
+Total alias statements:   0
+Resolved physical nets:   5
+Tri-state nets:           0
+Extended-width aliases:   0
+
+PHYSICAL NET: NET_0000    Width: 1    Kind: CLOCK
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: instance_array.jz@10
+
+Consumers:
+    SYNCHRONOUS block (CLK=clk) at line 24
+
+PHYSICAL NET: NET_0001    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: instance_array.jz@11
+
+Sinks:
+    instance_array.jz@24: <source unavailable>
+
+PHYSICAL NET: NET_0002    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: instance_array.jz@12
+
+Sinks:
+    instance_array.jz@25: <source unavailable>
+
+PHYSICAL NET: NET_0003    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT OUT
+Declared at: instance_array.jz@13
+
+ASYNCHRONOUS Drivers:
+    instance_array.jz@21: <source unavailable>
+
+PHYSICAL NET: NET_0004    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: instance_array.jz@17
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    instance_array.jz@25: <source unavailable>
+
+Sinks:
+    instance_array.jz@21: <source unavailable>
+
+------------------------------------------------------------
+IDENTIFIER INDEX
+------------------------------------------------------------
+clk  -> NET_0000
+reset  -> NET_0001
+din  -> NET_0002
+dout  -> NET_0003
+q  -> NET_0004
+
+------------------------------------------------------------
+HARDWARE SUMMARY
+------------------------------------------------------------
+- 1 clock domain
+- 1 register
+- Alias net merges: none
+- Tri-state logic: none
+------------------------------------------------------------
+
+Module: instance_array_demo
+
+User-visible identifiers:  13
+Internal elaboration nodes:26
+Total identifiers:        39
+Total alias statements:   0
+Resolved physical nets:   8
+Tri-state nets:           0
+Extended-width aliases:   0
+
+PHYSICAL NET: NET_0000    Width: 1    Kind: CLOCK
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: instance_array.jz@31
+
+Consumers:
+    SYNCHRONOUS block (CLK=clk) at line 61
+
+PHYSICAL NET: NET_0001    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: instance_array.jz@32
+
+Sinks:
+    instance_array.jz@55: <source unavailable>
+
+Top-level binding:
+    PORT binding: IN por -> 1'b1
+
+PHYSICAL NET: NET_0002    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT IN
+Declared at: instance_array.jz@33
+
+Sinks:
+    instance_array.jz@55: <source unavailable>
+
+Top-level binding:
+    PORT binding: IN rst_n -> 1'b1
+
+PHYSICAL NET: NET_0003    Width: 6    Tri-state: No
+------------------------------------------------------------
+Declared as: PORT OUT
+Declared at: instance_array.jz@34
+
+ASYNCHRONOUS Drivers:
+    instance_array.jz@58: <source unavailable>
+
+Top-level binding:
+    PORT binding: OUT leds -> { ~ LED , _ , _ , _ }
+
+PHYSICAL NET: NET_0004    Width: 1    Tri-state: No
+------------------------------------------------------------
+Declared as: WIRE
+Declared at: instance_array.jz@38
+
+ASYNCHRONOUS Drivers:
+    instance_array.jz@55: <source unavailable>
+
+Sinks:
+    instance_array.jz@61: <source unavailable>
+    instance_array.jz@47: <source unavailable>
+
+PHYSICAL NET: NET_0005    Width: 6    Tri-state: No
+------------------------------------------------------------
+Declared as: WIRE
+Declared at: instance_array.jz@39
+
+ASYNCHRONOUS Drivers:
+    instance_array.jz@56: <source unavailable>
+    instance_array.jz@57: <source unavailable>
+
+Sinks:
+    instance_array.jz@47: <source unavailable>
+
+PHYSICAL NET: NET_0006    Width: 6    Tri-state: No
+------------------------------------------------------------
+Declared as: WIRE
+Declared at: instance_array.jz@40
+
+Drivers:
+    instance_array.jz@47: <source unavailable>
+
+Sinks:
+    instance_array.jz@57: <source unavailable>
+    instance_array.jz@58: <source unavailable>
+
+PHYSICAL NET: NET_0007    Width: 25    Tri-state: No
+------------------------------------------------------------
+Declared as: REGISTER
+Declared at: instance_array.jz@44
+
+SYNCHRONOUS(CLK=clk) Drivers:
+    instance_array.jz@62: <source unavailable>
+
+Sinks:
+    instance_array.jz@56: <source unavailable>
+    instance_array.jz@62: <source unavailable>
+
+------------------------------------------------------------
+IDENTIFIER INDEX
+------------------------------------------------------------
+clk  -> NET_0000
+por  -> NET_0001
+rst_n  -> NET_0002
+leds  -> NET_0003
+reset  -> NET_0004
+stage_in  -> NET_0005
+stage_out  -> NET_0006
+counter  -> NET_0007
+
+------------------------------------------------------------
+HARDWARE SUMMARY
+------------------------------------------------------------
+- 1 clock domain
+- 1 register
+- Alias net merges: none
+- Tri-state logic: none
+------------------------------------------------------------
+
+============================================================
+CROSS-MODULE SUMMARY
+============================================================
+Total modules analyzed: 2
+
+Module                 Nets Clocks   Regs Tri-St  Alias
+-------------------- ------ ------ ------ ------ ------
+bit_stage                 5      1      1      0      0
+instance_array_demo       8      1      1      0      0
+-------------------- ------ ------ ------ ------ ------
+TOTAL                    13      2      2      0      0
+============================================================

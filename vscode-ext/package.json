@@ -4,7 +4,12 @@
     "description": "Language support for JZ-HDL hardware correctness language",
     "version": "0.2.0",
     "publisher": "jz-hdl",
-    "license": "MIT",
+    "license": "MPL-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/jz-hdl/jz-hdl.git",
+        "directory": "vscode-ext"
+    },
     "engines": {
         "vscode": "^1.80.0"
     },

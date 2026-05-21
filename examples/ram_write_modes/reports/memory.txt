@@ -1,0 +1,56 @@
+JZ-HDL Memory Report
+Input file: src/ice_sugar_v15.jz
+Chip: ICE40UP-5K-SG48
+
+ram_write_modes.jz@ 35 = BLOCK MEMORY 2 Bytes (mem_wf)
+    Mode:
+    Requested | Pseudo-Dual Port
+    Matched   | Pseudo-Dual Port
+
+    Configuration:
+    Requested | 1 bit  | 4 bit (16)
+    Matched   | 16 bit | 8 bit     
+    Matched   | 8 bit  | 9 bit     
+    Matched   | 4 bit  | 10 bit    
+    Matched   | 2 bit  | 11 bit    
+
+
+ram_write_modes.jz@ 41 = BLOCK MEMORY 2 Bytes (mem_rf)
+    Mode:
+    Requested | Pseudo-Dual Port
+    Matched   | Pseudo-Dual Port
+
+    Configuration:
+    Requested | 1 bit  | 4 bit (16)
+    Matched   | 16 bit | 8 bit     
+    Matched   | 8 bit  | 9 bit     
+    Matched   | 4 bit  | 10 bit    
+    Matched   | 2 bit  | 11 bit    
+
+
+ram_write_modes.jz@ 47 = BLOCK MEMORY 2 Bytes (mem_nc)
+    Mode:
+    Requested | Pseudo-Dual Port
+    Matched   | Pseudo-Dual Port
+
+    Configuration:
+    Requested | 1 bit  | 4 bit (16)
+    Matched   | 16 bit | 8 bit     
+    Matched   | 8 bit  | 9 bit     
+    Matched   | 4 bit  | 10 bit    
+    Matched   | 2 bit  | 11 bit    
+
+
+Memory Summary
+--------------
+Block Memory:
+    Requested: 6 bytes
+    Max Available: 15360 bytes (30 blocks x 4 Kbits)
+    Used: 3 / 30 blocks (one per BLOCK MEMORY)
+
+Distributed Memory:
+    Requested: 0 bytes
+    Max Available: Unknown
+    Used: 0 bytes
+
+Errors: 0

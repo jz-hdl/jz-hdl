@@ -1,0 +1,39 @@
+// UMUL_ZERO_EXTEND_RIGHT_OPERAND: §5.5.3 umul(a, b) accepts a narrower
+// right operand and zero-extends it to max_bits before multiplication.
+// Valid uses only. No diagnostics expected.
+
+@project UMUL_ZERO_EXTEND_RIGHT_OPERAND_happy_path
+    CONFIG {
+        WIDTH = 8;
+    }
+
+    @top TopMod {
+        IN  [1]  clk = _;
+        IN  [8]  a8 = _;
+        IN  [4]  b4 = _;
+        OUT [16] prod = _;
+    }
+@endproj
+
+@module TopMod
+    PORT {
+        IN  [1]  clk;
+        IN  [8]  a8;
+        IN  [4]  b4;
+        OUT [16] prod;
+    }
+
+    REGISTER {
+        r_prod [16] = 16'd0;
+    }
+
+    ASYNCHRONOUS {
+        prod = r_prod;
+    }
+
+    SYNCHRONOUS(CLK=clk) {
+        // Valid: width(a8)=8, width(b4)=4, so b4 is the narrower right operand.
+        // max_bits = 8, b4 is zero-extended to 8 bits, result_width = 16.
+        r_prod <= umul(a8, b4);
+    }
+@endmod

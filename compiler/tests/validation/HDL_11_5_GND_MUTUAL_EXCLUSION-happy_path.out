@@ -1,4 +1,4 @@
 File: HDL_11_5_GND_MUTUAL_EXCLUSION-happy_path.jz
-      13:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      25:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
-      46:0    info  INFO_TRISTATE_TRANSFORM S11 Tri-state net transformed by --tristate-default
+      13:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default
+      25:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default
+      46:0    info  INFO_TRISTATE_TRANSFORM S11.4 Tri-state net transformed by --tristate-default

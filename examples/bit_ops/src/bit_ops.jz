@@ -1,0 +1,65 @@
+// Bit-ops example.
+//
+// This example demonstrates practical use of several uncovered operators and
+// intrinsics in one self-contained pattern generator:
+//   - `=z` zero-extension
+//   - `<=s` sign-extension
+//   - `bswap`, `reverse`, `b2oh`, `prienc`, `gbit`, `sbit`
+//   - `reduce_and`, `reduce_or`, `reduce_xor`
+//
+// LEDs:
+//   leds[5] - any request bit set
+//   leds[4] - sticky history is full
+//   leds[3] - request parity
+//   leds[2] - sign-extended demo bit
+//   leds[1] - zero-extended index LSB
+//   leds[0] - highest-priority request currently selects bit 7
+
+@module bit_ops_demo
+    PORT {
+        IN  [1] clk;
+        IN  [1] por;
+        IN  [1] rst_n;
+        OUT [6] leds;
+    }
+
+    WIRE {
+        reset      [1];
+        requests   [8];
+        swap_view  [16];
+        grant_hot  [8];
+        idx_ext    [8];
+        sticky_next [8];
+    }
+
+    REGISTER {
+        counter  [24] = 24'b1;
+        sticky   [8]  = 8'b0;
+        sign_reg [8]  = 8'b0;
+    }
+
+    ASYNCHRONOUS {
+        reset <= por & rst_n;
+
+        swap_view <= bswap({ counter[15:8], counter[23:16] });
+        requests <= swap_view[7:0] ^ reverse(counter[15:8]);
+        grant_hot <= reverse(b2oh(prienc(requests), 8));
+        idx_ext =z prienc(requests);
+        sticky_next <= sbit(sticky, prienc(requests), gbit(requests, prienc(requests)));
+
+        leds <= {
+            reduce_or(requests),
+            reduce_and(sticky),
+            reduce_xor(requests),
+            sign_reg[7],
+            idx_ext[0],
+            grant_hot[7]
+        };
+    }
+
+    SYNCHRONOUS(CLK=clk RESET=reset RESET_ACTIVE=Low) {
+        counter <= counter + 24'b1;
+        sticky <= sticky_next;
+        sign_reg <=s counter[3:0];
+    }
+@endmod

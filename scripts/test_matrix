@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+
+import re
+import sys
+from pathlib import Path
+
+
+RULE_PATTERN = re.compile(
+    r'\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*\d+\s*,\s*JZ_RULE_MODE_\w+\s*,\s*"([^"]*)"\s*\}'
+)
+SECTION_PATTERN = re.compile(r"\bS(\d+(?:\.\d+){0,2})((?:/\d+(?:\.\d+){0,2})*)")
+TB_PATTERN = re.compile(r"\bTB-(\d+)\b")
+SIM_PATTERN = re.compile(r"\bSIM-(\d+)\b")
+CHIP_INFO_PATTERN = re.compile(r"\bCHIP-INFO-(\d+)\b")
+def format_row(cells: tuple[str, ...], widths: tuple[int, ...]) -> str:
+    padded = [f" {cell:<{width}} " for cell, width in zip(cells, widths)]
+    return "|" + "|".join(padded) + "|"
+
+
+def format_separator(widths: tuple[int, ...]) -> str:
+    return "+" + "+".join("-" * (width + 2) for width in widths) + "+"
+
+
+def extract_specs_and_sections(description: str) -> tuple[str, str]:
+    specs: list[str] = []
+    sections: list[str] = []
+
+    for match in SECTION_PATTERN.finditer(description):
+        specs.append("JZ-HDL")
+        sections.append(match.group(1))
+        suffix = match.group(2)
+        if suffix:
+            sections.extend(part for part in suffix.split("/") if part)
+
+    for pattern, spec_name in (
+        (TB_PATTERN, "TESTBENCH"),
+        (SIM_PATTERN, "SIMULATION"),
+        (CHIP_INFO_PATTERN, "CHIP-INFO"),
+    ):
+        for match in pattern.finditer(description):
+            specs.append(spec_name)
+            sections.append(match.group(1))
+
+    spec_cell = "|".join(dict.fromkeys(specs)) if specs else ""
+    section_cell = ", ".join(dict.fromkeys(sections)) if sections else ""
+    return spec_cell, section_cell
+
+
+def count_validation_tests(validation_dir: Path, rule: str) -> int:
+    patterns = (
+        f"*_{rule}-*.jz",
+        f"*_{rule}_*.jz",
+        f"*_{rule}.jz",
+    )
+    matched: set[Path] = set()
+    for pattern in patterns:
+        matched.update(validation_dir.glob(pattern))
+    return len(matched)
+
+
+def main() -> int:
+    repo_root = Path(__file__).resolve().parent.parent
+    rules_path = repo_root / "compiler" / "src" / "rules.c"
+    validation_dir = repo_root / "compiler" / "tests" / "validation"
+    contents = rules_path.read_text(encoding="utf-8")
+
+    rows: list[tuple[str, str, str, str, str]] = []
+    for group, rule, description in RULE_PATTERN.findall(contents):
+        spec_cell, section_cell = extract_specs_and_sections(description)
+        rows.append(
+            (
+                rule,
+                group,
+                str(count_validation_tests(validation_dir, rule)),
+                spec_cell,
+                section_cell,
+            )
+        )
+
+    if not rows:
+        print(f"No rules found in {rules_path}", file=sys.stderr)
+        return 1
+
+    rows.sort(key=lambda row: (row[3], row[1], row[0]))
+
+    header = ("Rule", "Group", "Validation", "Specification", "Sections")
+    widths = tuple(
+        max(len(title), *(len(row[index]) for row in rows))
+        for index, title in enumerate(header)
+    )
+
+    print(format_row(header, widths))
+    print(format_separator(widths))
+    for row in rows:
+        print(format_row(row, widths))
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,2 +1,2 @@
 File: TB_7_5_TMODE_FORMAT_STRING_LITERAL_REQUIRED-non_string_format_arg.jz
-      48:16   error PRT_FORMAT_STRING_LITERAL_REQUIRED PRT-002 @print/@print_if format argument must be a string literal
+      48:16   error PRT_FORMAT_STRING_LITERAL_REQUIRED S7.5/S7.6/S4.7/S4.8 PRT-002 @print/@print_if format argument must be a string literal
