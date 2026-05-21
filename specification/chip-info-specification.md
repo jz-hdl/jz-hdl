@@ -1,6 +1,6 @@
 ---
 title: "JZ-HDL CHIP INFO SPECIFICATION"
-subtitle: "State: Beta — Version: 0.2.0"
+subtitle: "State: Beta — Version: 0.2.1"
 toc: true
 header-includes:
   - \usepackage{titling}

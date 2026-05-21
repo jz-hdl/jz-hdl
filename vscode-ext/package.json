@@ -2,7 +2,7 @@
     "name": "jz-hdl",
     "displayName": "JZ-HDL",
     "description": "Language support for JZ-HDL hardware correctness language",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "publisher": "jz-hdl",
     "license": "MPL-2.0",
     "repository": {
